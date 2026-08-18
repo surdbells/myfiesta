@@ -2,10 +2,12 @@
 
 use App\Providers\AppServiceProvider;
 use App\Providers\Filament\AdminPanelProvider;
+use App\Providers\MailServiceProvider;
 use App\Providers\PaymentServiceProvider;
 
 return [
     AppServiceProvider::class,
     AdminPanelProvider::class,
     PaymentServiceProvider::class,
+    MailServiceProvider::class,
 ];

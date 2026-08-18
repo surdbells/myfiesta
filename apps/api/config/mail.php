@@ -37,6 +37,11 @@ return [
 
     'mailers' => [
 
+        'zeptomail' => [
+            'transport' => 'zeptomail',
+            'api_key' => env('ZEPTOMAIL_API_KEY'),
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),

@@ -2,10 +2,12 @@
 
 namespace App\Services\Checkout;
 
+use App\Mail\TicketsIssued;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Marks an order paid and issues its tickets.
@@ -48,6 +50,12 @@ class Fulfiller
             $this->issuer->issueFor($locked);
             $this->writeLedger($locked);
             $this->releaseHolds($locked);
+
+            // Queued, and dispatched only after the transaction commits.
+            // Sending inside it risks a buyer holding tickets in their inbox
+            // that a rollback then erased.
+            DB::afterCommit(fn () => Mail::to($locked->buyer_email)
+                ->send(new TicketsIssued($locked)));
 
             return $locked->refresh();
         });
