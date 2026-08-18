@@ -38,12 +38,36 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Posters, brand logos, generated ticket PDFs and wallet passes.
+         *
+         * Served directly and cacheable. Local now, Cloudflare R2 at scale —
+         * which stays a config change only as long as relative paths are what
+         * reach the database. A full URL in a column hardcodes the driver.
+         */
         'public' => [
-            'driver' => 'local',
+            'driver' => env('FILESYSTEM_PUBLIC_DRIVER', 'local'),
             'root' => storage_path('app/public'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,
+            'report' => false,
+        ],
+
+        /*
+         * Identity documents, settlement exports, anything personal.
+         *
+         * Deliberately a separate disk rather than a folder: different
+         * visibility, different retention, different backup rules. Never
+         * web-reachable — reaching a file here goes through a controller that
+         * checks the caller, and the access is logged.
+         */
+        'private' => [
+            'driver' => env('FILESYSTEM_PRIVATE_DRIVER', 'local'),
+            'root' => storage_path('app/private-secure'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => true,
             'report' => false,
         ],
 

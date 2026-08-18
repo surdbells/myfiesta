@@ -2,18 +2,26 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * The API host serves no public site of its own.
+     *
+     * The public site is a separate Angular application; this domain answers
+     * the API and hosts the admin panel, so the root redirects there rather
+     * than rendering a page.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_root_redirects_to_the_admin_panel(): void
     {
-        $response = $this->get('/');
+        $this->get('/')->assertRedirect('/admin');
+    }
 
-        $response->assertStatus(200);
+    public function test_the_health_endpoint_reports_ok(): void
+    {
+        $this->getJson('/api/health')
+            ->assertOk()
+            ->assertJson(['status' => 'ok']);
     }
 }
