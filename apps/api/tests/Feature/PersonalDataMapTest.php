@@ -133,7 +133,7 @@ class PersonalDataMapTest extends TestCase
             [],
             $suspects,
             'These columns look personal but are not in config/personal_data.php: '
-                . implode(', ', $suspects)
+                .implode(', ', $suspects)
         );
     }
 }
