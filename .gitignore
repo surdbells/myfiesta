@@ -1,0 +1,67 @@
+# --- Secrets. Nothing credential-shaped enters this repository. ---
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+*.keystore
+*.jks
+*.mobileprovision
+certs/
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# --- Dependencies ---
+node_modules/
+vendor/
+
+# --- Build output ---
+dist/
+build/
+out/
+.angular/
+*.tsbuildinfo
+public/build/
+public/hot
+
+# --- Laravel ---
+/apps/api/storage/*.key
+/apps/api/storage/app/**
+!/apps/api/storage/app/.gitkeep
+/apps/api/storage/framework/cache/**
+/apps/api/storage/framework/sessions/**
+/apps/api/storage/framework/views/**
+/apps/api/storage/logs/**
+/apps/api/bootstrap/cache/*
+!/apps/api/bootstrap/cache/.gitkeep
+
+# --- Flutter / Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.iml
+/apps/mobile/ios/Pods/
+/apps/mobile/android/.gradle/
+/apps/mobile/android/local.properties
+
+# --- Generated clients. Regenerated from packages/contract, never edited. ---
+/packages/contract/generated/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Logs & coverage ---
+*.log
+coverage/
+.phpunit.result.cache
+
+# --- Database dumps. Take them, keep them out of git. ---
+*.sql
+*.sql.gz
+*.dump

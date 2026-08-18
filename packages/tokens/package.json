@@ -1,0 +1,11 @@
+{
+  "name": "@myfiesta/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Design tokens emitted as CSS custom properties and Dart constants.",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs && git diff --exit-code dist/"
+  }
+}

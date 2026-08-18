@@ -1,0 +1,407 @@
+openapi: 3.1.0
+
+info:
+  title: myFiesta API
+  version: 0.1.0
+  description: |
+    The single contract between the myFiesta API and every client.
+
+    Both client libraries are generated from this file — TypeScript for the two
+    Angular apps, Dart for the Flutter app. Because Flutter cannot share a
+    TypeScript package, this document is the only thing keeping the two client
+    languages honest. Nothing here is optional documentation: if it is not in
+    this file, the clients cannot call it.
+
+    Status: seed. The shared components below are complete and settled — they
+    encode decisions that are expensive to change once data exists. The paths
+    are representative rather than exhaustive; they establish the shape that the
+    remaining resources follow as they are built out in Phase 1.
+
+servers:
+  - url: https://api.myfiesta.ca/v1
+    description: Production
+  - url: https://staging-api.myfiesta.ca/v1
+    description: Staging
+  - url: http://localhost:8000/v1
+    description: Local
+
+tags:
+  - name: Auth
+    description: Organizer, attendee, and door-staff authentication
+  - name: Events
+    description: Public event discovery and organizer event management
+  - name: Checkout
+    description: Cart pricing, holds, and payment session creation
+  - name: Tickets
+    description: Issued tickets, delivery, and transfer
+  - name: Door
+    description: Scanning and check-in
+
+# ---------------------------------------------------------------------------
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Sanctum personal access token. Every token carries an ability that
+        determines what it may reach:
+
+          attendee          browse, buy, and manage own tickets
+          organizer         full access within the caller's organization
+          door:{event_id}   scan and check in for one event, nothing else
+
+        A door token is rejected outright by sales, guest-list, payout, and
+        profile endpoints. The mobile app compiles all three modes into one
+        bundle, so hiding a screen is a convenience — the boundary is here.
+
+  schemas:
+
+    # -- Money -------------------------------------------------------------
+    # Money is always a pair. There is no bare numeric amount anywhere in this
+    # API. Amounts are integer minor units (cents, kobo) so nothing is ever
+    # represented as a float. Balances are per-currency and never summed across.
+
+    Currency:
+      type: string
+      description: ISO 4217 code. Scoped per event; an event sells in one currency.
+      enum: [CAD, NGN]
+
+    Money:
+      type: object
+      required: [amount, currency]
+      additionalProperties: false
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Minor units — cents for CAD, kobo for NGN. Never a float.
+          examples: [2500]
+        currency:
+          $ref: '#/components/schemas/Currency'
+
+    # -- Errors ------------------------------------------------------------
+    # RFC 7807. Real HTTP status codes, not 200-with-a-status-in-the-body.
+
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Stable identifier for the problem kind.
+          examples: ['https://api.myfiesta.ca/problems/insufficient-inventory']
+        title:
+          type: string
+          description: Short human-readable summary.
+          examples: ['Not enough tickets remaining']
+        status:
+          type: integer
+          examples: [409]
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri
+        errors:
+          type: object
+          description: Field-level validation failures, keyed by input name.
+          additionalProperties:
+            type: array
+            items: { type: string }
+
+    # -- Pagination --------------------------------------------------------
+
+    PageMeta:
+      type: object
+      required: [page, per_page, total]
+      properties:
+        page: { type: integer, minimum: 1 }
+        per_page: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+
+    # -- Core resources ----------------------------------------------------
+
+    Organization:
+      type: object
+      description: |
+        Resources belong to an organization, never directly to a user. People
+        hold roles within one. This is what lets a venue or promoter collective
+        have a manager, a finance lead, and door staff without sharing a login.
+      required: [id, name, slug]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        verified:
+          type: boolean
+          description: Set once submitted identity documents have been reviewed.
+        role:
+          allOf: [{ $ref: '#/components/schemas/OrganizationRole' }]
+          description: The calling user's role here. Absent on public responses.
+
+    OrganizationRole:
+      type: string
+      description: |
+        Determines what a member may do within their organization. `door` is
+        the narrowest — it exists so venue staff can be given scanning access
+        without seeing sales, guest lists, or payouts.
+      enum: [owner, manager, finance, marketing, door]
+
+    Event:
+      type: object
+      required: [id, slug, title, currency, starts_at, timezone, status]
+      properties:
+        id: { type: string, format: uuid }
+        slug:
+          type: string
+          description: |
+            Routed at the root — myfiesta.ca/{slug}. Slugs from the previous
+            platform are carried over verbatim; those links are in shared
+            messages and printed QR codes and cannot be edited.
+        title: { type: string }
+        description: { type: string }
+        organization: { $ref: '#/components/schemas/Organization' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, 'null'], format: date-time }
+        timezone:
+          type: string
+          description: |
+            IANA name, per event. Events run in Toronto and Lagos; a single
+            platform timezone is not survivable.
+          examples: ['America/Toronto', 'Africa/Lagos']
+        venue_name: { type: string }
+        city: { type: string }
+        province: { type: [string, 'null'] }
+        country: { type: string, description: ISO 3166-1 alpha-2 }
+        poster_url: { type: [string, 'null'], format: uri }
+        min_age:
+          type: [integer, 'null']
+          description: Null when the event has no age restriction.
+        status:
+          type: string
+          enum: [draft, review, scheduled, published, cancelled]
+
+    TicketType:
+      type: object
+      required: [id, name, price, admits, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        price:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: |
+            Authoritative. Clients send quantities; they never send prices.
+            The server reads this value when building a payment session.
+        admits: { type: integer, minimum: 1 }
+        max_per_order: { type: [integer, 'null'] }
+        remaining:
+          type: [integer, 'null']
+          description: Null when the allocation is unlimited.
+        status:
+          type: string
+          enum: [on_sale, sold_out, hidden, closed]
+
+    CartLine:
+      type: object
+      required: [ticket_type_id, quantity]
+      additionalProperties: false
+      properties:
+        ticket_type_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1 }
+
+    QuoteRequest:
+      type: object
+      required: [lines]
+      additionalProperties: false
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/CartLine' }
+        code:
+          type: [string, 'null']
+          description: |
+            One code namespace. A code may discount, attribute a promoter, or
+            both — in nightlife the discount code is frequently the promoter's
+            attribution mechanism, so they are the same object.
+        ref:
+          type: [string, 'null']
+          description: Attribution captured from a shared link's ?ref= parameter.
+
+    Quote:
+      type: object
+      description: |
+        Priced entirely server-side. The ordering is fixed and deliberate:
+        the discount applies to the subtotal, tax is calculated on the
+        discounted amount, and platform commission is taken on the net.
+      required: [subtotal, discount, tax, total, currency, expires_at]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        total:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: |
+            May be zero — a full-value code, a comp, or a free event. A zero
+            total skips payment entirely and routes straight to fulfilment.
+        expires_at:
+          type: string
+          format: date-time
+          description: |
+            Inventory is held until this moment. The hold is taken inside the
+            same transaction that counts code usage, so neither can oversell.
+
+    Ticket:
+      type: object
+      required: [id, code, event, ticket_type, status]
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: |
+            Cryptographically random. Codes issued by the previous platform are
+            imported verbatim so tickets already in inboxes still scan.
+        event: { $ref: '#/components/schemas/Event' }
+        ticket_type: { $ref: '#/components/schemas/TicketType' }
+        holder_name: { type: [string, 'null'] }
+        status:
+          type: string
+          enum: [valid, checked_in, transferred, refunded, void]
+        checked_in_at: { type: [string, 'null'], format: date-time }
+        pdf_url: { type: [string, 'null'], format: uri }
+        apple_pass_url: { type: [string, 'null'], format: uri }
+        google_pass_url: { type: [string, 'null'], format: uri }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+security:
+  - bearerAuth: []
+
+# ---------------------------------------------------------------------------
+
+paths:
+
+  /events:
+    get:
+      tags: [Events]
+      operationId: listEvents
+      summary: Browse published events
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Full-text search across title, description, and venue.
+        - { name: city, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: starts_after, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: A page of events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Event' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '422': { $ref: '#/components/responses/Problem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /events/{slug}:
+    get:
+      tags: [Events]
+      operationId: getEvent
+      summary: Fetch one event by slug
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The event, with its ticket types
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, ticket_types]
+                properties:
+                  data: { $ref: '#/components/schemas/Event' }
+                  ticket_types:
+                    type: array
+                    items: { $ref: '#/components/schemas/TicketType' }
+        '404': { $ref: '#/components/responses/Problem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /events/{slug}/quote:
+    post:
+      tags: [Checkout]
+      operationId: createQuote
+      summary: Price a cart and hold inventory
+      description: |
+        The only place a total is calculated. Clients send quantities and an
+        optional code; everything else is read from the database. Buying does
+        not require an account — guest checkout is the primary path.
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuoteRequest' }
+      responses:
+        '201':
+          description: Priced, with inventory held until expires_at
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '409':
+          description: Insufficient inventory, or the code is exhausted or invalid
+          $ref: '#/components/responses/Problem'
+        '422': { $ref: '#/components/responses/Problem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /tickets/{code}/check-in:
+    post:
+      tags: [Door]
+      operationId: checkInTicket
+      summary: Validate a ticket and check it in
+      description: |
+        Requires a door token scoped to this ticket's event. The read and the
+        write happen in one transaction, so two scanners hitting the same code
+        cannot both be told it is valid. Every attempt is recorded, including
+        rejections.
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Checked in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ticket' }
+        '403':
+          description: Token is not scoped to this event
+          $ref: '#/components/responses/Problem'
+        '404': { $ref: '#/components/responses/Problem' }
+        '409':
+          description: Already checked in, or the ticket is void or refunded
+          $ref: '#/components/responses/Problem'
+        default: { $ref: '#/components/responses/Problem' }
