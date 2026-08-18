@@ -72,7 +72,16 @@ class User extends Authenticatable
 
         $membership = $this->organizations->firstWhere('id', $id);
 
-        return $membership ? Role::from($membership->pivot->role) : null;
+        if ($membership === null) {
+            return null;
+        }
+
+        // The custom pivot casts this to a Role, but a membership loaded
+        // without it hands back the raw string. Accept both rather than
+        // depending on how the relation happened to be loaded.
+        $role = $membership->pivot->role;
+
+        return $role instanceof Role ? $role : Role::from($role);
     }
 
     public function hasRoleIn(Organization|string $organization, Role ...$roles): bool

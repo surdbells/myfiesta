@@ -1,43 +1,60 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Unit;
 
 use App\Enums\Role;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Models\OrganizationUser;
 use App\Models\User;
 use App\Policies\EventPolicy;
 use App\Policies\OrganizationPolicy;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
-use Tests\TestCase;
+use Illuminate\Database\Eloquent\Collection;
+use PHPUnit\Framework\TestCase;
 
 /**
- * The door boundary, asserted rather than assumed.
+ * The door boundary, asserted without touching a database.
  *
- * The mobile app carries attendee, organizer, and door modes in one binary, so
- * a door-staff phone has the organizer interface compiled into it. Hiding it is
- * a convenience; these checks are the actual boundary. If they pass by accident
- * the product has the defect it was built to remove.
+ * Authorization here is pure: it reads a role off a loaded relation and
+ * answers. Building the objects in memory keeps these checks runnable
+ * anywhere, which matters because they are the rules that stop a door-staff
+ * phone from becoming an organizer console — the defect this platform was
+ * rebuilt to remove.
+ *
+ * Tests that exercise the same rules through real persistence live in
+ * tests/Feature and need Postgres.
  */
 class RoleBoundaryTest extends TestCase
 {
-    use RefreshDatabase;
+    private const ORG_ID = '11111111-1111-1111-1111-111111111111';
 
-    private function memberWithRole(Role $role): array
+    /** @return array{User, Organization, Event} */
+    private function memberWithRole(?Role $role): array
     {
-        $organization = Organization::factory()->create();
-        $user = User::factory()->create();
+        $organization = new Organization;
+        $organization->id = self::ORG_ID;
 
-        $organization->members()->attach($user, [
-            'id' => (string) Str::uuid(),
-            'role' => $role->value,
-            'accepted_at' => now(),
-        ]);
+        $user = new User;
+        $user->id = '22222222-2222-2222-2222-222222222222';
+        $user->email = 'staff@example.com';
 
-        $event = Event::factory()->for($organization)->published()->create();
+        $memberships = new Collection;
 
-        return [$user->fresh(['organizations']), $organization, $event];
+        if ($role !== null) {
+            $pivot = new OrganizationUser;
+            $pivot->role = $role;
+            $organization->setRelation('pivot', $pivot);
+            $memberships->push($organization);
+        }
+
+        $user->setRelation('organizations', $memberships);
+
+        $event = new Event;
+        $event->id = '33333333-3333-3333-3333-333333333333';
+        $event->organization_id = self::ORG_ID;
+        $event->status = 'published';
+
+        return [$user, $organization, $event];
     }
 
     public function test_door_staff_can_scan(): void
@@ -81,7 +98,7 @@ class RoleBoundaryTest extends TestCase
         $this->assertFalse((new EventPolicy)->update($user, $event));
     }
 
-    public function test_door_is_not_considered_staff(): void
+    public function test_door_is_not_counted_as_staff(): void
     {
         [$user, $organization] = $this->memberWithRole(Role::Door);
 
@@ -96,7 +113,7 @@ class RoleBoundaryTest extends TestCase
         $this->assertTrue((new EventPolicy)->viewGuests($user, $event));
         $this->assertFalse(
             (new OrganizationPolicy)->viewFinancials($user, $organization),
-            'A manager reached banking details. Running events must not imply seeing where money lands.'
+            'A manager reached banking details. Running events must not imply seeing where the money lands.'
         );
     }
 
@@ -107,6 +124,14 @@ class RoleBoundaryTest extends TestCase
         $this->assertTrue((new OrganizationPolicy)->viewFinancials($user, $organization));
         $this->assertTrue((new EventPolicy)->viewSales($user, $event));
         $this->assertFalse((new EventPolicy)->update($user, $event));
+    }
+
+    public function test_marketing_messages_guests_but_cannot_see_sales(): void
+    {
+        [$user, , $event] = $this->memberWithRole(Role::Marketing);
+
+        $this->assertTrue((new EventPolicy)->message($user, $event));
+        $this->assertFalse((new EventPolicy)->viewSales($user, $event));
     }
 
     public function test_only_the_owner_manages_members(): void
@@ -121,29 +146,49 @@ class RoleBoundaryTest extends TestCase
         }
 
         [$owner, $ownerOrganization] = $this->memberWithRole(Role::Owner);
+
         $this->assertTrue((new OrganizationPolicy)->manageMembers($owner, $ownerOrganization));
     }
 
-    public function test_a_stranger_reaches_nothing(): void
+    public function test_a_non_member_reaches_nothing(): void
     {
-        [, $organization, $event] = $this->memberWithRole(Role::Owner);
-        $stranger = User::factory()->create();
+        [$stranger, $organization, $event] = $this->memberWithRole(null);
 
+        $this->assertNull($stranger->roleIn($organization));
+        $this->assertFalse($stranger->isStaffOf($organization));
         $this->assertFalse((new EventPolicy)->update($stranger, $event));
         $this->assertFalse((new EventPolicy)->scan($stranger, $event));
         $this->assertFalse((new EventPolicy)->viewGuests($stranger, $event));
         $this->assertFalse((new OrganizationPolicy)->viewFinancials($stranger, $organization));
-        $this->assertFalse($stranger->isStaffOf($organization));
     }
 
-    public function test_a_published_event_is_publicly_visible_but_a_draft_is_not(): void
+    public function test_a_role_in_one_organization_grants_nothing_in_another(): void
     {
-        [, $organization] = $this->memberWithRole(Role::Owner);
+        [$user, , $event] = $this->memberWithRole(Role::Owner);
 
-        $published = Event::factory()->for($organization)->published()->create();
-        $draft = Event::factory()->for($organization)->create();
+        $someoneElsesEvent = new Event;
+        $someoneElsesEvent->id = '44444444-4444-4444-4444-444444444444';
+        $someoneElsesEvent->organization_id = '99999999-9999-9999-9999-999999999999';
+        $someoneElsesEvent->status = 'published';
 
-        $this->assertTrue((new EventPolicy)->view(null, $published));
+        $this->assertTrue((new EventPolicy)->update($user, $event));
+        $this->assertFalse(
+            (new EventPolicy)->update($user, $someoneElsesEvent),
+            'Owning one organization granted access to another.'
+        );
+    }
+
+    public function test_drafts_are_private_but_published_events_are_not(): void
+    {
+        [$user, , $event] = $this->memberWithRole(Role::Manager);
+
+        $draft = new Event;
+        $draft->id = '55555555-5555-5555-5555-555555555555';
+        $draft->organization_id = self::ORG_ID;
+        $draft->status = 'draft';
+
+        $this->assertTrue((new EventPolicy)->view(null, $event));
         $this->assertFalse((new EventPolicy)->view(null, $draft));
+        $this->assertTrue((new EventPolicy)->view($user, $draft));
     }
 }
