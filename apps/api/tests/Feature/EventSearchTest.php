@@ -188,4 +188,21 @@ class EventSearchTest extends TestCase
         // Otherwise a crawler asks for the whole table in one response.
         $this->assertSame(50, EventFilters::fromRequest($request)->perPage);
     }
+
+    public function test_invitation_events_never_appear_in_public_search(): void
+    {
+        $this->event(['title' => 'Ada and Sam Wedding', 'kind' => 'invitation']);
+        $this->event(['title' => 'Public Club Night']);
+
+        // An invitation event is published so its invited guests can reach it,
+        // not so strangers can. Somebody's wedding surfacing in a public feed
+        // is a privacy failure, not a discovery feature.
+        $results = $this->find();
+
+        $this->assertCount(1, $results);
+        $this->assertSame('Public Club Night', $results[0]->title);
+
+        // Not even by name.
+        $this->assertCount(0, $this->find(['text' => 'wedding']));
+    }
 }

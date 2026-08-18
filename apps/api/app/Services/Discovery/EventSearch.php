@@ -23,6 +23,11 @@ class EventSearch
     {
         $query = Event::query()
             ->published()
+            // Invitation events are published so their invited guests can reach
+            // them, not so strangers can. A wedding must never surface in a
+            // public feed, and defaulting to open here would make that a
+            // one-line mistake away for every future caller.
+            ->where('kind', 'ticketed')
             ->with(['organization:id,name,slug,logo_path', 'venue:id,name,city']);
 
         $this->applyText($query, $filters->text);

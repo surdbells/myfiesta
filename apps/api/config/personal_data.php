@@ -93,6 +93,21 @@ return [
             'strategy' => 'delete',
             'key' => 'email',
         ],
+
+        /*
+         * Invites+ guests.
+         *
+         * The most exposed people in the system: added to a list by somebody
+         * else, usually without an account, and often without having asked to
+         * be there at all. An erasure request from a wedding guest is entirely
+         * foreseeable, and deleting outright is right here — unlike an order,
+         * a guest row carries no financial obligation to retain.
+         */
+        'guests' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'Cascades to their RSVP and answers. No retention duty applies.',
+        ],
     ],
 
     /*
