@@ -20,6 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'token.scope' => EnforceTokenScope::class,
         ]);
+
+        // Webhooks carry no browser session, so there is no CSRF token to
+        // present and nothing for one to protect. Their authentication is the
+        // signature over the raw body, checked inside each gateway adapter.
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/payments/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

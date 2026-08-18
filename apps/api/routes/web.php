@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IdentityDocumentController;
+use App\Http\Controllers\Webhooks\PaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect('/admin'));
@@ -15,3 +16,14 @@ Route::get('/', fn () => redirect('/admin'));
 Route::get('/identity-documents/{document}', [IdentityDocumentController::class, 'show'])
     ->middleware(['auth', 'signed'])
     ->name('identity-documents.show');
+
+/*
+ * Payment webhooks.
+ *
+ * Deliberately outside any auth middleware — the gateway is not a logged-in
+ * user — and outside CSRF, since there is no browser session to protect. The
+ * signature is the authentication, checked inside each adapter against the raw
+ * request body.
+ */
+Route::post('/webhooks/payments/{gateway}', PaymentWebhookController::class)
+    ->name('webhooks.payments');
