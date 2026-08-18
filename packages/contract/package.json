@@ -1,0 +1,18 @@
+{
+  "name": "@myfiesta/contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The OpenAPI contract. Both client languages generate from this file.",
+  "scripts": {
+    "lint": "redocly lint openapi.yaml",
+    "bundle": "redocly bundle openapi.yaml -o generated/openapi.bundled.yaml",
+    "gen:ts": "openapi-typescript openapi.yaml -o generated/ts/schema.d.ts",
+    "gen:dart": "openapi-generator-cli generate -i openapi.yaml -g dart-dio -o generated/dart --additional-properties=pubName=myfiesta_api,nullableFields=true",
+    "gen": "npm run gen:ts && npm run gen:dart",
+    "docs": "redocly build-docs openapi.yaml -o generated/docs.html"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.4.0",
+    "openapi-typescript": "^7.9.0"
+  }
+}

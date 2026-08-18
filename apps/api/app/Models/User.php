@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\PlatformRole;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -28,7 +31,7 @@ use Laravel\Sanctum\HasApiTokens;
  */
 #[Fillable(['name', 'email', 'password', 'phone', 'locale', 'timezone'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasUuids, Notifiable, SoftDeletes;
@@ -38,6 +41,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'platform_role' => PlatformRole::class,
             'password' => 'hashed',
         ];
     }
@@ -64,6 +68,33 @@ class User extends Authenticatable
     public function isUnclaimed(): bool
     {
         return $this->password === null;
+    }
+
+    /**
+     * Who may open the admin panel.
+     *
+     * One users table holds attendees as well as staff, so this gate is the
+     * only thing between a ticket buyer and /admin — they already have a valid
+     * account, and Filament would otherwise be satisfied by that alone.
+     *
+     * platform_role is null for almost every row and is granted deliberately.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->platform_role !== null
+            && $this->email_verified_at !== null
+            && $this->deleted_at === null;
+    }
+
+    public function isPlatformStaff(): bool
+    {
+        return $this->platform_role !== null;
+    }
+
+    public function hasPlatformRole(PlatformRole ...$roles): bool
+    {
+        return $this->platform_role !== null
+            && in_array($this->platform_role, $roles, true);
     }
 
     public function roleIn(Organization|string $organization): ?Role
