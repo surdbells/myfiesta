@@ -1,121 +1,142 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'core/session.dart';
+import 'design/theme.dart';
+import 'features/door/door_screen.dart';
+
+void main() => runApp(const MyFiestaApp());
+
+/// One app, three modes.
+///
+/// Attendee, organizer, and door ship in a single binary under the existing
+/// bundle id, so the store listing, its reviews, and the forced-update gate all
+/// carry over rather than needing every user to find and install something new.
+///
+/// Which mode a session gets is decided by the scope on its token, not by a
+/// build flavour. The app hides what a scope should not see; the API refuses it.
+/// Only the second of those is a security boundary.
+class MyFiestaApp extends StatefulWidget {
+  const MyFiestaApp({super.key});
+
+  @override
+  State<MyFiestaApp> createState() => _MyFiestaAppState();
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class _MyFiestaAppState extends State<MyFiestaApp> {
+  Session? _session;
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'myFiesta',
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      home: _session == null
+          ? _ModePicker(onPick: (s) => setState(() => _session = s))
+          : _routeFor(_session!),
+    );
+  }
+
+  Widget _routeFor(Session session) {
+    if (session.isLocked) {
+      return DoorScreen(
+        session: session,
+        onSignOut: () => setState(() => _session = null),
+      );
+    }
+
+    return _NotYetBuilt(
+      session: session,
+      onSignOut: () => setState(() => _session = null),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+/// Stands in for sign-in during the spike.
+///
+/// In the real app a door session is entered by redeeming a per-event invite
+/// from an organizer, never by sharing organizer credentials — which is how the
+/// platform this replaces ended up with venue staff holding the owner's login.
+class _ModePicker extends StatelessWidget {
+  const _ModePicker({required this.onPick});
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  final ValueChanged<Session> onPick;
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('myFiesta', style: Theme.of(context).textTheme.displaySmall),
+              const SizedBox(height: 8),
+              Text(
+                'Spike build — choose a token scope',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 32),
+              FilledButton(
+                onPressed: () => onPick(const Session(
+                  scope: TokenScope.door,
+                  displayName: 'Door staff',
+                  eventId: 'evt_demo',
+                  eventTitle: 'Afro Fest — Lagos',
+                )),
+                child: const Text('Door'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () => onPick(const Session(
+                  scope: TokenScope.organizer,
+                  displayName: 'Organizer',
+                )),
+                child: const Text('Organizer'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () => onPick(const Session(
+                  scope: TokenScope.attendee,
+                  displayName: 'Attendee',
+                )),
+                child: const Text('Attendee'),
+              ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+class _NotYetBuilt extends StatelessWidget {
+  const _NotYetBuilt({required this.session, required this.onSignOut});
+
+  final Session session;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(session.displayName),
+        actions: [
+          TextButton(onPressed: onSignOut, child: const Text('Sign out')),
+        ],
+      ),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Door mode was built first, on purpose: it is the smallest '
+            'well-scoped surface in the app, and learning Flutter on the '
+            'checkout flow would be the expensive way round.',
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
