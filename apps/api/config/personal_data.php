@@ -1,0 +1,136 @@
+<?php
+
+/**
+ * Where personal data lives.
+ *
+ * PIPEDA in Canada and the NDPR in Nigeria both grant people the right to see
+ * what is held about them and to have it erased. Satisfying that means being
+ * able to answer "where is this person?" across the whole schema — which is
+ * trivial to maintain from the first migration and archaeology once there are
+ * forty tables.
+ *
+ * This map is the input to the export and erasure jobs. It is deliberately
+ * configuration rather than prose so it can be executed and tested: a feature
+ * test walks every entry and fails if a table or column named here has gone
+ * missing, so the map cannot drift away from the schema in silence.
+ *
+ * Adding a table that holds personal data means adding it here in the same
+ * change. Treat a missing entry as a bug, not an oversight.
+ *
+ * Strategies:
+ *   delete    remove the row outright
+ *   anonymise blank the listed columns, keep the row for financial integrity
+ *   retain    keep as-is; the legal basis is recorded in `reason`
+ */
+
+return [
+
+    /*
+     * Identified by user id. The person has an account, claimed or unclaimed.
+     */
+    'by_user' => [
+
+        'users' => [
+            'strategy' => 'anonymise',
+            'key' => 'id',
+            'columns' => ['name', 'email', 'phone', 'avatar_path', 'timezone'],
+            'reason' => 'Row is retained because orders and tickets reference it; identifying fields are cleared.',
+        ],
+
+        'sessions' => [
+            'strategy' => 'delete',
+            'key' => 'user_id',
+        ],
+
+        'organization_user' => [
+            'strategy' => 'delete',
+            'key' => 'user_id',
+            'reason' => 'Membership ends with the account. Organization-owned records survive.',
+        ],
+
+        'ticket_scans' => [
+            'strategy' => 'anonymise',
+            'key' => 'scanned_by',
+            'columns' => ['scanned_by'],
+            'reason' => 'The scan happened and stays in the record; who performed it is detached.',
+        ],
+
+        'sensitive_data_accesses' => [
+            'strategy' => 'retain',
+            'key' => 'user_id',
+            'reason' => 'Security audit trail. Erasing it would defeat the log that exists to detect misuse.',
+        ],
+    ],
+
+    /*
+     * Identified by email address. Guest checkout means much personal data is
+     * attached to an address rather than an account — an erasure request from
+     * someone who never registered still has to find these.
+     */
+    'by_email' => [
+
+        'orders' => [
+            'strategy' => 'anonymise',
+            'key' => 'buyer_email',
+            'columns' => ['buyer_email', 'buyer_name', 'buyer_phone'],
+            'reason' => 'Financial record. Amounts, tax, and commission are retained; the buyer is detached.',
+        ],
+
+        'tickets' => [
+            'strategy' => 'anonymise',
+            'key' => 'owner_email',
+            'columns' => ['owner_email', 'holder_name'],
+            'reason' => 'Admission record for a real event. Identity is cleared, the ticket remains.',
+        ],
+
+        'ticket_transfers' => [
+            'strategy' => 'anonymise',
+            'key' => 'from_email',
+            'columns' => ['from_email', 'to_email'],
+        ],
+
+        'password_reset_tokens' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+        ],
+    ],
+
+    /*
+     * Held about an organization rather than an individual, but personal in
+     * substance — legal names, dates of birth, government identifiers, bank
+     * details. Encrypted at rest, access-logged, and never returned by a
+     * general-purpose endpoint.
+     */
+    'organization_scoped' => [
+
+        'organization_payout_details' => [
+            'strategy' => 'delete',
+            'key' => 'organization_id',
+            'encrypted' => [
+                'interac_email', 'bank_name', 'account_name', 'account_number',
+                'transit_number', 'institution_number', 'bank_code',
+            ],
+        ],
+
+        'organization_identity_documents' => [
+            'strategy' => 'delete',
+            'key' => 'organization_id',
+            'encrypted' => [
+                'legal_first_name', 'legal_last_name', 'date_of_birth',
+                'document_number', 'expires_on',
+            ],
+            'files' => ['document_path'],
+            'reason' => 'Stored on the private disk; the file is removed with the row.',
+        ],
+    ],
+
+    /*
+     * Erasure cannot be unconditional. A request that would destroy a record
+     * still required for tax or accounting is refused with a reason, not
+     * silently partially applied.
+     */
+    'retention' => [
+        'financial_records_years' => 7,
+        'note' => 'Orders, ledger entries, and settlements are anonymised rather than deleted until this period lapses.',
+    ],
+];
