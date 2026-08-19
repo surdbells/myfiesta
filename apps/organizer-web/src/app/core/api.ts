@@ -1,0 +1,122 @@
+import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { Injectable, InjectionToken, inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { Router } from '@angular/router';
+import { Observable, throwError } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { EventSummary, OrganizerEvent, Session, TicketType } from './api.types';
+import { SessionStore } from './session';
+
+/**
+ * Where the API lives, supplied at runtime rather than compiled in.
+ *
+ * One bundle then serves staging and production, which is what stops a staging
+ * build being promoted with the wrong host inside it.
+ */
+export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
+  providedIn: 'root',
+  factory: () => {
+    const meta = inject(DOCUMENT).querySelector<HTMLMetaElement>('meta[name="api-base"]');
+
+    return meta?.content || 'http://127.0.0.1:8000';
+  },
+});
+
+/**
+ * Attaches the token, and reacts when the server stops accepting it.
+ *
+ * A 401 means the token is gone or expired — the session is cleared rather
+ * than kept, because a console that looks signed in and fails every action is
+ * worse than one that asks you to sign in again.
+ *
+ * A 403 is left alone. That is the server saying this account may not do this
+ * particular thing, which is information, not a broken session.
+ */
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const session = inject(SessionStore);
+  const router = inject(Router);
+  const token = session.token;
+
+  const request = token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+
+  return next(request).pipe(
+    catchError((error: HttpErrorResponse) => {
+      if (error.status === 401 && session.signedIn()) {
+        session.clear();
+        void router.navigate(['/sign-in']);
+      }
+
+      return throwError(() => error);
+    }),
+  );
+};
+
+@Injectable({ providedIn: 'root' })
+export class Api {
+  private readonly http = inject(HttpClient);
+  private readonly base = inject(API_BASE_URL);
+
+  signIn(email: string, password: string): Observable<Session> {
+    return this.http.post<Session>(`${this.base}/api/auth/login`, {
+      email,
+      password,
+      device: 'organizer-console',
+    });
+  }
+
+  signOut(): Observable<unknown> {
+    return this.http.post(`${this.base}/api/auth/logout`, {});
+  }
+
+  events(): Observable<{ data: OrganizerEvent[] }> {
+    return this.http.get<{ data: OrganizerEvent[] }>(`${this.base}/api/organizer/events`);
+  }
+
+  createEvent(body: Record<string, unknown>): Observable<unknown> {
+    return this.http.post(`${this.base}/api/organizer/events`, body);
+  }
+
+  updateEvent(id: string, body: Record<string, unknown>): Observable<unknown> {
+    return this.http.patch(`${this.base}/api/organizer/events/${id}`, body);
+  }
+
+  publish(id: string, status: 'draft' | 'published'): Observable<{ status: string }> {
+    return this.http.post<{ status: string }>(`${this.base}/api/organizer/events/${id}/publish`, {
+      status,
+    });
+  }
+
+  summary(id: string): Observable<EventSummary> {
+    return this.http.get<EventSummary>(`${this.base}/api/organizer/events/${id}/summary`);
+  }
+
+  ticketTypes(eventId: string): Observable<{ data: TicketType[] }> {
+    return this.http.get<{ data: TicketType[] }>(
+      `${this.base}/api/organizer/events/${eventId}/ticket-types`,
+    );
+  }
+
+  createTicketType(eventId: string, body: Record<string, unknown>): Observable<TicketType> {
+    return this.http.post<TicketType>(
+      `${this.base}/api/organizer/events/${eventId}/ticket-types`,
+      body,
+    );
+  }
+
+  updateTicketType(
+    eventId: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Observable<TicketType> {
+    return this.http.patch<TicketType>(
+      `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
+      body,
+    );
+  }
+
+  deleteTicketType(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
+    );
+  }
+}

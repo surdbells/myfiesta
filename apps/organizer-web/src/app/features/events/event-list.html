@@ -1,0 +1,78 @@
+<header class="bar">
+  <div>
+    <h1>Events</h1>
+    @if (session.current(); as org) {
+      <p class="sub">{{ org.name }}</p>
+    }
+  </div>
+
+  @if (session.canEditEvents()) {
+    <a class="cta" routerLink="/events/new">New event</a>
+  }
+</header>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+} @else if (events().length === 0) {
+  <div class="empty">
+    <h2>Nothing here yet</h2>
+    <p>Create an event, add a ticket, and share the link.</p>
+    @if (session.canEditEvents()) {
+      <a class="cta" routerLink="/events/new">New event</a>
+    }
+  </div>
+} @else {
+  @if (upcoming().length > 0) {
+    <h2 class="section">Upcoming</h2>
+    <ul class="list">
+      @for (event of upcoming(); track event.id) {
+        <li>
+          <a class="row" [routerLink]="['/events', event.id]">
+            <span class="title">
+              {{ event.title }}
+              <span class="badge" [class]="'badge--' + event.status">{{ event.status }}</span>
+            </span>
+
+            <span class="meta">
+              <!-- In the event's own zone. A Lagos event at 10pm should say
+                   10pm to somebody reading in Toronto. -->
+              {{ event.starts_at | date: 'EEE d MMM, h:mm a' : event.timezone }}
+              · {{ event.city }}
+            </span>
+
+            <span class="stats">
+              <span>{{ event.tickets_issued }} issued</span>
+              @if (arrivalRate(event); as rate) {
+                <span>{{ rate }}% arrived</span>
+              }
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (past().length > 0) {
+    <h2 class="section">Past</h2>
+    <ul class="list list--past">
+      @for (event of past(); track event.id) {
+        <li>
+          <a class="row" [routerLink]="['/events', event.id]">
+            <span class="title">{{ event.title }}</span>
+            <span class="meta">
+              {{ event.starts_at | date: 'd MMM yyyy' : event.timezone }} · {{ event.city }}
+            </span>
+            <span class="stats">
+              <span>{{ event.tickets_issued }} issued</span>
+              @if (arrivalRate(event); as rate) {
+                <span>{{ rate }}% arrived</span>
+              }
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+}

@@ -1,0 +1,151 @@
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (event(); as event) {
+  <a class="back" routerLink="/events">← All events</a>
+
+  <header class="bar">
+    <div>
+      <h1>{{ event.title }}</h1>
+      <p class="sub">
+        {{ event.starts_at | date: 'EEEE d MMMM yyyy, h:mm a' : event.timezone }}
+        · {{ event.city }}
+      </p>
+    </div>
+
+    @if (session.canEditEvents()) {
+      <button
+        class="cta"
+        type="button"
+        [disabled]="publishing() || (event.status !== 'published' && !canPublish())"
+        (click)="togglePublished()"
+      >
+        @if (publishing()) {
+          Saving…
+        } @else if (event.status === 'published') {
+          Take down
+        } @else {
+          Publish
+        }
+      </button>
+    }
+  </header>
+
+  @if (notice(); as message) {
+    <p class="notice" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  @if (event.status !== 'published' && !canPublish()) {
+    <p class="hint">
+      Add a ticket before publishing. A published event with nothing on sale is a link that
+      disappoints everyone who follows it.
+    </p>
+  }
+
+  <!-- Money is only fetched, and only shown, for roles the API would serve. -->
+  @if (summary(); as totals) {
+    <section class="totals">
+      <div>
+        <span class="label">Gross</span><span class="figure">{{ money(totals.gross) }}</span>
+      </div>
+      <div>
+        <span class="label">Discounts</span
+        ><span class="figure">{{ money(totals.discounts) }}</span>
+      </div>
+      <div>
+        <span class="label">Tax</span><span class="figure">{{ money(totals.tax) }}</span>
+      </div>
+      <div>
+        <span class="label">Commission</span
+        ><span class="figure">{{ money(totals.commission) }}</span>
+      </div>
+      <div class="net">
+        <span class="label">Owed to you</span><span class="figure">{{ money(totals.net) }}</span>
+      </div>
+    </section>
+
+    <p class="counts">
+      {{ totals.orders }} orders · {{ totals.tickets_issued }} tickets ·
+      {{ totals.checked_in }} arrived
+    </p>
+  }
+
+  <h2 class="section">Tickets</h2>
+
+  @if (ticketTypes().length === 0) {
+    <p class="muted">Nothing on sale yet.</p>
+  } @else {
+    <ul class="tickets">
+      @for (type of ticketTypes(); track type.id) {
+        <li>
+          <span class="name">
+            {{ type.name }}
+            @if (type.status !== 'on_sale') {
+              <span class="badge">{{ type.status }}</span>
+            }
+          </span>
+          <span class="price">{{ money(type.price) }}</span>
+          @if (session.canEditEvents() && type.status === 'on_sale') {
+            <button class="link" type="button" (click)="removeTicketType(type)">Remove</button>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (session.canEditEvents()) {
+    <form class="add" (ngSubmit)="addTicketType()">
+      <div class="field">
+        <label for="tname">Name</label>
+        <input
+          id="tname"
+          name="tname"
+          required
+          placeholder="Early bird"
+          [ngModel]="draft().name"
+          (ngModelChange)="draft.set({ ...draft(), name: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="tprice">Price ({{ event.currency }})</label>
+        <input
+          id="tprice"
+          name="tprice"
+          type="number"
+          min="0"
+          step="0.01"
+          required
+          placeholder="25.00"
+          [ngModel]="draft().price"
+          (ngModelChange)="draft.set({ ...draft(), price: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="tqty">How many</label>
+        <input
+          id="tqty"
+          name="tqty"
+          type="number"
+          min="0"
+          placeholder="Unlimited"
+          [ngModel]="draft().quantity"
+          (ngModelChange)="draft.set({ ...draft(), quantity: $event })"
+        />
+      </div>
+
+      <button type="submit" [disabled]="savingTicket()">
+        @if (savingTicket()) {
+          Saving…
+        } @else {
+          Add ticket
+        }
+      </button>
+    </form>
+  }
+} @else {
+  <p class="error">That event could not be found.</p>
+}

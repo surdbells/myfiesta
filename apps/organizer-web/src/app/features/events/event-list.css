@@ -1,0 +1,146 @@
+.bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+h1 {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-sm);
+}
+
+.section {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-neutral-600);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Present, but quieter. These are records rather than work. */
+.list--past .row {
+  opacity: 0.7;
+}
+
+.row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+}
+
+.row:hover {
+  border-color: var(--color-brand-500);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.meta,
+.stats {
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+}
+
+.stats {
+  display: flex;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-600);
+}
+
+/* Published is the state that means people can buy, so it is the one that
+   reads differently at a glance. */
+.badge--published {
+  background: color-mix(in srgb, var(--color-semantic-success) 14%, transparent);
+  color: var(--color-semantic-success);
+}
+
+.badge--cancelled {
+  background: color-mix(in srgb, var(--color-semantic-danger) 12%, transparent);
+  color: var(--color-semantic-danger);
+}
+
+.cta {
+  align-self: start;
+  padding: var(--space-3) var(--space-4);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  color: var(--color-neutral-0);
+  background: var(--color-brand-500);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  border: 1px dashed var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+}
+
+.empty h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-lg);
+}
+
+.empty p {
+  margin: 0 0 var(--space-5);
+  color: var(--color-neutral-600);
+}
+
+.empty .cta {
+  display: inline-block;
+}
+
+.muted {
+  color: var(--color-neutral-600);
+}
+
+.error {
+  padding: var(--space-3);
+  color: var(--color-semantic-danger);
+  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  border-radius: var(--radius-md);
+}

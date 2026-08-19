@@ -1,0 +1,40 @@
+<main class="shell">
+  <form class="card" (ngSubmit)="submit()">
+    <h1>myFiesta</h1>
+    <p class="sub">Organizer console</p>
+
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+
+    <label for="email">Email</label>
+    <input
+      id="email"
+      name="email"
+      type="email"
+      autocomplete="username"
+      required
+      [ngModel]="email()"
+      (ngModelChange)="email.set($event)"
+    />
+
+    <label for="password">Password</label>
+    <input
+      id="password"
+      name="password"
+      type="password"
+      autocomplete="current-password"
+      required
+      [ngModel]="password()"
+      (ngModelChange)="password.set($event)"
+    />
+
+    <button type="submit" [disabled]="busy()">
+      @if (busy()) {
+        Signing in…
+      } @else {
+        Sign in
+      }
+    </button>
+  </form>
+</main>
