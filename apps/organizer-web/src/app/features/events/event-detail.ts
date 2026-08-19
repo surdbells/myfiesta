@@ -1,16 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { EventSummary, OrganizerEvent, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
+import { longEventTime } from '../../core/event-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-detail',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   templateUrl: './event-detail.html',
   styleUrl: './event-detail.css',
 })
@@ -35,6 +35,7 @@ export class EventDetail {
   readonly savingTicket = signal(false);
 
   readonly money = formatMoney;
+  readonly when = longEventTime;
 
   readonly canPublish = computed(() => this.ticketTypes().some((t) => t.status === 'on_sale'));
 

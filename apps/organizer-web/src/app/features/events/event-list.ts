@@ -1,19 +1,22 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { eventDate, shortEventTime } from '../../core/event-time';
 import { Api } from '../../core/api';
 import { OrganizerEvent } from '../../core/api.types';
 import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-list',
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink],
   templateUrl: './event-list.html',
   styleUrl: './event-list.css',
 })
 export class EventList {
   private readonly api = inject(Api);
   readonly session = inject(SessionStore);
+
+  readonly when = shortEventTime;
+  readonly onDate = eventDate;
 
   readonly events = signal<OrganizerEvent[]>([]);
   readonly loading = signal(true);

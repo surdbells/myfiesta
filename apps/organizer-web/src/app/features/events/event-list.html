@@ -38,7 +38,7 @@
             <span class="meta">
               <!-- In the event's own zone. A Lagos event at 10pm should say
                    10pm to somebody reading in Toronto. -->
-              {{ event.starts_at | date: 'EEE d MMM, h:mm a' : event.timezone }}
+              {{ when(event.starts_at, event.timezone) }}
               · {{ event.city }}
             </span>
 
@@ -62,7 +62,7 @@
           <a class="row" [routerLink]="['/events', event.id]">
             <span class="title">{{ event.title }}</span>
             <span class="meta">
-              {{ event.starts_at | date: 'd MMM yyyy' : event.timezone }} · {{ event.city }}
+              {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
             </span>
             <span class="stats">
               <span>{{ event.tickets_issued }} issued</span>

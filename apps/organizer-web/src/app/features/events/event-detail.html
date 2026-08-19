@@ -6,10 +6,7 @@
   <header class="bar">
     <div>
       <h1>{{ event.title }}</h1>
-      <p class="sub">
-        {{ event.starts_at | date: 'EEEE d MMMM yyyy, h:mm a' : event.timezone }}
-        · {{ event.city }}
-      </p>
+      <p class="sub">{{ when(event.starts_at, event.timezone) }} · {{ event.city }}</p>
     </div>
 
     @if (session.canEditEvents()) {
