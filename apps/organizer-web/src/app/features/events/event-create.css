@@ -1,0 +1,125 @@
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--color-brand-500);
+}
+
+h1 {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  margin: var(--space-1) 0 var(--space-6);
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-sm);
+}
+
+form {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 640px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-neutral-400);
+}
+
+input,
+select,
+textarea {
+  padding: var(--space-3);
+  font: inherit;
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 1px;
+}
+
+.help {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-neutral-600);
+}
+
+/* The instant the organizer is actually creating, echoed back before they
+   commit to it. */
+.preview {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  background: var(--color-brand-50);
+  border-left: 3px solid var(--color-brand-500);
+  border-radius: var(--radius-md);
+}
+
+/* The only irreversible choice on the form, so it does not look like the
+   rest of the help text. */
+.permanent {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-800);
+  background: var(--color-accent-50, color-mix(in srgb, var(--color-accent-500) 10%, transparent));
+  border-radius: var(--radius-md);
+}
+
+.cta {
+  justify-self: start;
+  padding: var(--space-3) var(--space-5);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-neutral-0);
+  background: var(--color-brand-500);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.cta:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.error {
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-semantic-danger);
+  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  border-radius: var(--radius-md);
+}

@@ -12,6 +12,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
   },
   {
+    // Above events/:id, or "new" is read as an event id.
+    path: 'events/new',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/events/event-create').then((m) => m.EventCreate),
+  },
+  {
     path: 'events/:id',
     canActivate: [requireSession],
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),

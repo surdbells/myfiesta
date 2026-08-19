@@ -1,0 +1,187 @@
+<a class="back" routerLink="/events">← All events</a>
+
+<h1>New event</h1>
+<p class="sub">It starts as a draft. Nothing is public until you publish it.</p>
+
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+<form (ngSubmit)="submit()">
+  <div class="field">
+    <label for="title">What is it called?</label>
+    <input
+      id="title"
+      name="title"
+      required
+      maxlength="160"
+      placeholder="Afro Fest 2026"
+      [ngModel]="title()"
+      (ngModelChange)="title.set($event)"
+    />
+  </div>
+
+  <div class="field">
+    <label for="kind">Kind</label>
+    <select id="kind" name="kind" [ngModel]="kind()" (ngModelChange)="kind.set($event)">
+      <option value="ticketed">Ticketed — sold publicly</option>
+      <option value="invitation">Invitation — guests you invite</option>
+    </select>
+    <p class="help">
+      @if (kind() === 'invitation') {
+        Invitation events never appear in public search. Only people you invite can find them.
+      } @else {
+        Listed publicly and shareable by link.
+      }
+    </p>
+  </div>
+
+  <div class="field">
+    <label for="description">Description</label>
+    <textarea
+      id="description"
+      name="description"
+      rows="3"
+      maxlength="8000"
+      placeholder="What should people know before they buy?"
+      [ngModel]="description()"
+      (ngModelChange)="description.set($event)"
+    ></textarea>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="country">Country</label>
+      <select
+        id="country"
+        name="country"
+        [ngModel]="country()"
+        (ngModelChange)="onCountryChange($event)"
+      >
+        @for (option of countries; track option.code) {
+          <option [value]="option.code">{{ option.name }}</option>
+        }
+      </select>
+    </div>
+
+    @if (needsProvince()) {
+      <div class="field">
+        <label for="subdivision">Province</label>
+        <select
+          id="subdivision"
+          name="subdivision"
+          [ngModel]="subdivision()"
+          (ngModelChange)="subdivision.set($event)"
+        >
+          @for (province of provinces; track province.code) {
+            <option [value]="province.code">{{ province.name }}</option>
+          }
+        </select>
+        <!-- Not cosmetic: Canadian sales tax is set by province, and the rate
+             is looked up from this. -->
+        <p class="help">Sets the sales tax charged at checkout.</p>
+      </div>
+    }
+
+    <div class="field">
+      <label for="city">City</label>
+      <input
+        id="city"
+        name="city"
+        required
+        placeholder="Toronto"
+        [ngModel]="city()"
+        (ngModelChange)="city.set($event)"
+      />
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="timezone">Time zone</label>
+      <select
+        id="timezone"
+        name="timezone"
+        [ngModel]="timezone()"
+        (ngModelChange)="timezone.set($event)"
+      >
+        @for (zone of zones(); track zone) {
+          <option [value]="zone">{{ describe(zone) }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="startsAt">Starts</label>
+      <input
+        id="startsAt"
+        name="startsAt"
+        type="datetime-local"
+        required
+        [ngModel]="startsAt()"
+        (ngModelChange)="startsAt.set($event)"
+      />
+    </div>
+
+    <div class="field">
+      <label for="endsAt">Ends <span class="optional">optional</span></label>
+      <input
+        id="endsAt"
+        name="endsAt"
+        type="datetime-local"
+        [ngModel]="endsAt()"
+        (ngModelChange)="endsAt.set($event)"
+      />
+    </div>
+  </div>
+
+  <!-- The wall clock typed and the zone picked combine into an instant the
+       organizer cannot otherwise check. Shown before saving, not after. -->
+  @if (preview(); as when) {
+    <p class="preview">
+      Doors: <strong>{{ when }}</strong>
+    </p>
+  }
+
+  <div class="row">
+    <div class="field">
+      <label for="category">Category <span class="optional">optional</span></label>
+      <input
+        id="category"
+        name="category"
+        placeholder="Music"
+        [ngModel]="category()"
+        (ngModelChange)="category.set($event)"
+      />
+    </div>
+
+    <div class="field">
+      <label for="minAge">Minimum age <span class="optional">optional</span></label>
+      <input
+        id="minAge"
+        name="minAge"
+        type="number"
+        min="0"
+        max="99"
+        placeholder="19"
+        [ngModel]="minAge()"
+        (ngModelChange)="minAge.set($event)"
+      />
+    </div>
+  </div>
+
+  <!-- Said plainly because it is the one thing on this form that can never be
+       undone. -->
+  <p class="permanent">
+    Sold in <strong>{{ currency() }}</strong
+    >, set by the country. This cannot be changed once the event exists.
+  </p>
+
+  <button class="cta" type="submit" [disabled]="saving()">
+    @if (saving()) {
+      Creating…
+    } @else {
+      Create draft
+    }
+  </button>
+</form>
