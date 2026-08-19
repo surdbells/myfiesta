@@ -1,4 +1,5 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { API_BASE_URL } from './api-base';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { EventDetail, EventSummary, OrderCreated, OrderStatus, Page, Quote } from './api.types';
@@ -24,15 +25,8 @@ export interface EventQuery {
 export class Api {
   private readonly http = inject(HttpClient);
 
-  /**
-   * Absolute during server rendering, relative in the browser.
-   *
-   * SSR has no origin to resolve a relative URL against, so a relative path
-   * silently fails on the server and works in the browser — which shows up as
-   * an event page that renders empty to a crawler and fine to a person.
-   */
-  private readonly base =
-    typeof window === 'undefined' ? (process.env['API_URL'] ?? 'http://localhost:8000') : '';
+  /** Absolute in both halves — see API_BASE_URL for why. */
+  private readonly base = inject(API_BASE_URL);
 
   events(query: EventQuery = {}): Observable<Page<EventSummary>> {
     let params = new HttpParams();
