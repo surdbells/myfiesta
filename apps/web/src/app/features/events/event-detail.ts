@@ -117,6 +117,20 @@ export class EventDetail {
     });
   }
 
+  /**
+   * Which code the server actually accepted.
+   *
+   * Read back from the quote rather than echoed from the input, so a code that
+   * was typed but rejected never appears applied. The server is the only thing
+   * that knows whether it counted.
+   */
+  readonly appliedCode = computed(() => this.quote()?.code_applied ?? null);
+
+  clearCode(): void {
+    this.code.set('');
+    this.reprice();
+  }
+
   private items(): { ticket_type_id: string; quantity: number }[] {
     return Object.entries(this.basket())
       .filter(([, quantity]) => quantity > 0)
@@ -139,6 +153,11 @@ export class EventDetail {
   }
 
   applyCode(): void {
+    if (!this.code().trim()) return;
+
+    // Goes through the same path as a quantity change. The discount, the tax
+    // on the discounted amount and the total all come back from the server
+    // together — nothing about a price is adjusted in the browser.
     this.reprice();
   }
 

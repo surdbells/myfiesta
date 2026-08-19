@@ -72,6 +72,41 @@
         }
       }
 
+      <!--
+        Only offered once there is something to discount. A promo field on an
+        empty basket is an invitation to hunt for a code before buying, and a
+        buyer who goes looking for one often does not come back.
+      -->
+      @if (hasSelection()) {
+        <div class="promo">
+          @if (appliedCode(); as applied) {
+            <p class="promo-applied">
+              <span
+                ><strong>{{ applied }}</strong> applied</span
+              >
+              <button type="button" class="link" (click)="clearCode()">Remove</button>
+            </p>
+          } @else {
+            <label for="promo">Have a code?</label>
+            <div class="promo-row">
+              <input
+                id="promo"
+                name="promo"
+                type="text"
+                inputmode="text"
+                autocapitalize="characters"
+                spellcheck="false"
+                placeholder="EARLY20"
+                [ngModel]="code()"
+                (ngModelChange)="code.set($event)"
+                (keydown.enter)="applyCode(); $event.preventDefault()"
+              />
+              <button type="button" (click)="applyCode()" [disabled]="!code().trim()">Apply</button>
+            </div>
+          }
+        </div>
+      }
+
       @if (quoteError(); as message) {
         <p class="error" role="alert">{{ message }}</p>
       }
