@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api';
 import { EventDetail as EventDetailModel, Quote, TicketType } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
@@ -16,19 +17,30 @@ import { Seo } from '../../core/seo';
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './event-detail.html',
   styleUrl: './event-detail.css',
 })
 export class EventDetail {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly seo = inject(Seo);
 
   readonly event = signal<EventDetailModel | null>(null);
   readonly notFound = signal(false);
   readonly quote = signal<Quote | null>(null);
   readonly quoteError = signal<string | null>(null);
+
+  /** Opens once a basket exists, so the form is not in the way while browsing. */
+  readonly checkingOut = signal(false);
+  readonly placing = signal(false);
+  readonly orderError = signal<string | null>(null);
+
+  readonly buyer = { name: '', email: '', phone: '' };
+
+  /** A code the buyer typed, as opposed to the ref carried by a shared link. */
+  readonly code = signal('');
 
   /** ticket type id -> quantity */
   readonly basket = signal<Record<string, number>>({});
@@ -38,9 +50,7 @@ export class EventDetail {
 
   readonly formatMoney = formatMoney;
 
-  readonly hasSelection = computed(() =>
-    Object.values(this.basket()).some((q) => q > 0),
-  );
+  readonly hasSelection = computed(() => Object.values(this.basket()).some((q) => q > 0));
 
   constructor() {
     this.ref = this.route.snapshot.queryParamMap.get('ref');
@@ -87,10 +97,13 @@ export class EventDetail {
     if (items.length === 0) {
       this.quote.set(null);
       this.quoteError.set(null);
+      this.checkingOut.set(false);
       return;
     }
 
-    this.api.quote(this.event()!.slug, items, undefined, this.ref ?? undefined).subscribe({
+    const typed = this.code().trim() || undefined;
+
+    this.api.quote(this.event()!.slug, items, typed, this.ref ?? undefined).subscribe({
       next: (quote) => {
         this.quote.set(quote);
         this.quoteError.set(null);
@@ -123,5 +136,69 @@ export class EventDetail {
 
   stepLabel(type: TicketType, direction: 'more' | 'fewer'): string {
     return direction === 'more' ? `One more ${type.name}` : `One fewer ${type.name}`;
+  }
+
+  applyCode(): void {
+    this.reprice();
+  }
+
+  beginCheckout(): void {
+    this.orderError.set(null);
+    this.checkingOut.set(true);
+  }
+
+  /**
+   * Place the order.
+   *
+   * Sends quantities and who the buyer is. No amount is sent, because none
+   * would be read — the server prices the basket again from its own rows and
+   * charges that.
+   *
+   * Two outcomes. A payable order comes back with somewhere to pay and the
+   * browser goes there. A free one — a comp, a full-value code, a free event —
+   * is already fulfilled, because there was never a gateway to involve.
+   */
+  placeOrder(): void {
+    if (this.placing()) return;
+
+    const name = this.buyer.name.trim();
+    const email = this.buyer.email.trim();
+
+    if (!name || !email) {
+      this.orderError.set('Your name and email are needed to send the tickets.');
+      return;
+    }
+
+    this.placing.set(true);
+    this.orderError.set(null);
+
+    this.api
+      .order(
+        this.event()!.slug,
+        this.items(),
+        { name, email, phone: this.buyer.phone.trim() || undefined },
+        this.code().trim() || undefined,
+        this.ref ?? undefined,
+      )
+      .subscribe({
+        next: (order) => {
+          if (order.payment?.redirect_url) {
+            // Leaving the app entirely. The return is cosmetic — a signed
+            // webhook decides whether this order is paid, not the redirect.
+            window.location.href = order.payment.redirect_url;
+            return;
+          }
+
+          this.router.navigate(['/order', order.reference]);
+        },
+        error: (response) => {
+          this.placing.set(false);
+          // Said plainly, because the worry at this moment is whether money
+          // has moved.
+          this.orderError.set(
+            response?.error?.message ?? 'That order could not be placed. Nothing has been charged.',
+          );
+        },
+      });
   }
 }

@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { EventDetail, EventSummary, OrderCreated, Page, Quote } from './api.types';
+import { EventDetail, EventSummary, OrderCreated, OrderStatus, Page, Quote } from './api.types';
 
 export interface EventQuery {
   q?: string;
@@ -31,9 +31,8 @@ export class Api {
    * silently fails on the server and works in the browser — which shows up as
    * an event page that renders empty to a crawler and fine to a person.
    */
-  private readonly base = typeof window === 'undefined'
-    ? (process.env['API_URL'] ?? 'http://localhost:8000')
-    : '';
+  private readonly base =
+    typeof window === 'undefined' ? (process.env['API_URL'] ?? 'http://localhost:8000') : '';
 
   events(query: EventQuery = {}): Observable<Page<EventSummary>> {
     let params = new HttpParams();
@@ -68,7 +67,20 @@ export class Api {
     ref?: string,
   ): Observable<OrderCreated> {
     return this.http.post<OrderCreated>(`${this.base}/api/events/${slug}/orders`, {
-      items, buyer, code, ref,
+      items,
+      buyer,
+      code,
+      ref,
     });
+  }
+
+  /**
+   * Order status, polled after returning from a payment page.
+   *
+   * The return itself proves nothing — a signed webhook decides — so the client
+   * asks until the status settles.
+   */
+  orderStatus(reference: string): Observable<OrderStatus> {
+    return this.http.get<OrderStatus>(`${this.base}/api/orders/${reference}`);
   }
 }

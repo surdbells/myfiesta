@@ -21,6 +21,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
   },
   {
+    // Above the wildcard, or an order reference would be read as a slug.
+    path: 'order/:reference',
+    loadComponent: () => import('./features/orders/order-status').then((m) => m.OrderStatus),
+  },
+  {
     path: ':slug',
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
   },

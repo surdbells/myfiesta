@@ -108,3 +108,12 @@ export interface Page<T> {
   meta?: { has_more?: boolean; next_cursor?: string | null };
   links?: { next?: string | null; prev?: string | null };
 }
+
+/** What /api/orders/{reference} returns while a buyer waits for the webhook. */
+export interface OrderStatus {
+  reference: string;
+  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'partially_refunded';
+  total: Money;
+  ticket_count: number;
+  event: { slug: string; title: string; starts_at: string; timezone: string };
+}

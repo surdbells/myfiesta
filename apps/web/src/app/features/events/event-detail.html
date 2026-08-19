@@ -100,9 +100,76 @@
           <dd class="total">{{ formatMoney(q.total) }}</dd>
         </dl>
 
-        <button class="cta" type="button" [disabled]="!hasSelection()">
-          {{ q.requires_payment ? 'Get tickets' : 'Reserve free tickets' }}
-        </button>
+        @if (!checkingOut()) {
+          <button class="cta" type="button" [disabled]="!hasSelection()" (click)="beginCheckout()">
+            {{ q.requires_payment ? 'Get tickets' : 'Reserve free tickets' }}
+          </button>
+        } @else {
+          <form class="buyer" (ngSubmit)="placeOrder()" #f="ngForm" novalidate>
+            <h3>Where should the tickets go?</h3>
+
+            <label for="buyer-name">Full name</label>
+            <input
+              id="buyer-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              [(ngModel)]="buyer.name"
+              required
+            />
+
+            <label for="buyer-email">Email</label>
+            <!--
+              The tickets are sent here, and it is how a guest gets back to them
+              later without an account. Worth saying so rather than leaving the
+              field bare.
+            -->
+            <input
+              id="buyer-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              [(ngModel)]="buyer.email"
+              required
+              aria-describedby="email-hint"
+            />
+            <small id="email-hint" class="muted">Your tickets are sent here.</small>
+
+            <label for="buyer-phone">Phone <span class="muted">(optional)</span></label>
+            <input
+              id="buyer-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              inputmode="tel"
+              [(ngModel)]="buyer.phone"
+            />
+
+            @if (orderError(); as err) {
+              <p class="error" role="alert">{{ err }}</p>
+            }
+
+            <button class="cta" type="submit" [disabled]="placing()">
+              @if (placing()) {
+                Placing your order…
+              } @else if (q.requires_payment) {
+                Pay {{ formatMoney(q.total) }}
+              } @else {
+                Reserve free tickets
+              }
+            </button>
+
+            <button
+              class="link"
+              type="button"
+              (click)="checkingOut.set(false)"
+              [disabled]="placing()"
+            >
+              Back to tickets
+            </button>
+          </form>
+        }
       }
     </section>
   </article>

@@ -20,9 +20,7 @@
   @if (loading()) {
     <p class="muted" role="status">Finding events…</p>
   } @else if (events().length === 0) {
-    <p class="muted">
-      Nothing matches that yet. Try a different city, or clear the filters.
-    </p>
+    <p class="muted">Nothing matches that yet. Try a different city, or clear the filters.</p>
   } @else {
     <ul class="grid">
       @for (event of events(); track event.slug) {

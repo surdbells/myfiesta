@@ -1,0 +1,79 @@
+<section class="wrap">
+  @if (notFound()) {
+    <h1>We cannot find that order</h1>
+    <p class="muted">
+      Check the reference in your confirmation email. If you have just paid, the order may take a
+      moment to appear.
+    </p>
+  } @else if (order(); as o) {
+    @switch (o.status) {
+      @case ('paid') {
+        <h1>You're going to {{ o.event.title }}</h1>
+        <p class="lead">{{ when() }}</p>
+
+        <p>
+          {{ o.ticket_count }}
+          {{ o.ticket_count === 1 ? 'ticket is' : 'tickets are' }} on the way to your inbox, with
+          the QR code to show at the door.
+        </p>
+
+        <dl class="summary">
+          <dt>Order</dt>
+          <dd>
+            <code>{{ o.reference }}</code>
+          </dd>
+          <dt>Paid</dt>
+          <dd>{{ formatMoney(o.total) }}</dd>
+        </dl>
+
+        <!--
+          Said explicitly. Guest checkout means most buyers have no account to
+          log into, and the emailed link is the only way back to their tickets.
+        -->
+        <p class="muted">Keep that email — the link inside is how you get back to your tickets.</p>
+      }
+
+      @case ('pending') {
+        <h1>Confirming your payment</h1>
+        <p class="lead" role="status" aria-live="polite">
+          @if (stillWaiting()) {
+            Still confirming. This can take a moment — you can close this page and your tickets will
+            arrive by email.
+          } @else {
+            One moment.
+          }
+        </p>
+        <dl class="summary">
+          <dt>Order</dt>
+          <dd>
+            <code>{{ o.reference }}</code>
+          </dd>
+        </dl>
+      }
+
+      @case ('failed') {
+        <h1>That payment did not go through</h1>
+        <p class="lead">Nothing has been charged.</p>
+        <a class="cta" [href]="'/' + o.event.slug">Try again</a>
+      }
+
+      @case ('cancelled') {
+        <h1>Your order was cancelled</h1>
+        <p class="lead">Nothing has been charged.</p>
+        <a class="cta" [href]="'/' + o.event.slug">Back to the event</a>
+      }
+
+      @case ('refunded') {
+        <h1>This order was refunded</h1>
+        <dl class="summary">
+          <dt>Order</dt>
+          <dd>
+            <code>{{ o.reference }}</code>
+          </dd>
+        </dl>
+      }
+    }
+  } @else {
+    <p class="muted" role="status">Loading…</p>
+  }
+</section>
