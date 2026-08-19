@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
+use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,3 +51,38 @@ Route::middleware(['auth:sanctum', 'token.scope:attendee'])->group(function () {
 // compares against.
 Route::middleware(['auth:sanctum', 'token.scope:door'])
     ->post('/events/{event:id}/scan', [DoorController::class, 'scan']);
+
+/*
+ * Signing in.
+ *
+ * Abilities are decided by the server from what the account is, never from
+ * what the client asks for.
+ */
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::get('/auth/me', [AuthController::class, 'me']);
+});
+
+/*
+ * The organizer console.
+ *
+ * Every route authorises against the organization owning the record, not the
+ * token alone — membership grants the ability, and the policy decides whether
+ * this member may do this thing to this event.
+ */
+Route::middleware(['auth:sanctum', 'token.scope:organizer'])
+    ->prefix('organizer')
+    ->group(function () {
+        Route::get('/events', [OrganizerEventController::class, 'index']);
+        Route::post('/events', [OrganizerEventController::class, 'store']);
+        Route::patch('/events/{event:id}', [OrganizerEventController::class, 'update']);
+        Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
+        Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
+
+        Route::get('/events/{event:id}/ticket-types', [TicketTypeController::class, 'index']);
+        Route::post('/events/{event:id}/ticket-types', [TicketTypeController::class, 'store']);
+        Route::patch('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'update']);
+        Route::delete('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'destroy']);
+    });
