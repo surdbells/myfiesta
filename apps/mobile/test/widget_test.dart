@@ -112,10 +112,26 @@ void main() {
     });
   });
 
-  testWidgets('the app boots to the mode picker', (tester) async {
+  testWidgets('the app boots to sign-in, not into a mode', (tester) async {
     await tester.pumpWidget(const MyFiestaApp());
+    await tester.pump();
 
     expect(find.text('myFiesta'), findsOneWidget);
-    expect(find.text('Door'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+
+    // Which mode a session gets is decided by the scope the server grants.
+    // The app must never offer that as a choice, or the boundary between
+    // attendee, organizer and door becomes a thing a user picks.
+    expect(find.text('Door'), findsNothing);
+    expect(find.text('Organizer'), findsNothing);
+  });
+
+  testWidgets('sign-in says an account is not needed to buy', (tester) async {
+    await tester.pumpWidget(const MyFiestaApp());
+    await tester.pump();
+
+    // Guest checkout is the primary path. Somebody who opened the app to buy
+    // should not conclude they have to register first.
+    expect(find.textContaining('needs no account'), findsOneWidget);
   });
 }

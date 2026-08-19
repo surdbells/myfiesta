@@ -1,20 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
 
+import 'core/api.dart';
 import 'core/session.dart';
 import 'design/theme.dart';
+import 'design/tokens.dart';
+import 'features/attendee/my_tickets_screen.dart';
 import 'features/door/door_screen.dart';
+import 'features/organizer/organizer_screen.dart';
 
-void main() => runApp(const MyFiestaApp());
+void main() {
+  // Event times are rendered in the event's own zone, which needs the IANA
+  // database loaded before anything draws.
+  tzdata.initializeTimeZones();
+
+  runApp(const MyFiestaApp());
+}
 
 /// One app, three modes.
 ///
-/// Attendee, organizer, and door ship in a single binary under the existing
-/// bundle id, so the store listing, its reviews, and the forced-update gate all
+/// Attendee, organizer and door ship in a single binary under the existing
+/// bundle id, so the store listing, its reviews and the forced-update gate all
 /// carry over rather than needing every user to find and install something new.
 ///
-/// Which mode a session gets is decided by the scope on its token, not by a
-/// build flavour. The app hides what a scope should not see; the API refuses it.
-/// Only the second of those is a security boundary.
+/// Which mode a session gets is decided by the scope the server granted, not by
+/// a build flavour and not by anything the app asks for. The app hides what a
+/// scope should not see; the API refuses it. Only the second is a boundary.
 class MyFiestaApp extends StatefulWidget {
   const MyFiestaApp({super.key});
 
@@ -23,7 +34,19 @@ class MyFiestaApp extends StatefulWidget {
 }
 
 class _MyFiestaAppState extends State<MyFiestaApp> {
+  final Api _api = Api();
   Session? _session;
+
+  void _start(Session session) {
+    _api.token = session.token;
+    setState(() => _session = session);
+  }
+
+  Future<void> _signOut() async {
+    await _api.signOut();
+    _api.token = null;
+    setState(() => _session = null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,110 +54,131 @@ class _MyFiestaAppState extends State<MyFiestaApp> {
       title: 'myFiesta',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      home: _session == null
-          ? _ModePicker(onPick: (s) => setState(() => _session = s))
-          : _routeFor(_session!),
+      home: _session == null ? _SignIn(api: _api, onSignedIn: _start) : _routeFor(_session!),
     );
   }
 
   Widget _routeFor(Session session) {
     if (session.isLocked) {
-      return DoorScreen(
-        session: session,
-        onSignOut: () => setState(() => _session = null),
+      return DoorScreen(session: session, onSignOut: _signOut);
+    }
+
+    if (session.canSeeSales) {
+      return OrganizerScreen(
+        api: _api,
+        organizationName: session.organizationName,
+        onSignOut: _signOut,
       );
     }
 
-    return _NotYetBuilt(
-      session: session,
-      onSignOut: () => setState(() => _session = null),
-    );
+    return MyTicketsScreen(api: _api, onSignOut: _signOut);
   }
 }
 
-/// Stands in for sign-in during the spike.
-///
-/// In the real app a door session is entered by redeeming a per-event invite
-/// from an organizer, never by sharing organizer credentials — which is how the
-/// platform this replaces ended up with venue staff holding the owner's login.
-class _ModePicker extends StatelessWidget {
-  const _ModePicker({required this.onPick});
+class _SignIn extends StatefulWidget {
+  const _SignIn({required this.api, required this.onSignedIn});
 
-  final ValueChanged<Session> onPick;
+  final Api api;
+  final ValueChanged<Session> onSignedIn;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('myFiesta', style: Theme.of(context).textTheme.displaySmall),
-              const SizedBox(height: 8),
-              Text(
-                'Spike build — choose a token scope',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 32),
-              FilledButton(
-                onPressed: () => onPick(const Session(
-                  scope: TokenScope.door,
-                  displayName: 'Door staff',
-                  eventId: 'evt_demo',
-                  eventTitle: 'Afro Fest — Lagos',
-                )),
-                child: const Text('Door'),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => onPick(const Session(
-                  scope: TokenScope.organizer,
-                  displayName: 'Organizer',
-                )),
-                child: const Text('Organizer'),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => onPick(const Session(
-                  scope: TokenScope.attendee,
-                  displayName: 'Attendee',
-                )),
-                child: const Text('Attendee'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  State<_SignIn> createState() => _SignInState();
 }
 
-class _NotYetBuilt extends StatelessWidget {
-  const _NotYetBuilt({required this.session, required this.onSignOut});
+class _SignInState extends State<_SignIn> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
 
-  final Session session;
-  final VoidCallback onSignOut;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      final session = await widget.api.signIn(_email.text.trim(), _password.text);
+      widget.onSignedIn(session);
+    } on ApiException catch (e) {
+      // ApiException has already decided what is safe to show: a 4xx message
+      // is written for the reader, a 5xx one is not repeated.
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = e.message;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(session.displayName),
-        actions: [
-          TextButton(onPressed: onSignOut, child: const Text('Sign out')),
-        ],
-      ),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Door mode was built first, on purpose: it is the smallest '
-            'well-scoped surface in the app, and learning Flutter on the '
-            'checkout flow would be the expensive way round.',
-            textAlign: TextAlign.center,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(Tokens.space6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('myFiesta', style: theme.textTheme.displaySmall),
+                const SizedBox(height: Tokens.space6),
+
+                if (_error != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(Tokens.space3),
+                    decoration: BoxDecoration(
+                      color: Tokens.colorSemanticDanger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                    ),
+                    child: Text(_error!, style: TextStyle(color: Tokens.colorSemanticDanger)),
+                  ),
+                  const SizedBox(height: Tokens.space4),
+                ],
+
+                TextField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+                const SizedBox(height: Tokens.space3),
+
+                TextField(
+                  controller: _password,
+                  obscureText: true,
+                  onSubmitted: (_) => _submit(),
+                  decoration: const InputDecoration(labelText: 'Password'),
+                ),
+                const SizedBox(height: Tokens.space5),
+
+                FilledButton(
+                  onPressed: _busy ? null : _submit,
+                  child: Text(_busy ? 'Signing in…' : 'Sign in'),
+                ),
+
+                const SizedBox(height: Tokens.space4),
+                Text(
+                  'Buying a ticket needs no account. Sign in to see tickets you already hold.',
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),

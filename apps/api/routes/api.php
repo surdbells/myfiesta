@@ -5,7 +5,9 @@ use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
+use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
@@ -85,4 +87,14 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/ticket-types', [TicketTypeController::class, 'store']);
         Route::patch('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'update']);
         Route::delete('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'destroy']);
+
+        Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
+
+        Route::get('/events/{event:id}/codes', [CodeController::class, 'index']);
+        Route::post('/events/{event:id}/codes', [CodeController::class, 'store']);
+        // {code} rather than {code:id}: naming the key makes Laravel scope the
+        // binding to the parent, and a code may be organization-wide with no
+        // event at all — scoping would make those unreachable. Ownership is
+        // checked in the controller instead.
+        Route::delete('/events/{event:id}/codes/{code}', [CodeController::class, 'destroy']);
     });
