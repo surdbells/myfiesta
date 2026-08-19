@@ -142,7 +142,7 @@ class CheckoutController extends Controller
             // So the client can label it honestly rather than guessing whether
             // tax was added or was already inside the price.
             'tax_inclusive' => (bool) $quote->taxRate?->inclusive,
-            'tax_name' => $quote->taxRate?->name,
+            'tax_label' => $quote->taxRate?->name,
             'code_applied' => $quote->code?->code,
             'requires_payment' => $quote->requiresPayment(),
         ];

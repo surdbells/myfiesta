@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -16,9 +17,12 @@ class EventSummaryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $cheapest = $this->whenLoaded('ticketTypes', fn () => $this->ticketTypes
-            ->where('status', 'on_sale')
-            ->min('price_amount'));
+        $onSale = $this->whenLoaded('ticketTypes',
+            fn () => $this->ticketTypes->where('status', 'on_sale'));
+
+        $cheapest = $onSale instanceof Collection
+            ? $onSale->min('price_amount')
+            : null;
 
         return [
             'slug' => $this->slug,
@@ -27,6 +31,9 @@ class EventSummaryResource extends JsonResource
             'timezone' => $this->timezone,
             'city' => $this->city,
             'country' => $this->country,
+            // Always present, even when nothing is on sale. Without it a client
+            // showing "From —" has no symbol to render it with.
+            'currency' => $this->currency,
             'category' => $this->category,
             'poster_url' => $this->poster_path
                 ? Storage::disk('public')->url($this->poster_path)
@@ -38,6 +45,11 @@ class EventSummaryResource extends JsonResource
             'from_price' => $cheapest !== null
                 ? ['amount' => $cheapest, 'currency' => $this->currency]
                 : null,
+            // Nothing on sale means nothing left to buy, whether the tickets
+            // sold out or the organizer closed them.
+            'is_sold_out' => $onSale instanceof Collection
+                ? $onSale->isEmpty()
+                : false,
         ];
     }
 }

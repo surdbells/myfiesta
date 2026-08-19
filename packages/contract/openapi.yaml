@@ -417,9 +417,10 @@ components:
           description: Minor units. Cents, kobo.
         currency:
           type: string
-          minLength: 3
-          maxLength: 3
-          examples: [CAD, NGN]
+          description: >
+            Constrained to what the platform actually takes. An open string
+            generates a client able to represent prices no gateway can charge.
+          enum: [CAD, NGN]
 
     CursorMeta:
       type: object
@@ -430,9 +431,12 @@ components:
 
     EventSummary:
       type: object
-      required: [id, slug, title, starts_at, timezone, city, country, currency]
+      # No id. The slug is the public identifier — it is what a shareable link
+      # carries and what the site routes on. Exposing the UUID as well would
+      # give clients two ways to name the same event and no reason to prefer
+      # either.
+      required: [slug, title, starts_at, timezone, city, country]
       properties:
-        id: { type: string, format: uuid }
         slug: { type: string }
         title: { type: string }
         poster_url: { type: [string, 'null'], format: uri }
@@ -451,6 +455,8 @@ components:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
         is_sold_out: { type: boolean }
+        category: { type: [string, 'null'] }
+        organizer: { $ref: '#/components/schemas/OrganizerRef' }
 
     Event:
       allOf:
@@ -460,7 +466,12 @@ components:
           properties:
             description: { type: [string, 'null'] }
             ends_at: { type: [string, 'null'], format: date-time }
-            venue_name: { type: [string, 'null'] }
+            venue:
+              oneOf:
+                - $ref: '#/components/schemas/Venue'
+                - type: 'null'
+            dress_code: { type: [string, 'null'] }
+            subdivision: { type: [string, 'null'] }
             min_age: { type: [integer, 'null'] }
             id_required: { type: boolean }
             organizer: { $ref: '#/components/schemas/OrganizerBrand' }
@@ -468,14 +479,30 @@ components:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
 
+    OrganizerRef:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+
     OrganizerBrand:
       type: object
-      required: [id, name]
+      required: [name, slug]
       properties:
-        id: { type: string, format: uuid }
         name: { type: string }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
         logo_url: { type: [string, 'null'], format: uri }
         is_verified: { type: boolean }
+
+    Venue:
+      type: object
+      required: [name]
+      properties:
+        name: { type: [string, 'null'] }
+        address: { type: [string, 'null'] }
+        city: { type: [string, 'null'] }
 
     TicketType:
       type: object
@@ -516,9 +543,8 @@ components:
 
     Quote:
       type: object
-      required: [currency, subtotal, discount, tax, total, lines]
+      required: [subtotal, discount, tax, total, lines]
       properties:
-        currency: { type: string, minLength: 3, maxLength: 3 }
         subtotal: { $ref: '#/components/schemas/Money' }
         discount: { $ref: '#/components/schemas/Money' }
         tax: { $ref: '#/components/schemas/Money' }

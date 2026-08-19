@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,7 @@ Route::get('/health', fn () => ['status' => 'ok']);
  */
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
+Route::get('/orders/{reference}', OrderStatusController::class);
 
 Route::middleware('throttle:120,1')
     ->post('/events/{slug}/quote', [CheckoutController::class, 'quote']);

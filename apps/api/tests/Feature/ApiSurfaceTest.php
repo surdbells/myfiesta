@@ -102,7 +102,7 @@ class ApiSurfaceTest extends TestCase
             ->assertJsonPath('tax.amount', 2600)
             ->assertJsonPath('total.amount', 22600)
             ->assertJsonPath('tax_inclusive', false)
-            ->assertJsonPath('tax_name', 'HST');
+            ->assertJsonPath('tax_label', 'HST');
     }
 
     public function test_a_client_cannot_send_a_price(): void
