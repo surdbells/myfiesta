@@ -10,22 +10,30 @@ import { join } from 'node:path';
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
-const angularApp = new AngularNodeAppEngine();
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
+ * Hosts this server will render for.
  *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * Angular refuses to render for an unrecognised Host header, because an
+ * attacker who can set it could make server-side requests resolve against a
+ * host of their choosing. The failure is quiet rather than loud — it falls back
+ * to client-side rendering, so pages still load for people and arrive empty at
+ * a crawler. That is precisely the failure this app exists to avoid, so the
+ * allowlist is explicit rather than left to a default.
  */
+const allowedHosts = (process.env['ALLOWED_HOSTS'] ?? 'myfiesta.ca,www.myfiesta.ca,localhost,127.0.0.1')
+  .split(',')
+  // Hostnames only — Angular compares the parsed hostname, so an entry that
+  // includes a port never matches and the check fails open into client-side
+  // rendering, which looks like it works right up until a crawler arrives.
+  .map((host) => host.trim().replace(/:\d+$/, ''))
+  .filter(Boolean);
+
+const angularApp = new AngularNodeAppEngine({ allowedHosts });
 
 /**
- * Serve static files from /browser
+ * Static assets are content-hashed by the build, so a year is safe and anything
+ * shorter just costs a round trip.
  */
 app.use(
   express.static(browserDistFolder, {
@@ -35,9 +43,6 @@ app.use(
   }),
 );
 
-/**
- * Handle all other requests by rendering the Angular application.
- */
 app.use((req, res, next) => {
   angularApp
     .handle(req)
@@ -47,10 +52,6 @@ app.use((req, res, next) => {
     .catch(next);
 });
 
-/**
- * Start the server if this module is the main entry point, or it is ran via PM2.
- * The server listens on the port defined by the `PORT` environment variable, or defaults to 4000.
- */
 if (isMainModule(import.meta.url) || process.env['pm_id']) {
   const port = process.env['PORT'] || 4000;
   app.listen(port, (error) => {
@@ -58,11 +59,9 @@ if (isMainModule(import.meta.url) || process.env['pm_id']) {
       throw error;
     }
 
-    console.log(`Node Express server listening on http://localhost:${port}`);
+    console.log(`myFiesta web listening on http://localhost:${port}`);
+    console.log(`API: ${process.env['API_URL'] ?? 'http://localhost:8000'}`);
   });
 }
 
-/**
- * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
- */
 export const reqHandler = createNodeRequestHandler(app);

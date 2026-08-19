@@ -1,0 +1,33 @@
+/* Present but visually hidden until focused: keyboard users should not have to
+   tab through the header on every page. */
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip:focus {
+  left: var(--space-4);
+  top: var(--space-4);
+  z-index: 10;
+  background: var(--color-neutral-0);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.site-header {
+  border-bottom: 1px solid var(--color-neutral-100);
+  padding: var(--space-4);
+}
+
+.brand {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  text-decoration: none;
+  color: var(--color-neutral-900);
+}
+
+.site-footer {
+  border-top: 1px solid var(--color-neutral-100);
+  padding: var(--space-5) var(--space-4);
+  color: var(--color-neutral-600);
+}

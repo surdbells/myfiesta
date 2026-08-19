@@ -1,0 +1,111 @@
+@if (notFound()) {
+  <section class="wrap">
+    <h1>Event not found</h1>
+    <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
+  </section>
+} @else if (event(); as ev) {
+  <article class="wrap">
+    @if (ev.poster_url) {
+      <img class="poster" [src]="ev.poster_url" alt="" />
+    }
+
+    <header>
+      <h1>{{ ev.title }}</h1>
+      <p class="when">{{ when() }}</p>
+      <p class="where">
+        {{ ev.venue?.name ?? ev.city }}
+        @if (ev.venue?.address) {
+          <span class="muted">· {{ ev.venue?.address }}</span>
+        }
+      </p>
+      <p class="by">
+        By {{ ev.organizer.name }}
+        @if (ev.organizer.is_verified) {
+          <span class="verified" title="Identity verified">✓</span>
+        }
+      </p>
+      @if (ev.min_age) {
+        <p class="gate">
+          {{ ev.min_age }}+ · photo ID {{ ev.id_required ? 'required' : 'may be requested' }}
+        </p>
+      }
+    </header>
+
+    @if (ev.description) {
+      <p class="description">{{ ev.description }}</p>
+    }
+
+    <section class="tickets" aria-label="Tickets">
+      <h2>Tickets</h2>
+
+      @if (onSale().length === 0) {
+        <p class="muted">Nothing is on sale for this event right now.</p>
+      } @else {
+        @for (type of onSale(); track type.id) {
+          <div class="ticket-row">
+            <div>
+              <h3>{{ type.name }}</h3>
+              @if (type.description) {
+                <p class="muted">{{ type.description }}</p>
+              }
+              <p class="price">{{ formatMoney(type.price) }}</p>
+            </div>
+            <div class="stepper">
+              <button
+                type="button"
+                (click)="adjust(type, -1)"
+                [disabled]="quantity(type.id) === 0"
+                [attr.aria-label]="stepLabel(type, 'fewer')"
+              >
+                −
+              </button>
+              <span aria-live="polite">{{ quantity(type.id) }}</span>
+              <button
+                type="button"
+                (click)="adjust(type, 1)"
+                [attr.aria-label]="stepLabel(type, 'more')"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        }
+      }
+
+      @if (quoteError(); as message) {
+        <p class="error" role="alert">{{ message }}</p>
+      }
+
+      @if (quote(); as q) {
+        <dl class="totals">
+          <dt>Subtotal</dt>
+          <dd>{{ formatMoney(q.subtotal) }}</dd>
+
+          @if (q.discount.amount > 0) {
+            <dt>Discount</dt>
+            <dd>−{{ formatMoney(q.discount) }}</dd>
+          }
+
+          @if (q.tax.amount > 0) {
+            <!--
+              Says which, and whether it was already in the price. "Included"
+              and "added" are different money, and a buyer who thinks tax is
+              being added twice abandons the basket.
+            -->
+            <dt>{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
+            <dd>{{ formatMoney(q.tax) }}</dd>
+          }
+
+          <dt class="total">Total</dt>
+          <dd class="total">{{ formatMoney(q.total) }}</dd>
+        </dl>
+
+        <button class="cta" type="button" [disabled]="!hasSelection()">
+          {{ q.requires_payment ? 'Get tickets' : 'Reserve free tickets' }}
+        </button>
+      }
+    </section>
+  </article>
+} @else {
+  <section class="wrap"><p class="muted" role="status">Loading…</p></section>
+}

@@ -1,1 +1,30 @@
-/* You can add global styles to this file, and also import other style files */
+/*
+ * Generated from packages/tokens/tokens.json, which also emits the Dart the
+ * Flutter app uses. Editing the generated file is pointless — it is rewritten
+ * by `npm run build` in that package, and CI checks the committed output.
+ */
+@use '../../../packages/tokens/dist/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-50);
+}
+
+img {
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}

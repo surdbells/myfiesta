@@ -1,0 +1,110 @@
+/**
+ * Response shapes, kept in step with packages/contract.
+ *
+ * Hand-written here rather than imported from the generated TypeScript,
+ * because the generator emits a path-keyed `paths` interface that is awkward to
+ * consume in components. The generated schema is still the check: a conformance
+ * test on the API side asserts these fields exist, so drift fails a build
+ * rather than a page.
+ */
+
+/**
+ * An integer amount in minor units, with its currency.
+ *
+ * Never a float and never preformatted. The platform this replaces returned
+ * "$1,234.00" from the API and re-parsed it in the client.
+ */
+export interface Money {
+  amount: number;
+  currency: 'CAD' | 'NGN';
+}
+
+export interface OrganizerRef {
+  name: string;
+  slug: string;
+}
+
+export interface EventSummary {
+  slug: string;
+  title: string;
+  starts_at: string;
+  timezone: string;
+  city: string;
+  country: string;
+  currency: Money['currency'];
+  category: string | null;
+  poster_url: string | null;
+  organizer: OrganizerRef;
+  from_price: Money | null;
+  is_sold_out: boolean;
+}
+
+export interface Venue {
+  name: string | null;
+  address: string | null;
+  city: string | null;
+}
+
+export interface TicketType {
+  id: string;
+  name: string;
+  description: string | null;
+  price: Money;
+  admits: number;
+  max_per_order: number | null;
+  status: 'on_sale' | 'sold_out' | 'hidden' | 'closed';
+}
+
+export interface EventDetail extends EventSummary {
+  description: string | null;
+  ends_at: string | null;
+  subdivision: string | null;
+  dress_code: string | null;
+  min_age: number | null;
+  id_required: boolean;
+  venue: Venue | null;
+  organizer: OrganizerRef & {
+    description: string | null;
+    is_verified: boolean;
+    logo_url: string | null;
+  };
+  ticket_types: TicketType[];
+}
+
+export interface QuoteLine {
+  ticket_type_id: string;
+  name: string;
+  quantity: number;
+  unit_price: Money;
+  line_total: Money;
+}
+
+export interface Quote {
+  lines: QuoteLine[];
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  total: Money;
+  /** Whether tax was already inside the displayed price, or added at checkout. */
+  tax_inclusive: boolean;
+  tax_label: string | null;
+  code_applied: string | null;
+  requires_payment: boolean;
+}
+
+export interface OrderCreated {
+  reference: string;
+  status: 'pending' | 'paid';
+  /** Null when there is nothing to charge — a comp, a full-value code, a free event. */
+  payment: {
+    gateway: 'stripe' | 'paystack';
+    redirect_url: string;
+    expires_at: string | null;
+  } | null;
+}
+
+export interface Page<T> {
+  data: T[];
+  meta?: { has_more?: boolean; next_cursor?: string | null };
+  links?: { next?: string | null; prev?: string | null };
+}

@@ -1,0 +1,53 @@
+<section class="wrap">
+  <h1>What's on</h1>
+
+  <form class="filters" (ngSubmit)="search()">
+    <input
+      type="search"
+      name="q"
+      placeholder="Search events"
+      aria-label="Search events"
+      [(ngModel)]="query"
+    />
+    <input type="text" name="city" placeholder="City" aria-label="City" [(ngModel)]="city" />
+    <label class="check">
+      <input type="checkbox" name="free" [(ngModel)]="freeOnly" />
+      Free only
+    </label>
+    <button type="submit">Search</button>
+  </form>
+
+  @if (loading()) {
+    <p class="muted" role="status">Finding events…</p>
+  } @else if (events().length === 0) {
+    <p class="muted">
+      Nothing matches that yet. Try a different city, or clear the filters.
+    </p>
+  } @else {
+    <ul class="grid">
+      @for (event of events(); track event.slug) {
+        <li class="card">
+          <a [routerLink]="['/', event.slug]">
+            @if (event.poster_url) {
+              <img [src]="event.poster_url" [alt]="" loading="lazy" />
+            } @else {
+              <div class="poster-placeholder" aria-hidden="true"></div>
+            }
+            <div class="card-body">
+              <h2>{{ event.title }}</h2>
+              <p class="when">{{ when(event) }}</p>
+              <p class="where">{{ event.city }}</p>
+              <p class="price">
+                @if (event.is_sold_out) {
+                  <span class="sold-out">Sold out</span>
+                } @else {
+                  {{ formatFrom(event.from_price, event.currency) }}
+                }
+              </p>
+            </div>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+</section>

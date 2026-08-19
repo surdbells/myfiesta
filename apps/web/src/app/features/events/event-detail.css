@@ -1,0 +1,133 @@
+.wrap {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.poster {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.when {
+  font-size: var(--font-size-lg);
+  margin: 0 0 var(--space-1);
+}
+
+.where,
+.by,
+.gate {
+  margin: 0 0 var(--space-1);
+  color: var(--color-neutral-600);
+}
+
+.verified {
+  color: var(--color-semantic-success);
+}
+
+.description {
+  margin: var(--space-5) 0;
+  white-space: pre-wrap;
+}
+
+.tickets {
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--color-neutral-100);
+  padding-top: var(--space-5);
+}
+
+.ticket-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+
+.ticket-row h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-base);
+}
+
+.price {
+  margin: var(--space-2) 0 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 2.5rem square: a thumb target at a bus stop, not a mouse target at a desk. */
+.stepper button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-neutral-200);
+  background: var(--color-neutral-0);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-5) 0;
+}
+
+.totals dt {
+  color: var(--color-neutral-600);
+}
+
+.totals dd {
+  margin: 0;
+  text-align: right;
+  /* Amounts line up as they change, so a total does not appear to jump. */
+  font-variant-numeric: tabular-nums;
+}
+
+.totals .total {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  color: var(--color-neutral-900);
+}
+
+.cta {
+  width: 100%;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-500);
+  color: var(--color-neutral-0);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+}
+
+.cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  color: var(--color-semantic-danger);
+}
+
+.muted {
+  color: var(--color-neutral-600);
+}
