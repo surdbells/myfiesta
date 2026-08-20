@@ -32,6 +32,16 @@ export class EventList {
   readonly city = signal('');
   readonly freeOnly = signal(false);
 
+  /**
+   * Set by the front page when somebody taps a category, and never cleared by
+   * the filter form.
+   *
+   * It has no control of its own here — it arrives from a chip on the home
+   * page — so it is shown as a removable pill rather than silently narrowing
+   * every search somebody then types.
+   */
+  readonly category = signal('');
+
   readonly formatFrom = formatFrom;
 
   constructor() {
@@ -47,6 +57,7 @@ export class EventList {
       this.query.set(params.get('q') ?? '');
       this.city.set(params.get('city') ?? '');
       this.freeOnly.set(params.get('free') === '1');
+      this.category.set(params.get('category') ?? '');
       this.load();
     });
   }
@@ -57,9 +68,18 @@ export class EventList {
         q: this.query() || null,
         city: this.city() || null,
         free: this.freeOnly() ? '1' : null,
+        // Carried through every search rather than dropped, so typing into the
+        // box does not silently widen a category somebody chose deliberately.
+        // clearCategory() is the only thing that removes it.
+        category: this.category() || null,
       },
       queryParamsHandling: 'merge',
     });
+  }
+
+  clearCategory(): void {
+    this.category.set('');
+    this.search();
   }
 
   private load(): void {
@@ -70,6 +90,7 @@ export class EventList {
         q: this.query() || undefined,
         city: this.city() || undefined,
         free: this.freeOnly() || undefined,
+        category: this.category() || undefined,
       })
       .subscribe({
         next: (page) => {

@@ -240,6 +240,39 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/tickets/{token}:
+    get:
+      operationId: getTicketsByToken
+      summary: A buyer's tickets, with the QR a door reads
+      description: |
+        Reached from the link in a confirmation email. Unauthenticated by
+        necessity: guest checkout is the primary path, so most people holding a
+        ticket have no account, and the random per-order token in the path is
+        the whole credential.
+
+        It does not expire. The previous platform's ticket links went stale
+        before some of its events had happened, and a ticket you cannot open on
+        the night is not a ticket.
+
+        Refunded tickets are omitted rather than shown as void — a QR that will
+        be turned away is worse than no QR, because its holder finds out at the
+        front of the queue.
+      tags: [Tickets]
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The order and its live tickets.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketAccess' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/me/tickets:
     get:
       operationId: listMyTickets
@@ -491,6 +524,59 @@ components:
             ticket_types:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
+
+    HeldTicket:
+      type: object
+      required: [id, code, status, admits, admitted, qr]
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: |
+            What the door scans, and what gets read aloud when a camera will
+            not focus. The alphabet excludes characters that are misheard.
+        type: { type: [string, 'null'] }
+        holder: { type: [string, 'null'] }
+        status: { type: string }
+        admits:
+          type: integer
+          description: How many people this one lets in — a Couple admits 2.
+        admitted:
+          type: integer
+          description: |
+            How many of them are already inside. A table arriving in two groups
+            needs this, or the second half thinks the ticket is spent.
+        qr:
+          type: string
+          description: |
+            SVG markup, drawn by the server from the code. The white ground is
+            part of the symbol: a QR rendered transparently over a dark theme
+            inverts and will not scan.
+
+    TicketAccess:
+      type: object
+      required: [reference, status, event, tickets]
+      properties:
+        reference: { type: string }
+        status: { type: string }
+        buyer_name: { type: [string, 'null'] }
+        event:
+          type: object
+          required: [slug, title, starts_at, timezone, organizer]
+          properties:
+            slug: { type: string }
+            title: { type: string }
+            starts_at: { type: string, format: date-time }
+            timezone: { type: string }
+            venue: { type: [string, 'null'] }
+            address: { type: [string, 'null'] }
+            city: { type: string }
+            min_age: { type: [integer, 'null'] }
+            id_required: { type: boolean }
+            organizer: { type: string }
+        tickets:
+          type: array
+          items: { $ref: '#/components/schemas/HeldTicket' }
 
     GalleryImage:
       type: object

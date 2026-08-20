@@ -167,3 +167,12 @@ export interface TicketAccess {
   };
   tickets: HeldTicket[];
 }
+
+/** Everything the front page needs, in one response. */
+export interface Discovery {
+  featured: EventSummary[];
+  upcoming: EventSummary[];
+  /** Only places with something on — a filter leading nowhere is worse than none. */
+  cities: { city: string; country: string; events: number }[];
+  categories: { category: string; events: number }[];
+}

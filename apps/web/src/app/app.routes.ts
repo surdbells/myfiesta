@@ -13,8 +13,10 @@ import { Routes } from '@angular/router';
  */
 export const routes: Routes = [
   {
+    // The front page. Previously this was the same flat search list as
+    // /events, so somebody arriving without a link had nothing to browse.
     path: '',
-    loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
+    loadComponent: () => import('./features/home/home').then((m) => m.Home),
   },
   {
     path: 'events',

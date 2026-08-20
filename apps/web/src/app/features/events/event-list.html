@@ -17,6 +17,13 @@
     <button type="submit">Search</button>
   </form>
 
+  @if (category(); as chosen) {
+    <p class="applied">
+      Showing <strong>{{ chosen }}</strong>
+      <button type="button" class="clear" (click)="clearCategory()">Clear</button>
+    </p>
+  }
+
   @if (loading()) {
     <p class="muted" role="status">Finding events…</p>
   } @else if (events().length === 0) {

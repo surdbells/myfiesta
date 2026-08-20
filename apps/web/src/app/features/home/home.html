@@ -1,0 +1,124 @@
+@if (loading()) {
+  <section class="wrap"><p class="muted" role="status">Loading what's on…</p></section>
+} @else if (discovery(); as d) {
+  <!--
+    The hero is one real event, not a stock photograph and a slogan. A ticketing
+    front page has exactly one job — show somebody something they might go to —
+    and the fastest version of that is the next good night, at full size.
+  -->
+  @if (lead(); as event) {
+    <section class="hero">
+      <a [routerLink]="['/', event.slug]">
+        @if (event.poster_url) {
+          <img [src]="event.poster_url" alt="" fetchpriority="high" />
+        } @else {
+          <div class="hero__placeholder" aria-hidden="true"></div>
+        }
+
+        <div class="hero__text">
+          <p class="eyebrow">{{ event.organizer.name }}</p>
+          <h1>{{ event.title }}</h1>
+          <p class="hero__when">{{ when(event) }} · {{ event.city }}</p>
+          <span class="hero__cta">{{ price(event) }} →</span>
+        </div>
+      </a>
+    </section>
+  } @else {
+    <section class="wrap empty">
+      <h1>Nothing on sale yet</h1>
+      <p class="muted">Check back shortly, or search for something specific.</p>
+      <a class="cta" routerLink="/events">Search events</a>
+    </section>
+  }
+
+  <div class="wrap">
+    @if (rest().length > 0) {
+      <section>
+        <h2>Featured</h2>
+        <ul class="grid">
+          @for (event of rest(); track event.slug) {
+            <li class="card">
+              <a [routerLink]="['/', event.slug]">
+                @if (event.poster_url) {
+                  <img [src]="event.poster_url" alt="" loading="lazy" />
+                } @else {
+                  <div class="placeholder" aria-hidden="true"></div>
+                }
+                <div class="card__body">
+                  <h3>{{ event.title }}</h3>
+                  <p class="when">{{ when(event) }}</p>
+                  <p class="where">{{ event.city }}</p>
+                  <p class="price">{{ price(event) }}</p>
+                </div>
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    @if (upcoming().length > 0) {
+      <section>
+        <h2>Coming up</h2>
+        <ul class="grid">
+          @for (event of upcoming(); track event.slug) {
+            <li class="card">
+              <a [routerLink]="['/', event.slug]">
+                @if (event.poster_url) {
+                  <img [src]="event.poster_url" alt="" loading="lazy" />
+                } @else {
+                  <div class="placeholder" aria-hidden="true"></div>
+                }
+                <div class="card__body">
+                  <h3>{{ event.title }}</h3>
+                  <p class="when">{{ when(event) }}</p>
+                  <p class="where">{{ event.city }}</p>
+                  <p class="price">{{ price(event) }}</p>
+                </div>
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <!--
+      Only cities and categories that have something on. Offering a filter that
+      leads to an empty page is worse than not offering it, and the count is
+      what tells somebody whether it is worth the tap.
+    -->
+    @if (d.cities.length > 0) {
+      <section>
+        <h2>By city</h2>
+        <ul class="chips">
+          @for (place of d.cities; track place.city) {
+            <li>
+              <button type="button" (click)="browseCity(place.city)">
+                {{ place.city }}
+                <span class="count">{{ place.events }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    @if (d.categories.length > 0) {
+      <section>
+        <h2>By kind of night</h2>
+        <ul class="chips">
+          @for (kind of d.categories; track kind.category) {
+            <li>
+              <button type="button" (click)="browseCategory(kind.category)">
+                {{ kind.category }}
+                <span class="count">{{ kind.events }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <p class="all"><a routerLink="/events">See everything on sale →</a></p>
+  </div>
+}

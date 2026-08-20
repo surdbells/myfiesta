@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\DiscoverController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
@@ -28,6 +29,7 @@ Route::get('/health', fn () => ['status' => 'ok']);
  * Quoting is rate limited more loosely than ordering: a cart recalculates on
  * every change, while creating an order takes locks and reserves stock.
  */
+Route::get('/discover', DiscoverController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/orders/{reference}', OrderStatusController::class);

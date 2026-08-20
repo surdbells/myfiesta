@@ -1,0 +1,275 @@
+/*
+ * The front page.
+ *
+ * One real event at full width, then everything else in the same card the
+ * browse screen uses. The repetition is deliberate: a card that looks the same
+ * everywhere is one people learn once.
+ */
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-9);
+}
+
+.wrap > section {
+  margin-top: var(--space-8);
+}
+
+h2 {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-xl);
+}
+
+/* --- the hero ------------------------------------------------------------ */
+
+.hero {
+  margin-bottom: var(--space-2);
+}
+
+.hero a {
+  position: relative;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.hero img,
+.hero__placeholder {
+  width: 100%;
+  /* Wide on a desktop, taller on a phone — a 21:9 crop at 375px is a letterbox
+     with nothing readable in it. */
+  aspect-ratio: 21 / 9;
+  max-height: 62vh;
+  object-fit: cover;
+  background-color: var(--surface-inset);
+}
+
+@media (max-width: 720px) {
+  .hero img,
+  .hero__placeholder {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+.hero__placeholder {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 22%, var(--surface-inset)),
+    color-mix(in srgb, var(--accent) 18%, var(--surface-inset))
+  );
+}
+
+/*
+ * The text sits on a scrim, not straight on the photograph.
+ *
+ * An organizer's banner can be any brightness at all, and white text over a
+ * pale sky is invisible. The gradient guarantees the contrast regardless of
+ * what was uploaded — which is the only way to keep this readable without
+ * inspecting every image.
+ */
+.hero__text {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-8) var(--space-5) var(--space-6);
+  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+  color: #ffffff;
+}
+
+.hero__text .eyebrow {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.hero h1 {
+  max-width: 20ch;
+  font-size: clamp(var(--font-size-2xl), 5vw, var(--font-size-4xl));
+  line-height: var(--font-leading-tight);
+}
+
+.hero__when {
+  font-size: var(--font-size-lg);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero__cta {
+  justify-self: start;
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border-radius: var(--radius-md);
+}
+
+.hero a:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: -3px;
+}
+
+/* --- cards --------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    border-color var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease);
+}
+.card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-raised);
+}
+
+/* The whole card is one link — a linked title beside a linked image gives a
+   keyboard user two stops for one destination. */
+.card a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.card a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+
+.card img,
+.placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background-color: var(--surface-inset);
+}
+
+.placeholder {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 14%, var(--surface-inset)),
+    color-mix(in srgb, var(--accent) 12%, var(--surface-inset))
+  );
+}
+
+.card__body {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+}
+
+.card h3 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  /* Two lines then ellipsis, so one long title cannot make its card twice the
+     height of everything beside it. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.when {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--primary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.where {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.price {
+  margin-top: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- browse chips -------------------------------------------------------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.chips button:hover {
+  color: var(--primary-text);
+  border-color: var(--primary);
+}
+
+/* The count is what tells somebody whether the tap is worth it. */
+.count {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* --- odds and ends ------------------------------------------------------- */
+
+.all {
+  margin-top: var(--space-8);
+  font-size: var(--font-size-sm);
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-9) var(--space-5);
+  text-align: center;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}

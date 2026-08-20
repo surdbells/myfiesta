@@ -3,6 +3,7 @@ import { API_BASE_URL } from './api-base';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  Discovery,
   EventDetail,
   EventSummary,
   OrderCreated,
@@ -82,6 +83,18 @@ export class Api {
    * The return itself proves nothing — a signed webhook decides — so the client
    * asks until the status settles.
    */
+  /**
+   * The front page, in one request.
+   *
+   * Four sections from four endpoints would be four chances to look broken on
+   * a phone, and this is the first screen a stranger sees.
+   */
+  discover(city?: string): Observable<Discovery> {
+    const params = city ? new HttpParams().set('city', city) : undefined;
+
+    return this.http.get<Discovery>(`${this.base}/api/discover`, { params });
+  }
+
   orderStatus(reference: string): Observable<OrderStatus> {
     return this.http.get<OrderStatus>(`${this.base}/api/orders/${reference}`);
   }
