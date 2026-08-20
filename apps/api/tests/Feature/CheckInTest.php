@@ -69,7 +69,7 @@ class CheckInTest extends TestCase
 
         $outcome = $this->door->scan($ticket->code, $event->id);
 
-        $this->assertTrue($outcome->admitted());
+        $this->assertTrue($outcome->admittedAnyone());
         $this->assertSame('checked_in', $ticket->refresh()->status);
         $this->assertNotNull($ticket->checked_in_at);
     }
@@ -82,7 +82,7 @@ class CheckInTest extends TestCase
         $this->door->scan($ticket->code, $event->id);
         $outcome = $this->door->scan($ticket->code, $event->id);
 
-        $this->assertFalse($outcome->admitted());
+        $this->assertFalse($outcome->admittedAnyone());
         $this->assertSame(ScanOutcome::DUPLICATE, $outcome->result);
         // "Already scanned" is an accusation. Saying when turns it into
         // something the person on the door can actually resolve.
@@ -165,7 +165,7 @@ class CheckInTest extends TestCase
         // Codes get typed by hand when a camera will not read a cracked screen.
         $outcome = $this->door->scan(strtolower($ticket->code), $event->id);
 
-        $this->assertTrue($outcome->admitted());
+        $this->assertTrue($outcome->admittedAnyone());
     }
 
     public function test_surrounding_whitespace_does_not_defeat_a_scan(): void
@@ -175,6 +175,6 @@ class CheckInTest extends TestCase
 
         $outcome = $this->door->scan("  {$ticket->code}\n", $event->id);
 
-        $this->assertTrue($outcome->admitted());
+        $this->assertTrue($outcome->admittedAnyone());
     }
 }

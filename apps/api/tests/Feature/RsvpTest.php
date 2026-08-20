@@ -85,7 +85,7 @@ class RsvpTest extends TestCase
         $outcome = app(CheckInService::class)->scan($ticket->code, $event->id);
 
         // No new scanner, no new check-in path, no new duplicate protection.
-        $this->assertTrue($outcome->admitted());
+        $this->assertTrue($outcome->admittedAnyone());
         $this->assertSame('checked_in', $ticket->refresh()->status);
     }
 

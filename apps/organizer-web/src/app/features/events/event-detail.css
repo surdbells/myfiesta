@@ -227,3 +227,20 @@ button:disabled {
   color: var(--color-semantic-danger);
   background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
 }
+
+/* The add-ticket row wraps once it carries description and admits too. */
+.add {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.add .wide {
+  grid-column: 1 / -1;
+}
+.add .help {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-neutral-600);
+}
+.add .optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-neutral-400);
+}

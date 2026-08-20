@@ -24,18 +24,34 @@ class DoorController extends Controller
     {
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:32'],
+            // How many of the party are going in now. Absent admits everyone
+            // still outstanding, which is the right default for an ordinary
+            // single-admission ticket.
+            'party' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
 
-        $outcome = $this->door->scan($validated['code'], $event->id, $request->user());
+        $outcome = $this->door->scan(
+            $validated['code'],
+            $event->id,
+            $request->user(),
+            $validated['party'] ?? null,
+        );
 
         return response()->json([
             'result' => $outcome->result,
-            'admitted' => $outcome->admitted(),
+            'accepted' => $outcome->admittedAnyone(),
+            // How many this scan let in, and how many of the party are still
+            // outside. The second is what tells the door whether to keep the
+            // ticket open for the rest of a table.
+            'admitted' => $outcome->admitted,
+            'remaining' => $outcome->remaining,
             'message' => $outcome->message,
             'ticket' => $outcome->ticket && $outcome->ticket->event_id === $event->id
                 ? [
                     'holder_name' => $outcome->ticket->holder_name,
                     'type' => $outcome->ticket->ticketType?->name,
+                    'admits' => $outcome->ticket->admits,
+                    'admitted_count' => $outcome->ticket->admitted_count,
                 ]
                 // Nothing about a ticket belonging to another event. A door
                 // token is scoped to one event, and leaking a guest's name from

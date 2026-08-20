@@ -4,6 +4,7 @@ namespace App\Services\Checkout;
 
 use App\Models\Order;
 use App\Models\Ticket;
+use App\Models\TicketType;
 use App\Models\User;
 
 /**
@@ -46,12 +47,16 @@ class TicketIssuer
 
         $tickets = [];
 
-        foreach ($order->lines as $line) {
+        foreach ($order->lines()->with('ticketType:id,admits')->get() as $line) {
             for ($i = 0; $i < $line->quantity; $i++) {
                 $tickets[] = Ticket::create([
                     'code' => $this->code(),
                     'event_id' => $order->event_id,
                     'ticket_type_id' => $line->ticket_type_id,
+                    // Snapshotted, not read through the type at the door. An
+                    // organizer editing a Table of 5 down to a Table of 4 next
+                    // month must not silently shrink a table already sold.
+                    'admits' => $line->ticketType?->admits ?? 1,
                     'order_id' => $order->id,
                     'owner_user_id' => $owner->id,
                     'owner_email' => $order->buyer_email,
@@ -87,6 +92,10 @@ class TicketIssuer
             'code' => $this->code(),
             'event_id' => $eventId,
             'ticket_type_id' => $ticketTypeId,
+            'admits' => TicketType::whereKey($ticketTypeId)->value('admits') ?? 1,
+            // Set rather than left to the column default, so the model handed
+            // back reflects the row that exists instead of needing a refresh.
+            'admitted_count' => 0,
             'order_id' => null,
             'owner_user_id' => $owner->id,
             'owner_email' => strtolower(trim($email)),

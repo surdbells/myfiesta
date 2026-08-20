@@ -250,7 +250,7 @@ class ApiSurfaceTest extends TestCase
 
         $this->postJson("/api/events/{$this->event->id}/scan", ['code' => $ticket->code])
             ->assertOk()
-            ->assertJsonPath('admitted', true);
+            ->assertJsonPath('accepted', true);
     }
 
     public function test_a_door_token_cannot_scan_another_event(): void
