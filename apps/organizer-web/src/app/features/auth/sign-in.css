@@ -84,3 +84,35 @@ button[type='submit']:disabled {
   background-color: color-mix(in srgb, var(--danger) 9%, transparent);
   border-radius: var(--radius-md);
 }
+
+/* --- shared with register, forgot and reset ------------------------------ */
+
+.hint {
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* A hint that has become a problem. Colour plus wording — the wording is what
+   a colourblind reader gets. */
+.hint.bad {
+  color: var(--danger);
+}
+
+.alt {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.back-link {
+  justify-self: start;
+  font-size: var(--font-size-sm);
+}
+
+/* On the confirmation cards there is no form, so the card needs its own
+   breathing room rather than inheriting the form's field rhythm. */
+.card > h1 + .sub {
+  margin-bottom: var(--space-2);
+}

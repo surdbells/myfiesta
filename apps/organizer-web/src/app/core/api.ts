@@ -84,6 +84,63 @@ export class Api {
     return this.http.post(`${this.base}/api/auth/logout`, {});
   }
 
+  // --- getting an account -------------------------------------------------
+
+  /**
+   * Sign up as an organizer.
+   *
+   * Returns a session, so signing up and being able to create an event are one
+   * step — or a 202 with `pending`, which is what comes back when the address
+   * already has an account. The server deliberately will not say which, so
+   * neither does this.
+   */
+  register(body: {
+    name: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+    organization: string;
+  }): Observable<Session & { pending?: boolean }> {
+    return this.http.post<Session & { pending?: boolean }>(
+      `${this.base}/api/auth/register`,
+      { ...body, device: 'organizer-console' },
+    );
+  }
+
+  forgotPassword(email: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/auth/forgot-password`, { email });
+  }
+
+  resetPassword(body: {
+    token: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+  }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/auth/reset-password`, body);
+  }
+
+  updateProfile(body: {
+    name?: string;
+    phone?: string | null;
+    timezone?: string | null;
+  }): Observable<{ name: string; email: string; phone: string | null; timezone: string | null }> {
+    return this.http.patch<{
+      name: string;
+      email: string;
+      phone: string | null;
+      timezone: string | null;
+    }>(`${this.base}/api/auth/profile`, body);
+  }
+
+  changePassword(body: {
+    current_password: string;
+    password: string;
+    password_confirmation: string;
+  }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/auth/password`, body);
+  }
+
   events(): Observable<{ data: OrganizerEvent[] }> {
     return this.http.get<{ data: OrganizerEvent[] }>(`${this.base}/api/organizer/events`);
   }

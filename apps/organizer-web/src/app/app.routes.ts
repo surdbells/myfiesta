@@ -3,6 +3,19 @@ import { requireSession } from './core/auth.guard';
 
 export const routes: Routes = [
   {
+    path: 'register',
+    loadComponent: () => import('./features/auth/register').then((m) => m.Register),
+  },
+  {
+    path: 'forgot-password',
+    loadComponent: () => import('./features/auth/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
+    // Reached from an emailed link, carrying token and email in the query.
+    path: 'reset-password',
+    loadComponent: () => import('./features/auth/reset-password').then((m) => m.ResetPassword),
+  },
+  {
     path: 'sign-in',
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },

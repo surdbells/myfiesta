@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DoorController;
@@ -67,9 +68,22 @@ Route::middleware(['auth:sanctum', 'token.scope:door'])
  */
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
+/*
+ * Getting an account, and getting back into one.
+ *
+ * Unauthenticated by necessity — everything here is what somebody does when
+ * they have no token. Each is rate limited inside the controller on the pair
+ * that actually identifies the attempt, not just on the route.
+ */
+Route::post('/auth/register', [AccountController::class, 'register'])->middleware('throttle:10,1');
+Route::post('/auth/forgot-password', [AccountController::class, 'forgotPassword'])->middleware('throttle:10,1');
+Route::post('/auth/reset-password', [AccountController::class, 'resetPassword'])->middleware('throttle:10,1');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::patch('/auth/profile', [AccountController::class, 'updateProfile']);
+    Route::post('/auth/password', [AccountController::class, 'changePassword']);
 });
 
 /*

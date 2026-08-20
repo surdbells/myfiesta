@@ -55,6 +55,16 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+     * Where the two front ends live.
+     *
+     * The API serves neither of them, so anything it emails has to be told
+     * where to send people: a password reset goes to the console, an event
+     * link goes to the public site.
+     */
+    'console_url' => env('CONSOLE_URL', 'http://localhost:4310'),
+    'public_url' => env('PUBLIC_URL', 'http://localhost:4320'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------

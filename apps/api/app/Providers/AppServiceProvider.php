@@ -32,6 +32,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        /*
+         * The reset link points at the console, not at this API.
+         *
+         * Laravel's default builds a URL for a Blade route that does not exist
+         * here — the form somebody types their new password into is an Angular
+         * screen on another origin. Without this the email arrives with a link
+         * to a 404, which is the kind of break nobody notices until a real
+         * person is locked out.
+         */
+        \Illuminate\Auth\Notifications\ResetPassword::createUrlUsing(
+            fn ($user, string $token) => rtrim(config('app.console_url'), '/')
+                .'/reset-password?token='.$token
+                .'&email='.urlencode($user->getEmailForPasswordReset()),
+        );
     }
 }
