@@ -7,6 +7,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <meta name="api-base" content="" />
+    <!-- Where the public site lives, so promoter links can be built here. The
+         console and the site are separate deployments, so this origin is not
+         the one the console is served from. Injected at deploy time, like the
+         API base — a built bundle should carry no hostname. -->
+    <meta name="public-base" content="" />
   </head>
   <body>
     <app-root></app-root>

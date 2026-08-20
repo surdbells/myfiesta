@@ -47,10 +47,15 @@ class CodeController extends Controller
                     ->whereNull('deleted_at'),
             ],
             'label' => ['nullable', 'string', 'max:120'],
-            'discount_type' => ['nullable', 'in:percentage,fixed'],
+            'discount_type' => ['nullable', 'in:percentage,fixed', 'required_with:discount_value'],
             // Percentage in basis points, fixed in minor units. Both integers,
             // because a rate that multiplies money must not be a float.
-            'discount_value' => ['nullable', 'integer', 'min:1'],
+            //
+            // Required alongside the type. A percentage code with no percentage
+            // used to be accepted — the check constraint meant to stop it was
+            // defeated by NULL comparing to unknown rather than false — and then
+            // returned a 500 to every buyer who typed it.
+            'discount_value' => ['nullable', 'integer', 'min:1', 'required_with:discount_type'],
             'promoter_name' => ['nullable', 'string', 'max:120'],
             'ref_slug' => ['nullable', 'string', 'max:64', 'alpha_dash'],
             'max_redemptions' => ['nullable', 'integer', 'min:1'],
@@ -58,6 +63,11 @@ class CodeController extends Controller
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'event_scoped' => ['nullable', 'boolean'],
+        ], [
+            // The defaults here read as if somebody else claimed a username.
+            'code.unique' => 'You already have a code with that name.',
+            'discount_value.required_with' => 'Say how much comes off.',
+            'discount_type.required_with' => 'Say whether that is a percentage or an amount.',
         ]);
 
         // A code has to do something. The database enforces this too, but a
@@ -96,7 +106,11 @@ class CodeController extends Controller
             'is_active' => true,
         ]);
 
-        return response()->json($this->present($code, $event), 201);
+        // Refreshed so the response carries what the database actually holds.
+        // redemption_count defaults to 0 there and is absent from the model we
+        // just built, so without this a new code reports a null usage count and
+        // a reload silently changes it to 0.
+        return response()->json($this->present($code->refresh(), $event), 201);
     }
 
     /**

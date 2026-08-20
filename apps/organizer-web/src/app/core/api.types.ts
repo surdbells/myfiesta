@@ -126,7 +126,7 @@ export interface PromoCode {
   label: string | null;
   discount_type: 'percentage' | 'fixed' | null;
   discount_value: number | null;
-  discount_currency: string | null;
+  discount_currency: Money['currency'] | null;
   ref_slug: string | null;
   promoter_name: string | null;
   redemption_count: number;

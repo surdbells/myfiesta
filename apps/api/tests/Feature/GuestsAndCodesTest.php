@@ -199,6 +199,67 @@ class GuestsAndCodesTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_discount_with_no_amount_is_refused(): void
+    {
+        $this->asOrganizer($this->member(Role::Marketing));
+
+        // This used to be accepted. The check constraint meant to stop it
+        // compares NULL to zero, which is unknown rather than false, and a
+        // CHECK that evaluates to unknown passes. The code then looked usable
+        // in the console and returned a 500 to every buyer who typed it.
+        $this->postJson("/api/organizer/events/{$this->event->id}/codes", [
+            'code' => 'NOVALUE',
+            'discount_type' => 'percentage',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.discount_value.0', 'Say how much comes off.');
+
+        $this->assertSame(0, Code::count());
+    }
+
+    public function test_an_amount_with_no_discount_type_is_refused(): void
+    {
+        $this->asOrganizer($this->member(Role::Marketing));
+
+        // The mirror image: 500 of something unspecified.
+        $this->postJson("/api/organizer/events/{$this->event->id}/codes", [
+            'code' => 'HALFSAID',
+            'discount_value' => 500,
+        ])->assertStatus(422);
+    }
+
+    public function test_the_database_refuses_a_half_written_discount_too(): void
+    {
+        // The validation above is the sentence a person reads. This is the
+        // floor underneath it, for anything reaching the table another way.
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        Code::create([
+            'organization_id' => $this->org->id,
+            'event_id' => $this->event->id,
+            'code' => 'BYPASS',
+            'discount_type' => 'percentage',
+            'discount_value' => null,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_a_new_code_reports_a_real_usage_count(): void
+    {
+        $this->asOrganizer($this->member(Role::Marketing));
+
+        // The count lives on the database's default, not on the model we just
+        // built, so without a refresh this came back null and then silently
+        // became 0 on the next load.
+        $this->postJson("/api/organizer/events/{$this->event->id}/codes", [
+            'code' => 'FRESH',
+            'discount_type' => 'percentage',
+            'discount_value' => 1000,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('redemption_count', 0);
+    }
+
     public function test_a_percentage_over_one_hundred_is_refused(): void
     {
         $this->asOrganizer($this->member(Role::Marketing));

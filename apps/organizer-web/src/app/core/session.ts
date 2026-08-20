@@ -46,6 +46,9 @@ export class SessionStore {
   /** What this member may do here. Mirrors the policies the API enforces. */
   readonly canEditEvents = computed(() => this.hasRole('owner', 'manager'));
   readonly canSeeMoney = computed(() => this.hasRole('owner', 'finance'));
+  // Reaching attendees, and the codes that bring them in. Marketing is here and
+  // nowhere else — writing a promo code is their job, minting tickets is not.
+  readonly canMessage = computed(() => this.hasRole('owner', 'manager', 'marketing'));
 
   private hasRole(...roles: Membership['role'][]): boolean {
     const role = this.current()?.role;

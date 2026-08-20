@@ -1,0 +1,232 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <div>
+    <h1>Codes</h1>
+    <p class="sub">
+      A code can take money off, credit a promoter for the sale, or do both.
+      Promoter codes also work as a link, so nobody has to type anything.
+    </p>
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (session.canMessage()) {
+  <form class="new" (ngSubmit)="submit()">
+    <div class="row">
+      <div class="field">
+        <label for="code">Code</label>
+        <input
+          id="code"
+          name="code"
+          required
+          maxlength="64"
+          placeholder="EARLYBIRD"
+          [ngModel]="form().code"
+          (ngModelChange)="form.set({ ...form(), code: $event })"
+        />
+        <p class="help">What a buyer types. Case does not matter.</p>
+      </div>
+
+      <div class="field">
+        <label for="kind">What it does</label>
+        <select
+          id="kind"
+          name="kind"
+          [ngModel]="form().kind"
+          (ngModelChange)="form.set({ ...form(), kind: $event })"
+        >
+          <option value="discount">Takes money off</option>
+          <option value="promoter">Credits a promoter</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="label">Note to yourself <span class="optional">optional</span></label>
+        <input
+          id="label"
+          name="label"
+          maxlength="120"
+          placeholder="Radio giveaway"
+          [ngModel]="form().label"
+          (ngModelChange)="form.set({ ...form(), label: $event })"
+        />
+      </div>
+    </div>
+
+    @if (discounts()) {
+      <div class="row">
+        <div class="field">
+          <label for="discountType">Discount</label>
+          <select
+            id="discountType"
+            name="discountType"
+            [ngModel]="form().discount_type"
+            (ngModelChange)="form.set({ ...form(), discount_type: $event })"
+          >
+            <option value="percentage">A percentage</option>
+            <option value="fixed">A fixed amount</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="discountValue">
+            @if (form().discount_type === 'percentage') { How much off (%) } @else {
+              How much off ({{ currency() }})
+            }
+          </label>
+          <input
+            id="discountValue"
+            name="discountValue"
+            type="number"
+            min="0"
+            step="0.01"
+            required
+            [ngModel]="form().discount_value"
+            (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+          />
+          @if (form().discount_type === 'fixed') {
+            <p class="help">
+              Only usable on events priced in {{ currency() }} — a fixed amount carries
+              its currency with it.
+            </p>
+          }
+        </div>
+      </div>
+    }
+
+    @if (attributes()) {
+      <div class="row">
+        <div class="field">
+          <label for="promoterName">Promoter</label>
+          <input
+            id="promoterName"
+            name="promoterName"
+            maxlength="120"
+            placeholder="Ada"
+            [ngModel]="form().promoter_name"
+            (ngModelChange)="form.set({ ...form(), promoter_name: $event })"
+          />
+          <p class="help">Who gets credited when this code is used.</p>
+        </div>
+
+        <div class="field">
+          <label for="refSlug">Link tag <span class="optional">optional</span></label>
+          <input
+            id="refSlug"
+            name="refSlug"
+            maxlength="64"
+            [placeholder]="form().code.toLowerCase() || 'ada'"
+            [ngModel]="form().ref_slug"
+            (ngModelChange)="form.set({ ...form(), ref_slug: $event })"
+          />
+          <p class="help">Goes on the end of their link. Defaults to the code itself.</p>
+        </div>
+      </div>
+    }
+
+    <div class="row">
+      <div class="field">
+        <label for="maxRedemptions">Total uses <span class="optional">optional</span></label>
+        <input
+          id="maxRedemptions"
+          name="maxRedemptions"
+          type="number"
+          min="1"
+          placeholder="Unlimited"
+          [ngModel]="form().max_redemptions"
+          (ngModelChange)="form.set({ ...form(), max_redemptions: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="maxPerCustomer">Per buyer <span class="optional">optional</span></label>
+        <input
+          id="maxPerCustomer"
+          name="maxPerCustomer"
+          type="number"
+          min="1"
+          placeholder="Unlimited"
+          [ngModel]="form().max_per_customer"
+          (ngModelChange)="form.set({ ...form(), max_per_customer: $event })"
+        />
+      </div>
+    </div>
+
+    <button class="cta" type="submit" [disabled]="saving() || !form().code.trim()">
+      @if (saving()) { Creating… } @else { Create code }
+    </button>
+  </form>
+}
+
+<h2 class="section">In use</h2>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (codes().length === 0) {
+  <p class="muted">No codes yet.</p>
+} @else {
+  <ul class="codes">
+    @for (code of codes(); track code.id) {
+      <li [class.off]="!code.usable">
+        <div class="head">
+          <code class="name">{{ code.code }}</code>
+
+          @if (code.usable) {
+            <span class="tag live">Working</span>
+          } @else if (!code.is_active) {
+            <span class="tag">Turned off</span>
+          } @else if (code.max_redemptions !== null && code.redemption_count >= code.max_redemptions) {
+            <span class="tag">Used up</span>
+          } @else {
+            <!-- Active, within its limits, and still not usable: it is scoped
+                 elsewhere, outside its dates, or in another currency. -->
+            <span class="tag">Not usable here</span>
+          }
+
+          @if (!code.event_scoped) {
+            <span class="tag wide">All your events</span>
+          }
+        </div>
+
+        <p class="what">
+          {{ describeDiscount(code) }}
+          @if (code.promoter_name) {
+            · credits {{ code.promoter_name }}
+          }
+          @if (code.label) {
+            · {{ code.label }}
+          }
+        </p>
+
+        <p class="uses">
+          {{ code.redemption_count }}
+          @if (code.max_redemptions !== null) {
+            of {{ code.max_redemptions }}
+          }
+          used
+        </p>
+
+        @if (linkFor(code); as link) {
+          <div class="link">
+            <input readonly [value]="link" (focus)="$any($event.target).select()" />
+            <button type="button" (click)="copy(code)">
+              @if (copied() === code.id) { Copied } @else { Copy }
+            </button>
+          </div>
+        }
+
+        @if (code.is_active && session.canMessage()) {
+          <button class="off-btn" type="button" (click)="turnOff(code)">Turn off</button>
+        }
+      </li>
+    }
+  </ul>
+}
