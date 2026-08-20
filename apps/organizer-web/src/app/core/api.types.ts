@@ -227,3 +227,20 @@ export interface Series {
   occurrences: SeriesOccurrence[];
   skipped: { occurs_at: string; reason: string | null }[];
 }
+
+/** What the door gets back from one scan. */
+export interface ScanResult {
+  result: string;
+  /** Whether anybody went in. A table can be partly admitted. */
+  accepted: boolean;
+  admitted: number;
+  /** Still outstanding on this ticket — what keeps a table open. */
+  remaining: number;
+  message: string;
+  ticket: {
+    holder_name: string | null;
+    type: string | null;
+    admits: number;
+    admitted_count: number;
+  } | null;
+}

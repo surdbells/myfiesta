@@ -33,12 +33,31 @@ class EnforceTokenScope
             return $this->deny('This endpoint requires an API token.');
         }
 
-        // Door tokens are event-scoped, so an exact-match check is not enough:
-        // the ability carries the event id it was minted for.
+        /*
+         * The door takes two kinds of token.
+         *
+         * A `door:{event_id}` token, which carries the event it was minted for
+         * and reaches nothing else — that is why an exact-match check is not
+         * enough here.
+         *
+         * Or an ordinary organizer token, because organizers work their own
+         * doors constantly and issuing themselves a door token to stand at
+         * their own event would be ceremony for its own sake. Both the route
+         * and the controller have always documented this; the check did not
+         * implement it, so an organizer scanning their own door got a 403 and
+         * the console had no way to scan at all.
+         *
+         * The ability alone is not authority. An organizer token says only
+         * "somebody organizes something" — DoorController authorizes 'scan'
+         * against this specific event, which is what stops one organizer
+         * scanning another's door.
+         */
         if ($required === TokenAbility::Door->value) {
             $eventId = $request->route('event')?->id ?? $request->route('event');
 
-            if (! is_string($eventId) || ! $token->can(TokenAbility::doorFor($eventId))) {
+            $hasDoorToken = is_string($eventId) && $token->can(TokenAbility::doorFor($eventId));
+
+            if (! $hasDoorToken && ! $token->can(TokenAbility::Organizer->value)) {
                 return $this->deny('This token does not grant access to this door.');
             }
 

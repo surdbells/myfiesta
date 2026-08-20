@@ -14,6 +14,7 @@ import {
   OrganizerEventDetail,
   RefundResult,
   Reminder,
+  ScanResult,
   Series,
   SeriesOccurrence,
   SoldOrder,
@@ -322,6 +323,21 @@ export class Api {
       `${this.base}/api/organizer/events/${eventId}/images/order`,
       { ids },
     );
+  }
+
+  // --- the door -----------------------------------------------------------
+
+  /**
+   * One scan.
+   *
+   * The party size is how many of a table are going in now; omitting it admits
+   * everyone still outstanding, which is right for an ordinary ticket.
+   */
+  scan(eventId: string, code: string, party?: number): Observable<ScanResult> {
+    return this.http.post<ScanResult>(`${this.base}/api/events/${eventId}/scan`, {
+      code,
+      ...(party ? { party } : {}),
+    });
   }
 
   // --- reminders ----------------------------------------------------------

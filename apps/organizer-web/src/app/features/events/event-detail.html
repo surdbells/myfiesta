@@ -70,6 +70,7 @@
   }
 
   <nav class="jump">
+    <a [routerLink]="['/events', eventId, 'door']">Door · scan tickets →</a>
     <a [routerLink]="['/events', eventId, 'guests']">Guests and check-in →</a>
     @if (session.canEditEvents()) {
       <a [routerLink]="['/events', eventId, 'pictures']">Pictures →</a>

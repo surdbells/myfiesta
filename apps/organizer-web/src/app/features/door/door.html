@@ -1,0 +1,126 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <div>
+    <h1>Door</h1>
+    <p class="sub">Scan a ticket, or type the code from it.</p>
+  </div>
+
+  <p class="tally">
+    <span class="figure">{{ admittedHere() }}</span>
+    <span class="of">admitted here · {{ scannedHere() }} scanned</span>
+  </p>
+</header>
+
+<!--
+  The verdict panel is first and fills the width, because at a door in the dark
+  this is the only thing anybody looks at. Everything below is for the
+  conversation that follows a refusal.
+-->
+@if (outcome(); as result) {
+  <section class="verdict" [class]="'verdict--' + verdict()" role="status" aria-live="assertive">
+    <p class="verdict__word">
+      @switch (verdict()) {
+        @case ('in') {
+          Let them in
+        }
+        @case ('partial') {
+          {{ result.admitted }} in · {{ result.remaining }} still outside
+        }
+        @default {
+          Do not admit
+        }
+      }
+    </p>
+
+    <p class="verdict__why">{{ result.message }}</p>
+
+    @if (result.ticket; as ticket) {
+      <p class="verdict__who">
+        {{ ticket.holder_name ?? 'No name on ticket' }}
+        @if (ticket.type) {
+          · {{ ticket.type }}
+        }
+        @if (ticket.admits > 1) {
+          · admits {{ ticket.admits }}, {{ ticket.admitted_count }} in
+        }
+      </p>
+    }
+  </section>
+}
+
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+<!--
+  Typing is always available, never behind a "having trouble?" link. A cracked
+  lens, a flat battery or a guest whose screen will not brighten all end here,
+  and at that moment nobody is hunting for a disclosure triangle.
+-->
+<form class="entry" (ngSubmit)="submit()">
+  <div class="field">
+    <label for="code">Ticket code</label>
+    <input
+      id="code"
+      name="code"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      placeholder="WFY7-F77K4EJW"
+      [ngModel]="code()"
+      (ngModelChange)="code.set($event)"
+    />
+  </div>
+
+  <div class="field narrow">
+    <label for="party">How many <span class="optional">of a table</span></label>
+    <input
+      id="party"
+      name="party"
+      type="number"
+      inputmode="numeric"
+      min="1"
+      max="50"
+      placeholder="All"
+      [ngModel]="party()"
+      (ngModelChange)="party.set($event)"
+      aria-describedby="party-hint"
+    />
+  </div>
+
+  <button class="cta" type="submit" [disabled]="busy() || !code().trim()">
+    @if (busy()) {
+      Checking…
+    } @else {
+      Check in
+    }
+  </button>
+</form>
+
+<p id="party-hint" class="help">
+  Leave the number blank for an ordinary ticket. For a table arriving in two
+  groups, put in how many are going in now — the rest stay outstanding.
+</p>
+
+<h2 class="section">Camera</h2>
+
+@if (!cameraSupported) {
+  <p class="muted">
+    This browser cannot read a QR code. Chrome on Android can; on an iPhone,
+    type the code above instead.
+  </p>
+} @else if (!scanning()) {
+  <button class="secondary" type="button" (click)="startCamera()">Use the camera</button>
+  @if (cameraError(); as message) {
+    <p class="error">{{ message }}</p>
+  }
+} @else {
+  <div class="camera">
+    <!-- muted and playsinline, or iOS refuses to play it inline and Chrome
+         blocks autoplay outright. -->
+    <video id="door-camera" muted playsinline></video>
+    <div class="reticle" aria-hidden="true"></div>
+  </div>
+  <button class="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
+}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Services\Door\CheckInService;
@@ -22,6 +23,25 @@ class DoorController extends Controller
 
     public function scan(Request $request, Event $event): JsonResponse
     {
+        /*
+         * Only the organizer path needs authorising.
+         *
+         * A `door:{event_id}` token already names this event. It was minted
+         * deliberately, for one night, and it is the whole grant — that is what
+         * lets a venue hand a phone to somebody working the door without first
+         * creating them an account and a membership.
+         *
+         * An organizer token names nothing. It says somebody organizes
+         * something, so without this check every organizer on the platform
+         * could scan every other organizer's event — a far worse hole than the
+         * 403 this fixes.
+         */
+        $token = $request->user()->currentAccessToken();
+
+        if (! $token->can(TokenAbility::doorFor($event->id))) {
+            $this->authorize('scan', $event);
+        }
+
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:32'],
             // How many of the party are going in now. Absent admits everyone
