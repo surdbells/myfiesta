@@ -474,10 +474,35 @@ components:
             subdivision: { type: [string, 'null'] }
             min_age: { type: [integer, 'null'] }
             id_required: { type: boolean }
+            og_image_url:
+              type: [string, 'null']
+              format: uri
+              description: |
+                The banner cropped to exactly 1200x630, which is what Facebook,
+                LinkedIn and Slack read when a link is shared. Distinct from
+                poster_url, which is a different shape and would be cropped by
+                whichever of them is doing the cropping.
+            gallery:
+              type: array
+              description: |
+                Photographs from the night, added after it. Empty before.
+              items: { $ref: '#/components/schemas/GalleryImage' }
             organizer: { $ref: '#/components/schemas/OrganizerBrand' }
             ticket_types:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
+
+    GalleryImage:
+      type: object
+      required: [url, thumb_url]
+      properties:
+        url: { type: string, format: uri }
+        thumb_url: { type: string, format: uri }
+        # Doubles as alt text. A caption an organizer actually writes is worth
+        # more to a screen reader than an alt field they leave empty.
+        caption: { type: [string, 'null'] }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
 
     OrganizerRef:
       type: object

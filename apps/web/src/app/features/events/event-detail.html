@@ -6,7 +6,11 @@
 } @else if (event(); as ev) {
   <article class="wrap">
     @if (ev.poster_url) {
-      <img class="poster" [src]="ev.poster_url" alt="" />
+      <!-- Decorative: the title sits directly beneath it and says the same
+           thing, so announcing the image as well only repeats it. Eager and
+           high priority because this is the largest thing on the page and the
+           one the load metric is measured against. -->
+      <img class="poster" [src]="ev.poster_url" alt="" fetchpriority="high" />
     }
 
     <header>
@@ -207,6 +211,33 @@
         }
       }
     </section>
+
+    @if (ev.gallery.length > 0) {
+      <section class="gallery" aria-label="Photographs from this event">
+        <h2>From the night</h2>
+
+        <ul>
+          @for (image of ev.gallery; track image.url) {
+            <li>
+              <!-- Lazy, and below the tickets on purpose: somebody who came to
+                   buy should reach the buy button before a dozen photographs
+                   start downloading. -->
+              <a [href]="image.url" target="_blank" rel="noopener">
+                <img
+                  [src]="image.thumb_url"
+                  [alt]="image.caption || 'Photograph from this event'"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </a>
+              @if (image.caption) {
+                <p>{{ image.caption }}</p>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
   </article>
 } @else {
   <section class="wrap"><p class="muted" role="status">Loading…</p></section>

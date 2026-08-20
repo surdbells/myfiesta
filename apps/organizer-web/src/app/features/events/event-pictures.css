@@ -1,0 +1,225 @@
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+  text-decoration: none;
+}
+.back:hover {
+  color: var(--color-brand-500);
+}
+
+.bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+h1 {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  max-width: 56ch;
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+}
+
+.section {
+  margin: var(--space-7) 0 var(--space-3);
+  font-size: var(--font-size-lg);
+}
+
+.banner {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Intrinsic ratio from the width/height attributes, so the page does not
+   reflow when the picture arrives. */
+.shot {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-neutral-100);
+}
+
+.empty {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 720px;
+  padding: var(--space-6);
+  text-align: center;
+  border: 1px dashed var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+}
+.empty p {
+  margin: 0;
+}
+.empty .muted {
+  max-width: 46ch;
+  margin: 0 auto;
+  font-size: var(--font-size-sm);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* The input itself is hidden and the label is the button. A native file input
+   cannot be styled and reads as "No file chosen" next to a grey rectangle. */
+.file {
+  display: inline-block;
+  cursor: pointer;
+}
+.file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.file span {
+  display: inline-block;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-neutral-0);
+  background: var(--color-brand-500);
+  border-radius: var(--radius-md);
+}
+.file:hover span {
+  background: var(--color-brand-700);
+}
+/* Focus lands on the visually-hidden input, so the ring has to be drawn on
+   the label — otherwise keyboard users get no indication at all. */
+.file input:focus-visible + span {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+.file input:disabled + span {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid li {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-100);
+}
+
+.caption,
+.caption-read {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.caption {
+  padding: var(--space-2);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+.caption:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 1px;
+}
+
+.caption-read {
+  color: var(--color-neutral-600);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tools button {
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-100);
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.tools button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.link {
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link.danger:hover {
+  color: var(--color-semantic-danger);
+}
+/* Overrides .tools button, which would otherwise give it a filled background —
+   ordered after it on purpose rather than fought with specificity. */
+.tools .link {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+}
+
+.muted {
+  color: var(--color-neutral-600);
+}
+
+.notice,
+.error {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-md);
+}
+.notice {
+  color: var(--color-semantic-success);
+  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+}
+.error {
+  color: var(--color-semantic-danger);
+  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+}

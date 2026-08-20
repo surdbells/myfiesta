@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Event extends Model
@@ -46,6 +47,25 @@ class Event extends Model
     public function ticketTypes(): HasMany
     {
         return $this->hasMany(TicketType::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(EventImage::class);
+    }
+
+    /** The one picture that sells the link. */
+    public function banner(): HasOne
+    {
+        return $this->hasOne(EventImage::class)->where('kind', 'banner');
+    }
+
+    public function gallery(): HasMany
+    {
+        return $this->hasMany(EventImage::class)
+            ->where('kind', 'gallery')
+            ->orderBy('position')
+            ->orderBy('created_at');
     }
 
     public function orders(): HasMany

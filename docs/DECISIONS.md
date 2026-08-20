@@ -45,6 +45,13 @@ scaffolding time were 13 and 21, and those are what the repository uses.
 panel means two tools overwriting the same nginx vhosts, PHP pools, and
 certificates.
 
+**PHP-FPM needs `memory_limit` at 256M or above** on the pool that serves
+uploads. A 2400-pixel-edge photograph is roughly 23MB as an uncompressed GD
+bitmap and resizing holds two at once, which does not fit in PHP's 128M default
+alongside a booted framework. The symptom is a 500 on the first banner an
+organizer uploads, and nothing before it. `phpunit.xml` sets 512M for the same
+reason, so the image tests exercise the real path rather than a smaller one.
+
 **Postgres was chosen for what it absorbs**, not just as a swap: full-text
 search removes the need for a separate search service, `numeric` gives a money
 type that does not drift between cents and dollars, and row-level locking makes

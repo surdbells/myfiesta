@@ -40,6 +40,21 @@ class EventResource extends EventSummaryResource
                     : null,
             ],
 
+            // Exactly 1200×630, which is what the social networks read. The
+            // display rendition is a different shape and gets cropped by
+            // whichever of them is doing the cropping, usually badly.
+            'og_image_url' => $this->banner?->renditionUrl('og'),
+
+            // Empty until after the night. A gallery is what sells the next
+            // event to the people who missed this one.
+            'gallery' => $this->gallery->map(fn ($image) => [
+                'url' => $image->renditionUrl('display'),
+                'thumb_url' => $image->renditionUrl('thumb'),
+                'caption' => $image->caption,
+                'width' => $image->width,
+                'height' => $image->height,
+            ])->values(),
+
             'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
         ];
     }

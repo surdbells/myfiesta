@@ -1,0 +1,124 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <div>
+    <h1>Pictures</h1>
+    <p class="sub">
+      The banner is what people see when your link is shared. The gallery goes
+      up after the night, and is what sells the next one.
+    </p>
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+<h2 class="section">Banner</h2>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else {
+  <div class="banner">
+    @if (banner(); as image) {
+      <img
+        class="shot"
+        [src]="image.display_url"
+        [alt]="'Banner for this event'"
+        [width]="image.width"
+        [height]="image.height"
+      />
+    } @else {
+      <div class="empty">
+        <p>No banner yet.</p>
+        <p class="muted">
+          A shared link with no picture unfurls as a line of text. Landscape works
+          best — it gets cropped to a wide shape.
+        </p>
+      </div>
+    }
+
+    @if (session.canEditEvents()) {
+      <div class="row">
+        <label class="file">
+          <input type="file" accept="image/*" [disabled]="busy()" (change)="pickBanner($event)" />
+          <span>@if (banner()) { Replace banner } @else { Choose a banner }</span>
+        </label>
+
+        @if (banner(); as image) {
+          <button class="link danger" type="button" [disabled]="busy()" (click)="remove(image)">
+            Remove
+          </button>
+        }
+      </div>
+    }
+  </div>
+}
+
+<h2 class="section">Gallery</h2>
+
+@if (session.canEditEvents()) {
+  <label class="file">
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      [disabled]="busy()"
+      (change)="pickGallery($event)"
+    />
+    <span>
+      @if (busy() && remaining() > 0) {
+        Uploading — {{ remaining() }} to go
+      } @else {
+        Add pictures
+      }
+    </span>
+  </label>
+}
+
+@if (!loading() && gallery().length === 0) {
+  <p class="muted">Nothing here yet.</p>
+} @else {
+  <ul class="grid">
+    @for (image of gallery(); track image.id) {
+      <li>
+        <img class="thumb" [src]="image.thumb_url" [alt]="image.caption || 'Event photo'" />
+
+        @if (session.canEditEvents()) {
+          <input
+            class="caption"
+            placeholder="Add a caption"
+            maxlength="255"
+            [value]="image.caption ?? ''"
+            (blur)="caption(image, $any($event.target).value)"
+          />
+
+          <div class="tools">
+            <button
+              type="button"
+              aria-label="Move earlier"
+              [disabled]="isFirst(image)"
+              (click)="move(image, -1)"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              aria-label="Move later"
+              [disabled]="isLast(image)"
+              (click)="move(image, 1)"
+            >
+              →
+            </button>
+            <button class="link danger" type="button" (click)="remove(image)">Remove</button>
+          </div>
+        } @else if (image.caption) {
+          <p class="caption-read">{{ image.caption }}</p>
+        }
+      </li>
+    }
+  </ul>
+}

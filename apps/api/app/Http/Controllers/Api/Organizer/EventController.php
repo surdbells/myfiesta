@@ -84,9 +84,7 @@ class EventController extends Controller
             'category' => $event->category,
             'min_age' => $event->min_age,
             'id_required' => $event->id_required,
-            'poster_url' => $event->poster_path
-                ? \Illuminate\Support\Facades\Storage::disk('public')->url($event->poster_path)
-                : null,
+            'poster_url' => $event->banner?->renditionUrl('display'),
         ]);
     }
 

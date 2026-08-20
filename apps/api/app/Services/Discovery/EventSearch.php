@@ -28,7 +28,9 @@ class EventSearch
             // public feed, and defaulting to open here would make that a
             // one-line mistake away for every future caller.
             ->where('kind', 'ticketed')
-            ->with(['organization:id,name,slug,logo_path', 'venue:id,name,city']);
+            // banner eager-loaded: a listing page renders one per card, and
+            // lazily loading it turns one query into thirty.
+            ->with(['organization:id,name,slug,logo_path', 'venue:id,name,city', 'banner']);
 
         $this->applyText($query, $filters->text);
         $this->applyPlace($query, $filters);

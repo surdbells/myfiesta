@@ -8,6 +8,8 @@ import {
   EventSummary,
   GuestPage,
   IssueResult,
+  EventImage,
+  EventImages,
   OrganizerEvent,
   OrganizerEventDetail,
   RefundResult,
@@ -152,6 +154,55 @@ export class Api {
     return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
       params,
     });
+  }
+
+  // --- pictures -----------------------------------------------------------
+
+  images(eventId: string): Observable<EventImages> {
+    return this.http.get<EventImages>(`${this.base}/api/organizer/events/${eventId}/images`);
+  }
+
+  /**
+   * Multipart, and no Content-Type header set by hand.
+   *
+   * The browser has to write that header itself, because it carries the
+   * multipart boundary — setting it manually produces a request the server
+   * cannot parse, with an error that says nothing about why.
+   */
+  uploadImage(
+    eventId: string,
+    file: File,
+    kind: 'banner' | 'gallery',
+    caption?: string,
+  ): Observable<EventImage> {
+    const body = new FormData();
+
+    body.append('file', file);
+    body.append('kind', kind);
+
+    if (caption) body.append('caption', caption);
+
+    return this.http.post<EventImage>(`${this.base}/api/organizer/events/${eventId}/images`, body);
+  }
+
+  captionImage(eventId: string, id: string, caption: string | null): Observable<EventImage> {
+    return this.http.patch<EventImage>(
+      `${this.base}/api/organizer/events/${eventId}/images/${id}`,
+      { caption },
+    );
+  }
+
+  deleteImage(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/images/${id}`,
+    );
+  }
+
+  reorderImages(eventId: string, ids: string[]): Observable<{ gallery: EventImage[] }> {
+    return this.http.post<{ gallery: EventImage[] }>(
+      `${this.base}/api/organizer/events/${eventId}/images/order`,
+      { ids },
+    );
   }
 
   // --- orders and refunds -------------------------------------------------

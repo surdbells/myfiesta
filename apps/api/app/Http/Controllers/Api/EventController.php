@@ -30,7 +30,7 @@ class EventController extends Controller
         $event = Event::query()
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->with(['organization', 'venue', 'ticketTypes' => fn ($q) => $q
+            ->with(['organization', 'venue', 'banner', 'gallery', 'ticketTypes' => fn ($q) => $q
                 ->whereIn('status', ['on_sale', 'sold_out'])
                 ->orderBy('sort_order')])
             ->first();

@@ -174,3 +174,21 @@ export interface RefundResult {
   ticket_ids: string[];
   created_at: string;
 }
+
+/** A picture on an event — the banner, or one of the gallery. */
+export interface EventImage {
+  id: string;
+  kind: 'banner' | 'gallery';
+  url: string;
+  thumb_url: string;
+  display_url: string;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  position: number;
+}
+
+export interface EventImages {
+  banner: EventImage | null;
+  gallery: EventImage[];
+}

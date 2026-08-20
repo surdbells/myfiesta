@@ -18,6 +18,15 @@
         </include>
     </source>
     <php>
+        <!-- Image processing needs room. A 2400-edge photo is about 23MB as an
+             uncompressed GD bitmap and resizing holds two at once, which does
+             not fit in PHP's 128MB default alongside a booted framework.
+
+             This mirrors a real deployment requirement rather than working
+             around one: the PHP-FPM pool serving uploads needs memory_limit at
+             256M or above, or the first banner an organizer uploads returns a
+             500. Recorded in DECISIONS.md as part of the hosting spec. -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

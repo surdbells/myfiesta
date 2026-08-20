@@ -112,7 +112,10 @@ export class EventCodes {
 
     if (!code.ref_slug || !slug) return null;
 
-    return `${this.publicOrigin()}/events/${slug}?ref=${encodeURIComponent(code.ref_slug)}`;
+    // An event lives at the root — myfiesta.ca/{slug} — not under /events.
+    // Getting this wrong hands every promoter a link that 404s, and they find
+    // out from the people who followed it.
+    return `${this.publicOrigin()}/${slug}?ref=${encodeURIComponent(code.ref_slug)}`;
   }
 
   copy(code: PromoCode): void {

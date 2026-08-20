@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
+use App\Http\Controllers\Api\Organizer\EventImageController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\RefundController;
@@ -93,6 +94,12 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
 
         Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
         Route::post('/events/{event:id}/tickets', [IssuedTicketController::class, 'store']);
+
+        Route::get('/events/{event:id}/images', [EventImageController::class, 'index']);
+        Route::post('/events/{event:id}/images', [EventImageController::class, 'store']);
+        Route::patch('/events/{event:id}/images/{image:id}', [EventImageController::class, 'update']);
+        Route::delete('/events/{event:id}/images/{image:id}', [EventImageController::class, 'destroy']);
+        Route::post('/events/{event:id}/images/order', [EventImageController::class, 'reorder']);
 
         Route::get('/events/{event:id}/orders', [RefundController::class, 'index']);
         Route::post('/events/{event:id}/orders/{order:id}/refunds', [RefundController::class, 'store']);

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "--prefix", "apps/organizer-web", "--", "--port", "4310"],
       "port": 4310
+    },
+    {
+      "name": "public-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "apps/web", "--", "--port", "4320"],
+      "port": 4320
     }
   ]
 }

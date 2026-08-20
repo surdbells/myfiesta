@@ -35,9 +35,12 @@ class EventSummaryResource extends JsonResource
             // showing "From —" has no symbol to render it with.
             'currency' => $this->currency,
             'category' => $this->category,
-            'poster_url' => $this->poster_path
-                ? Storage::disk('public')->url($this->poster_path)
-                : null,
+            // Kept under its original name because both generated clients and
+            // the contract already carry it; what changed is where it comes
+            // from. A list card gets the display rendition rather than the
+            // stored original — the difference is roughly a megabyte per card
+            // on a page that shows twenty of them.
+            'poster_url' => $this->banner?->renditionUrl('display'),
             'organizer' => [
                 'name' => $this->whenLoaded('organization', fn () => $this->organization->name),
                 'slug' => $this->whenLoaded('organization', fn () => $this->organization->slug),

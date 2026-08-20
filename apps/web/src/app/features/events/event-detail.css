@@ -209,3 +209,51 @@ h1 {
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* --- photographs from the night ---------------------------------------- */
+
+.gallery {
+  margin-top: var(--space-8);
+}
+
+.gallery h2 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-lg);
+}
+
+.gallery ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gallery li {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.gallery img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  /* Holds the square before the picture arrives, so a gallery loading over a
+     slow connection does not push the page around under a reader's thumb. */
+  background: var(--color-neutral-100);
+}
+
+.gallery a:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 3px;
+  border-radius: var(--radius-md);
+}
+
+.gallery p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+}

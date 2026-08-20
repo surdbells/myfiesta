@@ -40,8 +40,20 @@ export class Seo {
       { property: 'og:site_name', content: 'myFiesta' },
       // Without an image the card collapses to a line of text, which converts
       // far worse than a poster.
-      ...(event.poster_url ? [{ property: 'og:image', content: event.poster_url }] : []),
-      { name: 'twitter:card', content: event.poster_url ? 'summary_large_image' : 'summary' },
+      //
+      // The dedicated 1200×630 crop, falling back to the display rendition.
+      // Handing the networks a 16:9 image means each of them crops it their own
+      // way, and the one that matters most crops the middle out.
+      ...(this.cardImage(event)
+        ? [
+            { property: 'og:image', content: this.cardImage(event)! },
+            { property: 'og:image:width', content: '1200' },
+            { property: 'og:image:height', content: '630' },
+            // Read aloud by screen readers on the platforms that support it.
+            { property: 'og:image:alt', content: `Poster for ${event.title}` },
+          ]
+        : []),
+      { name: 'twitter:card', content: this.cardImage(event) ? 'summary_large_image' : 'summary' },
     ]);
 
     this.canonical(url);
@@ -64,6 +76,17 @@ export class Seo {
       const selector = tag.property ? `property="${tag.property}"` : `name="${tag.name}"`;
       this.meta.updateTag(tag, selector);
     }
+  }
+
+  /**
+   * The picture a shared link unfurls with.
+   *
+   * Falls back to the poster because an event imported from the old platform
+   * has a picture and no 1200×630 crop of it — a card with a badly-cropped
+   * image still beats a card with none.
+   */
+  private cardImage(event: EventDetail): string | null {
+    return event.og_image_url ?? event.poster_url;
   }
 
   private canonical(url: string): void {

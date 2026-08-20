@@ -55,8 +55,24 @@ export interface TicketType {
   status: 'on_sale' | 'sold_out' | 'hidden' | 'closed';
 }
 
+/** A photograph from the night. The caption doubles as alt text. */
+export interface GalleryImage {
+  url: string;
+  thumb_url: string;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+}
+
 export interface EventDetail extends EventSummary {
   description: string | null;
+  /**
+   * The banner cropped to exactly 1200×630 — what the social networks read.
+   * Distinct from poster_url, which is a different shape and gets cropped by
+   * whichever of them is doing the cropping.
+   */
+  og_image_url: string | null;
+  gallery: GalleryImage[];
   ends_at: string | null;
   subdivision: string | null;
   dress_code: string | null;
