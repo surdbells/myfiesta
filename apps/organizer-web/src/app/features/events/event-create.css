@@ -1,25 +1,31 @@
+/*
+ * Creating an event, and — through styleUrl — editing one.
+ *
+ * A single narrow column. A create form laid out in two columns makes the eye
+ * decide which field comes next at every row; one column has one answer, and
+ * this form is short enough not to need the space.
+ */
+
 .back {
   display: inline-block;
   margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   text-decoration: none;
 }
-
 .back:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
 }
 
 h1 {
-  margin: 0;
   font-size: var(--font-size-2xl);
-  letter-spacing: -0.02em;
 }
 
 .sub {
-  margin: var(--space-1) 0 var(--space-6);
-  color: var(--color-neutral-600);
+  max-width: 60ch;
+  margin: var(--space-2) 0 var(--space-6);
   font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 form {
@@ -28,129 +34,131 @@ form {
   max-width: 640px;
 }
 
+.field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Fields that belong together — country, province, city — sit on one line so
+   they read as one address rather than three unrelated questions. */
 .row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-4);
 }
 
-.field {
-  display: grid;
-  gap: var(--space-1);
-}
-
-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+.help {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .optional {
   font-weight: var(--font-weight-regular);
-  color: var(--color-neutral-400);
+  color: var(--text-subtle);
 }
 
-input,
-select,
-textarea {
-  padding: var(--space-3);
-  font: inherit;
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-}
-
-textarea {
-  resize: vertical;
-}
-
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 1px;
-}
-
-.help {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-neutral-600);
-}
-
-/* The instant the organizer is actually creating, echoed back before they
-   commit to it. */
-.preview {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-sm);
-  background: var(--color-brand-50);
-  border-left: 3px solid var(--color-brand-500);
-  border-radius: var(--radius-md);
-}
-
-/* The only irreversible choice on the form, so it does not look like the
-   rest of the help text. */
+/* Something the organizer will not be able to change later. Said at the point
+   of decision, not in a support article after the link is shared. */
 .permanent {
-  margin: 0;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--warning);
+  background-color: color-mix(in srgb, var(--warning) 9%, transparent);
+  border-radius: var(--radius-md);
+}
+
+/*
+ * The doors line: the instant they just described, read back in the venue's
+ * own zone with the abbreviation attached.
+ *
+ * This exists because a datetime input has no zone, and an organizer typing 9pm
+ * has no way of knowing which 9pm the server heard. Showing it back is the only
+ * confirmation available before the event is live.
+ */
+.preview {
   padding: var(--space-3) var(--space-4);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-800);
-  background: var(--color-accent-50, color-mix(in srgb, var(--color-accent-500) 10%, transparent));
+  color: var(--primary-soft-text);
+  background-color: var(--primary-soft);
   border-radius: var(--radius-md);
+}
+
+.preview strong {
+  font-weight: var(--font-weight-semibold);
 }
 
 .cta {
   justify-self: start;
-  padding: var(--space-3) var(--space-5);
+  height: 48px;
+  padding: 0 var(--space-6);
   font: inherit;
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-neutral-0);
-  background: var(--color-brand-500);
+  color: var(--on-primary);
+  background-color: var(--primary);
   border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
 }
-
+.cta:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+}
 .cta:disabled {
   opacity: 0.6;
-  cursor: progress;
+  cursor: not-allowed;
 }
 
 .error {
   padding: var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--color-semantic-danger);
-  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
   border-radius: var(--radius-md);
 }
 
-/* Shared with the edit form. */
-.actions { display: flex; align-items: center; gap: var(--space-4); }
+/* --- shared with the edit form ------------------------------------------- */
 
-.actions .link {
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.actions .link,
+.link {
   padding: 0;
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.actions .link:hover {
+  color: var(--text);
 }
 
 .notice {
   padding: var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+  color: var(--success);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
   border-radius: var(--radius-md);
 }
 
-.muted { color: var(--color-neutral-600); }
+.muted {
+  color: var(--text-muted);
+}
 
 code {
-  padding: 1px 5px;
   font-size: 0.9em;
-  background: var(--color-neutral-100);
+  padding: 1px 5px;
+  background-color: var(--surface-inset);
   border-radius: var(--radius-sm);
 }

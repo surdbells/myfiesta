@@ -1,146 +1,203 @@
+/*
+ * Every event this organization runs.
+ *
+ * A list of rows rather than a grid of cards. The organizer already knows what
+ * their events look like — what they come here for is the date, the count and
+ * whether it is live, and a row puts those in fixed columns that can be scanned
+ * down. A card grid would make the eye hunt for each figure separately.
+ */
+
 .bar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-5);
+  flex-wrap: wrap;
   margin-bottom: var(--space-6);
 }
 
 h1 {
-  margin: 0;
   font-size: var(--font-size-2xl);
-  letter-spacing: -0.02em;
 }
 
 .sub {
-  margin: var(--space-1) 0 0;
-  color: var(--color-neutral-600);
+  margin-top: var(--space-1);
   font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border: 0;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.cta:hover {
+  background-color: var(--primary-hover);
 }
 
 .section {
   margin: var(--space-6) 0 var(--space-3);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-neutral-600);
+  color: var(--text-subtle);
 }
+
+/* --- the list ------------------------------------------------------------ */
 
 .list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: grid;
   gap: var(--space-2);
-}
-
-/* Present, but quieter. These are records rather than work. */
-.list--past .row {
-  opacity: 0.7;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .row {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-4);
-  text-decoration: none;
+  /* Title takes the room; date and figures hold their own columns so they line
+     up down the page and can be compared at a glance. */
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   color: inherit;
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
+  text-decoration: none;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
 }
 
 .row:hover {
-  border-color: var(--color-brand-500);
+  border-color: var(--primary);
+  background-color: var(--primary-soft);
 }
 
 .row:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .row {
+    /* Stacked on a phone. Three columns at 375px gives each of them about a
+       hundred pixels, which is not enough for any of them. */
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
 }
 
 .title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   font-weight: var(--font-weight-semibold);
 }
 
-.meta,
-.stats {
+.meta {
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .stats {
   display: flex;
   gap: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.badge {
-  padding: 2px 8px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-radius: var(--radius-full);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-600);
-}
-
-/* Published is the state that means people can buy, so it is the one that
-   reads differently at a glance. */
-.badge--published {
-  background: color-mix(in srgb, var(--color-semantic-success) 14%, transparent);
-  color: var(--color-semantic-success);
-}
-
-.badge--cancelled {
-  background: color-mix(in srgb, var(--color-semantic-danger) 12%, transparent);
-  color: var(--color-semantic-danger);
-}
-
-.cta {
-  align-self: start;
-  padding: var(--space-3) var(--space-4);
-  font-weight: var(--font-weight-semibold);
-  text-decoration: none;
-  color: var(--color-neutral-0);
-  background: var(--color-brand-500);
-  border-radius: var(--radius-md);
   white-space: nowrap;
 }
 
+/* --- status --------------------------------------------------------------- */
+
+/* The word is always present. A status carried by colour alone is invisible to
+   a colourblind reader and to a printed guest list. */
+.badge {
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: capitalize;
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  background-color: var(--surface-inset);
+}
+
+.badge--published {
+  color: var(--primary-soft-text);
+  background-color: var(--primary-soft);
+}
+
+.badge--cancelled {
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+/* --- past events ---------------------------------------------------------- */
+
+/* Dimmed rather than hidden. An organizer still needs to reach last month's
+   numbers, but the events that need attention are the ones ahead. */
+.list--past .row {
+  background: transparent;
+}
+.list--past .title,
+.list--past .meta,
+.list--past .stats {
+  color: var(--text-subtle);
+}
+.list--past .title {
+  font-weight: var(--font-weight-medium);
+}
+
+/* --- empty ---------------------------------------------------------------- */
+
 .empty {
-  padding: var(--space-8) var(--space-4);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-5);
   text-align: center;
-  border: 1px dashed var(--color-neutral-200);
+  background-color: var(--surface-raised);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
 }
 
 .empty h2 {
-  margin: 0 0 var(--space-2);
   font-size: var(--font-size-lg);
 }
 
 .empty p {
-  margin: 0 0 var(--space-5);
-  color: var(--color-neutral-600);
-}
-
-.empty .cta {
-  display: inline-block;
+  max-width: 40ch;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .muted {
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .error {
   padding: var(--space-3);
-  color: var(--color-semantic-danger);
-  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
   border-radius: var(--radius-md);
 }

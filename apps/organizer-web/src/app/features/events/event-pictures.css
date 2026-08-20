@@ -2,11 +2,11 @@
   display: inline-block;
   margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   text-decoration: none;
 }
 .back:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
 }
 
 .bar {
@@ -27,7 +27,7 @@ h1 {
   max-width: 56ch;
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .section {
@@ -48,7 +48,7 @@ h1 {
   max-width: 720px;
   height: auto;
   border-radius: var(--radius-lg);
-  background: var(--color-neutral-100);
+  background-color: var(--surface-inset);
 }
 
 .empty {
@@ -57,7 +57,7 @@ h1 {
   max-width: 720px;
   padding: var(--space-6);
   text-align: center;
-  border: 1px dashed var(--color-neutral-200);
+  border: 1px dashed var(--border);
   border-radius: var(--radius-lg);
 }
 .empty p {
@@ -97,17 +97,17 @@ h1 {
   padding: var(--space-3) var(--space-5);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-neutral-0);
-  background: var(--color-brand-500);
+  color: var(--on-primary);
+  background-color: var(--primary);
   border-radius: var(--radius-md);
 }
 .file:hover span {
-  background: var(--color-brand-700);
+  background-color: var(--primary-hover);
 }
 /* Focus lands on the visually-hidden input, so the ring has to be drawn on
    the label — otherwise keyboard users get no indication at all. */
 .file input:focus-visible + span {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 .file input:disabled + span {
@@ -135,7 +135,7 @@ h1 {
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--radius-md);
-  background: var(--color-neutral-100);
+  background-color: var(--surface-inset);
 }
 
 .caption,
@@ -148,19 +148,19 @@ h1 {
   padding: var(--space-2);
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
+  color: var(--text);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
   min-width: 0;
 }
 .caption:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
 
 .caption-read {
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .tools {
@@ -172,8 +172,8 @@ h1 {
   padding: var(--space-1) var(--space-3);
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-100);
+  color: var(--text);
+  background-color: var(--surface-inset);
   border: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -187,14 +187,14 @@ h1 {
   padding: 0;
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
   text-decoration: underline;
 }
 .link.danger:hover {
-  color: var(--color-semantic-danger);
+  color: var(--danger);
 }
 /* Overrides .tools button, which would otherwise give it a filled background —
    ordered after it on purpose rather than fought with specificity. */
@@ -205,7 +205,7 @@ h1 {
 }
 
 .muted {
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .notice,
@@ -216,10 +216,10 @@ h1 {
   border-radius: var(--radius-md);
 }
 .notice {
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+  color: var(--success);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
 }
 .error {
-  color: var(--color-semantic-danger);
-  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 8%, transparent);
 }

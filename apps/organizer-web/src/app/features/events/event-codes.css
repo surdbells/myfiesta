@@ -1,115 +1,127 @@
+/*
+ * Discount codes and promoter links.
+ *
+ * A code is a small object with several facts attached — what it takes off, how
+ * many are left, whether it still works — so each one is a card rather than a
+ * table row. A table would force every fact into a column, and most codes do
+ * not have most of them.
+ */
+
 .back {
   display: inline-block;
   margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   text-decoration: none;
 }
 .back:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
 }
 
 .bar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-5);
   flex-wrap: wrap;
+  margin-bottom: var(--space-6);
 }
 
 h1 {
-  margin: 0;
   font-size: var(--font-size-2xl);
-  letter-spacing: -0.02em;
 }
 
 .sub {
-  max-width: 52ch;
-  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+  margin-top: var(--space-2);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .section {
-  margin: var(--space-7) 0 var(--space-3);
-  font-size: var(--font-size-lg);
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
 
-/* --- the form --------------------------------------------------------- */
+/* --- the new-code form --------------------------------------------------- */
 
 .new {
   display: grid;
   gap: var(--space-4);
-  margin-top: var(--space-5);
+  margin-bottom: var(--space-6);
   padding: var(--space-5);
-  background: var(--color-neutral-50);
-  border: 1px solid var(--color-neutral-100);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 
 .row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
 }
+
 .field {
   display: grid;
-  gap: var(--space-1);
-  align-content: start;
-}
-
-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-.optional {
-  font-weight: var(--font-weight-regular);
-  color: var(--color-neutral-400);
-}
-
-input,
-select {
-  padding: var(--space-3);
-  font: inherit;
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
+  gap: var(--space-2);
   min-width: 0;
 }
-input:focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 1px;
+
+.wide {
+  grid-column: 1 / -1;
 }
 
 .help {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--text-subtle);
+}
+
+/* Codes are typed by buyers off a poster or a story screenshot, so they are
+   shown in caps with the letters spaced — an O and a 0 next to each other at a
+   normal tracking is a support email. */
+.new input[name='code'] {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: var(--font-weight-medium);
 }
 
 .cta {
   justify-self: start;
-  padding: var(--space-3) var(--space-5);
+  height: 44px;
+  padding: 0 var(--space-5);
   font: inherit;
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-neutral-0);
-  background: var(--color-brand-500);
+  color: var(--on-primary);
+  background-color: var(--primary);
   border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.cta:hover:not(:disabled) {
+  background-color: var(--primary-hover);
 }
 .cta:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-/* --- the list --------------------------------------------------------- */
+/* --- the codes ----------------------------------------------------------- */
 
 .codes {
   display: grid;
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -119,16 +131,21 @@ select:focus-visible {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border: 1px solid var(--color-neutral-100);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
-/* A code that will not work should read as inert without being unreadable —
-   an organizer still has to see what it was. */
+
+/* A code that no longer works. Dimmed and left in place rather than removed —
+   an organizer needs to see that EARLY20 existed and is spent, otherwise they
+   create it again and wonder why the numbers do not add up. */
 .codes li.off {
-  background: var(--color-neutral-50);
+  background: transparent;
+  border-style: dashed;
 }
 .codes li.off .name {
-  color: var(--color-neutral-600);
+  color: var(--text-subtle);
+  text-decoration: line-through;
 }
 
 .head {
@@ -139,97 +156,106 @@ select:focus-visible {
 }
 
 .name {
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: var(--font-size-lg);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .tag {
   padding: 2px var(--space-2);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-neutral-600);
-  background: var(--color-neutral-100);
+  color: var(--text-muted);
+  background-color: var(--surface-inset);
   border-radius: var(--radius-full);
-}
-.tag.live {
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 12%, transparent);
-}
-.tag.wide {
-  color: var(--color-brand-700);
-  background: var(--color-brand-50);
+  white-space: nowrap;
 }
 
+/* What it takes off — the fact an organizer is scanning for. */
 .what {
-  margin: 0;
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--primary-soft-text);
 }
+
 .uses {
-  margin: 0;
   font-size: var(--font-size-sm);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  color: var(--color-neutral-600);
+}
+
+/* --- the promoter link --------------------------------------------------- */
+
+/* The whole point of a ref link is that it gets copied, so it is shown in full
+   and wraps rather than being truncated with an ellipsis nobody can select. */
+.live {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background-color: var(--surface-inset);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
 }
 
 .link {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
-}
-.link input {
-  font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
-}
-.link button {
-  padding: 0 var(--space-4);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-brand-700);
-  background: var(--color-brand-50);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-.link button:hover {
-  background: var(--color-brand-100);
-}
-
-.off-btn {
-  justify-self: start;
   padding: 0;
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link:hover {
+  color: var(--primary);
+}
+
+/* Turning a code off is not destructive — nothing is deleted and past
+   redemptions stand — so it does not get the danger colour. */
+.off-btn {
+  justify-self: start;
+  margin-top: var(--space-1);
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .off-btn:hover {
-  color: var(--color-semantic-danger);
+  color: var(--danger);
+}
+
+/* --- messages ------------------------------------------------------------ */
+
+.notice {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--success);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
+  border-radius: var(--radius-md);
 }
 
 .muted {
-  color: var(--color-neutral-600);
-}
-
-.notice,
-.error {
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  font-size: var(--font-size-sm);
-  border-radius: var(--radius-md);
-}
-.notice {
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
-}
-.error {
-  color: var(--color-semantic-danger);
-  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  color: var(--text-muted);
 }

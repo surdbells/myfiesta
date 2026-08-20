@@ -6,6 +6,7 @@
   "description": "Design tokens emitted as CSS custom properties and Dart constants.",
   "scripts": {
     "build": "node build.mjs",
-    "check": "node build.mjs && git diff --exit-code dist/"
+    "contrast": "node contrast.mjs",
+    "check": "node build.mjs && git diff --exit-code dist/ ../../apps/mobile/lib/design/ && node contrast.mjs"
   }
 }

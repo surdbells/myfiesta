@@ -2,12 +2,12 @@
   display: inline-block;
   margin-bottom: var(--space-4);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   text-decoration: none;
 }
 
 .back:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
 }
 
 .bar {
@@ -25,7 +25,7 @@ h1 {
 
 .sub {
   margin: var(--space-1) 0 0;
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   font-size: var(--font-size-sm);
 }
 
@@ -35,7 +35,7 @@ h1 {
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 /* Figures line up in a column, so tabular digits stop them dancing. */
@@ -44,8 +44,8 @@ h1 {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1px;
   margin-top: var(--space-5);
-  background: var(--color-neutral-200);
-  border: 1px solid var(--color-neutral-200);
+  background-color: var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -55,14 +55,14 @@ h1 {
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-4);
-  background: var(--color-neutral-0);
+  background-color: var(--surface-raised);
 }
 
 .label {
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .figure {
@@ -73,13 +73,13 @@ h1 {
 
 /* The only figure that is actually theirs. */
 .net .figure {
-  color: var(--color-semantic-success);
+  color: var(--success);
 }
 
 .counts {
   margin: var(--space-3) 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -96,8 +96,8 @@ h1 {
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
 
@@ -119,8 +119,8 @@ h1 {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-radius: var(--radius-full);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-600);
+  background-color: var(--surface-inset);
+  color: var(--text-muted);
 }
 
 .add {
@@ -130,7 +130,7 @@ h1 {
   align-items: end;
   margin-top: var(--space-4);
   padding: var(--space-4);
-  border: 1px dashed var(--color-neutral-200);
+  border: 1px dashed var(--border);
   border-radius: var(--radius-lg);
 }
 
@@ -153,14 +153,14 @@ label {
 input {
   padding: var(--space-2) var(--space-3);
   font: inherit;
-  border: 1px solid var(--color-neutral-200);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
-  background: var(--color-neutral-0);
-  color: var(--color-neutral-900);
+  background-color: var(--surface-raised);
+  color: var(--text);
 }
 
 input:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
 
@@ -169,8 +169,10 @@ button[type='submit'],
   padding: var(--space-3) var(--space-4);
   font: inherit;
   font-weight: var(--font-weight-semibold);
-  color: var(--color-neutral-0);
-  background: var(--color-brand-500);
+  /* Paired with the fill it sits on. --surface would happen to be white in
+     light mode and would turn dark green text on light green in dark mode. */
+  color: var(--on-primary);
+  background-color: var(--primary);
   border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -186,7 +188,7 @@ button:disabled {
   padding: 0;
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   background: none;
   border: 0;
   cursor: pointer;
@@ -194,19 +196,19 @@ button:disabled {
 }
 
 .link:hover {
-  color: var(--color-semantic-danger);
+  color: var(--danger);
 }
 
 .muted {
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .hint {
   margin-top: var(--space-4);
   padding: var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
-  background: var(--color-neutral-50);
+  color: var(--text-muted);
+  background-color: var(--surface-sunken);
   border-radius: var(--radius-md);
 }
 
@@ -219,13 +221,13 @@ button:disabled {
 }
 
 .notice {
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+  color: var(--success);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
 }
 
 .error {
-  color: var(--color-semantic-danger);
-  background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
+  color: var(--danger);
+  background-color: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 /* The add-ticket row wraps once it carries description and admits too. */
@@ -238,11 +240,11 @@ button:disabled {
 .add .help {
   margin: 0;
   font-size: var(--font-size-xs);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 .add .optional {
   font-weight: var(--font-weight-regular);
-  color: var(--color-neutral-400);
+  color: var(--text-subtle);
 }
 
 .jump {
@@ -256,12 +258,12 @@ button:disabled {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   text-decoration: none;
-  color: var(--color-brand-700);
-  background: var(--color-brand-50);
+  color: var(--primary-soft-text);
+  background-color: var(--primary-soft);
   border-radius: var(--radius-md);
 }
 .jump a:hover {
-  background: var(--color-brand-100);
+  background-color: var(--primary-soft);
 }
 
 /* --- reminders ---------------------------------------------------------- */
@@ -285,7 +287,7 @@ button:disabled {
   font-weight: var(--font-weight-medium);
 }
 .rt {
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -299,8 +301,8 @@ button:disabled {
   font: inherit;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-brand-700);
-  background: var(--color-brand-50);
+  color: var(--primary-soft-text);
+  background-color: var(--primary-soft);
   border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -310,20 +312,20 @@ button:disabled {
 .help {
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-xs);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 select {
   padding: var(--space-2) var(--space-3);
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-0);
-  border: 1px solid var(--color-neutral-200);
+  color: var(--text);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
 }
 select:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
 
@@ -347,8 +349,8 @@ select:focus-visible {
   font: inherit;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-brand-700);
-  background: var(--color-brand-50);
+  color: var(--primary-soft-text);
+  background-color: var(--primary-soft);
   border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -356,7 +358,7 @@ select:focus-visible {
 
 /* .link turns danger-red on hover, which is wrong for a neutral action. */
 .link.plain:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
 }
 
 /* --- the dates in a series ---------------------------------------------- */
@@ -376,12 +378,12 @@ select:focus-visible {
 }
 .dates a {
   min-width: 13rem;
-  color: var(--color-neutral-900);
+  color: var(--text);
   text-decoration: none;
   font-variant-numeric: tabular-nums;
 }
 .dates a:hover {
-  color: var(--color-brand-500);
+  color: var(--primary);
   text-decoration: underline;
 }
 .dates .link {
