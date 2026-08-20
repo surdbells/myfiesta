@@ -263,3 +263,66 @@ button:disabled {
 .jump a:hover {
   background: var(--color-brand-100);
 }
+
+/* --- reminders ---------------------------------------------------------- */
+
+.reminders {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reminders li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+}
+.rl {
+  min-width: 9rem;
+  font-weight: var(--font-weight-medium);
+}
+.rt {
+  color: var(--color-neutral-600);
+  font-variant-numeric: tabular-nums;
+}
+
+.add-reminder {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.add-reminder button {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-brand-700);
+  background: var(--color-brand-50);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* Scoped to .add elsewhere; this is the same note outside a form. */
+.help {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-neutral-600);
+}
+
+select {
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-900);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+}
+select:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 1px;
+}

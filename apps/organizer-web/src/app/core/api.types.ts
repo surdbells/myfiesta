@@ -192,3 +192,14 @@ export interface EventImages {
   banner: EventImage | null;
   gallery: EventImage[];
 }
+
+/** A scheduled nudge to everyone holding a ticket. */
+export interface Reminder {
+  id: string;
+  offset_minutes: number;
+  label: string;
+  send_at: string;
+  status: 'scheduled' | 'sending' | 'sent' | 'cancelled';
+  sent_at: string | null;
+  recipients: number | null;
+}

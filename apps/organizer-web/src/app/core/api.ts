@@ -13,6 +13,7 @@ import {
   OrganizerEvent,
   OrganizerEventDetail,
   RefundResult,
+  Reminder,
   SoldOrder,
   PromoCode,
   Session,
@@ -202,6 +203,26 @@ export class Api {
     return this.http.post<{ gallery: EventImage[] }>(
       `${this.base}/api/organizer/events/${eventId}/images/order`,
       { ids },
+    );
+  }
+
+  // --- reminders ----------------------------------------------------------
+
+  reminders(eventId: string): Observable<{ data: Reminder[] }> {
+    return this.http.get<{ data: Reminder[] }>(
+      `${this.base}/api/organizer/events/${eventId}/reminders`,
+    );
+  }
+
+  addReminder(eventId: string, offsetMinutes: number): Observable<Reminder> {
+    return this.http.post<Reminder>(`${this.base}/api/organizer/events/${eventId}/reminders`, {
+      offset_minutes: offsetMinutes,
+    });
+  }
+
+  cancelReminder(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/reminders/${id}`,
     );
   }
 

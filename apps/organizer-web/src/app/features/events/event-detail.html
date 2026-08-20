@@ -85,6 +85,51 @@
     }
   </nav>
 
+  <h2 class="section">Reminders</h2>
+
+  @if (liveReminders().length === 0) {
+    <p class="muted">
+      No reminders. Publishing an event schedules a week out, the day before and
+      three hours before.
+    </p>
+  } @else {
+    <ul class="reminders">
+      @for (reminder of liveReminders(); track reminder.id) {
+        <li>
+          <span class="rl">{{ reminder.label }}</span>
+          <span class="rt">{{ sendTime(reminder.send_at) }}</span>
+
+          @if (reminder.status === 'sent') {
+            <span class="badge">
+              Sent@if (reminder.recipients !== null) { · {{ reminder.recipients }} people }
+            </span>
+          } @else if (session.canEditEvents()) {
+            <button class="link" type="button" (click)="cancelReminder(reminder)">Turn off</button>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (session.canEditEvents()) {
+    <form class="add-reminder" (ngSubmit)="addReminder()">
+      <select
+        name="offset"
+        aria-label="When to remind"
+        [ngModel]="newReminder()"
+        (ngModelChange)="newReminder.set($event)"
+      >
+        @for (choice of reminderChoices; track choice.minutes) {
+          <option [value]="choice.minutes">{{ choice.label }}</option>
+        }
+      </select>
+      <button type="submit" [disabled]="savingReminder()">Add</button>
+    </form>
+    <p class="help">
+      Everyone holding a ticket gets an email. Anyone who has unsubscribed does not.
+    </p>
+  }
+
   <h2 class="section">Tickets</h2>
 
   @if (ticketTypes().length === 0) {

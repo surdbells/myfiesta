@@ -26,6 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // signature over the raw body, checked inside each gateway adapter.
         $middleware->validateCsrfTokens(except: [
             'webhooks/payments/*',
+            // Gmail and Outlook post here directly when they render their own
+            // unsubscribe control, from the List-Unsubscribe-Post header. Those
+            // requests carry no session and no token, and the token in the URL
+            // is the authorisation. Requiring CSRF would break the one path the
+            // law is most specific about.
+            'unsubscribe/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -49,6 +49,11 @@ class Event extends Model
         return $this->hasMany(TicketType::class);
     }
 
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(EventReminder::class)->orderByDesc('offset_minutes');
+    }
+
     public function images(): HasMany
     {
         return $this->hasMany(EventImage::class);

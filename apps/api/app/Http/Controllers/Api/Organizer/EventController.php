@@ -186,6 +186,8 @@ class EventController extends Controller
             'published_at' => $event->published_at ?? now(),
         ]);
 
+        $this->scheduleDefaultReminders($event);
+
         return response()->json(['status' => 'published']);
     }
 
@@ -219,6 +221,33 @@ class EventController extends Controller
             'tickets_issued' => $event->tickets()->whereIn('status', ['valid', 'checked_in'])->count(),
             'checked_in' => $event->tickets()->where('status', 'checked_in')->count(),
         ]);
+    }
+
+    /**
+     * Reminders an organizer did not have to think about.
+     *
+     * A week out to plan around, the day before to remember, and three hours
+     * out for anyone who has not left yet. Created on first publish only —
+     * firstOrCreate rather than create, so republishing does not resurrect a
+     * reminder the organizer deliberately turned off, and so an event that was
+     * taken down and put back does not send twice.
+     *
+     * Skipped entirely for anything starting sooner than the offset, since a
+     * reminder for a moment already past is not something to write to the
+     * database and then decline to send.
+     */
+    private function scheduleDefaultReminders(Event $event): void
+    {
+        foreach ([7 * 24 * 60, 24 * 60, 3 * 60] as $minutes) {
+            if ($event->starts_at->copy()->subMinutes($minutes)->isPast()) {
+                continue;
+            }
+
+            $event->reminders()->firstOrCreate(
+                ['offset_minutes' => $minutes],
+                ['status' => 'scheduled'],
+            );
+        }
     }
 
     /**

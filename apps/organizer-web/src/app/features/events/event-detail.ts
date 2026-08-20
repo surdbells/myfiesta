@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { EventSummary, OrganizerEvent, TicketType } from '../../core/api.types';
+import { EventSummary, OrganizerEvent, Reminder, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
@@ -53,6 +53,32 @@ export class EventDetail {
 
   readonly canPublish = computed(() => this.ticketTypes().some((t) => t.status === 'on_sale'));
 
+  /*
+   * Reminders live on this page rather than behind another click.
+   *
+   * They are set once and never touched, and sensible ones exist from the
+   * moment an event is published — so the job of this section is to let an
+   * organizer see that reminders will go out without having to go looking for
+   * a screen that confirms it.
+   */
+  readonly reminders = signal<Reminder[]>([]);
+  readonly newReminder = signal('1440');
+  readonly savingReminder = signal(false);
+
+  readonly reminderChoices = [
+    { minutes: '20160', label: '2 weeks before' },
+    { minutes: '10080', label: '1 week before' },
+    { minutes: '2880', label: '2 days before' },
+    { minutes: '1440', label: 'The day before' },
+    { minutes: '360', label: '6 hours before' },
+    { minutes: '180', label: '3 hours before' },
+    { minutes: '60', label: '1 hour before' },
+  ];
+
+  readonly liveReminders = computed(() =>
+    this.reminders().filter((r) => r.status !== 'cancelled'),
+  );
+
   constructor() {
     this.load();
   }
@@ -74,6 +100,8 @@ export class EventDetail {
       error: () => this.error.set('Could not load tickets for this event.'),
     });
 
+    this.loadReminders();
+
     // Only asked for when this member may see it. Requesting anyway would
     // produce a 403 in the console for someone doing nothing wrong.
     if (this.session.canSeeMoney()) {
@@ -82,6 +110,64 @@ export class EventDetail {
         error: () => undefined,
       });
     }
+  }
+
+  private loadReminders(): void {
+    this.api.reminders(this.eventId).subscribe({
+      next: ({ data }) => this.reminders.set(data),
+      error: () => undefined,
+    });
+  }
+
+  addReminder(): void {
+    if (this.savingReminder()) return;
+
+    this.savingReminder.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+
+    this.api.addReminder(this.eventId, Number(this.newReminder())).subscribe({
+      next: () => {
+        this.savingReminder.set(false);
+        this.loadReminders();
+      },
+      error: (response) => {
+        this.savingReminder.set(false);
+        this.error.set(messageFor(response, 'That reminder could not be added.'));
+      },
+    });
+  }
+
+  cancelReminder(reminder: Reminder): void {
+    this.error.set(null);
+
+    this.api.cancelReminder(this.eventId, reminder.id).subscribe({
+      next: () => this.loadReminders(),
+      error: (response) =>
+        this.error.set(messageFor(response, 'That reminder could not be turned off.')),
+    });
+  }
+
+  /**
+   * When the email goes out, in the event's zone.
+   *
+   * Not the browser's. Everything else on this page is shown at the venue, and
+   * an organizer in Lagos running a Toronto night reading "10:00 p.m." next to
+   * a 5pm event has to work out which of the two is lying. The abbreviation is
+   * what settles it.
+   */
+  sendTime(iso: string): string {
+    const timeZone = this.event()?.timezone;
+
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+      ...(timeZone ? { timeZone } : {}),
+    }).format(new Date(iso));
   }
 
   addTicketType(): void {

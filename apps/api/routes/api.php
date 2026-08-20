@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Organizer\EventImageController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\RefundController;
+use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
@@ -100,6 +101,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::patch('/events/{event:id}/images/{image:id}', [EventImageController::class, 'update']);
         Route::delete('/events/{event:id}/images/{image:id}', [EventImageController::class, 'destroy']);
         Route::post('/events/{event:id}/images/order', [EventImageController::class, 'reorder']);
+
+        Route::get('/events/{event:id}/reminders', [ReminderController::class, 'index']);
+        Route::post('/events/{event:id}/reminders', [ReminderController::class, 'store']);
+        Route::delete('/events/{event:id}/reminders/{reminder:id}', [ReminderController::class, 'destroy']);
 
         Route::get('/events/{event:id}/orders', [RefundController::class, 'index']);
         Route::post('/events/{event:id}/orders/{order:id}/refunds', [RefundController::class, 'store']);

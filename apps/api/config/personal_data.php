@@ -95,6 +95,32 @@ return [
         ],
 
         /*
+         * The suppression list, and the one entry here that survives erasure.
+         *
+         * Somebody who unsubscribes and then asks to be erased must stay
+         * unsubscribed. Deleting the row would forget the refusal, and the next
+         * time that address buys a ticket the reminders start again — which is
+         * the exact harm the opt-out existed to prevent, arrived at by way of a
+         * privacy request.
+         *
+         * Both PIPEDA and the NDPR allow retaining the minimum needed to honour
+         * a legal obligation, and a record that says "do not email this
+         * address" is that minimum. The address is the whole record; there is
+         * nothing else in the row to clear.
+         */
+        'email_preferences' => [
+            'strategy' => 'retain',
+            'key' => 'email',
+            'reason' => 'A suppression list only works if it outlives the account. Deleting it re-subscribes somebody who asked to be left alone.',
+        ],
+
+        'reminder_deliveries' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'Only exists to stop a resumed send emailing somebody twice. Once the tickets are gone there is nothing left to send.',
+        ],
+
+        /*
          * Invites+ guests.
          *
          * The most exposed people in the system: added to a list by somebody

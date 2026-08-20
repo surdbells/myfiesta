@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\Webhooks\PaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,3 +41,24 @@ Route::post('/webhooks/payments/{gateway}', PaymentWebhookController::class)
 Route::get('/orders/{order}', OrderController::class)
     ->middleware('signed')
     ->name('orders.show');
+
+/*
+ * Unsubscribing from reminders.
+ *
+ * No auth, because guest checkout means most recipients have no account and a
+ * way out behind a login is not a way out. The token in the URL is the whole
+ * credential — it identifies nothing on its own, and the worst it can do in the
+ * wrong hands is stop emails the owner can turn back on.
+ *
+ * Outside CSRF for the same reason the webhooks are: Gmail and Outlook post to
+ * this directly when they render their own unsubscribe button, and those
+ * requests carry no session and no token.
+ */
+Route::get('/unsubscribe/{token}', [UnsubscribeController::class, 'show'])
+    ->name('unsubscribe');
+
+Route::post('/unsubscribe/{token}', [UnsubscribeController::class, 'store'])
+    ->name('unsubscribe.confirm');
+
+Route::post('/unsubscribe/{token}/resubscribe', [UnsubscribeController::class, 'resubscribe'])
+    ->name('unsubscribe.resubscribe');
