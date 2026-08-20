@@ -85,6 +85,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events', [OrganizerEventController::class, 'store']);
         Route::get('/events/{event:id}', [OrganizerEventController::class, 'show']);
         Route::patch('/events/{event:id}', [OrganizerEventController::class, 'update']);
+        Route::post('/events/{event:id}/duplicate', [OrganizerEventController::class, 'duplicate']);
         Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
 

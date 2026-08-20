@@ -326,3 +326,35 @@ select:focus-visible {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 1px;
 }
+
+/* --- run it again ------------------------------------------------------- */
+
+.copy {
+  margin-top: var(--space-5);
+}
+
+.copy-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.copy-form label {
+  font-size: var(--font-size-sm);
+}
+.copy-form button[type='button']:not(.link) {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-brand-700);
+  background: var(--color-brand-50);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* .link turns danger-red on hover, which is wrong for a neutral action. */
+.link.plain:hover {
+  color: var(--color-brand-500);
+}

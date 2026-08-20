@@ -7,6 +7,8 @@ use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Services\Events\EventDuplicator;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -118,6 +120,38 @@ class EventController extends Controller
 
         return response()->json(
             new EventResource($event->load(['organization', 'ticketTypes'])),
+            201,
+        );
+    }
+
+    /**
+     * Copy an event into a new draft.
+     *
+     * Authorised as a create against the same organization, not as an update
+     * of the original: this makes a new event, and somebody who may read an
+     * event must not be able to mint one from it.
+     */
+    public function duplicate(Request $request, Event $event, EventDuplicator $duplicator): JsonResponse
+    {
+        $this->authorize('view', $event);
+        $this->authorize('create', [Event::class, $event->organization_id]);
+
+        $data = $request->validate([
+            'starts_at' => ['nullable', 'date', 'after:now'],
+            'title' => ['nullable', 'string', 'max:160'],
+        ], [
+            'starts_at.after' => 'Pick a date in the future for the copy.',
+        ]);
+
+        $copy = $duplicator->duplicate(
+            $event,
+            isset($data['starts_at']) ? Carbon::parse($data['starts_at']) : null,
+            $data['title'] ?? null,
+            $request->user(),
+        );
+
+        return response()->json(
+            new EventResource($copy->load(['organization', 'ticketTypes'])),
             201,
         );
     }

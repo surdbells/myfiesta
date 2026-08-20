@@ -85,6 +85,35 @@
     }
   </nav>
 
+  @if (session.canEditEvents()) {
+    <section class="copy">
+      @if (!copying()) {
+        <button class="link plain" type="button" (click)="copying.set(true)">
+          Run this again on another date →
+        </button>
+      } @else {
+        <div class="copy-form">
+          <label for="copyDate">Same event, new date</label>
+          <input
+            id="copyDate"
+            name="copyDate"
+            type="datetime-local"
+            [ngModel]="copyDate()"
+            (ngModelChange)="copyDate.set($event)"
+          />
+          <button type="button" [disabled]="duplicating()" (click)="duplicate()">
+            @if (duplicating()) { Copying… } @else { Make a copy }
+          </button>
+          <button class="link plain" type="button" (click)="copying.set(false)">Cancel</button>
+        </div>
+        <p class="help">
+          Tickets, prices, capacity and the banner come across. Sales and the
+          gallery do not, and the copy starts as a draft.
+        </p>
+      }
+    </section>
+  }
+
   <h2 class="section">Reminders</h2>
 
   @if (liveReminders().length === 0) {

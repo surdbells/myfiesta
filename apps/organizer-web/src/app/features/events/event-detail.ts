@@ -5,6 +5,7 @@ import { Api } from '../../core/api';
 import { EventSummary, OrganizerEvent, Reminder, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
+import { zonedWallClockToIso } from '../../core/zoned-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
 
@@ -74,6 +75,10 @@ export class EventDetail {
     { minutes: '180', label: '3 hours before' },
     { minutes: '60', label: '1 hour before' },
   ];
+
+  readonly copying = signal(false);
+  readonly duplicating = signal(false);
+  readonly copyDate = signal('');
 
   readonly liveReminders = computed(() =>
     this.reminders().filter((r) => r.status !== 'cancelled'),
@@ -240,5 +245,46 @@ export class EventDetail {
 
   priceOf(type: TicketType): string {
     return String(toMajorUnits(type.price.amount));
+  }
+
+  /**
+   * Copy this event to a new date.
+   *
+   * The date is asked for rather than defaulted, because a copy with no date
+   * is a copy on the same night as the original — which is never what somebody
+   * duplicating a weekly night means, and produces two events competing for
+   * the same room.
+   */
+  duplicate(): void {
+    const event = this.event();
+
+    if (!event || this.duplicating()) return;
+
+    const startsAt = zonedWallClockToIso(this.copyDate(), event.timezone);
+
+    if (!startsAt) {
+      this.error.set('Choose when the copy happens.');
+
+      return;
+    }
+
+    this.duplicating.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+
+    this.api.duplicateEvent(this.eventId, startsAt).subscribe({
+      next: () => {
+        this.duplicating.set(false);
+        this.copying.set(false);
+        // Left on this page rather than jumped to the copy: the organizer is
+        // mid-thought about this event, and being moved somewhere else is
+        // disorienting when the new thing is a draft they may not want yet.
+        this.notice.set('Copied. It is in your events list as a draft.');
+      },
+      error: (response) => {
+        this.duplicating.set(false);
+        this.error.set(messageFor(response, 'That event could not be copied.'));
+      },
+    });
   }
 }

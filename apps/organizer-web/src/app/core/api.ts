@@ -98,6 +98,21 @@ export class Api {
     return this.http.patch(`${this.base}/api/organizer/events/${id}`, body);
   }
 
+  /**
+   * Copy an event into a new draft.
+   *
+   * Sends only a date. What gets copied is the server's decision, not the
+   * client's — a caller that chose which parts to carry over would be a second
+   * place for that rule to live, and the second copy is the one that goes
+   * stale.
+   */
+  duplicateEvent(id: string, startsAt: string, title?: string): Observable<{ slug: string }> {
+    return this.http.post<{ slug: string }>(
+      `${this.base}/api/organizer/events/${id}/duplicate`,
+      { starts_at: startsAt, ...(title ? { title } : {}) },
+    );
+  }
+
   publish(id: string, status: 'draft' | 'published'): Observable<{ status: string }> {
     return this.http.post<{ status: string }>(`${this.base}/api/organizer/events/${id}/publish`, {
       status,
