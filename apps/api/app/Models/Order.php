@@ -69,6 +69,11 @@ class Order extends Model
         return $this->hasMany(Ticket::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     protected function subtotal(): Attribute
     {
         return Attribute::get(fn () => new Money($this->subtotal_amount, $this->currency));

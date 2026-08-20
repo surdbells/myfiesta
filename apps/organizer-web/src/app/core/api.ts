@@ -10,6 +10,8 @@ import {
   IssueResult,
   OrganizerEvent,
   OrganizerEventDetail,
+  RefundResult,
+  SoldOrder,
   PromoCode,
   Session,
   TicketType,
@@ -150,6 +152,32 @@ export class Api {
     return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
       params,
     });
+  }
+
+  // --- orders and refunds -------------------------------------------------
+
+  orders(eventId: string): Observable<{ data: SoldOrder[] }> {
+    return this.http.get<{ data: SoldOrder[] }>(
+      `${this.base}/api/organizer/events/${eventId}/orders`,
+    );
+  }
+
+  /**
+   * Refund by ticket, never by amount.
+   *
+   * Omitting ticket_ids refunds the whole order. There is deliberately no way
+   * to send a figure: the server works out what those tickets are worth, the
+   * same way it works out what a buyer owes.
+   */
+  refund(
+    eventId: string,
+    orderId: string,
+    body: { ticket_ids?: string[]; reason?: string | null },
+  ): Observable<RefundResult> {
+    return this.http.post<RefundResult>(
+      `${this.base}/api/organizer/events/${eventId}/orders/${orderId}/refunds`,
+      body,
+    );
   }
 
   // --- codes --------------------------------------------------------------

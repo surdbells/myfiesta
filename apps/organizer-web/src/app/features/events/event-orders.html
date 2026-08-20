@@ -1,0 +1,128 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <div>
+    <h1>Orders</h1>
+    <p class="sub">
+      Refunds are picked by ticket. The tickets you choose stop working at the
+      door, and the amount is worked out from what was actually charged.
+    </p>
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+<div class="search">
+  <input
+    name="search"
+    placeholder="Reference, name or email"
+    aria-label="Search orders"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+  />
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (visible().length === 0) {
+  <p class="muted">
+    @if (search()) { Nothing matches that. } @else { Nothing has sold yet. }
+  </p>
+} @else {
+  <ul class="orders">
+    @for (order of visible(); track order.id) {
+      <li>
+        <div class="head">
+          <div>
+            <p class="who">{{ order.buyer_name }}</p>
+            <p class="meta">
+              {{ order.buyer_email }} · <code>{{ order.reference }}</code> ·
+              {{ when(order.paid_at) }}
+            </p>
+          </div>
+
+          <div class="figures">
+            <span class="total">{{ money(order.total) }}</span>
+            <span class="tag" [class.part]="order.status === 'partially_refunded'"
+                              [class.done]="order.status === 'refunded'">
+              {{ label(order) }}
+            </span>
+          </div>
+        </div>
+
+        @if (order.refunded.amount > 0) {
+          <p class="meta">
+            {{ money(order.refunded) }} returned · {{ money(order.refundable) }} left
+          </p>
+        }
+
+        @if (session.canSeeMoney() || session.canEditEvents()) {
+          @if (order.refundable.amount > 0) {
+            <button class="link" type="button" (click)="open(order)">
+              @if (openId() === order.id) { Cancel } @else { Refund… }
+            </button>
+          }
+        }
+
+        @if (openId() === order.id) {
+          <div class="refund">
+            <p class="pick-label">Which tickets?</p>
+
+            <ul class="tickets">
+              @for (ticket of order.tickets; track ticket.id) {
+                <li [class.gone]="!ticket.refundable">
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [disabled]="!ticket.refundable"
+                      [checked]="isPicked(ticket)"
+                      (change)="toggle(ticket)"
+                    />
+                    <span>
+                      {{ ticket.ticket_type_name || 'Ticket' }}
+                      @if (ticket.holder_name) {
+                        · {{ ticket.holder_name }}
+                      }
+                    </span>
+                  </label>
+
+                  @if (!ticket.refundable) {
+                    <span class="tag">{{ ticket.status }}</span>
+                  }
+                </li>
+              }
+            </ul>
+
+            <div class="field">
+              <label [attr.for]="'reason-' + order.id">
+                Why <span class="optional">optional</span>
+              </label>
+              <input
+                [id]="'reason-' + order.id"
+                name="reason"
+                maxlength="255"
+                placeholder="Headliner cancelled"
+                [ngModel]="reason()"
+                (ngModelChange)="reason.set($event)"
+              />
+            </div>
+
+            <p class="estimate">
+              About <strong>{{ estimate(order) }}</strong> goes back to
+              {{ order.buyer_name }}, and those tickets stop working.
+            </p>
+
+            <button class="cta" type="button" [disabled]="working()" (click)="submit(order)">
+              @if (working()) { Sending… } @else { Send the refund }
+            </button>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+}

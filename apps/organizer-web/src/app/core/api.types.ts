@@ -136,3 +136,41 @@ export interface PromoCode {
   /** Whether it would actually work right now — the question being asked. */
   usable: boolean;
 }
+
+/**
+ * An order as the refunds screen needs it.
+ *
+ * Ticket codes are deliberately absent — this list is read on a laptop in an
+ * office, and a ticket code is the thing that opens a door.
+ */
+export interface OrderTicket {
+  id: string;
+  holder_name: string | null;
+  ticket_type_name: string | null;
+  status: string;
+  refundable: boolean;
+}
+
+export interface SoldOrder {
+  id: string;
+  reference: string;
+  buyer_name: string;
+  buyer_email: string;
+  status: 'paid' | 'partially_refunded' | 'refunded';
+  paid_at: string | null;
+  currency: Money['currency'];
+  total: Money;
+  refunded: Money;
+  refundable: Money;
+  tickets: OrderTicket[];
+}
+
+export interface RefundResult {
+  id: string;
+  status: string;
+  amount: Money;
+  tax: Money;
+  reason: string | null;
+  ticket_ids: string[];
+  created_at: string;
+}

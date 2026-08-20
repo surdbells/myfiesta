@@ -55,6 +55,19 @@ class EventPolicy
     }
 
     /**
+     * Send money back.
+     *
+     * Narrower than reading the numbers. Finance is here because returning
+     * money is finance's job, and a manager is here because refunds are asked
+     * for at the door and on the night. Marketing is not: seeing what an event
+     * took is a long way from being able to move it.
+     */
+    public function refund(User $user, Event $event): bool
+    {
+        return $user->hasRoleIn($event->organization_id, Role::Owner, Role::Manager, Role::Finance);
+    }
+
+    /**
      * Check people in.
      *
      * The only capability door staff hold, and it is granted per event: a

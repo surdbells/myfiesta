@@ -52,6 +52,40 @@ describe('messageFor', () => {
     expect(message).not.toContain('Authorization');
   });
 
+  it('shows a 5xx message the server explicitly marked for the reader', () => {
+    // A refund the processor declined is a 502 — nothing about the request was
+    // wrong — and the organizer still has to be told no money moved.
+    const message = messageFor(
+      response(502, {
+        message: 'The payment processor would not complete this refund. No money has moved.',
+        display: true,
+      }),
+    );
+
+    expect(message).toContain('No money has moved');
+  });
+
+  it('still hides a 5xx that only claims to be safe by looking tidy', () => {
+    // The marker is the whole mechanism. A well-phrased 5xx without it is
+    // still server detail, and a leak that reads nicely is still a leak.
+    const message = messageFor(
+      response(502, { message: 'Upstream connect error to 10.0.3.7:5432.' }),
+    );
+
+    expect(message).not.toContain('10.0.3.7');
+    expect(message).toContain('Nothing you did caused it');
+  });
+
+  it('ignores a display flag that is not exactly true', () => {
+    // Nothing but the server's own marker opens this door — not a truthy
+    // string that arrived from somewhere else.
+    const message = messageFor(
+      response(500, { message: 'Stack trace follows.', display: 'yes' }),
+    );
+
+    expect(message).not.toContain('Stack trace');
+  });
+
   it('tells the reader a 5xx was not their fault', () => {
     // The worry when something fails mid-action is whether you broke it, or
     // whether money moved. Saying so is most of the job.

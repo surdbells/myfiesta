@@ -71,6 +71,9 @@
 
   <nav class="jump">
     <a [routerLink]="['/events', eventId, 'guests']">Guests and check-in →</a>
+    @if (session.canSeeMoney() || session.canEditEvents()) {
+      <a [routerLink]="['/events', eventId, 'orders']">Orders and refunds →</a>
+    }
     @if (session.canMessage()) {
       <a [routerLink]="['/events', eventId, 'codes']">Codes and promoters →</a>
     }

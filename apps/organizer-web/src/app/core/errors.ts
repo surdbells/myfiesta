@@ -30,6 +30,20 @@ export function messageFor(error: unknown, fallback = 'Something went wrong.'): 
     // Kept for whoever is looking, and kept off the screen.
     console.error('Server error', error.status, error.error);
 
+    // One exception, and it has to be opted into explicitly.
+    //
+    // Some 5xx responses are authored rather than accidental: a refund the
+    // payment processor declined is a 502 because nothing about the request
+    // was wrong, and the organizer still needs to be told what happened. The
+    // server marks those with `display`, so the rule stays "server detail
+    // never leaks" rather than becoming "unless the status looks deliberate" —
+    // a distinction no status code can carry on its own.
+    const body = error.error;
+
+    if (body?.display === true && typeof body?.message === 'string' && body.message.trim() !== '') {
+      return body.message;
+    }
+
     return 'Something went wrong at our end. Nothing you did caused it — please try again.';
   }
 
