@@ -1,5 +1,13 @@
-/* Present but visually hidden until focused: keyboard users should not have to
-   tab through the header on every page. */
+/*
+ * The shell around every page.
+ *
+ * Uses only semantic tokens. It was still on the raw primitives, which meant
+ * the one element present on every screen was the one element that did not
+ * follow the theme.
+ */
+
+/* Present but hidden until focused: keyboard users should not have to tab
+   through the header on every page to reach the content. */
 .skip {
   position: absolute;
   left: -9999px;
@@ -9,25 +17,69 @@
   left: var(--space-4);
   top: var(--space-4);
   z-index: 10;
-  background: var(--color-neutral-0);
   padding: var(--space-3);
+  color: var(--text);
+  background-color: var(--surface-raised);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
 }
 
 .site-header {
-  border-bottom: 1px solid var(--color-neutral-100);
-  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
-  font-weight: var(--font-weight-bold);
   font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--font-tracking-tight);
+  color: var(--primary-text);
   text-decoration: none;
-  color: var(--color-neutral-900);
+}
+
+.site-header nav a {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.site-header nav a:hover {
+  color: var(--primary-text);
 }
 
 .site-footer {
-  border-top: 1px solid var(--color-neutral-100);
-  padding: var(--space-5) var(--space-4);
-  color: var(--color-neutral-600);
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-9);
+  padding: var(--space-6) var(--space-5);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  background-color: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.site-footer a:hover {
+  color: var(--primary-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-footer p {
+  margin: 0;
+  color: var(--text-subtle);
 }

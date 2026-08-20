@@ -23,6 +23,29 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
   },
   {
+    // Above the wildcard, or these read as event slugs. Each carries its own
+    // page name in route data rather than being four near-identical
+    // components.
+    path: 'help',
+    data: { page: 'help' },
+    loadComponent: () => import('./features/info/info').then((m) => m.Info),
+  },
+  {
+    path: 'terms',
+    data: { page: 'terms' },
+    loadComponent: () => import('./features/info/info').then((m) => m.Info),
+  },
+  {
+    path: 'privacy',
+    data: { page: 'privacy' },
+    loadComponent: () => import('./features/info/info').then((m) => m.Info),
+  },
+  {
+    path: 'contact',
+    data: { page: 'contact' },
+    loadComponent: () => import('./features/info/info').then((m) => m.Info),
+  },
+  {
     // Above the wildcard, or an order reference would be read as a slug.
     path: 'order/:reference',
     loadComponent: () => import('./features/orders/order-status').then((m) => m.OrderStatus),

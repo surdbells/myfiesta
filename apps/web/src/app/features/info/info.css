@@ -1,0 +1,49 @@
+/*
+ * Help, terms, privacy, contact.
+ *
+ * Long-form reading, so the only thing that matters is the measure and the
+ * rhythm between headings. Everything else comes from the base layer.
+ */
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5) var(--space-9);
+}
+
+h1 {
+  margin-bottom: var(--space-6);
+  font-size: var(--font-size-3xl);
+}
+
+h2 {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-lg);
+}
+
+p {
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+}
+
+/* Something the operator still has to do before launch. Deliberately loud on
+   the page rather than a code comment nobody reads — these pages go live the
+   moment the site does. */
+.note {
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  color: var(--warning);
+  background-color: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-md);
+}
+
+.note strong {
+  color: var(--warning);
+}
+
+.back {
+  margin-top: var(--space-8);
+  font-size: var(--font-size-sm);
+}

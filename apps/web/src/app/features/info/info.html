@@ -1,0 +1,188 @@
+<article class="wrap prose">
+  @switch (page()) {
+    @case ('help') {
+      <h1>Help</h1>
+
+      <h2>I bought a ticket and nothing arrived</h2>
+      <p>
+        Tickets are emailed within a minute of payment clearing. If it is not
+        there, check the spam folder for the address you typed at checkout — a
+        mistyped address is the usual cause, and we cannot see what was typed.
+        Get in touch with your order reference and we will resend them.
+      </p>
+
+      <h2>How do I get into the event?</h2>
+      <p>
+        Open the link in your confirmation email and show the QR code at the
+        door. Turn your screen brightness up — a dim screen is the most common
+        reason a scanner will not read a ticket. If the camera will not focus,
+        the code printed under it can be read out instead.
+      </p>
+
+      <h2>My ticket says it admits more than one person</h2>
+      <p>
+        Some tickets — a couple's ticket, a table — let in several people on one
+        code. You do not all have to arrive together: the door can let part of
+        the group in and the rest stay on the ticket for later.
+      </p>
+
+      <h2>Can I get a refund?</h2>
+      <p>
+        Refunds are the organizer's decision, not ours — they set the terms for
+        their own event. Contact them first. If an event is cancelled outright,
+        the organizer refunds through us and the money returns the way it came,
+        which takes a few working days depending on your bank.
+      </p>
+
+      <h2>Can I give my ticket to someone else?</h2>
+      <p>
+        Yes. Forward them the link from your confirmation email — whoever shows
+        the QR at the door gets in. If the event requires ID matching the name
+        on the ticket, the organizer will say so on the event page.
+      </p>
+
+      <h2>I did not get a reminder</h2>
+      <p>
+        Reminders can be turned off from the link at the bottom of any of them.
+        Turning them off never affects your tickets or your order emails.
+      </p>
+    }
+
+    @case ('terms') {
+      <h1>Terms</h1>
+
+      <p class="note">
+        <strong>Not yet reviewed by a lawyer.</strong> This describes how the
+        platform actually works and is accurate about the mechanics, but it must
+        be reviewed against Canadian and Nigerian consumer law before myFiesta
+        takes real money.
+      </p>
+
+      <h2>What myFiesta does</h2>
+      <p>
+        myFiesta sells tickets on behalf of organizers. The contract for the
+        event itself is between you and the organizer named on the event page.
+        We handle the sale, the ticket and the payment; they run the night.
+      </p>
+
+      <h2>Buying</h2>
+      <p>
+        A ticket is yours once payment clears. Prices are shown in the
+        organizer's currency, and tax is shown separately at checkout unless the
+        price already includes it, in which case it says so. Stock is held while
+        you are on the payment page and released if you do not finish.
+      </p>
+
+      <h2>Refunds and cancellations</h2>
+      <p>
+        Refund terms are set by the organizer and shown on the event page. If an
+        organizer cancels an event, they are responsible for refunding it, and
+        refunds are returned to the original payment method. We do not refund
+        our own fees on a change of mind, and we do refund them when an event is
+        cancelled.
+      </p>
+
+      <h2>Selling</h2>
+      <p>
+        Organizers are responsible for the event being what they said it was,
+        for holding the licences the venue and the law require, and for the
+        accuracy of what appears on their event page. Payouts are made after the
+        event, less our commission and any refunds.
+      </p>
+
+      <h2>Behaviour we will not host</h2>
+      <p>
+        Events that are fraudulent, that sell something illegal, or that exist
+        to launder money. We will withhold a payout and cancel an event where we
+        have reason to believe any of those apply.
+      </p>
+    }
+
+    @case ('privacy') {
+      <h1>Privacy</h1>
+
+      <p class="note">
+        <strong>Not yet reviewed by a lawyer.</strong> The description below is
+        accurate about what the system does — it is written from the same map
+        the export and deletion jobs run from — but it needs review against
+        PIPEDA and the NDPA before launch.
+      </p>
+
+      <h2>What we hold</h2>
+      <p>
+        If you buy a ticket: your name, email address, and phone number if you
+        gave one; what you bought and what you paid; and the ticket itself,
+        including whether it was scanned at the door. We never see or store your
+        card number — that goes directly to Stripe or Paystack.
+      </p>
+      <p>
+        If you organize events: the above, plus your organization's details and
+        the account you sign in with.
+      </p>
+
+      <h2>Why</h2>
+      <p>
+        To sell you a ticket, to get it to you, to let a door confirm it, and to
+        pay the organizer. Your email address is also used to remind you about
+        events you hold tickets to, which you can turn off from any reminder
+        without affecting your tickets.
+      </p>
+
+      <h2>Who else sees it</h2>
+      <p>
+        The organizer of an event you bought a ticket to sees your name, email
+        and what you bought — they need it to run their guest list. Our payment
+        processors see what they need to take the payment. Our email provider
+        sees the address a message is sent to. Nobody else, and we do not sell
+        anything to anybody.
+      </p>
+
+      <h2>Removing your data</h2>
+      <p>
+        Write to us and we will remove it. Financial records are kept, with your
+        identity stripped out of them, because we are required to be able to
+        account for money that moved. One thing survives deletion deliberately:
+        if you have asked us to stop emailing you, we keep a record of that
+        address so we do not start again the next time you buy a ticket.
+      </p>
+
+      <h2>Where it lives</h2>
+      <p>
+        On servers we run, with backups. Some of the services above hold copies
+        outside Canada and Nigeria as part of doing their job.
+      </p>
+    }
+
+    @case ('contact') {
+      <h1>Contact</h1>
+
+      <h2>About an order</h2>
+      <p>
+        Email us with the order reference from your confirmation — it is the
+        short code on your ticket page — and we can find it immediately. Without
+        it we are searching by name, which is slow and often ambiguous.
+      </p>
+
+      <h2>About an event</h2>
+      <p>
+        The organizer is the right person for anything about the event itself:
+        the lineup, the timings, the door policy, or a refund. Their name is on
+        the event page.
+      </p>
+
+      <h2>About your data</h2>
+      <p>
+        Requests to see or remove what we hold about you go to the same address
+        and are answered within thirty days.
+      </p>
+
+      <p class="note">
+        <strong>Addresses still to be filled in.</strong> This page needs the
+        real support and privacy addresses, and a postal address — both markets
+        require a reachable operator on commercial email.
+      </p>
+    }
+  }
+
+  <p class="back"><a routerLink="/">← Back to what's on</a></p>
+</article>

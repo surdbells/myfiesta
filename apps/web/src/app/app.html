@@ -2,12 +2,27 @@
 
 <header class="site-header">
   <a class="brand" routerLink="/">myFiesta</a>
+  <nav>
+    <a routerLink="/events">What's on</a>
+  </nav>
 </header>
 
 <main id="main">
   <router-outlet />
 </main>
 
+<!--
+  These are not decoration. Stripe and Paystack both require published terms and
+  a privacy policy before an account goes live, and CASL and the NDPA both
+  require a reachable operator on commercial email — which means a link to them
+  from every page, not a URL somebody has to be told.
+-->
 <footer class="site-footer">
+  <nav>
+    <a routerLink="/help">Help</a>
+    <a routerLink="/terms">Terms</a>
+    <a routerLink="/privacy">Privacy</a>
+    <a routerLink="/contact">Contact</a>
+  </nav>
   <p>&copy; myFiesta</p>
 </footer>

@@ -87,8 +87,24 @@ class CheckoutController extends Controller
 
         try {
             $session = $gateway->createCheckout($order, new CheckoutOptions(
-                successUrl: URL::temporarySignedRoute('orders.show', now()->addDays(90), ['order' => $order->id]),
-                cancelUrl: config('app.frontend_url', config('app.url'))."/{$event->slug}",
+                /*
+                 * Where the gateway drops the buyer, and both of these were
+                 * wrong.
+                 *
+                 * Success pointed at the API's signed orders route, which
+                 * returns JSON — somebody who had just paid landed on a wall of
+                 * braces. It now goes to the order screen on the public site,
+                 * which polls until the webhook settles the order and can say
+                 * "confirming your payment" in the meantime. The return itself
+                 * still proves nothing; the signed webhook does.
+                 *
+                 * Cancel read config('app.frontend_url'), which is not defined
+                 * anywhere — so it fell back to the API's own host and sent
+                 * somebody who changed their mind to a 404 instead of back to
+                 * the event they were looking at.
+                 */
+                successUrl: $this->site()."/order/{$order->reference}",
+                cancelUrl: $this->site()."/{$event->slug}",
                 idempotencyKey: $order->idempotency_key,
             ));
         } catch (Throwable $e) {
@@ -169,5 +185,17 @@ class CheckoutController extends Controller
             'code_applied' => $quote->code?->code,
             'requires_payment' => $quote->requiresPayment(),
         ];
+    }
+
+    /**
+     * The public site, which is not this application.
+     *
+     * The API serves no pages, so every URL handed to a payment gateway has to
+     * name the site explicitly. Falling back to app.url — as the cancel URL
+     * used to — sends buyers to the API host, where nothing they want exists.
+     */
+    private function site(): string
+    {
+        return rtrim(config('app.public_url'), '/');
     }
 }
