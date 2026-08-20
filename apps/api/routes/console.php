@@ -20,3 +20,15 @@ Schedule::command('reminders:send')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Repeating events.
+ *
+ * Daily, because the window is measured in months — nobody is selling tickets
+ * to a night six months out that appeared six hours late. Overnight, when the
+ * duplication work is cheapest.
+ */
+Schedule::command('series:extend')
+    ->dailyAt('03:30')
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
+use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
@@ -85,6 +86,11 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events', [OrganizerEventController::class, 'store']);
         Route::get('/events/{event:id}', [OrganizerEventController::class, 'show']);
         Route::patch('/events/{event:id}', [OrganizerEventController::class, 'update']);
+        Route::get('/events/{event:id}/series', [SeriesController::class, 'show']);
+        Route::post('/events/{event:id}/series', [SeriesController::class, 'store']);
+        Route::post('/events/{event:id}/series/skip', [SeriesController::class, 'skip']);
+        Route::delete('/events/{event:id}/series', [SeriesController::class, 'destroy']);
+
         Route::post('/events/{event:id}/duplicate', [OrganizerEventController::class, 'duplicate']);
         Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);

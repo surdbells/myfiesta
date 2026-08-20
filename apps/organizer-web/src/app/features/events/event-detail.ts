@@ -2,7 +2,14 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { EventSummary, OrganizerEvent, Reminder, TicketType } from '../../core/api.types';
+import {
+  EventSummary,
+  OrganizerEvent,
+  Reminder,
+  Series,
+  SeriesOccurrence,
+  TicketType,
+} from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
 import { zonedWallClockToIso } from '../../core/zoned-time';
@@ -80,6 +87,16 @@ export class EventDetail {
   readonly duplicating = signal(false);
   readonly copyDate = signal('');
 
+  readonly series = signal<Series | null>(null);
+  readonly repeating = signal(false);
+  readonly frequency = signal<'weekly' | 'fortnightly' | 'monthly'>('weekly');
+  readonly repeatCount = signal('8');
+
+  /** Future dates only. A residency's past nights are not a schedule. */
+  readonly upcoming = computed(() =>
+    (this.series()?.occurrences ?? []).filter((o) => new Date(o.starts_at) > new Date()),
+  );
+
   readonly liveReminders = computed(() =>
     this.reminders().filter((r) => r.status !== 'cancelled'),
   );
@@ -106,6 +123,7 @@ export class EventDetail {
     });
 
     this.loadReminders();
+    this.loadSeries();
 
     // Only asked for when this member may see it. Requesting anyway would
     // produce a 403 in the console for someone doing nothing wrong.
@@ -115,6 +133,78 @@ export class EventDetail {
         error: () => undefined,
       });
     }
+  }
+
+  private loadSeries(): void {
+    this.api.series(this.eventId).subscribe({
+      next: ({ series }) => this.series.set(series),
+      error: () => undefined,
+    });
+  }
+
+  makeRepeating(): void {
+    if (this.repeating()) return;
+
+    this.repeating.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+
+    const count = Number(this.repeatCount());
+
+    this.api.repeatEvent(this.eventId, this.frequency(), count || undefined).subscribe({
+      next: ({ created }) => {
+        this.repeating.set(false);
+        this.copying.set(false);
+        this.notice.set(
+          `${created} more ${created === 1 ? 'date' : 'dates'} added. They are drafts until you publish them.`,
+        );
+        this.loadSeries();
+      },
+      error: (response) => {
+        this.repeating.set(false);
+        this.error.set(messageFor(response, 'That event could not be set to repeat.'));
+      },
+    });
+  }
+
+  skip(occurrence: SeriesOccurrence): void {
+    this.error.set(null);
+
+    this.api.skipOccurrence(this.eventId, occurrence.id).subscribe({
+      next: (result) => {
+        this.notice.set(result.message);
+        this.loadSeries();
+      },
+      error: (response) =>
+        this.error.set(messageFor(response, 'That date could not be taken out.')),
+    });
+  }
+
+  stopRepeating(): void {
+    this.error.set(null);
+
+    this.api.stopRepeating(this.eventId).subscribe({
+      next: (result) => {
+        this.notice.set(result.message);
+        this.loadSeries();
+      },
+      error: (response) =>
+        this.error.set(messageFor(response, 'That series could not be stopped.')),
+    });
+  }
+
+  /** A date in the event's own zone, which is the venue's. */
+  occurrenceDate(iso: string): string {
+    const timeZone = this.event()?.timezone;
+
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(timeZone ? { timeZone } : {}),
+    }).format(new Date(iso));
   }
 
   private loadReminders(): void {

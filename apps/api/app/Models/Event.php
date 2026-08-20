@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\UtcDateTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,9 +21,15 @@ class Event extends Model
     protected function casts(): array
     {
         return [
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
+            // UtcDateTime rather than 'datetime': Eloquent stores the wall
+            // clock of whatever instance it is given and drops the zone, so a
+            // Carbon in the venue's zone lands in the column hours out.
+            'starts_at' => UtcDateTime::class,
+            'ends_at' => UtcDateTime::class,
             'published_at' => 'datetime',
+            // The slot the rule scheduled, distinct from starts_at so an
+            // occurrence an organizer moved is still recognised as filled.
+            'series_occurs_at' => UtcDateTime::class,
             'id_required' => 'boolean',
             'is_featured' => 'boolean',
         ];
@@ -47,6 +54,11 @@ class Event extends Model
     public function ticketTypes(): HasMany
     {
         return $this->hasMany(TicketType::class);
+    }
+
+    public function series(): BelongsTo
+    {
+        return $this->belongsTo(EventSeries::class, 'series_id');
     }
 
     public function reminders(): HasMany

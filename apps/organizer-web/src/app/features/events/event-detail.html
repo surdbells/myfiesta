@@ -85,13 +85,98 @@
     }
   </nav>
 
+  @if (series(); as s) {
+    <h2 class="section">Repeats</h2>
+
+    @if (s.status === 'ended') {
+      <p class="muted">This event no longer repeats.</p>
+    } @else if (upcoming().length === 0) {
+      <p class="muted">No dates left in this series.</p>
+    } @else {
+      <ul class="dates">
+        @for (date of upcoming(); track date.id) {
+          <li>
+            <a [routerLink]="['/events', date.id]">{{ occurrenceDate(date.starts_at) }}</a>
+
+            @if (date.id === eventId) {
+              <span class="badge">This one</span>
+            }
+            @if (date.moved) {
+              <span class="badge">Moved</span>
+            }
+            @if (date.status !== 'published') {
+              <span class="badge">{{ date.status }}</span>
+            }
+
+            @if (session.canEditEvents() && date.id !== eventId) {
+              <button class="link" type="button" (click)="skip(date)">Skip</button>
+            }
+          </li>
+        }
+      </ul>
+
+      @if (s.skipped.length > 0) {
+        <p class="help">
+          {{ s.skipped.length }} {{ s.skipped.length === 1 ? 'date is' : 'dates are' }} skipped.
+          They will not come back.
+        </p>
+      }
+
+      @if (session.canEditEvents()) {
+        <button class="link" type="button" (click)="stopRepeating()">Stop repeating</button>
+        <p class="help">
+          Dates people have already bought tickets for are kept.
+        </p>
+      }
+    }
+  }
+
   @if (session.canEditEvents()) {
     <section class="copy">
       @if (!copying()) {
         <button class="link plain" type="button" (click)="copying.set(true)">
-          Run this again on another date →
+          @if (series()) { Copy this to another date → } @else { Run this again → }
         </button>
       } @else {
+        @if (!series()) {
+          <div class="copy-form">
+            <label for="freq">Repeat this</label>
+            <select
+              id="freq"
+              name="freq"
+              [ngModel]="frequency()"
+              (ngModelChange)="frequency.set($event)"
+            >
+              <option value="weekly">Every week</option>
+              <option value="fortnightly">Every other week</option>
+              <option value="monthly">Every month</option>
+            </select>
+            <label for="times">for</label>
+            <input
+              id="times"
+              name="times"
+              type="number"
+              min="2"
+              max="104"
+              class="narrow"
+              [ngModel]="repeatCount()"
+              (ngModelChange)="repeatCount.set($event)"
+            />
+            <span class="muted">dates</span>
+            <button type="button" [disabled]="repeating()" (click)="makeRepeating()">
+              @if (repeating()) { Setting up… } @else { Repeat }
+            </button>
+          </div>
+          <p class="help">
+            Each date is its own event with its own tickets and door, so you can
+            change one without touching the rest.
+          </p>
+        }
+      }
+    </section>
+
+    <section class="copy">
+      @if (copying()) {
         <div class="copy-form">
           <label for="copyDate">Same event, new date</label>
           <input

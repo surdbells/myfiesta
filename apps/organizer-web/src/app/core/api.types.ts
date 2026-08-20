@@ -203,3 +203,27 @@ export interface Reminder {
   sent_at: string | null;
   recipients: number | null;
 }
+
+/** One date in a repeating event. */
+export interface SeriesOccurrence {
+  id: string;
+  slug: string;
+  title: string;
+  starts_at: string;
+  series_occurs_at: string;
+  status: string;
+  /** The organizer moved this one off the date the rule scheduled. */
+  moved: boolean;
+  is_source: boolean;
+}
+
+export interface Series {
+  id: string;
+  rrule: string;
+  status: 'active' | 'paused' | 'ended';
+  timezone: string;
+  generated_through: string | null;
+  source_event_id: string;
+  occurrences: SeriesOccurrence[];
+  skipped: { occurs_at: string; reason: string | null }[];
+}

@@ -358,3 +358,36 @@ select:focus-visible {
 .link.plain:hover {
   color: var(--color-brand-500);
 }
+
+/* --- the dates in a series ---------------------------------------------- */
+
+.dates {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dates li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+.dates a {
+  min-width: 13rem;
+  color: var(--color-neutral-900);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.dates a:hover {
+  color: var(--color-brand-500);
+  text-decoration: underline;
+}
+.dates .link {
+  margin-left: auto;
+}
+
+.narrow {
+  width: 5rem;
+}

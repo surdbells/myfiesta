@@ -14,6 +14,8 @@ import {
   OrganizerEventDetail,
   RefundResult,
   Reminder,
+  Series,
+  SeriesOccurrence,
   SoldOrder,
   PromoCode,
   Session,
@@ -110,6 +112,50 @@ export class Api {
     return this.http.post<{ slug: string }>(
       `${this.base}/api/organizer/events/${id}/duplicate`,
       { starts_at: startsAt, ...(title ? { title } : {}) },
+    );
+  }
+
+  // --- repeating ----------------------------------------------------------
+
+  series(eventId: string): Observable<{ series: Series | null }> {
+    return this.http.get<{ series: Series | null }>(
+      `${this.base}/api/organizer/events/${eventId}/series`,
+    );
+  }
+
+  /**
+   * Make an event repeat.
+   *
+   * Sends a plain frequency, not a recurrence rule. The API speaks RFC 5545
+   * because that is the interchange format calendars read, but asking an
+   * organizer to write "FREQ=WEEKLY;BYDAY=FR" would be exposing a file format
+   * as a user interface.
+   */
+  repeatEvent(
+    eventId: string,
+    frequency: 'weekly' | 'fortnightly' | 'monthly',
+    count?: number,
+  ): Observable<{ series: Series; created: number }> {
+    return this.http.post<{ series: Series; created: number }>(
+      `${this.base}/api/organizer/events/${eventId}/series`,
+      { frequency, ...(count ? { count } : {}) },
+    );
+  }
+
+  skipOccurrence(
+    eventId: string,
+    occurrenceId: string,
+    reason?: string,
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/series/skip`,
+      { occurrence_id: occurrenceId, ...(reason ? { reason } : {}) },
+    );
+  }
+
+  stopRepeating(eventId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/series`,
     );
   }
 
