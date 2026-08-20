@@ -3,6 +3,12 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    // The shared component package is consumed as source. Both apps compile in
+    // the same repository, so a built library between them would only add a
+    // stale-artifact failure mode.
+    "paths": {
+      "@myfiesta/ui": ["../../packages/ui/src/index.ts"]
+    },
     "strict": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

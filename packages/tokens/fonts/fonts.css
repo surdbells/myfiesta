@@ -1,0 +1,39 @@
+/* Poppins, self-hosted.
+ *
+ * The live platform links these from Google Fonts, which makes every page load
+ * a render-blocking request to a third party — and in both launch markets it is
+ * a disclosure of the reader's IP address to somebody they did not choose.
+ * Self-hosting removes both. Latin subset only, four weights, ~22KB total.
+ *
+ * font-display: swap so text is readable immediately in the fallback and
+ * reflows once, rather than being invisible while the font arrives on a bad
+ * connection outside a venue.
+ */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./poppins-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./poppins-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./poppins-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./poppins-700.woff2') format('woff2');
+}

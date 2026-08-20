@@ -1,189 +1,271 @@
+/*
+ * The event page — the screen a shared link opens, and the only one that has to
+ * convert a stranger.
+ *
+ * Styled against the markup as it stands rather than rewriting both at once:
+ * the structure was already right, it was the surface that was unfinished.
+ *
+ * The one structural change is the split. Above 900px the tickets sit in a
+ * panel that follows you down the page, so the price and the buy button are
+ * never scrolled away from. Below that it collapses to one column, because a
+ * sticky panel on a phone eats the screen it is trying to sell on.
+ */
+
 .wrap {
-  max-width: 46rem;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-6) var(--space-5) var(--space-9);
 }
+
+/* --- the banner ---------------------------------------------------------- */
 
 .poster {
   width: 100%;
-  border-radius: var(--radius-lg);
-  aspect-ratio: 3 / 2;
+  /* A fixed ratio so the page does not jump when the image lands, and so a
+     portrait upload cannot push the title off the screen entirely. */
+  aspect-ratio: 21 / 9;
   object-fit: cover;
+  margin-bottom: var(--space-6);
+  background: var(--surface-inset);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 700px) {
+  .poster {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* --- the split ----------------------------------------------------------- */
+
+@media (min-width: 900px) {
+  article.wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: var(--space-7);
+    align-items: start;
+  }
+
+  /* Full-bleed across both columns; everything else takes a lane. */
+  .poster,
+  .gallery {
+    grid-column: 1 / -1;
+  }
+
+  header,
+  .description {
+    grid-column: 1;
+  }
+
+  .tickets {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    position: sticky;
+    top: var(--space-5);
+    /* Never taller than the viewport — a panel that overflows a laptop screen
+       hides its own buy button below the fold. */
+    max-height: calc(100vh - var(--space-7));
+    overflow-y: auto;
+  }
+}
+
+/* --- the event ----------------------------------------------------------- */
+
+header {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
 }
 
 h1 {
   font-size: var(--font-size-3xl);
-  margin: var(--space-5) 0 var(--space-2);
 }
 
 .when {
   font-size: var(--font-size-lg);
-  margin: 0 0 var(--space-1);
+  font-weight: var(--font-weight-medium);
+  color: var(--primary);
 }
 
-.where,
-.by,
-.gate {
-  margin: 0 0 var(--space-1);
-  color: var(--color-neutral-600);
+.where {
+  color: var(--text);
 }
 
+.by {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+/* The tick means somebody checked who this organizer is, which is worth more
+   to a stranger about to pay than anything else on the line. */
 .verified {
-  color: var(--color-semantic-success);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  color: var(--on-primary);
+  background: var(--primary);
+  border-radius: var(--radius-full);
+}
+
+.gate {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-radius: var(--radius-md);
 }
 
 .description {
-  margin: var(--space-5) 0;
-  white-space: pre-wrap;
+  max-width: 66ch;
+  margin-top: var(--space-5);
+  color: var(--text-muted);
+  /* Organizers write in paragraphs and expect them to survive. */
+  white-space: pre-line;
 }
+
+/* --- the ticket panel ---------------------------------------------------- */
 
 .tickets {
   margin-top: var(--space-6);
-  border-top: 1px solid var(--color-neutral-100);
-  padding-top: var(--space-5);
+  padding: var(--space-5);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+}
+
+@media (min-width: 900px) {
+  .tickets {
+    margin-top: 0;
+  }
+}
+
+.tickets h2 {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-lg);
 }
 
 .ticket-row {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
   gap: var(--space-4);
   padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--color-neutral-100);
+  border-top: 1px solid var(--border);
+}
+.ticket-row:first-of-type {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .ticket-row h3 {
-  margin: 0 0 var(--space-1);
   font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ticket-row .muted {
+  margin-top: 2px;
+  font-size: var(--font-size-sm);
+  max-width: 34ch;
 }
 
 .price {
-  margin: var(--space-2) 0 0;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
+
+/* --- the stepper --------------------------------------------------------- */
 
 .stepper {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding: 3px;
+  background: var(--surface-inset);
+  border-radius: var(--radius-md);
 }
 
-/* 2.5rem square: a thumb target at a bus stop, not a mouse target at a desk. */
 .stepper button {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--color-neutral-200);
-  background: var(--color-neutral-0);
+  width: 36px;
+  height: 36px;
+  font: inherit;
   font-size: var(--font-size-lg);
+  line-height: 1;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
 }
-
+.stepper button:hover:not(:disabled) {
+  color: var(--primary);
+  border-color: var(--primary);
+}
 .stepper button:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: not-allowed;
 }
 
-.totals {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-5) 0;
-}
-
-.totals dt {
-  color: var(--color-neutral-600);
-}
-
-.totals dd {
-  margin: 0;
-  text-align: right;
-  /* Amounts line up as they change, so a total does not appear to jump. */
+.stepper span {
+  min-width: 2.25rem;
+  text-align: center;
+  font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 
-.totals .total {
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-lg);
-  color: var(--color-neutral-900);
-}
-
-.cta {
-  width: 100%;
-  padding: var(--space-4);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-brand-500);
-  color: var(--color-neutral-0);
-  font-size: var(--font-size-lg);
-  cursor: pointer;
-}
-
-.cta:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.error {
-  color: var(--color-semantic-danger);
-}
-
-.muted {
-  color: var(--color-neutral-600);
-}
-
-/* --- promo code ------------------------------------------------------- */
+/* --- promo code ---------------------------------------------------------- */
 
 .promo {
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-4);
   padding-top: var(--space-4);
-  border-top: 1px solid var(--color-neutral-200);
+  border-top: 1px solid var(--border);
 }
 
 .promo label {
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }
 
 .promo-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   gap: var(--space-2);
 }
 
 .promo-row input {
-  padding: var(--space-3);
-  font: inherit;
-  /* Codes are given out in caps and typed in whatever. The value is
-     uppercased on the server; this just stops it looking wrong. */
   text-transform: uppercase;
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md);
-  background: var(--color-neutral-0);
-  color: var(--color-neutral-900);
-}
-
-.promo-row input:focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 1px;
+  letter-spacing: 0.04em;
 }
 
 .promo-row button {
-  padding: var(--space-3) var(--space-4);
+  flex-shrink: 0;
+  padding: 0 var(--space-4);
+  height: 44px;
   font: inherit;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-100);
-  border: 1px solid var(--color-neutral-200);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--primary-soft-text);
+  background: var(--primary-soft);
+  border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-
 .promo-row button:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .promo-applied {
@@ -191,39 +273,137 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--color-semantic-success);
-  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
   border-radius: var(--radius-md);
 }
 
-.promo-applied .link {
+/* --- totals -------------------------------------------------------------- */
+
+/* A definition list, laid out as two columns of rows. Using a grid here rather
+   than a table keeps the dt/dd pairing, which is what a screen reader reads. */
+.totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-sm);
+}
+
+.totals dt {
+  color: var(--text-muted);
+}
+
+.totals dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.totals .total {
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
+/* --- the buy button ------------------------------------------------------ */
+
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 52px;
+  margin-top: var(--space-5);
+  font: inherit;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--on-primary);
+  background: var(--primary);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.cta:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- the buyer form ------------------------------------------------------ */
+
+.buyer {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.buyer h3 {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-base);
+}
+
+.buyer label {
+  margin-top: var(--space-2);
+}
+
+.buyer small {
+  font-size: var(--font-size-xs);
+}
+
+.buyer .cta {
+  margin-top: var(--space-4);
+}
+
+/* --- messages ------------------------------------------------------------ */
+
+.error {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.link {
   padding: 0;
   font: inherit;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: inherit;
   background: none;
   border: 0;
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-/* --- photographs from the night ---------------------------------------- */
+/* --- photographs from the night ------------------------------------------ */
 
 .gallery {
   margin-top: var(--space-8);
 }
 
 .gallery h2 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-xl);
 }
 
 .gallery ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -235,25 +415,26 @@ h1 {
   gap: var(--space-2);
 }
 
-.gallery img {
+.gallery a {
   display: block;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.gallery img {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: var(--radius-md);
   /* Holds the square before the picture arrives, so a gallery loading over a
      slow connection does not push the page around under a reader's thumb. */
-  background: var(--color-neutral-100);
+  background: var(--surface-inset);
+  transition: transform var(--motion-base) var(--motion-ease);
 }
-
-.gallery a:focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 3px;
-  border-radius: var(--radius-md);
+.gallery a:hover img {
+  transform: scale(1.03);
 }
 
 .gallery p {
-  margin: 0;
   font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+  color: var(--text-muted);
 }

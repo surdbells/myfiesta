@@ -1,0 +1,500 @@
+/*
+ * The base layer, shared by the public site and the organizer console.
+ *
+ * Everything here styles elements and a small set of classes, so a screen gets
+ * a consistent button, input and table without importing anything. Components
+ * that need structure — alerts, badges, empty states — are Angular components
+ * in ../src.
+ *
+ * One rule runs through the whole file: only the semantic tokens are used
+ * (--surface, --text, --primary). A rule that reaches for --color-brand-500
+ * directly is one that will be the wrong colour in dark mode, and it will look
+ * fine to whoever wrote it.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--font-leading-normal);
+  color: var(--text);
+  background: var(--surface-sunken);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+/* --- type ---------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--font-leading-tight);
+  letter-spacing: var(--font-tracking-tight);
+  /* Headings are short and should break at sensible points rather than leaving
+     one word alone on the last line. */
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+}
+h2 {
+  font-size: var(--font-size-xl);
+}
+h3 {
+  font-size: var(--font-size-lg);
+}
+
+p {
+  margin: 0;
+}
+
+/* Running text stays near 65 characters. Longer lines make the eye lose the
+   start of the next one. */
+.prose {
+  max-width: 68ch;
+  line-height: var(--font-leading-normal);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.subtle {
+  color: var(--text-subtle);
+}
+
+.eyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* Figures that sit in a column must not dance as they change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: var(--primary);
+  text-decoration-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  text-underline-offset: 2px;
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+code,
+kbd {
+  font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  background: var(--surface-inset);
+  border-radius: var(--radius-sm);
+}
+
+hr {
+  height: 0;
+  margin: var(--space-6) 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* --- focus --------------------------------------------------------------- */
+
+/* One ring, everywhere, and only for keyboard users. Removing outlines without
+   replacing them is the single most common way an interface becomes unusable
+   without a mouse. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- buttons ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  /* A fixed height rather than vertical padding, so a button with an icon and a
+     button with only text line up in the same row. */
+  height: 44px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  color: var(--on-primary);
+  background: var(--primary);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.btn--primary:active:not(:disabled) {
+  background: var(--primary-active);
+}
+
+.btn--secondary {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+.btn--secondary:hover:not(:disabled) {
+  background: var(--surface-inset);
+}
+
+.btn--soft {
+  color: var(--primary-soft-text);
+  background: var(--primary-soft);
+}
+.btn--soft:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 14%, var(--primary-soft));
+}
+
+.btn--ghost {
+  color: var(--text-muted);
+  background: none;
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-inset);
+}
+
+/* Destructive actions never borrow the brand colour. The live platform maps
+   its danger colour to the same green as its primary, so a delete confirmation
+   and a save button are the same button. */
+.btn--danger {
+  color: var(--text-inverse);
+  background: var(--danger);
+}
+.btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, black);
+}
+
+.btn--sm {
+  height: 36px;
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-xs);
+}
+.btn--lg {
+  height: 52px;
+  padding: 0 var(--space-6);
+  font-size: var(--font-size-base);
+}
+.btn--block {
+  width: 100%;
+}
+
+/* A button that reads as a link. Still a button, so it is announced and
+   activated as one. */
+.btn-link {
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-link:hover {
+  color: var(--text);
+}
+.btn-link--danger:hover {
+  color: var(--danger);
+}
+
+/* --- forms --------------------------------------------------------------- */
+
+label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.input,
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='tel'],
+input[type='url'],
+input[type='number'],
+input[type='date'],
+input[type='datetime-local'],
+select,
+textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+textarea {
+  height: auto;
+  min-height: 96px;
+  padding: var(--space-3);
+  line-height: var(--font-leading-snug);
+  resize: vertical;
+}
+
+select {
+  /* The native arrow is drawn in the OS's own colours and looks wrong on a dark
+     surface, so it is replaced with one drawn from the token. */
+  appearance: none;
+  padding-right: var(--space-6);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 20px,
+    calc(100% - 13px) 20px;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+.input:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-subtle);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  color: var(--text-subtle);
+  background: var(--surface-inset);
+  cursor: not-allowed;
+}
+
+/* An invalid field says so in colour and in text; colour alone is not
+   available to everybody reading it. */
+.input--invalid,
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.field__hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.field__error {
+  font-size: var(--font-size-xs);
+  color: var(--danger);
+}
+
+.optional {
+  font-weight: var(--font-weight-regular);
+  color: var(--text-subtle);
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* --- surfaces ------------------------------------------------------------ */
+
+.card {
+  padding: var(--space-5);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+.stack--tight {
+  gap: var(--space-2);
+}
+.stack--loose {
+  gap: var(--space-6);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.row--between {
+  justify-content: space-between;
+}
+.push {
+  margin-left: auto;
+}
+
+/* --- tables -------------------------------------------------------------- */
+
+/* Wide content scrolls inside its own container so the page body never scrolls
+   sideways on a phone. */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+th,
+td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+thead th {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  background: var(--surface-inset);
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+td.numeric,
+th.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- page shell ---------------------------------------------------------- */
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-9);
+}
+.page--narrow {
+  max-width: 720px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.back:hover {
+  color: var(--primary);
+}
+
+/* --- motion -------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible only to screen readers — used for labels that would be redundant on
+   screen but are the only context a non-visual reader gets. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

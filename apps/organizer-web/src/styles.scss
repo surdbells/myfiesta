@@ -1,29 +1,10 @@
-/* Design tokens, generated from packages/tokens.
-   Editing them here would drift the console away from the public site and the
-   Flutter app, which all read the same source. */
+/*
+ * Generated from packages/tokens/tokens.json, which also emits the Dart the
+ * Flutter app uses. Editing the generated file is pointless — it is rewritten
+ * by `npm run build` in that package, and CI checks the committed output.
+ *
+ * Order matters: fonts, then tokens, then the base layer that uses them.
+ */
+@use '../../../packages/tokens/fonts/fonts.css';
 @use '../../../packages/tokens/dist/tokens.css';
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html {
-  color-scheme: light;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-base);
-  line-height: 1.5;
-  color: var(--color-neutral-900);
-  background: var(--color-neutral-50);
-  -webkit-font-smoothing: antialiased;
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-brand-500);
-  outline-offset: 2px;
-}
+@use '../../../packages/ui/styles/base.css';
