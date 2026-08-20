@@ -157,6 +157,42 @@ class OrganizerApiTest extends TestCase
             ->assertJsonPath('data.0.slug', 'afro-fest');
     }
 
+    public function test_one_event_comes_back_with_everything_the_edit_form_changes(): void
+    {
+        $this->event->update([
+            'description' => 'Afrobeats until 3am.',
+            'ends_at' => $this->event->starts_at->copy()->addHours(6),
+            'category' => 'Music',
+            'min_age' => 19,
+        ]);
+
+        $this->asOrganizer($this->owner);
+
+        // Every field the form can send has to come back, or editing one thing
+        // silently blanks the rest on save.
+        $this->getJson("/api/organizer/events/{$this->event->id}")
+            ->assertOk()
+            ->assertJsonPath('title', 'Afro Fest')
+            ->assertJsonPath('description', 'Afrobeats until 3am.')
+            ->assertJsonPath('city', 'Toronto')
+            ->assertJsonPath('subdivision', 'ON')
+            ->assertJsonPath('country', 'CA')
+            ->assertJsonPath('timezone', 'America/Toronto')
+            ->assertJsonPath('category', 'Music')
+            ->assertJsonPath('min_age', 19)
+            ->assertJsonStructure(['starts_at', 'ends_at', 'currency', 'slug', 'status']);
+    }
+
+    public function test_another_organizations_event_cannot_even_be_read(): void
+    {
+        $otherOrg = Organization::create(['name' => 'Someone Else', 'slug' => 'someone-else']);
+        $this->asOrganizer($this->member(Role::Owner, $otherOrg));
+
+        // Reading is a smaller thing than editing and still not theirs — an
+        // unpublished event's date and description are not public.
+        $this->getJson("/api/organizer/events/{$this->event->id}")->assertForbidden();
+    }
+
     public function test_an_organizer_cannot_edit_another_organizations_event(): void
     {
         $otherOrg = Organization::create(['name' => 'Someone Else', 'slug' => 'someone-else']);

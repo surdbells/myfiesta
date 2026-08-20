@@ -55,6 +55,41 @@ class EventController extends Controller
         ]);
     }
 
+    /**
+     * One event, in full.
+     *
+     * Separate from the list on purpose. A list carries what a list needs —
+     * title, date, counts — and an edit form needs every field it is allowed to
+     * change. Widening the list to serve the form would send description and
+     * address for thirty events to render a table that shows neither.
+     */
+    public function show(Request $request, Event $event): JsonResponse
+    {
+        $this->authorize('view', $event);
+
+        return response()->json([
+            'id' => $event->id,
+            'slug' => $event->slug,
+            'title' => $event->title,
+            'kind' => $event->kind,
+            'status' => $event->status,
+            'description' => $event->description,
+            'currency' => $event->currency,
+            'starts_at' => $event->starts_at,
+            'ends_at' => $event->ends_at,
+            'timezone' => $event->timezone,
+            'city' => $event->city,
+            'subdivision' => $event->subdivision,
+            'country' => $event->country,
+            'category' => $event->category,
+            'min_age' => $event->min_age,
+            'id_required' => $event->id_required,
+            'poster_url' => $event->poster_path
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($event->poster_path)
+                : null,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

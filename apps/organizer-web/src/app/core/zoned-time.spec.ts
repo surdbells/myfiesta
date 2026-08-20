@@ -1,4 +1,4 @@
-import { describeZone, zonedWallClockToIso } from './zoned-time';
+import { describeZone, isoToZonedWallClock, zonedWallClockToIso } from './zoned-time';
 
 /**
  * The conversion an organizer never sees and entirely depends on.
@@ -61,6 +61,44 @@ describe('zonedWallClockToIso', () => {
     // nobody chose.
     expect(zonedWallClockToIso('', 'UTC')).toBeNull();
     expect(zonedWallClockToIso('tomorrow night', 'UTC')).toBeNull();
+  });
+});
+
+describe('isoToZonedWallClock', () => {
+  it('shows the organizer the time they originally typed', () => {
+    // 01:00 UTC on the 20th is 9pm on the 19th in Toronto, which is what they
+    // entered. An edit form showing 1am would move the event on save.
+    expect(isoToZonedWallClock('2026-10-20T01:00:00.000Z', 'America/Toronto')).toBe(
+      '2026-10-19T21:00',
+    );
+  });
+
+  it('uses the offset in force on the event date', () => {
+    expect(isoToZonedWallClock('2027-01-20T02:00:00.000Z', 'America/Toronto')).toBe(
+      '2027-01-19T21:00',
+    );
+  });
+
+  it('round-trips without moving the event', () => {
+    // The property that matters: loading an edit form and saving it unchanged
+    // must leave the instant exactly where it was.
+    for (const zone of ['America/Toronto', 'Africa/Lagos', 'UTC']) {
+      for (const iso of ['2026-10-20T01:00:00.000Z', '2027-01-20T02:00:00.000Z']) {
+        const wall = isoToZonedWallClock(iso, zone)!;
+        expect(zonedWallClockToIso(wall, zone)).toBe(iso);
+      }
+    }
+  });
+
+  it('handles midnight without producing hour 24', () => {
+    const wall = isoToZonedWallClock('2026-10-19T23:00:00.000Z', 'Africa/Lagos');
+
+    // Some runtimes report midnight as 24:00, which no input will accept.
+    expect(wall).toBe('2026-10-20T00:00');
+  });
+
+  it('returns null rather than a wrong date for unusable input', () => {
+    expect(isoToZonedWallClock('not a date', 'UTC')).toBeNull();
   });
 });
 

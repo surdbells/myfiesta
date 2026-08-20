@@ -246,10 +246,12 @@ button:disabled {
 }
 
 .jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin-top: var(--space-5);
 }
 .jump a {
-  display: inline-block;
   padding: var(--space-3) var(--space-4);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);

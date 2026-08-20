@@ -73,6 +73,45 @@ export function zonedWallClockToIso(local: string, timeZone: string): string | n
   return Number.isNaN(second.getTime()) ? null : second.toISOString();
 }
 
+/**
+ * The reverse: an instant back to the wall clock a datetime-local input wants.
+ *
+ * Needed to edit an event. The stored value is a UTC instant and the organizer
+ * has to see the time they originally typed — 9pm at their venue, not the same
+ * moment expressed in the browser's zone or in UTC. Loading an edit form that
+ * silently shifts the time by five hours, and then saving it, moves the event.
+ *
+ * @returns "2026-10-19T21:00", or null if the instant cannot be read
+ */
+export function isoToZonedWallClock(iso: string, timeZone: string): string | null {
+  const instant = new Date(iso);
+
+  if (Number.isNaN(instant.getTime())) {
+    return null;
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(instant);
+
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+
+    // Midnight comes back as hour 24 in some runtimes, which no input accepts.
+    const hour = get('hour') === '24' ? '00' : get('hour');
+
+    return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}`;
+  } catch {
+    return null;
+  }
+}
+
 /** How a zone reads right now, for a picker: "Toronto — EDT". */
 export function describeZone(timeZone: string, on: Date = new Date()): string {
   const city = timeZone.split('/').pop()?.replace(/_/g, ' ') ?? timeZone;

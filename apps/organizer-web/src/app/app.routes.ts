@@ -18,6 +18,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-create').then((m) => m.EventCreate),
   },
   {
+    path: 'events/:id/edit',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/events/event-edit').then((m) => m.EventEdit),
+  },
+  {
     path: 'events/:id/guests',
     canActivate: [requireSession],
     loadComponent: () => import('./features/events/event-guests').then((m) => m.EventGuests),

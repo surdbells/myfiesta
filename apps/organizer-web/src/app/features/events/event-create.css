@@ -123,3 +123,34 @@ textarea:focus-visible {
   background: color-mix(in srgb, var(--color-semantic-danger) 8%, transparent);
   border-radius: var(--radius-md);
 }
+
+/* Shared with the edit form. */
+.actions { display: flex; align-items: center; gap: var(--space-4); }
+
+.actions .link {
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.notice {
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-semantic-success);
+  background: color-mix(in srgb, var(--color-semantic-success) 10%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.muted { color: var(--color-neutral-600); }
+
+code {
+  padding: 1px 5px;
+  font-size: 0.9em;
+  background: var(--color-neutral-100);
+  border-radius: var(--radius-sm);
+}

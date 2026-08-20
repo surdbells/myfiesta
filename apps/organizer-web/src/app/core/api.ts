@@ -9,6 +9,7 @@ import {
   GuestPage,
   IssueResult,
   OrganizerEvent,
+  OrganizerEventDetail,
   PromoCode,
   Session,
   TicketType,
@@ -78,6 +79,10 @@ export class Api {
 
   events(): Observable<{ data: OrganizerEvent[] }> {
     return this.http.get<{ data: OrganizerEvent[] }>(`${this.base}/api/organizer/events`);
+  }
+
+  event(id: string): Observable<OrganizerEventDetail> {
+    return this.http.get<OrganizerEventDetail>(`${this.base}/api/organizer/events/${id}`);
   }
 
   createEvent(body: Record<string, unknown>): Observable<unknown> {

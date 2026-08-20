@@ -71,6 +71,9 @@
 
   <nav class="jump">
     <a [routerLink]="['/events', eventId, 'guests']">Guests and check-in →</a>
+    @if (session.canEditEvents()) {
+      <a [routerLink]="['/events', eventId, 'edit']">Edit details →</a>
+    }
   </nav>
 
   <h2 class="section">Tickets</h2>

@@ -1,0 +1,166 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (event(); as ev) {
+  <h1>Edit event</h1>
+  <p class="sub">
+    <!-- Said once, plainly, rather than as two disabled inputs the organizer
+         would otherwise spend time trying to change. -->
+    Sold in {{ ev.currency }} at <code>/{{ ev.slug }}</code>. Neither can change —
+    orders are denominated in that currency, and the link is already out there.
+  </p>
+
+  @if (notice(); as message) {
+    <p class="notice" role="status">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  <form (ngSubmit)="submit()">
+    <div class="field">
+      <label for="title">What is it called?</label>
+      <input
+        id="title"
+        name="title"
+        required
+        maxlength="160"
+        [ngModel]="form().title"
+        (ngModelChange)="form.set({ ...form(), title: $event })"
+      />
+    </div>
+
+    <div class="field">
+      <label for="description">Description</label>
+      <textarea
+        id="description"
+        name="description"
+        rows="3"
+        maxlength="8000"
+        [ngModel]="form().description"
+        (ngModelChange)="form.set({ ...form(), description: $event })"
+      ></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="country">Country</label>
+        <select
+          id="country"
+          name="country"
+          [ngModel]="form().country"
+          (ngModelChange)="form.set({ ...form(), country: $event })"
+        >
+          <option value="CA">Canada</option>
+          <option value="NG">Nigeria</option>
+        </select>
+      </div>
+
+      @if (needsProvince()) {
+        <div class="field">
+          <label for="subdivision">Province</label>
+          <select
+            id="subdivision"
+            name="subdivision"
+            [ngModel]="form().subdivision"
+            (ngModelChange)="form.set({ ...form(), subdivision: $event })"
+          >
+            @for (province of provinces; track province.code) {
+              <option [value]="province.code">{{ province.name }}</option>
+            }
+          </select>
+          <p class="help">Sets the sales tax charged at checkout.</p>
+        </div>
+      }
+
+      <div class="field">
+        <label for="city">City</label>
+        <input
+          id="city"
+          name="city"
+          required
+          [ngModel]="form().city"
+          (ngModelChange)="form.set({ ...form(), city: $event })"
+        />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="timezone">Time zone</label>
+        <select
+          id="timezone"
+          name="timezone"
+          [ngModel]="form().timezone"
+          (ngModelChange)="form.set({ ...form(), timezone: $event })"
+        >
+          @for (zone of zones(); track zone) {
+            <option [value]="zone">{{ describe(zone) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="startsAt">Starts</label>
+        <input
+          id="startsAt"
+          name="startsAt"
+          type="datetime-local"
+          required
+          [ngModel]="form().startsAt"
+          (ngModelChange)="form.set({ ...form(), startsAt: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="endsAt">Ends <span class="optional">optional</span></label>
+        <input
+          id="endsAt"
+          name="endsAt"
+          type="datetime-local"
+          [ngModel]="form().endsAt"
+          (ngModelChange)="form.set({ ...form(), endsAt: $event })"
+        />
+      </div>
+    </div>
+
+    @if (preview(); as when) {
+      <p class="preview">Doors: <strong>{{ when }}</strong></p>
+    }
+
+    <div class="row">
+      <div class="field">
+        <label for="category">Category <span class="optional">optional</span></label>
+        <input
+          id="category"
+          name="category"
+          [ngModel]="form().category"
+          (ngModelChange)="form.set({ ...form(), category: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="minAge">Minimum age <span class="optional">optional</span></label>
+        <input
+          id="minAge"
+          name="minAge"
+          type="number"
+          min="0"
+          max="99"
+          [ngModel]="form().minAge"
+          (ngModelChange)="form.set({ ...form(), minAge: $event })"
+        />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="cta" type="submit" [disabled]="saving()">
+        @if (saving()) { Saving… } @else { Save changes }
+      </button>
+      <button class="link" type="button" (click)="done()">Done</button>
+    </div>
+  </form>
+} @else {
+  <p class="error">That event could not be found.</p>
+}

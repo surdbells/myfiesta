@@ -47,6 +47,25 @@ export interface OrganizerEvent {
   checked_in: number;
 }
 
+/**
+ * One event in full, as the edit form needs it.
+ *
+ * Deliberately not the same shape as the list. A list row shows a title, a date
+ * and two counts; a form has to round-trip every field it may change, and
+ * conflating the two would send a description and an address for every row of a
+ * table that displays neither.
+ */
+export interface OrganizerEventDetail extends OrganizerEvent {
+  description: string | null;
+  ends_at: string | null;
+  subdivision: string | null;
+  country: string;
+  category: string | null;
+  min_age: number | null;
+  id_required: boolean;
+  poster_url: string | null;
+}
+
 export interface TicketType {
   id: string;
   name: string;
