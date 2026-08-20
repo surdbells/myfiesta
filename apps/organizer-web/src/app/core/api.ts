@@ -1,10 +1,18 @@
-import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpParams } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { EventSummary, OrganizerEvent, Session, TicketType } from './api.types';
+import {
+  EventSummary,
+  GuestPage,
+  IssueResult,
+  OrganizerEvent,
+  PromoCode,
+  Session,
+  TicketType,
+} from './api.types';
 import { SessionStore } from './session';
 
 /**
@@ -117,6 +125,43 @@ export class Api {
   deleteTicketType(eventId: string, id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
+    );
+  }
+
+  // --- issuing by hand ----------------------------------------------------
+
+  issueTicket(eventId: string, body: Record<string, unknown>): Observable<IssueResult> {
+    return this.http.post<IssueResult>(
+      `${this.base}/api/organizer/events/${eventId}/tickets`,
+      body,
+    );
+  }
+
+  // --- guests -------------------------------------------------------------
+
+  guests(eventId: string, search?: string): Observable<GuestPage> {
+    const params = search ? new HttpParams().set('q', search) : undefined;
+
+    return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
+      params,
+    });
+  }
+
+  // --- codes --------------------------------------------------------------
+
+  codes(eventId: string): Observable<{ data: PromoCode[] }> {
+    return this.http.get<{ data: PromoCode[] }>(
+      `${this.base}/api/organizer/events/${eventId}/codes`,
+    );
+  }
+
+  createCode(eventId: string, body: Record<string, unknown>): Observable<PromoCode> {
+    return this.http.post<PromoCode>(`${this.base}/api/organizer/events/${eventId}/codes`, body);
+  }
+
+  deactivateCode(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/codes/${id}`,
     );
   }
 }

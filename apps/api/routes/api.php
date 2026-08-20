@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\GuestController;
+use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +90,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::delete('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'destroy']);
 
         Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
+        Route::post('/events/{event:id}/tickets', [IssuedTicketController::class, 'store']);
 
         Route::get('/events/{event:id}/codes', [CodeController::class, 'index']);
         Route::post('/events/{event:id}/codes', [CodeController::class, 'store']);

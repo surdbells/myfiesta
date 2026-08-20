@@ -1,0 +1,166 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <h1>Guests</h1>
+
+  <!-- The number an organizer is actually watching on the night. -->
+  <div class="arrivals">
+    <span class="figure"
+      >{{ arrived() }} <span class="of">of {{ total() }}</span></span
+    >
+    <span class="label">arrived</span>
+    @if (arrivalRate(); as rate) {
+      <span class="bar-track"><i [style.width.%]="rate"></i></span>
+    }
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (session.canEditEvents()) {
+  <form class="issue" (ngSubmit)="submitIssue()">
+    <h2>Add someone to the list</h2>
+    <p class="help">
+      Comps, guest list, cash at the door. These are ordinary tickets — they scan the same way and
+      count against the room.
+    </p>
+
+    <div class="row">
+      <div class="field">
+        <label for="gname">Name</label>
+        <input
+          id="gname"
+          name="gname"
+          required
+          [ngModel]="issue().name"
+          (ngModelChange)="issue.set({ ...issue(), name: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="gemail">Email</label>
+        <input
+          id="gemail"
+          name="gemail"
+          type="email"
+          required
+          [ngModel]="issue().email"
+          (ngModelChange)="issue.set({ ...issue(), email: $event })"
+        />
+      </div>
+
+      <div class="field">
+        <label for="gtype">Ticket</label>
+        <select
+          id="gtype"
+          name="gtype"
+          [ngModel]="issue().ticket_type_id"
+          (ngModelChange)="issue.set({ ...issue(), ticket_type_id: $event })"
+        >
+          @for (type of ticketTypes(); track type.id) {
+            <option [value]="type.id">
+              {{ type.name }}
+              @if (type.admits > 1) {
+                · admits {{ type.admits }}
+              }
+            </option>
+          }
+        </select>
+      </div>
+
+      <div class="field narrow">
+        <label for="gqty">How many</label>
+        <input
+          id="gqty"
+          name="gqty"
+          type="number"
+          min="1"
+          max="50"
+          [ngModel]="issue().quantity"
+          (ngModelChange)="issue.set({ ...issue(), quantity: $event })"
+        />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="gnote">Note <span class="optional">included in the email</span></label>
+      <input
+        id="gnote"
+        name="gnote"
+        maxlength="255"
+        placeholder="Ask for Ade at the door"
+        [ngModel]="issue().note"
+        (ngModelChange)="issue.set({ ...issue(), note: $event })"
+      />
+    </div>
+
+    <label class="check">
+      <input
+        type="checkbox"
+        name="gsend"
+        [ngModel]="issue().send_email"
+        (ngModelChange)="issue.set({ ...issue(), send_email: $event })"
+      />
+      <!-- Off is a real choice: forty names should not fire forty emails, and a
+           comp handed over in person needs none. -->
+      Email the ticket now
+    </label>
+
+    <button class="cta" type="submit" [disabled]="issuing()">
+      @if (issuing()) {
+        Issuing…
+      } @else {
+        Issue ticket
+      }
+    </button>
+  </form>
+}
+
+<form class="search" (ngSubmit)="load()">
+  <label for="q" class="sr-only">Search guests</label>
+  <input
+    id="q"
+    name="q"
+    type="search"
+    placeholder="Search by name or email"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+  />
+  <button type="submit">Search</button>
+</form>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (guests().length === 0) {
+  <p class="muted">
+    @if (search()) {
+      Nobody matches "{{ search() }}".
+    } @else {
+      Nobody on the list yet.
+    }
+  </p>
+} @else {
+  <ul class="list">
+    @for (guest of guests(); track guest.id) {
+      <li [class.in]="guest.checked_in">
+        <span class="who">
+          <span class="name">{{ guest.name }}</span>
+          <span class="email">{{ guest.email }}</span>
+        </span>
+        <span class="type">{{ guest.ticket_type }}</span>
+        <span class="state">
+          @if (guest.checked_in) {
+            Arrived
+          } @else {
+            Expected
+          }
+        </span>
+      </li>
+    }
+  </ul>
+}

@@ -76,3 +76,44 @@ export interface EventSummary {
   tickets_issued: number;
   checked_in: number;
 }
+
+/** Tickets minted by hand: comps, guest list, cash at the door. */
+export interface IssueResult {
+  message: string;
+  tickets: { id: string; code: string; admits: number; holder_name: string }[];
+}
+
+export interface Guest {
+  id: string;
+  name: string;
+  email: string;
+  ticket_type: string | null;
+  checked_in: boolean;
+  checked_in_at: string | null;
+}
+
+export interface GuestPage {
+  data: Guest[];
+  meta: { total: number; checked_in: number; next: string | null };
+}
+
+/**
+ * One object covering discounts and promoter attribution, because in nightlife
+ * the discount code is how a promoter proves they drove the sale.
+ */
+export interface PromoCode {
+  id: string;
+  code: string;
+  label: string | null;
+  discount_type: 'percentage' | 'fixed' | null;
+  discount_value: number | null;
+  discount_currency: string | null;
+  ref_slug: string | null;
+  promoter_name: string | null;
+  redemption_count: number;
+  max_redemptions: number | null;
+  is_active: boolean;
+  event_scoped: boolean;
+  /** Whether it would actually work right now — the question being asked. */
+  usable: boolean;
+}

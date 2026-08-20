@@ -244,3 +244,20 @@ button:disabled {
   font-weight: var(--font-weight-regular);
   color: var(--color-neutral-400);
 }
+
+.jump {
+  margin-top: var(--space-5);
+}
+.jump a {
+  display: inline-block;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  color: var(--color-brand-700);
+  background: var(--color-brand-50);
+  border-radius: var(--radius-md);
+}
+.jump a:hover {
+  background: var(--color-brand-100);
+}

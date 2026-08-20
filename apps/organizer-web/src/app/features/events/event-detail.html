@@ -69,6 +69,10 @@
     </p>
   }
 
+  <nav class="jump">
+    <a [routerLink]="['/events', eventId, 'guests']">Guests and check-in →</a>
+  </nav>
+
   <h2 class="section">Tickets</h2>
 
   @if (ticketTypes().length === 0) {
