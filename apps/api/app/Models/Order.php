@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * An immutable record of what was charged.
@@ -25,6 +26,26 @@ class Order extends Model
     use HasFactory, HasUuids;
 
     protected $guarded = ['id'];
+
+    /**
+     * Every order gets the token its buyer will reach it by.
+     *
+     * Here rather than at the call site. The column is NOT NULL because a paid
+     * order whose buyer cannot open their tickets is not a state worth being
+     * able to represent — and making each caller remember is how one of them
+     * eventually does not. Twenty-four tests found that out immediately, which
+     * is a cheap version of a checkout doing it in production.
+     *
+     * Not derived from the id or the reference: it must confirm nothing about
+     * the order if it leaks, and it must survive both of those being printed
+     * on something public.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $order) {
+            $order->access_token ??= Str::random(44);
+        });
+    }
 
     protected function casts(): array
     {

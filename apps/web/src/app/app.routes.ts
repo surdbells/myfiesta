@@ -26,6 +26,21 @@ export const routes: Routes = [
     loadComponent: () => import('./features/orders/order-status').then((m) => m.OrderStatus),
   },
   {
+    /*
+     * The tickets somebody bought, reached from their confirmation email.
+     *
+     * Above the wildcard for the same reason as the order reference — below it,
+     * the token is read as an event slug and every buyer following their own
+     * link lands on "event not found".
+     *
+     * The token in the path is the whole credential: guest checkout is the
+     * primary path, so most people holding a ticket have no account to sign in
+     * with.
+     */
+    path: 'tickets/:token',
+    loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets),
+  },
+  {
     path: ':slug',
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
   },

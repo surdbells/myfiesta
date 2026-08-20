@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
+use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +31,15 @@ Route::get('/health', fn () => ['status' => 'ok']);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/orders/{reference}', OrderStatusController::class);
+
+/*
+ * A buyer's tickets, with the QR the door reads.
+ *
+ * Unauthenticated on purpose: guest checkout is the primary path, so most
+ * people holding a ticket have no account, and the random token in the link is
+ * the whole credential.
+ */
+Route::get('/tickets/{token}', TicketAccessController::class)->middleware('throttle:60,1');
 
 Route::middleware('throttle:120,1')
     ->post('/events/{slug}/quote', [CheckoutController::class, 'quote']);

@@ -2,7 +2,15 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { API_BASE_URL } from './api-base';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { EventDetail, EventSummary, OrderCreated, OrderStatus, Page, Quote } from './api.types';
+import {
+  EventDetail,
+  EventSummary,
+  OrderCreated,
+  OrderStatus,
+  Page,
+  Quote,
+  TicketAccess,
+} from './api.types';
 
 export interface EventQuery {
   q?: string;
@@ -76,5 +84,15 @@ export class Api {
    */
   orderStatus(reference: string): Observable<OrderStatus> {
     return this.http.get<OrderStatus>(`${this.base}/api/orders/${reference}`);
+  }
+
+  /**
+   * The tickets behind an emailed link.
+   *
+   * The token is the whole credential — there is no account to sign into,
+   * because guest checkout is how most people buy.
+   */
+  ticketsByToken(token: string): Observable<TicketAccess> {
+    return this.http.get<TicketAccess>(`${this.base}/api/tickets/${token}`);
   }
 }

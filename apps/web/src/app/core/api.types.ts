@@ -133,3 +133,37 @@ export interface OrderStatus {
   ticket_count: number;
   event: { slug: string; title: string; starts_at: string; timezone: string };
 }
+
+/** One ticket as its holder sees it, with the symbol a door reads. */
+export interface HeldTicket {
+  id: string;
+  code: string;
+  type: string | null;
+  holder: string | null;
+  status: string;
+  /** How many people this one lets in — a Couple admits 2, a Table of 5 admits 5. */
+  admits: number;
+  /** How many of them are already inside. A table can arrive in two groups. */
+  admitted: number;
+  /** SVG markup, drawn by the server from the ticket code. */
+  qr: string;
+}
+
+export interface TicketAccess {
+  reference: string;
+  status: string;
+  buyer_name: string | null;
+  event: {
+    slug: string;
+    title: string;
+    starts_at: string;
+    timezone: string;
+    venue: string | null;
+    address: string | null;
+    city: string;
+    min_age: number | null;
+    id_required: boolean;
+    organizer: string;
+  };
+  tickets: HeldTicket[];
+}

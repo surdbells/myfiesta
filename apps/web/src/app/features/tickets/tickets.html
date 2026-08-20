@@ -1,0 +1,85 @@
+@if (loading()) {
+  <section class="wrap"><p class="muted" role="status">Finding your tickets…</p></section>
+} @else if (notFound()) {
+  <section class="wrap">
+    <h1>We cannot find those tickets</h1>
+    <p class="muted">
+      Check the link in your confirmation email — some email apps cut long links
+      in half. Opening it from the message itself usually works.
+    </p>
+  </section>
+} @else if (order(); as o) {
+  <section class="wrap" (click)="requestFullBrightness()">
+    <header>
+      <p class="eyebrow">{{ o.event.organizer }}</p>
+      <h1>{{ o.event.title }}</h1>
+      <p class="when">{{ when(o.event.starts_at, o.event.timezone) }}</p>
+      <p class="where">
+        {{ o.event.venue }}
+        @if (o.event.address) {
+          <span class="muted">· {{ o.event.address }}</span>
+        }
+      </p>
+      @if (o.event.min_age) {
+        <p class="gate">
+          {{ o.event.min_age }}+ · photo ID
+          {{ o.event.id_required ? 'required' : 'may be requested' }}
+        </p>
+      }
+    </header>
+
+    @if (o.tickets.length === 0) {
+      <p class="muted">There are no live tickets on this order.</p>
+    } @else {
+      <ul class="tickets">
+        @for (ticket of o.tickets; track ticket.id) {
+          <li class="ticket" [class.used]="ticket.admitted >= ticket.admits">
+            <!--
+              The QR is the whole point of the screen, so it leads. Everything
+              below it is what somebody checks after the scanner has beeped.
+            -->
+            <div class="qr" [innerHTML]="qr(ticket.qr)"></div>
+
+            <div class="detail">
+              <p class="type">{{ ticket.type }}</p>
+              @if (ticket.holder) {
+                <p class="holder">{{ ticket.holder }}</p>
+              }
+
+              <!--
+                Shown in the same grouping the code is printed in, because it
+                gets read aloud when a scanner will not focus.
+              -->
+              <p class="code">{{ ticket.code }}</p>
+
+              @if (ticket.admits > 1) {
+                <p class="admits">
+                  Admits {{ ticket.admits }}
+                  @if (ticket.admitted > 0) {
+                    · {{ ticket.admitted }} already in
+                  }
+                </p>
+              }
+
+              @if (ticket.admitted >= ticket.admits) {
+                <p class="state">Checked in</p>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+
+      <p class="hint">
+        Show this screen at the door. Turn your brightness up — a dim screen is
+        the most common reason a scanner will not read a ticket.
+      </p>
+    }
+
+    <dl class="summary">
+      <dt>Order</dt>
+      <dd><code>{{ o.reference }}</code></dd>
+    </dl>
+
+    <a class="back" [routerLink]="['/', o.event.slug]">← See the event</a>
+  </section>
+}

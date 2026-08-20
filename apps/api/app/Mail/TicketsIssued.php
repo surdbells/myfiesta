@@ -40,14 +40,22 @@ class TicketsIssued extends Mailable implements ShouldQueue
                 'order' => $this->order,
                 'event' => $this->order->event,
                 'tickets' => $this->order->tickets,
-                // Signed and expiring. A guest with no account still needs a
-                // way back to their tickets, and a guessable URL is how the
-                // previous platform let anyone read anyone else's.
-                'url' => URL::temporarySignedRoute(
-                    'orders.show',
-                    now()->addDays(90),
-                    ['order' => $this->order->id],
-                ),
+                /*
+                 * The ticket page on the public site, carrying the order's own
+                 * token.
+                 *
+                 * This used to be a signed URL into the API, which returned
+                 * JSON — so a buyer following it got a wall of braces instead
+                 * of their ticket. A signed URL also could not be moved to the
+                 * site, because the signature only validates against the exact
+                 * URL it was computed for.
+                 *
+                 * And it no longer expires. The previous platform's links went
+                 * stale before some of its events had happened, and a ticket
+                 * you cannot open on the night is not a ticket.
+                 */
+                'url' => rtrim(config('app.public_url'), '/')
+                    .'/tickets/'.$this->order->access_token,
             ],
         );
     }
