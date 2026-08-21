@@ -20,7 +20,7 @@ class TicketTypeController extends Controller
 {
     public function index(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('update', $event);
+        $this->authorize('manageTickets', $event);
 
         return response()->json([
             'data' => TicketTypeResource::collection(
@@ -31,7 +31,7 @@ class TicketTypeController extends Controller
 
     public function store(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('update', $event);
+        $this->authorize('manageTickets', $event);
 
         $data = $this->validated($request);
 
@@ -42,7 +42,7 @@ class TicketTypeController extends Controller
 
     public function update(Request $request, Event $event, TicketType $ticketType): JsonResponse
     {
-        $this->authorize('update', $event);
+        $this->authorize('manageTickets', $event);
 
         abort_unless($ticketType->event_id === $event->id, 404);
 
@@ -66,7 +66,7 @@ class TicketTypeController extends Controller
      */
     public function destroy(Request $request, Event $event, TicketType $ticketType): JsonResponse
     {
-        $this->authorize('update', $event);
+        $this->authorize('manageTickets', $event);
 
         abort_unless($ticketType->event_id === $event->id, 404);
 

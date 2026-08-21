@@ -130,6 +130,11 @@ class AccountController extends Controller
                 'name' => $o->name,
                 'slug' => $o->slug,
                 'role' => $o->pivot->role,
+                // Same shape as sign-in, so a session started by registering
+                // and one started by signing in are indistinguishable to the
+                // console. A payload that differs by entry point is a bug
+                // waiting for whichever path is tested less.
+                'permissions' => $user->permissionsIn($o->id),
             ])->values(),
         ], 201);
     }

@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { Membership, Session } from './api.types';
+import { Membership, Permission, Session } from './api.types';
 
 const STORAGE_KEY = 'myfiesta.organizer.session';
 
@@ -43,18 +43,41 @@ export class SessionStore {
     return orgs.find((o) => o.id === this.selectedId()) ?? orgs[0];
   });
 
-  /** What this member may do here. Mirrors the policies the API enforces. */
-  readonly canEditEvents = computed(() => this.hasRole('owner', 'manager'));
-  readonly canSeeMoney = computed(() => this.hasRole('owner', 'finance'));
-  // Reaching attendees, and the codes that bring them in. Marketing is here and
-  // nowhere else — writing a promo code is their job, minting tickets is not.
-  readonly canMessage = computed(() => this.hasRole('owner', 'manager', 'marketing'));
+  /**
+   * What this member may do here, as decided by the server.
+   *
+   * This used to derive capability from the role, in parallel with the policies
+   * on the API — and the two had drifted. The API granted sales figures to
+   * Owner, Manager and Finance; this file granted them to owner and finance, so
+   * a Manager saw no revenue on an event they were entitled to. Nothing tested
+   * the two against each other, so it was silent.
+   *
+   * The server now sends the resolved permission list with the session. This
+   * checks membership of that list and knows nothing about what a role implies.
+   * There is no second copy left to drift.
+   */
+  readonly permissions = computed<string[]>(() => this.current()?.permissions ?? []);
 
-  private hasRole(...roles: Membership['role'][]): boolean {
-    const role = this.current()?.role;
-
-    return role !== undefined && roles.includes(role);
+  can(permission: Permission): boolean {
+    return this.permissions().includes(permission);
   }
+
+  /*
+   * Named capabilities, for readability at the call site.
+   *
+   * Each is a lookup, never a rule. Adding one here without the server granting
+   * it changes nothing, which is the property worth having.
+   */
+  readonly canEditEvents = computed(() => this.can('events.edit'));
+  readonly canSeeMoney = computed(() => this.can('money.view'));
+  readonly canMessage = computed(() => this.can('messages.send'));
+  readonly canManageCodes = computed(() => this.can('codes.manage'));
+  readonly canManageTickets = computed(() => this.can('tickets.manage'));
+  readonly canViewAttendees = computed(() => this.can('attendees.view'));
+  readonly canScan = computed(() => this.can('door.scan'));
+  readonly canRefund = computed(() => this.can('refunds.process'));
+  readonly canPublish = computed(() => this.can('events.publish'));
+  readonly canCancel = computed(() => this.can('events.cancel'));
 
   get token(): string | null {
     return this.state()?.token ?? null;
@@ -107,7 +130,23 @@ export class SessionStore {
     try {
       const raw = this.storage?.getItem(STORAGE_KEY);
 
-      return raw ? (JSON.parse(raw) as Session) : null;
+      if (!raw) return null;
+
+      const session = JSON.parse(raw) as Session;
+
+      /*
+       * A session stored before the server started sending permissions has no
+       * list to read, and an absent list resolves to "may do nothing" — a
+       * console that looks signed in and offers no actions at all.
+       *
+       * Discarded rather than patched up. Signing in again is a small cost and
+       * produces a session in the shape the rest of this file assumes; guessing
+       * the permissions locally would reintroduce exactly the duplicated rule
+       * this change removed.
+       */
+      const complete = session.organizations.every((o) => Array.isArray(o.permissions));
+
+      return complete ? session : null;
     } catch {
       return null;
     }

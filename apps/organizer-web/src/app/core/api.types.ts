@@ -16,11 +16,35 @@ export interface Money {
 
 export type Role = 'owner' | 'manager' | 'finance' | 'marketing' | 'door';
 
+/**
+ * Every capability the platform recognises.
+ *
+ * Mirrors App\Enums\Permission on the API, which is the authority. This type
+ * exists so a typo at a call site is a compile error rather than a silently
+ * false permission check.
+ */
+export type Permission =
+  | "events.view"
+  | "events.create"
+  | "events.edit"
+  | "events.publish"
+  | "events.cancel"
+  | "events.delete"
+  | "tickets.manage"
+  | "codes.manage"
+  | "attendees.view"
+  | "door.scan"
+  | "money.view"
+  | "refunds.process"
+  | "messages.send";
+
 export interface Membership {
   id: string;
   name: string;
   slug: string;
   role: Role;
+  /** Resolved by the server. The console reads this and never derives it. */
+  permissions: Permission[];
   verified?: boolean;
 }
 

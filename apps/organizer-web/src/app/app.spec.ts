@@ -3,14 +3,45 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { SessionStore } from './core/session';
-import { Membership, Session } from './core/api.types';
+import { Membership, Permission, Session } from './core/api.types';
+
+/**
+ * The permissions the API resolves for each role.
+ *
+ * Mirrored here only so a fixture looks like a real session. The console never
+ * derives these — it reads what the server sent — and PermissionAuthorityTest
+ * on the API side is what pins the actual table.
+ */
+const PERMISSIONS: Record<Membership['role'], Permission[]> = {
+  owner: [
+    'events.view', 'events.create', 'events.edit', 'events.publish',
+    'events.cancel', 'events.delete', 'tickets.manage', 'codes.manage',
+    'attendees.view', 'door.scan', 'money.view', 'refunds.process', 'messages.send',
+  ],
+  manager: [
+    'events.view', 'events.create', 'events.edit', 'events.publish',
+    'tickets.manage', 'codes.manage', 'attendees.view', 'door.scan',
+    'money.view', 'refunds.process', 'messages.send',
+  ],
+  finance: ['events.view', 'money.view', 'refunds.process'],
+  marketing: ['events.view', 'attendees.view', 'codes.manage', 'messages.send'],
+  door: ['events.view', 'door.scan'],
+};
 
 function sessionWith(role: Membership['role']): Session {
   return {
     token: 'test-token',
     user: { name: 'Ada Okafor', email: 'ada@example.test' },
     abilities: ['attendee', 'organizer'],
-    organizations: [{ id: 'org-1', name: 'Lagos Nights', slug: 'lagos-nights', role }],
+    organizations: [
+      {
+        id: 'org-1',
+        name: 'Lagos Nights',
+        slug: 'lagos-nights',
+        role,
+        permissions: PERMISSIONS[role],
+      },
+    ],
   };
 }
 

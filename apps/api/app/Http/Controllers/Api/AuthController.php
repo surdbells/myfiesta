@@ -79,6 +79,10 @@ class AuthController extends Controller
                 'name' => $o->name,
                 'slug' => $o->slug,
                 'role' => $o->pivot->role,
+                // The resolved capability set. The client mirrors this rather
+                // than deriving it from the role a second time — which is how
+                // the two drifted before.
+                'permissions' => $user->permissionsIn($o->id),
             ])->values(),
         ]);
     }
@@ -122,6 +126,10 @@ class AuthController extends Controller
                 'name' => $o->name,
                 'slug' => $o->slug,
                 'role' => $o->pivot->role,
+                // The resolved capability set. The client mirrors this rather
+                // than deriving it from the role a second time — which is how
+                // the two drifted before.
+                'permissions' => $user->permissionsIn($o->id),
                 'verified' => $o->verified_at !== null,
             ])->values(),
         ]);

@@ -20,7 +20,7 @@ class CodeController extends Controller
 {
     public function index(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('message', $event);
+        $this->authorize('manageCodes', $event);
 
         $codes = Code::query()
             ->where('organization_id', $event->organization_id)
@@ -35,7 +35,7 @@ class CodeController extends Controller
 
     public function store(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('message', $event);
+        $this->authorize('manageCodes', $event);
 
         $data = $request->validate([
             'code' => [
@@ -122,7 +122,7 @@ class CodeController extends Controller
      */
     public function destroy(Request $request, Event $event, Code $code): JsonResponse
     {
-        $this->authorize('message', $event);
+        $this->authorize('manageCodes', $event);
 
         abort_unless($code->organization_id === $event->organization_id, 404);
 

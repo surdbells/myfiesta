@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Permission;
 use App\Enums\PlatformRole;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
@@ -120,6 +121,51 @@ class User extends Authenticatable implements FilamentUser
         $held = $this->roleIn($organization);
 
         return $held !== null && in_array($held, $roles, true);
+    }
+
+    /**
+     * May this person do this thing, here.
+     *
+     * The check policies should be making. hasRoleIn() asks who somebody is and
+     * leaves each caller to decide what that implies — which is how the role
+     * list for a capability ended up written out at a dozen call sites and then
+     * a thirteenth time, differently, in the console.
+     *
+     * Several permissions may be passed; holding any one of them is enough.
+     */
+    public function hasPermissionIn(Organization|string $organization, Permission ...$permissions): bool
+    {
+        $role = $this->roleIn($organization);
+
+        if ($role === null) {
+            return false;
+        }
+
+        $held = Permission::forRole($role);
+
+        foreach ($permissions as $permission) {
+            if (in_array($permission, $held, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Everything this person may do in one organization.
+     *
+     * Sent to the client so it can hide what somebody cannot do without
+     * reimplementing the rules. The client mirrors this list; it never derives
+     * it.
+     *
+     * @return list<string>
+     */
+    public function permissionsIn(Organization|string $organization): array
+    {
+        $role = $this->roleIn($organization);
+
+        return $role === null ? [] : Permission::namesForRole($role);
     }
 
     /** Any staff role. Excludes door, which is not general access. */
