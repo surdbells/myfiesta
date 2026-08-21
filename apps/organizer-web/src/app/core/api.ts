@@ -5,7 +5,9 @@ import { Router } from '@angular/router';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import {
+  AttendeeMessage,
   EventSummary,
+  MessageAudience,
   GuestPage,
   IssueResult,
   EventImage,
@@ -322,6 +324,24 @@ export class Api {
     return this.http.post<{ gallery: EventImage[] }>(
       `${this.base}/api/organizer/events/${eventId}/images/order`,
       { ids },
+    );
+  }
+
+  // --- messaging ----------------------------------------------------------
+
+  messages(eventId: string): Observable<{ data: AttendeeMessage[]; audience: MessageAudience }> {
+    return this.http.get<{ data: AttendeeMessage[]; audience: MessageAudience }>(
+      `${this.base}/api/organizer/events/${eventId}/messages`,
+    );
+  }
+
+  sendMessage(
+    eventId: string,
+    body: { subject: string; body: string; important: boolean },
+  ): Observable<{ message: string; data: AttendeeMessage }> {
+    return this.http.post<{ message: string; data: AttendeeMessage }>(
+      `${this.base}/api/organizer/events/${eventId}/messages`,
+      body,
     );
   }
 

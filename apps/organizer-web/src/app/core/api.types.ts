@@ -244,3 +244,22 @@ export interface ScanResult {
     admitted_count: number;
   } | null;
 }
+
+/** One message an organizer sent to their ticket holders. */
+export interface AttendeeMessage {
+  id: string;
+  subject: string;
+  body: string;
+  /** Overrides an opt-out. For news somebody needs before they travel. */
+  important: boolean;
+  status: string;
+  sent_at: string | null;
+  recipients: number | null;
+  suppressed: number | null;
+}
+
+/** Who holds a ticket, and how many of them are reachable. */
+export interface MessageAudience {
+  holders: number;
+  reachable: number;
+}

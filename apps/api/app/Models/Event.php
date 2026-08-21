@@ -61,6 +61,11 @@ class Event extends Model
         return $this->belongsTo(EventSeries::class, 'series_id');
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(EventMessage::class)->latest('created_at');
+    }
+
     public function reminders(): HasMany
     {
         return $this->hasMany(EventReminder::class)->orderByDesc('offset_minutes');

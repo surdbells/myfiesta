@@ -120,6 +120,12 @@ return [
             'reason' => 'Only exists to stop a resumed send emailing somebody twice. Once the tickets are gone there is nothing left to send.',
         ],
 
+        'event_message_deliveries' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'Same job as reminder_deliveries: it stops a resumed send writing to the same person twice, and has no value once their tickets are gone.',
+        ],
+
         /*
          * Invites+ guests.
          *

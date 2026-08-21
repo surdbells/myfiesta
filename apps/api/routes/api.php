@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventControll
 use App\Http\Controllers\Api\Organizer\EventImageController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
+use App\Http\Controllers\Api\Organizer\MessageController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
@@ -141,6 +142,9 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
 
         Route::get('/events/{event:id}/orders', [RefundController::class, 'index']);
         Route::post('/events/{event:id}/orders/{order:id}/refunds', [RefundController::class, 'store']);
+
+        Route::get('/events/{event:id}/messages', [MessageController::class, 'index']);
+        Route::post('/events/{event:id}/messages', [MessageController::class, 'store']);
 
         Route::get('/events/{event:id}/codes', [CodeController::class, 'index']);
         Route::post('/events/{event:id}/codes', [CodeController::class, 'store']);

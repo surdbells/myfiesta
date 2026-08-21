@@ -1,0 +1,124 @@
+<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
+
+<header class="bar">
+  <div>
+    <h1>Message ticket holders</h1>
+    <p class="sub">
+      Sent from myFiesta with your name on it, so it lands in an inbox rather
+      than a spam folder. Replies come back to you.
+    </p>
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (session.canMessage()) {
+  <form class="compose" (ngSubmit)="submit()">
+    <div class="field">
+      <label for="subject">Subject</label>
+      <input
+        id="subject"
+        name="subject"
+        maxlength="160"
+        required
+        placeholder="Doors are opening an hour earlier"
+        [ngModel]="subject()"
+        (ngModelChange)="subject.set($event)"
+      />
+    </div>
+
+    <div class="field">
+      <label for="body">Message</label>
+      <textarea
+        id="body"
+        name="body"
+        rows="6"
+        maxlength="4000"
+        required
+        [ngModel]="body()"
+        (ngModelChange)="body.set($event)"
+      ></textarea>
+      <p class="help">
+        The event name, date and venue are added automatically — you do not need
+        to repeat them.
+      </p>
+    </div>
+
+    <!--
+      Named for what it does rather than "high priority". Somebody choosing this
+      is choosing to email people who asked not to be emailed, and the label is
+      the only place that is made plain.
+    -->
+    <label class="check">
+      <input
+        type="checkbox"
+        name="important"
+        [ngModel]="important()"
+        (ngModelChange)="important.set($event)"
+      />
+      They need this before they travel — send even to people who turned emails off
+    </label>
+
+    <div class="reach">
+      <p>
+        <strong>{{ willReach() }}</strong>
+        {{ willReach() === 1 ? 'person' : 'people' }} will get this.
+      </p>
+      @if (suppressed() > 0 && !important()) {
+        <p class="muted">
+          {{ suppressed() }} of the {{ audience().holders }} holding tickets have
+          turned event emails off.
+        </p>
+      } @else if (suppressed() > 0 && important()) {
+        <p class="warn">
+          Includes {{ suppressed() }} who turned event emails off. Only do this
+          when not knowing would waste their journey.
+        </p>
+      }
+    </div>
+
+    <button class="cta" type="submit" [disabled]="!ready() || sending() || willReach() === 0">
+      @if (sending()) {
+        Sending…
+      } @else {
+        Send
+      }
+    </button>
+  </form>
+} @else {
+  <p class="muted">Your role does not include messaging attendees.</p>
+}
+
+<h2 class="section">Already sent</h2>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (sent().length === 0) {
+  <p class="muted">Nothing sent yet.</p>
+} @else {
+  <ul class="history">
+    @for (message of sent(); track message.id) {
+      <li>
+        <div class="head">
+          <span class="subject">{{ message.subject }}</span>
+          @if (message.important) {
+            <span class="tag">Important</span>
+          }
+          <span class="at">{{ when(message.sent_at) }}</span>
+        </div>
+        <p class="body">{{ message.body }}</p>
+        <p class="stats">
+          Sent to {{ message.recipients ?? 0 }}
+          @if (message.suppressed) {
+            · {{ message.suppressed }} opted out
+          }
+        </p>
+      </li>
+    }
+  </ul>
+}

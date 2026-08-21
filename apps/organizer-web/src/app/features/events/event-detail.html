@@ -79,6 +79,7 @@
       <a [routerLink]="['/events', eventId, 'orders']">Orders and refunds →</a>
     }
     @if (session.canMessage()) {
+      <a [routerLink]="['/events', eventId, 'messages']">Message attendees →</a>
       <a [routerLink]="['/events', eventId, 'codes']">Codes and promoters →</a>
     }
     @if (session.canEditEvents()) {
