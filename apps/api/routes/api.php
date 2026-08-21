@@ -119,6 +119,8 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::delete('/events/{event:id}/series', [SeriesController::class, 'destroy']);
 
         Route::post('/events/{event:id}/duplicate', [OrganizerEventController::class, 'duplicate']);
+        Route::get('/events/{event:id}/cancellation', [OrganizerEventController::class, 'cancellationPreview']);
+        Route::post('/events/{event:id}/cancel', [OrganizerEventController::class, 'cancel']);
         Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
 

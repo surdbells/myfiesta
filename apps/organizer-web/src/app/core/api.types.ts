@@ -55,7 +55,13 @@ export interface Session {
   organizations: Membership[];
 }
 
-export type EventStatus = 'draft' | 'review' | 'scheduled' | 'published' | 'cancelled';
+/**
+ * The states an event can actually be in.
+ *
+ * review and scheduled were in the schema and unreachable by any code path.
+ * Mirrors App\Enums\EventStatus, which owns the transitions.
+ */
+export type EventStatus = 'draft' | 'published' | 'cancelled';
 
 export interface OrganizerEvent {
   id: string;
@@ -286,4 +292,20 @@ export interface AttendeeMessage {
 export interface MessageAudience {
   holders: number;
   reachable: number;
+}
+
+/** What cancelling an event would involve, shown before it is confirmed. */
+export interface CancellationPreview {
+  ticket_holders: number;
+  orders_to_refund: number;
+  refund_total: Money;
+}
+
+export interface CancellationResult {
+  message: string;
+  status: EventStatus;
+  notified: number;
+  refunded: number;
+  /** Refunds a provider refused. These need a person. */
+  failed: number;
 }

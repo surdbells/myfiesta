@@ -27,6 +27,7 @@ class Event extends Model
             'starts_at' => UtcDateTime::class,
             'ends_at' => UtcDateTime::class,
             'published_at' => 'datetime',
+            'cancelled_at' => UtcDateTime::class,
             // The slot the rule scheduled, distinct from starts_at so an
             // occurrence an organizer moved is still recognised as filled.
             'series_occurs_at' => UtcDateTime::class,

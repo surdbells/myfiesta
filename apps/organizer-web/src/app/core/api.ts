@@ -6,6 +6,8 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import {
   AttendeeMessage,
+  CancellationPreview,
+  CancellationResult,
   EventSummary,
   MessageAudience,
   GuestPage,
@@ -216,6 +218,30 @@ export class Api {
   stopRepeating(eventId: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       `${this.base}/api/organizer/events/${eventId}/series`,
+    );
+  }
+
+  // --- calling an event off ------------------------------------------------
+
+  /** What cancelling would involve — asked for before the confirmation shows. */
+  cancellationPreview(id: string): Observable<CancellationPreview> {
+    return this.http.get<CancellationPreview>(
+      `${this.base}/api/organizer/events/${id}/cancellation`,
+    );
+  }
+
+  /**
+   * Call it off.
+   *
+   * The reason is required and reaches ticket holders verbatim. Refunding
+   * defaults to true on the server; this passes the organizer's choice
+   * explicitly so the request says what was intended rather than relying on a
+   * default staying what it is.
+   */
+  cancelEvent(id: string, reason: string, refund: boolean): Observable<CancellationResult> {
+    return this.http.post<CancellationResult>(
+      `${this.base}/api/organizer/events/${id}/cancel`,
+      { reason, refund },
     );
   }
 

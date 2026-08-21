@@ -5,6 +5,7 @@ import { Api } from '../../core/api';
 import {
   EventSummary,
   OrganizerEvent,
+  CancellationPreview,
   Reminder,
   Series,
   SeriesOccurrence,
@@ -86,6 +87,22 @@ export class EventDetail {
   readonly copying = signal(false);
   readonly duplicating = signal(false);
   readonly copyDate = signal('');
+
+  /*
+   * Calling the event off.
+   *
+   * Two steps on purpose. The preview is fetched first so the organizer sees
+   * how many people they are about to tell and how much money is about to move
+   * before they are asked to confirm — a confirm dialog that says "are you
+   * sure?" and nothing else is asking somebody to guess.
+   */
+  readonly cancelling = signal(false);
+  readonly cancelPreview = signal<CancellationPreview | null>(null);
+  readonly cancelReason = signal('');
+  readonly cancelRefund = signal(true);
+  readonly cancelBusy = signal(false);
+
+  readonly cancelReady = computed(() => this.cancelReason().trim().length >= 10);
 
   readonly series = signal<Series | null>(null);
   readonly repeating = signal(false);
@@ -345,6 +362,40 @@ export class EventDetail {
    * duplicating a weekly night means, and produces two events competing for
    * the same room.
    */
+  openCancel(): void {
+    this.cancelling.set(true);
+    this.error.set(null);
+
+    this.api.cancellationPreview(this.eventId).subscribe({
+      next: (preview) => this.cancelPreview.set(preview),
+      error: (response) =>
+        this.error.set(messageFor(response, 'Could not work out what cancelling would involve.')),
+    });
+  }
+
+  confirmCancel(): void {
+    if (!this.cancelReady() || this.cancelBusy()) return;
+
+    this.cancelBusy.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+
+    this.api.cancelEvent(this.eventId, this.cancelReason().trim(), this.cancelRefund()).subscribe({
+      next: (result) => {
+        this.cancelBusy.set(false);
+        this.cancelling.set(false);
+        this.notice.set(result.message);
+
+        const event = this.event();
+        if (event) this.event.set({ ...event, status: 'cancelled' });
+      },
+      error: (response) => {
+        this.cancelBusy.set(false);
+        this.error.set(messageFor(response, 'That event could not be cancelled.'));
+      },
+    });
+  }
+
   duplicate(): void {
     const event = this.event();
 

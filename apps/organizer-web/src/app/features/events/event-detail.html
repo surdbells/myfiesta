@@ -9,7 +9,13 @@
       <p class="sub">{{ when(event.starts_at, event.timezone) }} · {{ event.city }}</p>
     </div>
 
-    @if (session.canEditEvents()) {
+    <!--
+      A cancelled event is terminal. It cannot be published, taken down, edited
+      or copied back into life, so the actions that imply otherwise are absent
+      rather than disabled — a greyed-out Publish invites somebody to look for
+      the reason it is grey.
+    -->
+    @if (event.status !== 'cancelled' && session.canPublish()) {
       <button
         class="cta"
         type="button"
@@ -26,6 +32,14 @@
       </button>
     }
   </header>
+
+  @if (event.status === 'cancelled') {
+    <p class="cancelled-banner" role="status">
+      <strong>This event was cancelled.</strong>
+      Everybody holding a ticket was told. It cannot be put back on sale — copy
+      it to a new date instead.
+    </p>
+  }
 
   @if (notice(); as message) {
     <p class="notice" role="status">{{ message }}</p>
@@ -82,7 +96,7 @@
       <a [routerLink]="['/events', eventId, 'messages']">Message attendees →</a>
       <a [routerLink]="['/events', eventId, 'codes']">Codes and promoters →</a>
     }
-    @if (session.canEditEvents()) {
+    @if (session.canEditEvents() && event.status !== 'cancelled') {
       <a [routerLink]="['/events', eventId, 'edit']">Edit details →</a>
     }
   </nav>
@@ -199,6 +213,90 @@
         </p>
       }
     </section>
+  }
+
+  @if (event.status === 'published' && session.canCancel()) {
+    <h2 class="section">Danger</h2>
+
+    @if (!cancelling()) {
+      <button class="btn-danger-quiet" type="button" (click)="openCancel()">
+        Cancel this event
+      </button>
+      <p class="help">
+        Tells everybody holding a ticket that it is off, and refunds them. It
+        cannot be undone.
+      </p>
+    } @else {
+      <div class="cancel-panel">
+        @if (cancelPreview(); as preview) {
+          <p class="cancel-cost">
+            <strong>{{ preview.ticket_holders }}</strong>
+            {{ preview.ticket_holders === 1 ? 'person' : 'people' }} will be told.
+            @if (preview.orders_to_refund > 0) {
+              <br />
+              <strong>{{ money(preview.refund_total) }}</strong>
+              across {{ preview.orders_to_refund }}
+              {{ preview.orders_to_refund === 1 ? 'order' : 'orders' }} will be returned.
+            }
+          </p>
+        } @else {
+          <p class="muted">Working out what this would involve…</p>
+        }
+
+        <div class="field">
+          <label for="cancelReason">Why is it cancelled?</label>
+          <textarea
+            id="cancelReason"
+            name="cancelReason"
+            rows="3"
+            maxlength="500"
+            required
+            placeholder="The venue has flooded and cannot open."
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+            aria-describedby="cancelReasonHint"
+          ></textarea>
+          <p id="cancelReasonHint" class="help">
+            Sent to everyone holding a ticket, word for word. At least a
+            sentence.
+          </p>
+        </div>
+
+        <label class="check">
+          <input
+            type="checkbox"
+            name="cancelRefund"
+            [ngModel]="cancelRefund()"
+            (ngModelChange)="cancelRefund.set($event)"
+          />
+          Refund everybody now
+        </label>
+        @if (!cancelRefund()) {
+          <p class="help warn">
+            Nobody will be refunded automatically. You will need to refund each
+            order yourself from Orders and refunds.
+          </p>
+        }
+
+        <div class="row">
+          <button
+            class="btn-danger"
+            type="button"
+            [disabled]="!cancelReady() || cancelBusy()"
+            (click)="confirmCancel()"
+          >
+            @if (cancelBusy()) {
+              Cancelling…
+            } @else {
+              Cancel the event
+            }
+          </button>
+          <button class="link plain" type="button" (click)="cancelling.set(false)">
+            Keep it running
+          </button>
+        </div>
+      </div>
+    }
   }
 
   <h2 class="section">Reminders</h2>

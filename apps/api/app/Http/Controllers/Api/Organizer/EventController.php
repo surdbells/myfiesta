@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\Organizer;
 
+use App\Enums\EventStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -156,9 +158,91 @@ class EventController extends Controller
         );
     }
 
+    /**
+     * What cancelling this event would involve.
+     *
+     * Asked for before the confirmation is shown, so the organizer sees how
+     * many people they are about to tell and how much money is about to move
+     * before they decide — rather than finding out from the result.
+     */
+    public function cancellationPreview(Request $request, Event $event, EventCanceller $canceller): JsonResponse
+    {
+        $this->authorize('cancel', $event);
+
+        return response()->json($canceller->preview($event));
+    }
+
+    /**
+     * Call it off.
+     *
+     * Separate from publish because they are different decisions. Unpublishing
+     * hides a link and leaves every ticket working; cancelling tells everybody
+     * holding one that the night is not happening and, by default, gives them
+     * their money back.
+     */
+    public function cancel(Request $request, Event $event, EventCanceller $canceller): JsonResponse
+    {
+        $this->authorize('cancel', $event);
+
+        $data = $request->validate([
+            // Required, and it reaches ticket holders verbatim. An organizer
+            // who has to write the sentence is more likely to mean it than one
+            // clicking through a confirm dialog.
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+            'refund' => ['sometimes', 'boolean'],
+        ], [
+            'reason.required' => 'Say why — this is sent to everyone holding a ticket.',
+            'reason.min' => 'Give people a real explanation, not a word.',
+        ]);
+
+        try {
+            $outcome = $canceller->cancel(
+                $event,
+                $request->user(),
+                trim($data['reason']),
+                $data['refund'] ?? true,
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => $this->cancellationSummary($outcome),
+            'status' => EventStatus::Cancelled->value,
+        ] + $outcome);
+    }
+
+    /** Says what actually happened, including the part that did not work. */
+    private function cancellationSummary(array $outcome): string
+    {
+        $parts = ["{$outcome['notified']} people told"];
+
+        if ($outcome['refunded'] > 0) {
+            $parts[] = "{$outcome['refunded']} orders refunded";
+        }
+
+        if ($outcome['failed'] > 0) {
+            // Surfaced rather than buried in a log. These are the orders that
+            // need a person, and an organizer who is not told will find out
+            // from the buyer.
+            $parts[] = "{$outcome['failed']} refunds could not be sent — refund those by hand";
+        }
+
+        return 'Event cancelled. '.implode(', ', $parts).'.';
+    }
+
     public function update(Request $request, Event $event): JsonResponse
     {
         $this->authorize('update', $event);
+
+        // A cancelled event is a historical record. People bought tickets to
+        // what it said and some were refunded on that basis; editing it
+        // afterwards rewrites what they were told.
+        if (! EventStatus::from($event->status)->isEditable()) {
+            return response()->json([
+                'message' => 'A cancelled event cannot be edited. Copy it to a new date instead.',
+            ], 422);
+        }
 
         $data = $request->validate([
             'title' => ['sometimes', 'string', 'max:160'],
@@ -198,10 +282,28 @@ class EventController extends Controller
             'status' => ['required', 'in:draft,published'],
         ]);
 
-        if ($data['status'] === 'draft') {
-            $event->update(['status' => 'draft']);
+        $from = EventStatus::from($event->status);
+        $to = EventStatus::from($data['status']);
 
-            return response()->json(['status' => 'draft']);
+        /*
+         * The transition table decides, not this method.
+         *
+         * Without it, a cancelled event could be republished by sending the
+         * same request that publishes a draft — and everybody holding a ticket
+         * has already been told it is off, with some of them refunded.
+         */
+        if ($from !== $to && ! $from->canBecome($to)) {
+            return response()->json([
+                'message' => $from === EventStatus::Cancelled
+                    ? 'A cancelled event cannot go back on sale. Copy it to a new date instead.'
+                    : "An event that is {$from->label()} cannot become {$to->label()}.",
+            ], 422);
+        }
+
+        if ($to === EventStatus::Draft) {
+            $event->update(['status' => EventStatus::Draft->value]);
+
+            return response()->json(['status' => EventStatus::Draft->value]);
         }
 
         $needsTickets = $event->kind === 'ticketed'
@@ -210,6 +312,15 @@ class EventController extends Controller
         if ($needsTickets) {
             return response()->json([
                 'message' => 'Add at least one ticket on sale before publishing.',
+            ], 422);
+        }
+
+        // Publishing something that has already happened puts an event on the
+        // front page that nobody can attend, and schedules reminders for a date
+        // in the past.
+        if ($event->starts_at->isPast()) {
+            return response()->json([
+                'message' => 'This event has already started. Change the date before publishing.',
             ], 422);
         }
 
