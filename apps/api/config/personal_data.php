@@ -55,6 +55,27 @@ return [
             'reason' => 'The scan happened and stays in the record; who performed it is detached.',
         ],
 
+        /*
+         * The audit trail.
+         *
+         * Added deliberately rather than caught by the heuristic — `actor_label`
+         * does not look like a personal column and holds somebody's name.
+         *
+         * Anonymised, not deleted. The rows are the record that a refund was
+         * sent, a price was dropped, an event was cancelled; deleting them
+         * because the person who did it left would destroy the history of money
+         * that moved, which both PIPEDA and the NDPR permit retaining. What goes
+         * is the name: the action survives, the identity does not, and the
+         * foreign key is already nullOnDelete so the join disappears with the
+         * account.
+         */
+        'audit_logs' => [
+            'strategy' => 'anonymise',
+            'key' => 'actor_id',
+            'columns' => ['actor_label', 'ip_address'],
+            'reason' => 'The record that something happened is a financial record. Who did it is not, once they have asked to be forgotten.',
+        ],
+
         'sensitive_data_accesses' => [
             'strategy' => 'retain',
             'key' => 'user_id',

@@ -8,6 +8,7 @@ use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Services\Audit\Auditor;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
 use Carbon\Carbon;
@@ -25,6 +26,8 @@ use Illuminate\Support\Str;
  */
 class EventController extends Controller
 {
+    public function __construct(private readonly Auditor $auditor) {}
+
     public function index(Request $request): JsonResponse
     {
         $organizationIds = $request->user()->organizations->pluck('id');
@@ -303,6 +306,15 @@ class EventController extends Controller
         if ($to === EventStatus::Draft) {
             $event->update(['status' => EventStatus::Draft->value]);
 
+            // Taking an event off sale is not cancelling it, but it does stop
+            // people buying — worth a record of who decided that and when.
+            $this->auditor->record(
+                'event.unpublished',
+                $event,
+                $request->user(),
+                metadata: ['from' => $from->value],
+            );
+
             return response()->json(['status' => EventStatus::Draft->value]);
         }
 
@@ -332,6 +344,8 @@ class EventController extends Controller
         ]);
 
         $this->scheduleDefaultReminders($event);
+
+        $this->auditor->record('event.published', $event, $request->user());
 
         return response()->json(['status' => 'published']);
     }

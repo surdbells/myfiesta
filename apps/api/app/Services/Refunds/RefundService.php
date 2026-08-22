@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Refund;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\Audit\Auditor;
 use App\Support\Allocation;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +34,10 @@ use Throwable;
  */
 class RefundService
 {
-    public function __construct(private readonly PaymentGatewayRegistry $gateways) {}
+    public function __construct(
+        private readonly PaymentGatewayRegistry $gateways,
+        private readonly Auditor $auditor,
+    ) {}
 
     /**
      * @param  list<string>|null  $ticketIds  null refunds everything still refundable
@@ -50,7 +54,26 @@ class RefundService
 
         $result = $this->attempt($order, $refund);
 
-        return $this->settle($order, $refund, $result);
+        $settled = $this->settle($order, $refund, $result);
+
+        // Money leaving the platform is the single most important thing to be
+        // able to attribute afterwards. Recorded whether or not the provider
+        // accepted it — a refused refund is exactly what somebody investigates.
+        $this->auditor->record(
+            $settled->status === 'succeeded' ? 'refund.processed' : 'refund.failed',
+            $order,
+            $issuer,
+            metadata: [
+                'refund_id' => $settled->id,
+                'amount' => $settled->amount,
+                'currency' => $order->currency,
+                'tickets' => $ticketIds === null ? 'all remaining' : count($ticketIds),
+                'reason' => $reason,
+                'failure' => $settled->failure_reason,
+            ],
+        );
+
+        return $settled;
     }
 
     /**

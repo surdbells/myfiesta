@@ -6,6 +6,7 @@ use App\Enums\EventStatus;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Audit\Auditor;
 use App\Services\Messaging\MessageSender;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
@@ -40,6 +41,7 @@ class EventCanceller
     public function __construct(
         private readonly RefundService $refunds,
         private readonly MessageSender $messages,
+        private readonly Auditor $auditor,
     ) {}
 
     /**
@@ -87,6 +89,14 @@ class EventCanceller
         $outcome = $refund
             ? $this->refundEverybody($event, $by, $reason)
             : ['refunded' => 0, 'failed' => 0];
+
+        // Recorded after the work, so the entry says what actually happened
+        // rather than what was intended — including refunds a provider refused.
+        $this->auditor->record('event.cancelled', $event, $by, metadata: [
+            'reason' => $reason,
+            'refund_requested' => $refund,
+            'notified' => $notified,
+        ] + $outcome);
 
         return $outcome + ['notified' => $notified];
     }

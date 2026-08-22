@@ -7,6 +7,7 @@ use App\Mail\TicketIssued;
 use App\Models\Event;
 use App\Models\Ticket;
 use App\Models\TicketType;
+use App\Services\Audit\Auditor;
 use App\Services\Checkout\TicketIssuer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,10 @@ use Illuminate\Support\Facades\Mail;
  */
 class IssuedTicketController extends Controller
 {
-    public function __construct(private readonly TicketIssuer $issuer) {}
+    public function __construct(
+        private readonly TicketIssuer $issuer,
+        private readonly Auditor $auditor,
+    ) {}
 
     public function store(Request $request, Event $event): JsonResponse
     {
@@ -78,6 +82,19 @@ class IssuedTicketController extends Controller
         if ($data['send_email'] ?? false) {
             Mail::to($data['email'])->send(new TicketIssued($event, $tickets, $data['note'] ?? null));
         }
+
+        /*
+         * Comps are free tickets that count against the room, so they are the
+         * one way to fill a venue without any money appearing anywhere. The
+         * ledger has nothing to say about them, which makes this the only
+         * record that they happened.
+         */
+        $this->auditor->record('ticket.issued', $event, $request->user(), metadata: [
+            'count' => count($tickets),
+            'ticket_type' => $type->name,
+            'to' => $data['email'],
+            'emailed' => (bool) ($data['send_email'] ?? false),
+        ]);
 
         return response()->json([
             'message' => $quantity === 1

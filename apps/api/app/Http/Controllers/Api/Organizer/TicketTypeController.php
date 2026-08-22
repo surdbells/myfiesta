@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
 use App\Models\TicketType;
+use App\Services\Audit\Auditor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,7 +19,9 @@ use Illuminate\Http\Request;
  */
 class TicketTypeController extends Controller
 {
-    public function index(Request $request, Event $event): JsonResponse
+    public function __construct(private readonly Auditor $auditor) {}
+
+public function index(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
 
@@ -48,10 +51,43 @@ class TicketTypeController extends Controller
 
         $data = $this->validated($request, updating: true);
 
+        $before = $ticketType->only(['name', 'price_amount', 'quantity_available', 'status']);
+
         // Repricing after tickets have sold is allowed — early-bird tiers close
         // and prices rise — but it never rewrites what anyone already paid.
         // Orders snapshot their own figures precisely so this is safe.
         $ticketType->update($data);
+
+        /*
+         * Only when something an organizer would be asked about actually moved.
+         *
+         * Recording every PATCH would bury the price change in a hundred
+         * no-op saves from somebody tabbing through a form, and the entry that
+         * matters is the one somebody goes looking for: who dropped this to
+         * zero, and when.
+         */
+        $after = $ticketType->fresh()->only(['name', 'price_amount', 'quantity_available', 'status']);
+        $changed = array_keys(array_diff_assoc($after, $before));
+
+        if ($changed !== []) {
+            $this->auditor->record(
+                in_array('price_amount', $changed, true)
+                    ? 'ticket.price_changed'
+                    : 'ticket.updated',
+                $event,
+                $request->user(),
+                metadata: [
+                    'ticket_type_id' => $ticketType->id,
+                    'ticket_type' => $ticketType->name,
+                    'changed' => $changed,
+                    // Both sides, in minor units with the event's currency, so
+                    // the entry is readable without fetching anything else.
+                    'before' => array_intersect_key($before, array_flip($changed)),
+                    'after' => array_intersect_key($after, array_flip($changed)),
+                    'currency' => $event->currency,
+                ],
+            );
+        }
 
         return response()->json(new TicketTypeResource($ticketType->fresh()->load('event')));
     }
