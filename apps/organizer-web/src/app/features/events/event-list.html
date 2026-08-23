@@ -1,78 +1,89 @@
-<header class="bar">
-  <div>
-    <h1>Events</h1>
-    @if (session.current(); as org) {
-      <p class="sub">{{ org.name }}</p>
-    }
-  </div>
-
+<ui-page-header title="Events" [subtitle]="session.current()?.name ?? null">
   @if (session.canEditEvents()) {
-    <a class="cta" routerLink="/events/new">New event</a>
+    <a uiButton routerLink="/events/new">New event</a>
   }
-</header>
+</ui-page-header>
 
 @if (loading()) {
-  <p class="muted">Loading…</p>
-} @else if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
-} @else if (events().length === 0) {
-  <div class="empty">
-    <h2>Nothing here yet</h2>
-    <p>Create an event, add a ticket, and share the link.</p>
-    @if (session.canEditEvents()) {
-      <a class="cta" routerLink="/events/new">New event</a>
+  <!-- Rows of the shape that is coming, not the word "Loading". The list
+       arrives in place instead of the page jumping when it lands. -->
+  <ul class="list" aria-busy="true">
+    @for (row of [0, 1, 2, 3]; track row) {
+      <li class="row row--skeleton">
+        <ui-skeleton width="14rem" />
+        <ui-skeleton width="22rem" height="0.85rem" />
+        <ui-skeleton width="9rem" height="0.85rem" />
+      </li>
     }
-  </div>
+  </ul>
+} @else if (error(); as message) {
+  <ui-error-state
+    title="Could not load your events"
+    [detail]="message"
+    (retried)="load()"
+  />
+} @else if (events().length === 0) {
+  <ui-empty
+    title="Nothing here yet"
+    hint="Create an event, add a ticket type, and share the link. You can keep it a draft until you are ready."
+  >
+    @if (session.canEditEvents()) {
+      <a uiButton routerLink="/events/new">New event</a>
+    }
+  </ui-empty>
 } @else {
   @if (upcoming().length > 0) {
-    <h2 class="section">Upcoming</h2>
-    <ul class="list">
-      @for (event of upcoming(); track event.id) {
-        <li>
-          <a class="row" [routerLink]="['/events', event.id]">
-            <span class="title">
-              {{ event.title }}
-              <span class="badge" [class]="'badge--' + event.status">{{ event.status }}</span>
-            </span>
+    <section class="section">
+      <h2 class="section__title">Upcoming</h2>
+      <ul class="list">
+        @for (event of upcoming(); track event.id) {
+          <li>
+            <a class="row" [routerLink]="['/events', event.id]">
+              <span class="row__title">
+                {{ event.title }}
+                <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
+              </span>
 
-            <span class="meta">
-              <!-- In the event's own zone. A Lagos event at 10pm should say
-                   10pm to somebody reading in Toronto. -->
-              {{ when(event.starts_at, event.timezone) }}
-              · {{ event.city }}
-            </span>
+              <span class="row__meta">
+                <!-- In the event's own zone. A Lagos event at 10pm should say
+                     10pm to somebody reading in Toronto. -->
+                {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
+              </span>
 
-            <span class="stats">
-              <span>{{ event.tickets_issued }} issued</span>
-              @if (arrivalRate(event); as rate) {
-                <span>{{ rate }}% arrived</span>
-              }
-            </span>
-          </a>
-        </li>
-      }
-    </ul>
+              <span class="row__stats">
+                <span>{{ event.tickets_issued }} issued</span>
+                @if (arrivalRate(event); as rate) {
+                  <span>{{ rate }}% arrived</span>
+                }
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
   }
 
   @if (past().length > 0) {
-    <h2 class="section">Past</h2>
-    <ul class="list list--past">
-      @for (event of past(); track event.id) {
-        <li>
-          <a class="row" [routerLink]="['/events', event.id]">
-            <span class="title">{{ event.title }}</span>
-            <span class="meta">
-              {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
-            </span>
-            <span class="stats">
-              <span>{{ event.tickets_issued }} issued</span>
-              @if (arrivalRate(event); as rate) {
-                <span>{{ rate }}% arrived</span>
-              }
-            </span>
-          </a>
-        </li>
-      }
-    </ul>
+    <section class="section">
+      <h2 class="section__title">Past</h2>
+      <ul class="list list--past">
+        @for (event of past(); track event.id) {
+          <li>
+            <a class="row" [routerLink]="['/events', event.id]">
+              <span class="row__title">{{ event.title }}</span>
+              <span class="row__meta">
+                {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
+              </span>
+              <span class="row__stats">
+                <span>{{ event.tickets_issued }} issued</span>
+                @if (arrivalRate(event); as rate) {
+                  <span>{{ rate }}% arrived</span>
+                }
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
   }
 }

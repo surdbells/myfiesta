@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { UiAlert, UiButton, UiField } from '@myfiesta/ui';
 import { RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
@@ -13,7 +14,7 @@ import { messageFor } from '../../core/errors';
  */
 @Component({
   selector: 'app-forgot-password',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './forgot-password.html',
   styleUrl: './sign-in.css',
 })

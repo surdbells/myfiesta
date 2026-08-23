@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { UiAlert, UiButton, UiField } from '@myfiesta/ui';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
@@ -7,7 +8,7 @@ import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-sign-in',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './sign-in.html',
   styleUrl: './sign-in.css',
 })

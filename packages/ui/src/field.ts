@@ -2,10 +2,12 @@ import {
   AfterContentInit,
   Component,
   ElementRef,
+  booleanAttribute,
   computed,
   effect,
   inject,
   input,
+  signal,
 } from '@angular/core';
 
 let sequence = 0;
@@ -102,7 +104,15 @@ export class UiField implements AfterContentInit {
   /** What is wrong, in words. Null while the field is fine. */
   readonly error = input<string | null>(null);
 
-  readonly required = input(false);
+  /**
+   * Marked required.
+   *
+   * Takes the bare attribute — `<ui-field required>` — because that is how
+   * it reads on the native control beside it, and a form where half the
+   * flags are `[required]="true"` invites the other half to be written
+   * `required` and silently pass the empty string.
+   */
+  readonly required = input(false, { transform: booleanAttribute });
 
   /**
    * Marks the field "optional" in words.
@@ -110,12 +120,21 @@ export class UiField implements AfterContentInit {
    * On a form where most fields are required, marking the few that are not is
    * clearer than starring the many that are.
    */
-  readonly optionalMark = input(false);
+  readonly optionalMark = input(false, { transform: booleanAttribute });
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly uid = `field-${++sequence}`;
 
-  readonly controlId = computed(() => this.uid);
+  /**
+   * The id the label points at.
+   *
+   * Not simply the generated one: a screen may put its own id on the
+   * control, and honouring that while labelling the generated one leaves the
+   * label pointing at an element that does not exist — which looks correct
+   * on screen and is the exact failure this component exists to prevent.
+   */
+  readonly controlId = signal(this.uid);
+
   readonly hintId = computed(() => `${this.uid}-hint`);
   readonly errorId = computed(() => `${this.uid}-error`);
 
@@ -153,6 +172,8 @@ export class UiField implements AfterContentInit {
     if (!control) return;
 
     if (!control.id) control.id = this.uid;
+
+    this.controlId.set(control.id);
 
     const described = [
       this.error() ? this.errorId() : null,

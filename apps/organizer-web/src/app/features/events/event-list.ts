@@ -1,5 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import {
+  UiBadge,
+  UiButton,
+  UiEmpty,
+  UiErrorState,
+  UiPageHeader,
+  UiSkeleton,
+} from '@myfiesta/ui';
 import { eventDate, shortEventTime } from '../../core/event-time';
 import { Api } from '../../core/api';
 import { OrganizerEvent } from '../../core/api.types';
@@ -7,7 +15,7 @@ import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-list',
-  imports: [RouterLink],
+  imports: [RouterLink, UiPageHeader, UiButton, UiBadge, UiEmpty, UiErrorState, UiSkeleton],
   templateUrl: './event-list.html',
   styleUrl: './event-list.css',
 })
@@ -52,6 +60,17 @@ export class EventList {
         this.error.set('Could not load your events. Check your connection and try again.');
       },
     });
+  }
+
+  /**
+   * The colour a status is allowed to be.
+   *
+   * Published is the working state and gets no colour at all — a list where
+   * every row is green says nothing. The two that are worth a glance are the
+   * ones that mean the event is not selling.
+   */
+  statusTone(status: OrganizerEvent['status']): 'neutral' | 'warning' | 'danger' {
+    return status === 'draft' ? 'warning' : status === 'cancelled' ? 'danger' : 'neutral';
   }
 
   /**

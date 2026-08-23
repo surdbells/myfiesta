@@ -1,118 +1,90 @@
 /*
- * Signing in.
+ * Shared by all four auth screens.
  *
- * The first screen anybody sees, and currently the only way into the console —
- * so it carries more of the first impression than its size suggests. Centred
- * card on a tinted ground, and nothing else on the page to look at.
+ * The labels, inputs, hints, error paragraphs and buttons that used to be
+ * declared here are now the field, alert and button components — which is why
+ * the register form's password rule can be a hint and an error in the same
+ * breath without this file knowing anything about it.
+ *
+ * What is left is the one thing these screens have that no other screen does:
+ * a single card, centred in an otherwise empty page.
  */
 
 .shell {
   display: grid;
   place-items: center;
-  min-height: 100vh;
+  /* Small viewport height, so the card is not pushed under a phone's browser
+     chrome when the address bar is showing. */
   min-height: 100dvh;
   padding: var(--space-5);
-  /* A wash of the brand rather than flat grey, so the sign-in screen looks like
-     it belongs to this product rather than to the framework. */
-  background:
-    radial-gradient(
-      120% 90% at 50% 0%,
-      color-mix(in srgb, var(--primary) 9%, var(--surface-sunken)),
-      var(--surface-sunken) 60%
-    );
+  background-color: var(--surface-sunken);
 }
 
 .card {
   display: grid;
   gap: var(--space-4);
   width: 100%;
-  max-width: 400px;
+  max-width: 26rem;
   padding: var(--space-6);
   background-color: var(--surface-raised);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-overlay);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-raised);
 }
 
-h1 {
+.card__head {
+  display: grid;
+  gap: var(--space-1);
+  /* Pulled tighter than the form gap: the title and its line are one thing. */
+  margin-bottom: var(--space-1);
+}
+
+.card__head h1 {
+  margin: 0;
   font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-tight);
 }
 
 .sub {
+  margin: 0;
   font-size: var(--font-size-sm);
   color: var(--text-muted);
-}
-
-label {
-  margin-bottom: var(--space-2);
-}
-
-/* The submit button is the only action here, so it takes the full width — a
-   half-width button in a narrow card reads as one of two choices. */
-button[type='submit'] {
-  width: 100%;
-  height: 48px;
-  margin-top: var(--space-2);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-button[type='submit']:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-button[type='submit']:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/*
- * Sign-in failures are shown as text, never as a colour on the field alone —
- * and never repeating a server error verbatim. "These details do not match an
- * account" is what a person can act on; a database message is what tells an
- * attacker which half was right.
- */
-.error {
-  padding: var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--danger);
-  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
-  border-radius: var(--radius-md);
-}
-
-/* --- shared with register, forgot and reset ------------------------------ */
-
-.hint {
-  margin-top: calc(-1 * var(--space-2));
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-}
-
-/* A hint that has become a problem. Colour plus wording — the wording is what
-   a colourblind reader gets. */
-.hint.bad {
-  color: var(--danger);
+  text-wrap: pretty;
 }
 
 .alt {
-  margin-top: var(--space-2);
+  margin: 0;
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   text-align: center;
 }
 
-.back-link {
-  justify-self: start;
-  font-size: var(--font-size-sm);
+.alt a {
+  color: var(--primary-text);
 }
 
-/* On the confirmation cards there is no form, so the card needs its own
-   breathing room rather than inheriting the form's field rhythm. */
-.card > h1 + .sub {
-  margin-bottom: var(--space-2);
+/*
+ * The links sit under the submit button as one group rather than as two
+ * paragraphs with a form gap between them.
+ */
+.alt + .alt {
+  margin-top: calc(-1 * var(--space-3));
+}
+
+@media (max-width: 420px) {
+  .shell {
+    padding: 0;
+    align-items: start;
+  }
+
+  .card {
+    max-width: none;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    align-content: start;
+    padding-top: var(--space-7);
+  }
 }

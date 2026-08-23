@@ -1,40 +1,41 @@
 <main class="shell">
   <form class="card" (ngSubmit)="submit()">
-    <h1>myFiesta</h1>
-    <p class="sub">Organizer console</p>
+    <header class="card__head">
+      <h1>myFiesta</h1>
+      <p class="sub">Organizer console</p>
+    </header>
 
     @if (error(); as message) {
-      <p class="error" role="alert">{{ message }}</p>
+      <ui-alert tone="danger">{{ message }}</ui-alert>
     }
 
-    <label for="email">Email</label>
-    <input
-      id="email"
-      name="email"
-      type="email"
-      autocomplete="username"
-      required
-      [ngModel]="email()"
-      (ngModelChange)="email.set($event)"
-    />
+    <ui-field label="Email" required>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="username"
+        inputmode="email"
+        required
+        [ngModel]="email()"
+        (ngModelChange)="email.set($event)"
+      />
+    </ui-field>
 
-    <label for="password">Password</label>
-    <input
-      id="password"
-      name="password"
-      type="password"
-      autocomplete="current-password"
-      required
-      [ngModel]="password()"
-      (ngModelChange)="password.set($event)"
-    />
+    <ui-field label="Password" required>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+        [ngModel]="password()"
+        (ngModelChange)="password.set($event)"
+      />
+    </ui-field>
 
-    <button type="submit" [disabled]="busy()">
-      @if (busy()) {
-        Signing in…
-      } @else {
-        Sign in
-      }
+    <button uiButton type="submit" size="lg" [loading]="busy()" [disabled]="busy()">
+      @if (busy()) { Signing in… } @else { Sign in }
     </button>
 
     <p class="alt"><a routerLink="/forgot-password">Forgotten your password?</a></p>

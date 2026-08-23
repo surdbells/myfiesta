@@ -115,6 +115,33 @@ class PagerHost {
   readonly page = signal(1);
 }
 
+@Component({
+  imports: [UiField],
+  template: `
+    <ui-field label="Email">
+      <input id="email" type="email" />
+    </ui-field>
+  `,
+})
+class LabelledFieldHost {}
+
+describe('UiField with an id of its own', () => {
+  it('labels the id the screen gave the control, not the generated one', () => {
+    const fixture = TestBed.createComponent(LabelledFieldHost);
+    fixture.detectChanges();
+
+    const element: HTMLElement = fixture.nativeElement;
+    const label = element.querySelector('label')!;
+    const input = element.querySelector('input')!;
+
+    // The screen keeps its id — autofill and password managers key off it.
+    expect(input.id).toBe('email');
+    // And the label follows it. Pointing at the generated id instead leaves
+    // the label attached to nothing, which looks identical on screen.
+    expect(label.getAttribute('for')).toBe('email');
+  });
+});
+
 describe('UiPagination', () => {
   function mount(page: number) {
     const fixture = TestBed.createComponent(PagerHost);

@@ -1,90 +1,110 @@
 <main class="shell">
   @if (sent()) {
     <div class="card">
-      <h1>Check your email</h1>
-      <p class="sub">
-        If that address can be used, there is a message on its way with what to
-        do next.
-      </p>
-      <a class="back-link" routerLink="/sign-in">Back to sign in</a>
+      <header class="card__head">
+        <h1>Check your email</h1>
+        <p class="sub">
+          If that address can be used, there is a message on its way with what to
+          do next.
+        </p>
+      </header>
+      <a uiButton variant="secondary" routerLink="/sign-in">Back to sign in</a>
     </div>
   } @else {
     <form class="card" (ngSubmit)="submit()">
-      <h1>Create an account</h1>
-      <p class="sub">Start selling tickets on myFiesta.</p>
+      <header class="card__head">
+        <h1>Create an account</h1>
+        <p class="sub">Start selling tickets on myFiesta.</p>
+      </header>
 
       @if (error(); as message) {
-        <p class="error" role="alert">{{ message }}</p>
+        <ui-alert tone="danger">{{ message }}</ui-alert>
       }
 
-      <label for="name">Your name</label>
-      <input
-        id="name"
-        name="name"
-        autocomplete="name"
-        required
-        [ngModel]="form().name"
-        (ngModelChange)="form.set({ ...form(), name: $event })"
-      />
+      <ui-field label="Your name" required>
+        <input
+          id="name"
+          name="name"
+          autocomplete="name"
+          required
+          [ngModel]="form().name"
+          (ngModelChange)="form.set({ ...form(), name: $event })"
+        />
+      </ui-field>
 
-      <label for="organization">Venue or promoter name</label>
-      <input
-        id="organization"
-        name="organization"
-        autocomplete="organization"
+      <ui-field
+        label="Venue or promoter name"
+        hint="This is the name buyers see on your events."
         required
-        placeholder="Lagos Nights"
-        [ngModel]="form().organization"
-        (ngModelChange)="form.set({ ...form(), organization: $event })"
-        aria-describedby="org-hint"
-      />
-      <small id="org-hint" class="hint">This is the name buyers see on your events.</small>
+      >
+        <input
+          id="organization"
+          name="organization"
+          autocomplete="organization"
+          required
+          placeholder="Lagos Nights"
+          [ngModel]="form().organization"
+          (ngModelChange)="form.set({ ...form(), organization: $event })"
+        />
+      </ui-field>
 
-      <label for="email">Email</label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        autocomplete="username"
-        inputmode="email"
+      <ui-field label="Email" required>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="username"
+          inputmode="email"
+          required
+          [ngModel]="form().email"
+          (ngModelChange)="form.set({ ...form(), email: $event })"
+        />
+      </ui-field>
+
+      <!--
+        The rule is the hint until it is broken, at which point it is the error.
+        One string in two roles, which is what the field's error input is for.
+      -->
+      <ui-field
+        label="Password"
+        hint="At least 10 characters, with a letter and a number."
+        [error]="passwordHint()"
         required
-        [ngModel]="form().email"
-        (ngModelChange)="form.set({ ...form(), email: $event })"
-      />
+      >
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          required
+          [ngModel]="form().password"
+          (ngModelChange)="form.set({ ...form(), password: $event })"
+        />
+      </ui-field>
 
-      <label for="password">Password</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autocomplete="new-password"
+      <ui-field
+        label="Password again"
+        [error]="mismatch() ? 'The two passwords do not match.' : null"
         required
-        [ngModel]="form().password"
-        (ngModelChange)="form.set({ ...form(), password: $event })"
-        [attr.aria-invalid]="passwordHint() ? 'true' : null"
-        aria-describedby="password-hint"
-      />
-      <small id="password-hint" class="hint" [class.bad]="passwordHint()">
-        {{ passwordHint() ?? 'At least 10 characters, with a letter and a number.' }}
-      </small>
+      >
+        <input
+          id="confirm"
+          name="confirm"
+          type="password"
+          autocomplete="new-password"
+          required
+          [ngModel]="form().confirm"
+          (ngModelChange)="form.set({ ...form(), confirm: $event })"
+        />
+      </ui-field>
 
-      <label for="confirm">Password again</label>
-      <input
-        id="confirm"
-        name="confirm"
-        type="password"
-        autocomplete="new-password"
-        required
-        [ngModel]="form().confirm"
-        (ngModelChange)="form.set({ ...form(), confirm: $event })"
-        [attr.aria-invalid]="mismatch() ? 'true' : null"
-        aria-describedby="confirm-hint"
-      />
-      @if (mismatch()) {
-        <small id="confirm-hint" class="hint bad">The two passwords do not match.</small>
-      }
-
-      <button type="submit" [disabled]="busy() || mismatch() || !!passwordHint()">
+      <button
+        uiButton
+        type="submit"
+        size="lg"
+        [loading]="busy()"
+        [disabled]="busy() || mismatch() || !!passwordHint()"
+      >
         @if (busy()) { Creating your account… } @else { Create account }
       </button>
 

@@ -1,61 +1,24 @@
 /*
- * Every event this organization runs.
+ * What is left after the library took the rest.
  *
- * A list of rows rather than a grid of cards. The organizer already knows what
- * their events look like — what they come here for is the date, the count and
- * whether it is live, and a row puts those in fixed columns that can be scanned
- * down. A card grid would make the eye hunt for each figure separately.
+ * The header, the button, the badge, the empty state, the error state and the
+ * loading placeholders all came out of this file and are now one
+ * implementation shared by every screen. What remains is the one thing that is
+ * genuinely particular to this screen: the shape of an event row.
  */
 
-.bar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-5);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-6);
+.section + .section {
+  margin-top: var(--space-7);
 }
 
-h1 {
-  font-size: var(--font-size-2xl);
-}
-
-.sub {
-  margin-top: var(--space-1);
+.section__title {
+  margin: 0 0 var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--text-muted);
-}
-
-.cta {
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 var(--space-5);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover {
-  background-color: var(--primary-hover);
-}
-
-.section {
-  margin: var(--space-6) 0 var(--space-3);
-  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--font-tracking-wide);
   text-transform: uppercase;
   color: var(--text-subtle);
 }
-
-/* --- the list ------------------------------------------------------------ */
 
 .list {
   display: grid;
@@ -65,139 +28,78 @@ h1 {
   list-style: none;
 }
 
+/*
+ * The row is a link, and the whole card is the target.
+ *
+ * Not the title alone: on a phone the title is a short line in a tall card and
+ * the rest of the card looks tappable because it is a card. Making only the
+ * text work is the kind of thing that reads as broken rather than as designed.
+ */
 .row {
   display: grid;
-  /* Title takes the room; date and figures hold their own columns so they line
-     up down the page and can be compared at a glance. */
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-1);
+  padding: var(--space-4);
   color: inherit;
   text-decoration: none;
   background-color: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  transition:
-    border-color var(--motion-fast) var(--motion-ease),
-    background var(--motion-fast) var(--motion-ease);
+  transition: border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out);
 }
 
 .row:hover {
-  border-color: var(--primary);
-  background-color: var(--primary-soft);
+  border-color: var(--border-strong);
+  background-color: var(--surface-hover);
 }
 
 .row:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-@media (max-width: 720px) {
-  .row {
-    /* Stacked on a phone. Three columns at 375px gives each of them about a
-       hundred pixels, which is not enough for any of them. */
-    grid-template-columns: 1fr;
-    gap: var(--space-2);
-  }
+.row--skeleton {
+  gap: var(--space-2);
+  cursor: default;
 }
 
-.title {
+.row__title {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  font-weight: var(--font-weight-semibold);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-weight: var(--font-weight-medium);
 }
 
-.meta {
+.row__meta {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.stats {
+.row__stats {
   display: flex;
   gap: var(--space-4);
+  margin-top: var(--space-1);
   font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* --- status --------------------------------------------------------------- */
-
-/* The word is always present. A status carried by colour alone is invisible to
-   a colourblind reader and to a printed guest list. */
-.badge {
-  padding: 2px var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  text-transform: capitalize;
-  white-space: nowrap;
-  border-radius: var(--radius-full);
-  color: var(--text-muted);
-  background-color: var(--surface-inset);
-}
-
-.badge--published {
-  color: var(--primary-soft-text);
-  background-color: var(--primary-soft);
-}
-
-.badge--cancelled {
-  color: var(--danger);
-  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
-}
-
-/* --- past events ---------------------------------------------------------- */
-
-/* Dimmed rather than hidden. An organizer still needs to reach last month's
-   numbers, but the events that need attention are the ones ahead. */
-.list--past .row {
-  background: transparent;
-}
-.list--past .title,
-.list--past .meta,
-.list--past .stats {
   color: var(--text-subtle);
-}
-.list--past .title {
-  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
 }
 
-/* --- empty ---------------------------------------------------------------- */
-
-.empty {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-3);
-  padding: var(--space-8) var(--space-5);
-  text-align: center;
-  background-color: var(--surface-raised);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
+/*
+ * Past events are records, not work. Dimmed until pointed at, so the eye
+ * lands on the section above without the two needing a divider.
+ */
+.list--past .row {
+  background-color: transparent;
 }
 
-.empty h2 {
-  font-size: var(--font-size-lg);
+.list--past .row:hover {
+  background-color: var(--surface-hover);
 }
 
-.empty p {
-  max-width: 40ch;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-}
-
-.muted {
-  color: var(--text-muted);
-}
-
-.error {
-  padding: var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--danger);
-  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
-  border-radius: var(--radius-md);
+@media (max-width: 560px) {
+  .row__stats {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
 }
