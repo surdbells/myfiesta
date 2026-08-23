@@ -67,7 +67,9 @@ class PricingTest extends TestCase
 
         $this->assertSame(20000, $quote->subtotal->amount);
         $this->assertSame(2600, $quote->tax->amount, 'Ontario HST is 13%.');
-        $this->assertSame(22600, $quote->total->amount, 'Canadian prices are advertised before tax.');
+        $this->assertSame(1600, $quote->serviceCharge->amount, '8% of the 20000 earned.');
+        $this->assertSame(20000, $quote->netRevenue->amount, 'The organizer is owed the ticket price.');
+        $this->assertSame(24200, $quote->total->amount, 'Price, then tax, then the service charge.');
     }
 
     public function test_inclusive_tax_is_extracted_rather_than_added(): void
@@ -77,22 +79,37 @@ class PricingTest extends TestCase
 
         $quote = $this->pricer->quote($event, [$type->id => 1]);
 
-        // The trap: adding 7.5% here would charge ₦1,155.63 for a ticket
+        // The trap: adding 7.5% here would charge ₦1,155.63 of tax on a ticket
         // advertised at ₦1,075 — the tax twice.
-        $this->assertSame(107500, $quote->total->amount, 'The buyer pays the advertised price.');
         $this->assertSame(7500, $quote->tax->amount, 'VAT inside 1075 is 75, not 80.');
+        $this->assertSame(100000, $quote->netRevenue->amount, 'The ticket, VAT removed.');
+
+        // The advertised price is what the ticket costs. The service charge is
+        // a separate thing the buyer is told about, not a second tax hidden
+        // inside a price that was quoted as final.
+        $this->assertSame(8000, $quote->serviceCharge->amount);
+        $this->assertSame(107500 + 8000, $quote->total->amount);
     }
 
-    public function test_commission_is_taken_on_revenue_net_of_tax(): void
+    public function test_the_service_charge_is_added_for_the_buyer_not_taken_from_the_organizer(): void
     {
         $event = $this->event('NGN', 'NG', null);
         $type = $this->ticket($event, 107500);
 
         $quote = $this->pricer->quote($event, [$type->id => 1]);
 
-        // Tax is never the organizer's money, so the platform does not take a
-        // cut of it. 10% of 100000, not of 107500.
-        $this->assertSame(10000, $quote->commission->amount);
+        // The whole point of the model, in one assertion. An organizer selling
+        // a ₦1,075 ticket is owed ₦1,000 of it — the ₦75 is VAT — and not one
+        // naira less for the platform's ₦80, which the buyer pays on top.
+        //
+        // Taking it from the other side instead is arithmetically tidy and
+        // commercially a pay cut to every organizer already selling.
+        $this->assertSame(100000, $quote->netRevenue->amount);
+        $this->assertSame(8000, $quote->serviceCharge->amount, '8% of the net, not of the gross.');
+        $this->assertSame(
+            $quote->netRevenue->amount + $quote->tax->amount + $quote->serviceCharge->amount,
+            $quote->total->amount,
+        );
     }
 
     public function test_tax_applies_to_the_discounted_amount(): void
@@ -113,10 +130,11 @@ class PricingTest extends TestCase
         // 13% of 50.00, not of 100.00. Taxing the face value overcharges on
         // money nobody received.
         $this->assertSame(650, $quote->tax->amount);
-        $this->assertSame(5650, $quote->total->amount);
+        $this->assertSame(400, $quote->serviceCharge->amount, '8% of the 50.00 collected.');
+        $this->assertSame(6050, $quote->total->amount);
     }
 
-    public function test_commission_follows_the_discount_down(): void
+    public function test_the_service_charge_follows_the_discount_down(): void
     {
         $event = $this->event();
         $type = $this->ticket($event, 10000);
@@ -130,9 +148,11 @@ class PricingTest extends TestCase
 
         $quote = $this->pricer->quote($event, [$type->id => 1], 'HALF');
 
-        // The discount is the organizer's cost, and the platform's cut shrinks
-        // with what was actually collected.
-        $this->assertSame(500, $quote->commission->amount);
+        // The discount is the organizer's cost, and the service charge shrinks
+        // with what was actually collected — 8% of 50.00, not of the 100.00
+        // nobody paid. Charging on the face value would have the buyer of a
+        // half-price ticket paying the platform's fee on the other half.
+        $this->assertSame(400, $quote->serviceCharge->amount);
     }
 
     public function test_a_fixed_code_cannot_cross_currencies(): void
@@ -212,6 +232,8 @@ class PricingTest extends TestCase
         $quote = $this->pricer->quote($event, [$type->id => 1]);
 
         $this->assertSame(0, $quote->tax->amount);
-        $this->assertSame(10000, $quote->total->amount);
+        $this->assertSame(10000, $quote->netRevenue->amount);
+        $this->assertSame(800, $quote->serviceCharge->amount, 'No tax does not mean no service charge.');
+        $this->assertSame(10800, $quote->total->amount);
     }
 }

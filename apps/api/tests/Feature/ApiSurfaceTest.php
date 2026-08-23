@@ -100,7 +100,9 @@ class ApiSurfaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('subtotal.amount', 20000)
             ->assertJsonPath('tax.amount', 2600)
-            ->assertJsonPath('total.amount', 22600)
+            ->assertJsonPath('service_charge.amount', 1600)
+            ->assertJsonPath('net_revenue.amount', 20000)
+            ->assertJsonPath('total.amount', 24200)
             ->assertJsonPath('tax_inclusive', false)
             ->assertJsonPath('tax_label', 'HST');
     }
@@ -120,7 +122,7 @@ class ApiSurfaceTest extends TestCase
             'total' => 1,
         ]);
 
-        $response->assertOk()->assertJsonPath('total.amount', 11300);
+        $response->assertOk()->assertJsonPath('total.amount', 12100);
     }
 
     public function test_duplicate_line_items_are_summed_not_overwritten(): void

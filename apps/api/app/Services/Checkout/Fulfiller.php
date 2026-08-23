@@ -6,6 +6,7 @@ use App\Mail\TicketsIssued;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
+use App\Services\Payments\GatewayFee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
@@ -45,6 +46,13 @@ class Fulfiller
             $locked->update([
                 'status' => 'paid',
                 'paid_at' => now(),
+                // Recorded now, while the gateway that took it is known. An
+                // order that settles leaves a knowable cost behind; one that
+                // never settles keeps its null, because zero would read as
+                // free rather than as never charged.
+                'gateway_fee_amount' => $locked->gateway === null
+                    ? 0
+                    : GatewayFee::on($locked->total, $locked->gateway)->amount,
             ]);
 
             $this->issuer->issueFor($locked);
@@ -65,9 +73,15 @@ class Fulfiller
      * Record the money as separable facts rather than one net figure.
      *
      * An organizer asking why they are owed what they are owed needs to see
-     * gross, what they discounted, what was collected for a tax authority, and
-     * what the platform took. A single number cannot answer that, and the
-     * question always comes eventually.
+     * gross, what they discounted, and what was collected for a tax authority.
+     * A single number cannot answer that, and the question always comes
+     * eventually.
+     *
+     * The invariant these entries exist to satisfy: they sum to the order's
+     * net_revenue_amount, in both tax modes. That is what the organizer is
+     * owed, and it is asserted in CheckoutFlowTest rather than left as an
+     * intention — the two ways of arriving at the same figure disagreed
+     * silently for as long as nothing compared them.
      */
     private function writeLedger(Order $order): void
     {
@@ -79,9 +93,26 @@ class Fulfiller
             'occurred_at' => now(),
         ];
 
+        // The gross ticket side, tax included — not the subtotal.
+        //
+        // Where tax is added on top, the subtotal does not contain it, and the
+        // tax entry below subtracts it regardless. Recording the subtotal here
+        // therefore removed a tax that was never added: a Canadian organizer
+        // selling 20000 with 2600 of HST came out at 17400 rather than 20000,
+        // short by the whole tax, on every sale. Settlements pay from this
+        // ledger.
+        //
+        // Where tax is inside the price the subtotal already contains it, so
+        // the two cases converge on the same rule: the sale is what the ticket
+        // side of the charge was, and the entries below take out the parts
+        // that were never the organizer's.
+        $grossTicketSide = $order->tax_inclusive
+            ? $order->subtotal_amount
+            : $order->subtotal_amount + $order->tax_amount;
+
         LedgerEntry::create($common + [
             'type' => 'sale',
-            'amount' => $order->subtotal_amount,
+            'amount' => $grossTicketSide,
             'reason' => "Order {$order->reference}",
         ]);
 
@@ -105,13 +136,16 @@ class Fulfiller
             ]);
         }
 
-        if ($order->commission_amount > 0) {
-            LedgerEntry::create($common + [
-                'type' => 'commission',
-                'amount' => -$order->commission_amount,
-                'reason' => "Order {$order->reference}",
-            ]);
-        }
+        // No entry for the service charge, deliberately.
+        //
+        // The organizer's ledger records what the organizer is owed, and the
+        // service charge was never their money — the buyer paid it to the
+        // platform on top of the ticket price. Writing it here as a negative
+        // is what made an organizer selling a 5000 ticket appear to be owed
+        // 4500, and it would have been settled at that.
+        //
+        // The platform's side of the same transaction lives on the order, as
+        // service_charge_amount against gateway_fee_amount.
     }
 
     /**

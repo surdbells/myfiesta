@@ -20,8 +20,18 @@ use App\Support\Money;
  */
 class Pricer
 {
-    /** The platform's share of the net, in basis points. 10%. */
-    private const COMMISSION_BPS = 1000;
+    /**
+     * The service charge, in basis points.
+     *
+     * Read from configuration rather than fixed as a constant here. The
+     * constant this replaces said 10% while `payments.commission_bps` also
+     * said 10% and was read by nothing — two declarations of one rate, one of
+     * them dead, which is how a rate drifts from the one the business charges.
+     */
+    private function serviceChargeBps(): int
+    {
+        return (int) config('payments.service_charge_bps', 800);
+    }
 
     /**
      * @param  array<string, int>  $quantities  ticket type id => quantity
@@ -56,25 +66,32 @@ class Pricer
         $taxRate = TaxRate::resolve($event->country, $event->subdivision);
         $tax = $this->taxFor($taxRate, $afterDiscount);
 
-        // Where the tax sits relative to the price changes both the total and
-        // the commission base, and getting it backwards double-charges.
+        // Where the tax sits relative to the price changes what the organizer
+        // actually earned, and getting it backwards double-charges.
         //
-        //   exclusive (Canada) — 1000 + 130 tax  => charge 1130, revenue 1000
-        //   inclusive (Nigeria) — 1075 incl. 75  => charge 1075, revenue 1000
+        //   exclusive (Canada)  — 1000 + 130 tax => ticket side 1130, revenue 1000
+        //   inclusive (Nigeria) — 1075 incl. 75  => ticket side 1075, revenue 1000
         //
-        // Tax is never the organizer's money in either case, so commission is
-        // taken on revenue net of it.
+        // Tax is never the organizer's money in either case.
         if ($taxRate?->inclusive) {
-            $total = $afterDiscount;
+            $ticketSide = $afterDiscount;
             $netRevenue = $afterDiscount->minus($tax);
         } else {
-            $total = $afterDiscount->plus($tax);
+            $ticketSide = $afterDiscount->plus($tax);
             $netRevenue = $afterDiscount;
         }
 
-        // Commission on the net. If an organizer discounts 40%, the platform
-        // takes its cut of what was collected, not of the list price.
-        $commission = $netRevenue->percentage(self::COMMISSION_BPS);
+        // The service charge is added for the buyer, not taken out of the
+        // organizer. Somebody selling a 5000 ticket is owed 5000 and the buyer
+        // is charged 5400. Reversing that direction is a pay cut to every
+        // organizer on the platform, which is what this code did until the
+        // live database was read.
+        //
+        // On the net, so an organizer who discounts 40% is charged on what was
+        // collected rather than on the list price.
+        $serviceCharge = $netRevenue->percentage($this->serviceChargeBps());
+
+        $total = $ticketSide->plus($serviceCharge);
 
         return new Quote(
             event: $event,
@@ -83,7 +100,8 @@ class Pricer
             discount: $discount,
             tax: $tax,
             total: $total,
-            commission: $commission,
+            netRevenue: $netRevenue,
+            serviceCharge: $serviceCharge,
             code: $code,
             taxRate: $taxRate,
             refSlug: $code?->ref_slug ?? $refSlug,

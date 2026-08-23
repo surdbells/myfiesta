@@ -34,7 +34,9 @@ return new class extends Migration
             // sale       + gross ticket revenue
             // discount   - organizer-funded reduction
             // tax        - collected on behalf of a tax authority
-            // commission - platform fee on the net
+            // (there is deliberately no 'commission' type: the service charge is
+            //  the buyer's payment to the platform and never enters an
+            //  organizer's balance, so it has no entry to make here)
             // refund     - returned to the buyer
             // settlement - paid out to the organizer
             // adjustment - manual correction, always carrying a reason
@@ -67,7 +69,7 @@ return new class extends Migration
 
         DB::statement(<<<'SQL'
             ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_type_check
-            CHECK (type IN ('sale', 'discount', 'tax', 'commission', 'refund', 'settlement', 'adjustment'))
+            CHECK (type IN ('sale', 'discount', 'tax', 'refund', 'settlement', 'adjustment'))
         SQL);
         DB::statement(<<<'SQL'
             ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_adjustment_reason_check

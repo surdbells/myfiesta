@@ -13,13 +13,18 @@ use App\Support\Money;
  * The order of operations is fixed and every component is retained, so a
  * historic order can always be explained rather than merely totalled:
  *
- *   1. subtotal  — quantities times prices held in the database
- *   2. discount  — applied to the subtotal
- *   3. tax       — on the discounted amount, because tax follows the
- *                  consideration actually paid, not the face value
- *   4. total     — what the buyer is charged
- *   5. commission— the platform's cut of the net, not the gross. The discount
- *                  is the organizer's cost to bear, not one we share in.
+ *   1. subtotal      — quantities times prices held in the database
+ *   2. discount      — applied to the subtotal
+ *   3. tax           — on the discounted amount, because tax follows the
+ *                      consideration actually paid, not the face value
+ *   4. netRevenue    — what the organizer earned: the discounted price, net of
+ *                      tax whichever side of the price the tax sat on
+ *   5. serviceCharge — the platform's revenue, added on top for the buyer. Not
+ *                      deducted from netRevenue. Charged on the net, so the
+ *                      organizer's discount is their cost and not one we
+ *                      share in.
+ *   6. total         — what the buyer is charged: the ticket side plus the
+ *                      service charge
  *
  * Nothing here reads a price, quantity limit, or tax rate from a request.
  */
@@ -33,7 +38,8 @@ final readonly class Quote
         public Money $discount,
         public Money $tax,
         public Money $total,
-        public Money $commission,
+        public Money $netRevenue,
+        public Money $serviceCharge,
         public ?Code $code = null,
         public ?TaxRate $taxRate = null,
         public ?string $refSlug = null,

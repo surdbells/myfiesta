@@ -146,7 +146,7 @@ class RefundService
                 'currency' => $locked->currency,
                 'amount' => $share['amount'],
                 'tax_amount' => $share['tax'],
-                'commission_amount' => $share['commission'],
+                'service_charge_amount' => $share['service_charge'],
                 'gateway' => $locked->gateway,
                 'status' => 'pending',
                 'reason' => $reason,
@@ -284,7 +284,7 @@ class RefundService
      * parts belonging to its own. Splitting only the refunded tickets would
      * lose the rounding to whoever is refunded last.
      *
-     * @return array{amount: int, tax: int, commission: int}
+     * @return array{amount: int, tax: int, service_charge: int}
      */
     private function shareFor(Order $order, Collection $tickets): array
     {
@@ -319,21 +319,27 @@ class RefundService
         return [
             'amount' => $take($order->total_amount),
             'tax' => $take($order->tax_amount),
-            'commission' => $take($order->commission_amount),
+            'service_charge' => $take($order->service_charge_amount),
         ];
     }
 
     /**
      * The reversal, written the way the sale was written.
      *
-     * Three entries, because three different things go back. The refund entry
-     * is the organizer's own money leaving. The tax entry returns what was
-     * being held for a tax authority on a sale that has now partly unhappened.
-     * The commission entry returns the platform's cut on the same basis —
-     * charging a fee on a sale that was undone would make the organizer pay for
-     * a refund out of pocket, which is not a thing to discover on a statement.
+     * Two entries, because two things leave the organizer's balance. The refund
+     * entry is their own money going back. The tax entry returns what was being
+     * held for a tax authority on a sale that has now partly unhappened.
      *
-     * Written this way, a fully refunded order nets to exactly zero.
+     * The service charge is in neither, and that is the point. The buyer gets
+     * it back — it is part of `$refund->amount`, which is what the gateway
+     * sends — but it was the platform's revenue, never the organizer's, so it
+     * cannot leave a balance it never entered. Subtracting it here would charge
+     * the organizer for refunding a fee somebody else collected.
+     *
+     * Written this way, a fully refunded order nets the organizer to exactly
+     * zero. The platform is out the gateway fee on both legs, which no
+     * processor returns and which is therefore a real cost of a refund rather
+     * than an accounting entry.
      */
     private function writeLedger(Order $order, Refund $refund): void
     {
@@ -348,10 +354,11 @@ class RefundService
         $note = "Refund for order {$order->reference}";
 
         // What the organizer actually gives back: the gross that was returned,
-        // less the tax that was never theirs.
+        // less the tax that was never theirs and less the service charge that
+        // was never theirs either.
         LedgerEntry::create($common + [
             'type' => 'refund',
-            'amount' => -($refund->amount - $refund->tax_amount),
+            'amount' => -($refund->amount - $refund->tax_amount - $refund->service_charge_amount),
             'reason' => $note,
         ]);
 
@@ -363,13 +370,6 @@ class RefundService
             ]);
         }
 
-        if ($refund->commission_amount > 0) {
-            LedgerEntry::create($common + [
-                'type' => 'commission',
-                'amount' => $refund->commission_amount,
-                'reason' => $note,
-            ]);
-        }
     }
 
     /**

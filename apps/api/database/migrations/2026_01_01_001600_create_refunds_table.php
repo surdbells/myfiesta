@@ -38,12 +38,15 @@ return new class extends Migration
             $table->char('currency', 3);
 
             // What the buyer got back, and the parts it decomposes into. Kept
-            // separately rather than derived later: tax rates change, commission
-            // rates change, and a refund has to stay explicable against the
-            // terms in force when it happened.
+            // separately rather than derived later: tax rates change, the
+            // service charge rate changes, and a refund has to stay explicable
+            // against the terms in force when it happened.
             $table->bigInteger('amount');
             $table->bigInteger('tax_amount')->default(0);
-            $table->bigInteger('commission_amount')->default(0);
+            // The buyer's share of the service charge, returned with the rest of
+            // what they paid. Never touches the organizer's ledger, because it
+            // never came out of it.
+            $table->bigInteger('service_charge_amount')->default(0);
 
             $table->string('status')->default('pending');
             $table->string('gateway')->nullable();
@@ -68,7 +71,7 @@ return new class extends Migration
         DB::statement(<<<'SQL'
             ALTER TABLE refunds ADD CONSTRAINT refunds_amounts_check
             CHECK (amount > 0
-                   AND tax_amount >= 0 AND commission_amount >= 0
+                   AND tax_amount >= 0 AND service_charge_amount >= 0
                    AND tax_amount <= amount)
         SQL);
 

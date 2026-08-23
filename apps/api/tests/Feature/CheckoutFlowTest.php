@@ -76,7 +76,9 @@ class CheckoutFlowTest extends TestCase
         $this->assertSame('pending', $order->status);
         $this->assertSame(20000, $order->subtotal_amount);
         $this->assertSame(2600, $order->tax_amount);
-        $this->assertSame(22600, $order->total_amount);
+        $this->assertSame(20000, $order->net_revenue_amount, 'The organizer is owed the ticket price.');
+        $this->assertSame(1600, $order->service_charge_amount, 'The buyer pays the 8% on top.');
+        $this->assertSame(24200, $order->total_amount);
         $this->assertSame('CAD', $order->currency);
         $this->assertCount(1, $order->lines);
 
@@ -145,9 +147,16 @@ class CheckoutFlowTest extends TestCase
         // Separable facts, not one net figure: an organizer asking why they are
         // owed what they are owed needs to see each component.
         $types = LedgerEntry::where('order_id', $order->id)->pluck('amount', 'type');
-        $this->assertSame(30000, (int) $types['sale']);
+        // The gross ticket side, HST included, because the entry below takes
+        // the HST back out. Recording the tax-free subtotal here and removing
+        // the tax anyway is what left Canadian organizers short the whole 13%.
+        $this->assertSame(33900, (int) $types['sale']);
         $this->assertSame(-3900, (int) $types['tax'], 'Tax is never the organizer money.');
-        $this->assertSame(-3000, (int) $types['commission']);
+
+        // No service charge entry. The buyer paid it to the platform; it was
+        // never in this balance to take out.
+        $this->assertFalse($types->has('commission'));
+        $this->assertSame(30000, (int) $types->sum(), 'What the organizer is owed.');
     }
 
     public function test_ticket_codes_are_unique_and_unpredictable(): void
@@ -184,7 +193,16 @@ class CheckoutFlowTest extends TestCase
         $this->fulfiller->fulfil($order);
 
         $this->assertSame(2, Ticket::count());
-        $this->assertSame(3, LedgerEntry::where('order_id', $order->id)->count());
+
+        // Two entries, not three: the sale and the tax. There is no service
+        // charge entry because the service charge never enters the organizer's
+        // balance — the buyer paid it to the platform.
+        $this->assertSame(2, LedgerEntry::where('order_id', $order->id)->count());
+        $this->assertSame(
+            $order->net_revenue_amount,
+            (int) LedgerEntry::where('order_id', $order->id)->sum('amount'),
+            'What the ledger says the organizer is owed is the ticket price.',
+        );
     }
 
     public function test_a_free_order_skips_the_gateway_entirely(): void

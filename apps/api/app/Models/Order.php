@@ -115,9 +115,29 @@ class Order extends Model
         return Attribute::get(fn () => new Money($this->total_amount, $this->currency));
     }
 
-    protected function commission(): Attribute
+    /** What the organizer earned. Not reduced by the service charge. */
+    protected function netRevenue(): Attribute
     {
-        return Attribute::get(fn () => new Money($this->commission_amount, $this->currency));
+        return Attribute::get(fn () => new Money($this->net_revenue_amount, $this->currency));
+    }
+
+    /** What the buyer paid the platform, on top of the ticket price. */
+    protected function serviceCharge(): Attribute
+    {
+        return Attribute::get(fn () => new Money($this->service_charge_amount, $this->currency));
+    }
+
+    /**
+     * What the processor took, once the payment settled.
+     *
+     * Null until then, and null is not zero: an unsettled order has an unknown
+     * cost, not a free one.
+     */
+    protected function gatewayFee(): Attribute
+    {
+        return Attribute::get(fn () => $this->gateway_fee_amount === null
+            ? null
+            : new Money($this->gateway_fee_amount, $this->currency));
     }
 
     /**

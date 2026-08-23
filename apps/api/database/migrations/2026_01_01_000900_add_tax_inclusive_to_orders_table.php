@@ -31,13 +31,27 @@ return new class extends Migration
 
         DB::statement('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_total_arithmetic_check');
 
+        // Two assertions, not one.
+        //
+        // The total is now expressible in a single form for both tax modes,
+        // because net revenue means the same thing under each: what the
+        // organizer earned, tax excluded whichever side of the price it sat.
+        // The service charge is added for the buyer and appears here for the
+        // same reason the tax does — it is part of what was charged and no
+        // part of what was earned.
+        //
+        // The second clause is what the tax_inclusive flag is actually for: it
+        // pins net revenue to the arithmetic that applied, so the flag cannot
+        // disagree with the figures it describes.
         DB::statement(<<<'SQL'
             ALTER TABLE orders ADD CONSTRAINT orders_total_arithmetic_check
             CHECK (
-                (tax_inclusive = false AND total_amount = subtotal_amount - discount_amount + tax_amount)
-                OR
-                (tax_inclusive = true  AND total_amount = subtotal_amount - discount_amount
-                                       AND tax_amount <= total_amount)
+                total_amount = net_revenue_amount + tax_amount + service_charge_amount
+                AND (
+                    (tax_inclusive = false AND net_revenue_amount = subtotal_amount - discount_amount)
+                    OR
+                    (tax_inclusive = true  AND net_revenue_amount = subtotal_amount - discount_amount - tax_amount)
+                )
             )
         SQL);
     }

@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * The order of operations on money is fixed and recorded on every row, so a
  * historic order can always be explained: the discount applies to the subtotal,
- * tax calculates on the discounted amount, and platform commission takes the
- * net. The discount is the organizer's cost, not one the platform shares.
+ * tax calculates on the discounted amount, and the service charge is added on
+ * top for the buyer. The organizer is owed the ticket price either way — the
+ * platform is paid by the buyer, not out of the organizer's takings.
  *
  * Every amount here is computed server-side from ticket_types.price_amount. No
  * endpoint accepts a price. That single rule closes the two findings that let
@@ -63,8 +64,23 @@ return new class extends Migration
             $table->bigInteger('subtotal_amount');
             $table->bigInteger('discount_amount')->default(0);
             $table->bigInteger('tax_amount')->default(0);
+            // What the organizer earned: the ticket price after any discount
+            // they chose to give, net of tax. Stored rather than derived
+            // because it is the one figure that means the same thing under
+            // both tax modes, which is what makes the arithmetic below
+            // checkable at all.
+            $table->bigInteger('net_revenue_amount');
+
+            // The platform's revenue, paid by the buyer on top of the
+            // ticket price. Never deducted from net_revenue_amount.
+            $table->bigInteger('service_charge_amount')->default(0);
+
             $table->bigInteger('total_amount');
-            $table->bigInteger('commission_amount')->default(0);
+
+            // What the processor took, out of the service charge. Nullable
+            // until the payment settles: it is not knowable at quote time,
+            // and a zero would read as free rather than as unknown.
+            $table->bigInteger('gateway_fee_amount')->nullable();
 
             // Which rate applied, so the calculation stays reproducible even
             // after the rate is superseded.
@@ -109,17 +125,27 @@ return new class extends Migration
                 subtotal_amount   >= 0 AND
                 discount_amount   >= 0 AND
                 tax_amount        >= 0 AND
-                total_amount      >= 0 AND
-                commission_amount >= 0 AND
-                discount_amount  <= subtotal_amount
+                total_amount         >= 0 AND
+                net_revenue_amount   >= 0 AND
+                service_charge_amount >= 0 AND
+                (gateway_fee_amount IS NULL OR gateway_fee_amount >= 0) AND
+                discount_amount  <= subtotal_amount AND
+                net_revenue_amount <= subtotal_amount - discount_amount
             )
         SQL);
         // The arithmetic itself, asserted at the storage layer. If application
         // code ever computes a total another way, the write fails rather than
         // producing a row nobody can reconcile.
+        //
+        // Expressed through net revenue so it holds under both tax modes. The
+        // earlier form — total = subtotal - discount + tax — was true only
+        // where tax is added on top, and rejected every inclusive-tax order
+        // outright: a Nigerian sale of 1075 including 75 was required to
+        // total 1150. No test caught it because the pricer was only ever
+        // exercised in memory, never through a write.
         DB::statement(<<<'SQL'
             ALTER TABLE orders ADD CONSTRAINT orders_total_arithmetic_check
-            CHECK (total_amount = subtotal_amount - discount_amount + tax_amount)
+            CHECK (total_amount = net_revenue_amount + tax_amount + service_charge_amount)
         SQL);
 
         Schema::create('order_lines', function (Blueprint $table) {

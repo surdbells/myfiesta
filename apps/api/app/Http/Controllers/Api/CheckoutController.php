@@ -177,6 +177,14 @@ class CheckoutController extends Controller
             'subtotal' => $money($quote->subtotal),
             'discount' => $money($quote->discount),
             'tax' => $money($quote->tax),
+            // Itemised for the buyer rather than folded into the total. A fee
+            // that only appears as a larger number at the end is the thing
+            // people complain about; one on its own line is one they accept.
+            'service_charge' => $money($quote->serviceCharge),
+            // What the organizer earns. Returned so the console can show a
+            // payout without recomputing a rate it would then have to keep in
+            // step with the server's.
+            'net_revenue' => $money($quote->netRevenue),
             'total' => $money($quote->total),
             // So the client can label it honestly rather than guessing whether
             // tax was added or was already inside the price.

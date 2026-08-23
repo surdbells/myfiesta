@@ -25,7 +25,7 @@ return new class extends Migration
         DB::statement(<<<'SQL'
             ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_type_check
             CHECK (type IN (
-                'sale', 'discount', 'tax', 'commission', 'refund',
+                'sale', 'discount', 'tax', 'refund',
                 'settlement', 'adjustment', 'subscription'
             ))
         SQL);
@@ -38,7 +38,7 @@ return new class extends Migration
         DB::statement(<<<'SQL'
             ALTER TABLE ledger_entries ADD CONSTRAINT ledger_entries_type_check
             CHECK (type IN (
-                'sale', 'discount', 'tax', 'commission', 'refund',
+                'sale', 'discount', 'tax', 'refund',
                 'settlement', 'adjustment'
             ))
         SQL);

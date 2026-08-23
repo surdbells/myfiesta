@@ -371,7 +371,13 @@ class EventController extends Controller
             'gross' => $money($sum('sale')),
             'discounts' => $money(abs($sum('discount'))),
             'tax' => $money(abs($sum('tax'))),
-            'commission' => $money(abs($sum('commission'))),
+            // What buyers paid the platform on top of the ticket price. Shown
+            // so an organizer can reconcile against what a buyer says they were
+            // charged, and kept out of the net below because it was never taken
+            // from them.
+            'service_charge' => $money(
+                (int) $event->orders()->where('status', 'paid')->sum('service_charge_amount')
+            ),
             'refunds' => $money(abs($sum('refund'))),
             // What the organizer is actually owed, and the only figure here
             // that should ever be described as theirs.
