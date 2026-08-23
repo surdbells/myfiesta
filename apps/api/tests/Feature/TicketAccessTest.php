@@ -68,8 +68,9 @@ class TicketAccessTest extends TestCase
             'subtotal_amount' => 5000,
             'discount_amount' => 0,
             'tax_amount' => 0,
-            'total_amount' => 5000,
-            'commission_amount' => 0,
+            'net_revenue_amount' => 5000,
+            'service_charge_amount' => 400,
+            'total_amount' => 5400,
             'status' => 'paid',
         ]);
     }
@@ -174,8 +175,9 @@ class TicketAccessTest extends TestCase
             'subtotal_amount' => 5000,
             'discount_amount' => 0,
             'tax_amount' => 0,
-            'total_amount' => 5000,
-            'commission_amount' => 0,
+            'net_revenue_amount' => 5000,
+            'service_charge_amount' => 400,
+            'total_amount' => 5400,
             'status' => 'paid',
         ]);
 

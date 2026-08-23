@@ -86,7 +86,6 @@ class CheckoutService
             }
 
             $order = Order::create([
-                'reference' => $this->reference(),
                 'organization_id' => $event->organization_id,
                 'event_id' => $event->id,
                 'user_id' => $user?->id,
@@ -194,23 +193,4 @@ class CheckoutService
         $locked->increment('redemption_count');
     }
 
-    /**
-     * Short, human-readable, and not guessable.
-     *
-     * Buyers read this out to support, so it avoids characters that are
-     * ambiguous when spoken or written down.
-     */
-    private function reference(): string
-    {
-        $alphabet = 'ACDEFGHJKLMNPQRTUVWXY346789';
-
-        do {
-            $reference = '';
-            for ($i = 0; $i < 8; $i++) {
-                $reference .= $alphabet[random_int(0, strlen($alphabet) - 1)];
-            }
-        } while (Order::where('reference', $reference)->exists());
-
-        return $reference;
-    }
 }

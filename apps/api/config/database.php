@@ -84,6 +84,34 @@ return [
             ]) : [],
         ],
 
+        /*
+         * The live platform, read-only, for the cutover.
+         *
+         * MySQL 5.7. Present only while the import runs; nothing in the
+         * application touches it, and `legacy:import` is the one thing that
+         * names it.
+         *
+         * utf8mb4 on the connection even though most of the old tables are
+         * declared utf8: event titles hold emoji, and reading them through a
+         * three-byte charset turns those rows into question marks silently.
+         */
+        'legacy' => [
+            'driver' => 'mysql',
+            'host' => env('LEGACY_DB_HOST', '127.0.0.1'),
+            'port' => env('LEGACY_DB_PORT', '3306'),
+            'database' => env('LEGACY_DB_DATABASE', 'sql_myfiesta_ca'),
+            'username' => env('LEGACY_DB_USERNAME', 'root'),
+            'password' => env('LEGACY_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'strict' => false,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                // The poster column is a longblob. Buffering keeps one row in
+                // memory at a time rather than the whole result set.
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
+            ]) : [],
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

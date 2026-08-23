@@ -44,7 +44,35 @@ class Order extends Model
     {
         static::creating(function (self $order) {
             $order->access_token ??= Str::random(44);
+            $order->reference ??= self::newReference();
         });
+    }
+
+    /**
+     * A reference a buyer can read out over the phone.
+     *
+     * Generated here rather than by whoever is creating the order. The column
+     * is not nullable, so every caller that forgot it got a constraint
+     * violation instead of an order — which is what happened the first time
+     * anything other than checkout created one, and is exactly how
+     * `access_token` behaved before it moved here too.
+     *
+     * The alphabet omits characters that are ambiguous spoken or written: no
+     * O against 0, no I against 1, no S against 5.
+     */
+    public static function newReference(): string
+    {
+        $alphabet = 'ACDEFGHJKLMNPQRTUVWXY346789';
+
+        do {
+            $reference = '';
+
+            for ($i = 0; $i < 8; $i++) {
+                $reference .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+        } while (self::where('reference', $reference)->exists());
+
+        return $reference;
     }
 
     protected function casts(): array

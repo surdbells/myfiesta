@@ -68,9 +68,15 @@
       <div>
         <span class="label">Tax</span><span class="figure">{{ money(totals.tax) }}</span>
       </div>
-      <div>
-        <span class="label">Commission</span
-        ><span class="figure">{{ money(totals.commission) }}</span>
+      <div class="aside">
+        <!--
+          Outside the running total on purpose. This is what buyers paid us on
+          top of the ticket price, and showing it in the same column as the
+          deductions reads as money coming off the payout — which is exactly
+          the thing it is not.
+        -->
+        <span class="label">Service charge, paid by buyers</span
+        ><span class="figure">{{ money(totals.service_charge) }}</span>
       </div>
       <div class="net">
         <span class="label">Owed to you</span><span class="figure">{{ money(totals.net) }}</span>

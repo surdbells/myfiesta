@@ -306,8 +306,9 @@ class EventCancellationTest extends TestCase
             'subtotal_amount' => 5000,
             'discount_amount' => 0,
             'tax_amount' => 0,
-            'commission_amount' => 0,
-            'total_amount' => 5000,
+            'net_revenue_amount' => 5000,
+            'service_charge_amount' => 400,
+            'total_amount' => 5400,
             'status' => 'paid',
         ]);
 
@@ -319,7 +320,10 @@ class EventCancellationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('ticket_holders', 1)
             ->assertJsonPath('orders_to_refund', 1)
-            ->assertJsonPath('refund_total.amount', 5000)
+            // What the buyer paid, service charge included. Cancelling returns
+            // the whole charge — somebody whose event was called off does not
+            // pay us a fee for the privilege.
+            ->assertJsonPath('refund_total.amount', 5400)
             ->assertJsonPath('refund_total.currency', 'CAD');
     }
 

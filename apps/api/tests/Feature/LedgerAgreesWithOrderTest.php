@@ -56,7 +56,7 @@ class LedgerAgreesWithOrderTest extends TestCase
     {
         TaxRate::query()->updateOrCreate(
             ['country' => 'CA', 'subdivision' => 'ON'],
-            ['name' => 'HST', 'rate_bps' => 1300, 'inclusive' => false],
+            ['name' => 'HST', 'rate_bps' => 1300, 'inclusive' => false, 'effective_from' => '2020-01-01'],
         );
 
         [$order, $ledger] = $this->sell('CAD', 'CA', 'ON', 10000);
@@ -78,7 +78,7 @@ class LedgerAgreesWithOrderTest extends TestCase
     {
         TaxRate::query()->updateOrCreate(
             ['country' => 'NG', 'subdivision' => null],
-            ['name' => 'VAT', 'rate_bps' => 750, 'inclusive' => true],
+            ['name' => 'VAT', 'rate_bps' => 750, 'inclusive' => true, 'effective_from' => '2020-01-01'],
         );
 
         [$order, $ledger] = $this->sell('NGN', 'NG', null, 107500);
@@ -94,7 +94,7 @@ class LedgerAgreesWithOrderTest extends TestCase
     {
         TaxRate::query()->updateOrCreate(
             ['country' => 'CA', 'subdivision' => 'ON'],
-            ['name' => 'HST', 'rate_bps' => 1300, 'inclusive' => false],
+            ['name' => 'HST', 'rate_bps' => 1300, 'inclusive' => false, 'effective_from' => '2020-01-01'],
         );
 
         [$order, $ledger] = $this->sell('CAD', 'CA', 'ON', 10000);

@@ -118,7 +118,13 @@ export interface EventSummary {
   gross: Money;
   discounts: Money;
   tax: Money;
-  commission: Money;
+  /**
+   * What buyers paid the platform on top of the ticket price.
+   *
+   * Not deducted from `net`. It is here so an organizer can reconcile against
+   * what a buyer tells them they were charged.
+   */
+  service_charge: Money;
   refunds: Money;
   net: Money;
   orders: number;

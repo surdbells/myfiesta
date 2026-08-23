@@ -82,10 +82,14 @@ class RefundTest extends TestCase
     /**
      * A paid order with $quantity tickets at 5000 each, plus 13% tax.
      */
-    private function paidOrder(int $quantity = 2, int $discount = 0, int $commission = 0): Order
+    private function paidOrder(int $quantity = 2, int $discount = 0, int $serviceCharge = 0): Order
     {
         $subtotal = 5000 * $quantity;
         $tax = (int) round(($subtotal - $discount) * 0.13);
+        // Tax is added on top here, so what the organizer earned is the
+        // discounted price, and the service charge sits beside it rather than
+        // coming out of it.
+        $netRevenue = $subtotal - $discount;
 
         $order = Order::create([
             'organization_id' => $this->org->id,
@@ -97,8 +101,9 @@ class RefundTest extends TestCase
             'subtotal_amount' => $subtotal,
             'discount_amount' => $discount,
             'tax_amount' => $tax,
-            'commission_amount' => $commission,
-            'total_amount' => $subtotal - $discount + $tax,
+            'net_revenue_amount' => $netRevenue,
+            'service_charge_amount' => $serviceCharge,
+            'total_amount' => $netRevenue + $tax + $serviceCharge,
             'gateway' => 'stripe',
             'gateway_reference' => 'pi_test',
             'status' => 'pending',
@@ -160,7 +165,7 @@ class RefundTest extends TestCase
 
     public function test_a_fully_refunded_order_nets_to_zero_in_the_ledger(): void
     {
-        $order = $this->paidOrder(quantity: 2, commission: 700);
+        $order = $this->paidOrder(quantity: 2, serviceCharge: 700);
 
         app(RefundService::class)->refund($order);
 
@@ -218,7 +223,9 @@ class RefundTest extends TestCase
             'currency' => 'CAD',
             'subtotal_amount' => 25000,
             'tax_amount' => 3250,
-            'total_amount' => 28250,
+            'net_revenue_amount' => 25000,
+            'service_charge_amount' => 2000,
+            'total_amount' => 30250,
             'gateway' => 'stripe',
             'gateway_reference' => 'pi_test',
             'status' => 'pending',
@@ -249,8 +256,8 @@ class RefundTest extends TestCase
 
         // A fifth of the order and four fifths of it, and between them all of
         // it — not a unit less.
-        $this->assertSame(5650, $small->amount);
-        $this->assertSame(22600, $large->amount);
+        $this->assertSame(6050, $small->amount);
+        $this->assertSame(24200, $large->amount);
         $this->assertSame($order->total_amount, $small->amount + $large->amount);
         $this->assertSame(0, (int) LedgerEntry::where('order_id', $order->id)->sum('amount'));
     }
@@ -269,7 +276,7 @@ class RefundTest extends TestCase
 
     public function test_commission_comes_back_to_the_organizer(): void
     {
-        $order = $this->paidOrder(quantity: 2, commission: 700);
+        $order = $this->paidOrder(quantity: 2, serviceCharge: 700);
 
         app(RefundService::class)->refund($order);
 
@@ -381,7 +388,10 @@ class RefundTest extends TestCase
     public function test_a_free_order_says_so_rather_than_calling_a_gateway(): void
     {
         $order = $this->paidOrder(quantity: 1);
-        $order->update(['subtotal_amount' => 0, 'tax_amount' => 0, 'total_amount' => 0]);
+        $order->update([
+            'subtotal_amount' => 0, 'tax_amount' => 0,
+            'net_revenue_amount' => 0, 'service_charge_amount' => 0, 'total_amount' => 0,
+        ]);
 
         $this->expectExceptionMessage('This order was free, so there is nothing to return.');
         app(RefundService::class)->refund($order->refresh());

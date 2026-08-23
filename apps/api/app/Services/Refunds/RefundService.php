@@ -353,12 +353,17 @@ class RefundService
 
         $note = "Refund for order {$order->reference}";
 
-        // What the organizer actually gives back: the gross that was returned,
-        // less the tax that was never theirs and less the service charge that
-        // was never theirs either.
+        // The gross ticket side going back, mirroring the sale entry exactly:
+        // what the buyer paid less the service charge, which is the platform's
+        // and never entered this balance.
+        //
+        // The tax is left in and credited back below rather than netted off
+        // here. Both are needed, and doing only one of them returns the tax
+        // twice — which is what a fully refunded order looked like until it
+        // was made to sum to zero.
         LedgerEntry::create($common + [
             'type' => 'refund',
-            'amount' => -($refund->amount - $refund->tax_amount - $refund->service_charge_amount),
+            'amount' => -($refund->amount - $refund->service_charge_amount),
             'reason' => $note,
         ]);
 
