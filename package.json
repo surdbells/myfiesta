@@ -1,0 +1,15 @@
+{
+  "name": "myfiesta",
+  "private": true,
+  "description": "Ticketing platform. Laravel API, two Angular apps, a Flutter app, and the design tokens all three read from.",
+  "workspaces": [
+    "apps/organizer-web",
+    "apps/web",
+    "packages/tokens",
+    "packages/ui"
+  ],
+  "scripts": {
+    "tokens": "npm run build --workspace @myfiesta/tokens",
+    "check": "npm run check --workspace @myfiesta/tokens"
+  }
+}

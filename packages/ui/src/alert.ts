@@ -1,5 +1,8 @@
 import { Component, input } from '@angular/core';
 
+/** The four things an alert can be telling you. */
+export type AlertTone = 'success' | 'danger' | 'warning' | 'info';
+
 /**
  * A message about what just happened, or what is about to.
  *
@@ -45,31 +48,39 @@ import { Component, input } from '@angular/core';
        colours, so these follow the theme without a dark-mode block. */
     .alert--success {
       color: var(--success);
-      background: color-mix(in srgb, var(--success) 10%, transparent);
+      background-color: color-mix(in srgb, var(--success) 10%, transparent);
       border-color: color-mix(in srgb, var(--success) 28%, transparent);
     }
     .alert--danger {
       color: var(--danger);
-      background: color-mix(in srgb, var(--danger) 9%, transparent);
+      background-color: color-mix(in srgb, var(--danger) 9%, transparent);
       border-color: color-mix(in srgb, var(--danger) 26%, transparent);
     }
     .alert--warning {
       color: var(--warning);
-      background: color-mix(in srgb, var(--warning) 10%, transparent);
+      background-color: color-mix(in srgb, var(--warning) 10%, transparent);
       border-color: color-mix(in srgb, var(--warning) 28%, transparent);
     }
     .alert--info {
       color: var(--info);
-      background: color-mix(in srgb, var(--info) 9%, transparent);
+      background-color: color-mix(in srgb, var(--info) 9%, transparent);
       border-color: color-mix(in srgb, var(--info) 26%, transparent);
     }
   `,
 })
 export class UiAlert {
-  readonly tone = input<'success' | 'danger' | 'warning' | 'info'>('info');
+  readonly tone = input<AlertTone>('info');
   readonly title = input<string | null>(null);
 
+  /** Keyed by the tone union, so a new tone cannot be added without a mark. */
+  private static readonly marks: Record<AlertTone, string> = {
+    success: '✓',
+    danger: '!',
+    warning: '!',
+    info: 'i',
+  };
+
   mark(): string {
-    return { success: '✓', danger: '!', warning: '!', info: 'i' }[this.tone()];
+    return UiAlert.marks[this.tone()];
   }
 }

@@ -1,11 +1,12 @@
 import { Component, inject } from '@angular/core';
+import { UiToasts } from '@myfiesta/ui';
 import { Router, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, UiToasts],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

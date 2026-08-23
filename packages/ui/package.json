@@ -1,8 +1,12 @@
 {
   "name": "@myfiesta/ui",
-  "version": "0.1.0",
   "private": true,
-  "description": "Shared Angular components and the base stylesheet for the public site and organizer console.",
+  "version": "0.0.0",
+  "description": "The console and site component library. Consumed as source, not as a built library.",
   "type": "module",
-  "main": "src/index.ts"
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles/base.css": "./styles/base.css"
+  },
+  "_comment": "No dependencies of its own on purpose. This package is compiled as source by whichever app imports it, against that app's Angular. Declaring peers here made npm resolve a second copy at the root, and two copies of @angular/core in one graph is NG0203 on every component."
 }

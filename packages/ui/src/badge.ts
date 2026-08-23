@@ -23,23 +23,23 @@ import { Component, input } from '@angular/core';
     }
     .badge--neutral {
       color: var(--text-muted);
-      background: var(--surface-inset);
+      background-color: var(--surface-inset);
     }
     .badge--brand {
       color: var(--primary-soft-text);
-      background: var(--primary-soft);
+      background-color: var(--primary-soft);
     }
     .badge--success {
       color: var(--success);
-      background: color-mix(in srgb, var(--success) 12%, transparent);
+      background-color: color-mix(in srgb, var(--success) 12%, transparent);
     }
     .badge--warning {
       color: var(--warning);
-      background: color-mix(in srgb, var(--warning) 14%, transparent);
+      background-color: color-mix(in srgb, var(--warning) 14%, transparent);
     }
     .badge--danger {
       color: var(--danger);
-      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      background-color: color-mix(in srgb, var(--danger) 12%, transparent);
     }
   `,
 })

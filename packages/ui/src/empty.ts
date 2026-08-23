@@ -25,7 +25,7 @@ import { Component, input } from '@angular/core';
       gap: var(--space-3);
       padding: var(--space-7) var(--space-5);
       text-align: center;
-      background: var(--surface-raised);
+      background-color: var(--surface-raised);
       border: 1px dashed var(--border-strong);
       border-radius: var(--radius-lg);
     }
