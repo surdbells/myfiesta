@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { AttendeeMessage, MessageAudience } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -20,7 +21,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-messages',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './event-messages.html',
   styleUrl: './event-messages.css',
 })
@@ -29,7 +30,7 @@ export class EventMessages {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly sent = signal<AttendeeMessage[]>([]);
   readonly audience = signal<MessageAudience>({ holders: 0, reachable: 0 });

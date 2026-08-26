@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import {
   ToastStore,
   UiBadge,
@@ -80,7 +81,7 @@ export class EventTickets {
   protected readonly deleteIcon = Trash2;
 
   // The id lives on the parent route: this screen is a child of the workspace.
-  readonly eventId = this.route.parent!.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly types = signal<TicketType[]>([]);
   readonly loading = signal(true);

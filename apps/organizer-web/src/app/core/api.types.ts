@@ -364,3 +364,16 @@ export interface Overview {
   next_event: NextEvent | null;
   attention: AttentionItem[];
 }
+
+/**
+ * An upload still in flight.
+ *
+ * Distinguished from the finished image by the `uploading` flag rather than
+ * by shape, so a caller narrows on one property instead of guessing from
+ * which fields happen to be present.
+ */
+export interface UploadProgress {
+  uploading: true;
+  /** Null where the total size is unknown — show an indeterminate bar. */
+  percent: number | null;
+}

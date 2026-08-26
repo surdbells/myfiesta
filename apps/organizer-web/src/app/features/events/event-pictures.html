@@ -1,124 +1,219 @@
-<a class="back" [routerLink]="['/events', eventId]">← Back to event</a>
-
-<header class="bar">
-  <div>
-    <h1>Pictures</h1>
-    <p class="sub">
-      The banner is what people see when your link is shared. The gallery goes
-      up after the night, and is what sells the next one.
-    </p>
-  </div>
-</header>
-
-@if (notice(); as message) {
-  <p class="notice" role="status">{{ message }}</p>
-}
-@if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
-}
-
-<h2 class="section">Banner</h2>
-
 @if (loading()) {
-  <p class="muted">Loading…</p>
+  <div class="shots"><ui-skeleton height="14rem" /></div>
+} @else if (failed()) {
+  <ui-error-state
+    title="Could not load the pictures"
+    detail="We could not reach the server. It is usually temporary."
+    (retried)="load()"
+  />
 } @else {
-  <div class="banner">
-    @if (banner(); as image) {
-      <img
-        class="shot"
-        [src]="image.display_url"
-        [alt]="'Banner for this event'"
-        [width]="image.width"
-        [height]="image.height"
-      />
-    } @else {
-      <div class="empty">
-        <p>No banner yet.</p>
-        <p class="muted">
-          A shared link with no picture unfurls as a line of text. Landscape works
-          best — it gets cropped to a wide shape.
-        </p>
-      </div>
-    }
+  <!-- ---------------------------------------------------------------- flyer -->
+  <section class="block">
+    <header class="block__head">
+      <h2 class="block__title">Flyer</h2>
+      <p class="block__hint">
+        The picture people see when your link is shared. One per event, and
+        the thing most worth getting right.
+      </p>
+    </header>
 
-    @if (session.canEditEvents()) {
-      <div class="row">
-        <label class="file">
-          <input type="file" accept="image/*" [disabled]="busy()" (change)="pickBanner($event)" />
-          <span>@if (banner()) { Replace banner } @else { Choose a banner }</span>
-        </label>
+    <div
+      class="drop drop--banner"
+      [class.is-over]="draggingBanner()"
+      (dragover)="onDragOver($event, 'banner')"
+      (dragleave)="setDragging('banner', false)"
+      (drop)="onDropped($event, 'banner')"
+    >
+      @if (banner(); as image) {
+        <img class="drop__shot" [src]="image.display_url" alt="" />
 
-        @if (banner(); as image) {
-          <button class="link danger" type="button" [disabled]="busy()" (click)="remove(image)">
+        <div class="drop__over">
+          <label class="picker">
+            <input type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
+            <span class="picker__face">
+              <ui-icon [icon]="uploadIcon" size="sm" />
+              Replace
+            </span>
+          </label>
+
+          <button
+            uiButton
+            variant="secondary"
+            size="sm"
+            type="button"
+            (click)="removing.set(image)"
+          >
+            <ui-icon [icon]="deleteIcon" size="sm" />
             Remove
           </button>
+        </div>
+      } @else {
+        <label class="picker picker--empty">
+          <input type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
+          <span class="picker__face">
+            <ui-icon [icon]="addIcon" size="lg" />
+            <strong>Add a flyer</strong>
+            <span class="picker__note">Drop an image here, or choose one. Up to 10 MB.</span>
+          </span>
+        </label>
+      }
+    </div>
+
+    @for (upload of bannerUploads(); track upload.id) {
+      <div class="progress" [class.progress--failed]="upload.failed">
+        <p class="progress__name">{{ upload.name }}</p>
+
+        @if (upload.failed) {
+          <p class="progress__error" role="alert">{{ upload.error }}</p>
+          <button
+            uiButton
+            variant="ghost"
+            size="sm"
+            type="button"
+            (click)="dismissUpload(upload.id)"
+          >
+            Dismiss
+          </button>
+        } @else {
+          <!--
+            Determinate where the browser knows the total, indeterminate where
+            it does not. A bar that reports a percentage it had to invent is
+            worse than one that only says "still going".
+          -->
+          <div
+            class="bar"
+            [class.bar--unknown]="upload.percent === null"
+            role="progressbar"
+            [attr.aria-valuenow]="upload.percent"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            [attr.aria-label]="'Uploading ' + upload.name"
+          >
+            <span class="bar__fill" [style.width.%]="upload.percent ?? 100"></span>
+          </div>
+
+          <p class="progress__pct">
+            @if (upload.percent !== null) {
+              {{ upload.percent }}%
+            } @else {
+              Uploading…
+            }
+          </p>
         }
       </div>
     }
-  </div>
-}
+  </section>
 
-<h2 class="section">Gallery</h2>
+  <!-- -------------------------------------------------------------- gallery -->
+  <section class="block">
+    <header class="block__head">
+      <h2 class="block__title">Gallery</h2>
+      <p class="block__hint">
+        Pictures from the last one. They sit under the event page and are the
+        best argument that this is worth turning up to.
+      </p>
+    </header>
 
-@if (session.canEditEvents()) {
-  <label class="file">
-    <input
-      type="file"
-      accept="image/*"
-      multiple
-      [disabled]="busy()"
-      (change)="pickGallery($event)"
-    />
-    <span>
-      @if (busy() && remaining() > 0) {
-        Uploading — {{ remaining() }} to go
-      } @else {
-        Add pictures
-      }
-    </span>
-  </label>
-}
+    <div
+      class="drop drop--gallery"
+      [class.is-over]="draggingGallery()"
+      (dragover)="onDragOver($event, 'gallery')"
+      (dragleave)="setDragging('gallery', false)"
+      (drop)="onDropped($event, 'gallery')"
+    >
+      <label class="picker picker--empty">
+        <input type="file" accept="image/*" multiple (change)="onPicked($event, 'gallery')" />
+        <span class="picker__face">
+          <ui-icon [icon]="addIcon" size="lg" />
+          <strong>Add pictures</strong>
+          <span class="picker__note">Drop several at once, or choose them.</span>
+        </span>
+      </label>
+    </div>
 
-@if (!loading() && gallery().length === 0) {
-  <p class="muted">Nothing here yet.</p>
-} @else {
-  <ul class="grid">
-    @for (image of gallery(); track image.id) {
-      <li>
-        <img class="thumb" [src]="image.thumb_url" [alt]="image.caption || 'Event photo'" />
+    @for (upload of galleryUploads(); track upload.id) {
+      <div class="progress" [class.progress--failed]="upload.failed">
+        <p class="progress__name">{{ upload.name }}</p>
 
-        @if (session.canEditEvents()) {
-          <input
-            class="caption"
-            placeholder="Add a caption"
-            maxlength="255"
-            [value]="image.caption ?? ''"
-            (blur)="caption(image, $any($event.target).value)"
-          />
-
-          <div class="tools">
-            <button
-              type="button"
-              aria-label="Move earlier"
-              [disabled]="isFirst(image)"
-              (click)="move(image, -1)"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              aria-label="Move later"
-              [disabled]="isLast(image)"
-              (click)="move(image, 1)"
-            >
-              →
-            </button>
-            <button class="link danger" type="button" (click)="remove(image)">Remove</button>
+        @if (upload.failed) {
+          <p class="progress__error" role="alert">{{ upload.error }}</p>
+          <button
+            uiButton
+            variant="ghost"
+            size="sm"
+            type="button"
+            (click)="dismissUpload(upload.id)"
+          >
+            Dismiss
+          </button>
+        } @else {
+          <div
+            class="bar"
+            [class.bar--unknown]="upload.percent === null"
+            role="progressbar"
+            [attr.aria-valuenow]="upload.percent"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            [attr.aria-label]="'Uploading ' + upload.name"
+          >
+            <span class="bar__fill" [style.width.%]="upload.percent ?? 100"></span>
           </div>
-        } @else if (image.caption) {
-          <p class="caption-read">{{ image.caption }}</p>
+
+          <p class="progress__pct">
+            @if (upload.percent !== null) {
+              {{ upload.percent }}%
+            } @else {
+              Uploading…
+            }
+          </p>
         }
-      </li>
+      </div>
     }
-  </ul>
+
+    @if (gallery().length > 0) {
+      <ul class="shots">
+        @for (image of gallery(); track image.id) {
+          <li class="shot">
+            <img [src]="image.thumb_url" [alt]="image.caption ?? ''" loading="lazy" />
+
+            <div class="shot__over">
+              <!--
+                Promote rather than delete-and-reupload. The flyer goes into
+                the gallery by mistake constantly — it is the bigger target.
+              -->
+              <button
+                type="button"
+                class="shot__act"
+                [attr.aria-label]="'Make this the flyer'"
+                (click)="promote(image)"
+              >
+                <ui-icon [icon]="promoteIcon" size="sm" />
+              </button>
+
+              <button
+                type="button"
+                class="shot__act shot__act--danger"
+                [attr.aria-label]="'Remove this picture'"
+                (click)="removing.set(image)"
+              >
+                <ui-icon [icon]="deleteIcon" size="sm" />
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}
+
+@if (removing(); as image) {
+  <ui-confirm
+    [open]="true"
+    heading="Remove this picture?"
+    [consequence]="consequence(image)"
+    confirmLabel="Remove"
+    destructive
+    (confirmed)="confirmRemove()"
+    (cancelled)="removing.set(null)"
+  />
 }

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { OrganizerEventDetail } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -44,7 +45,7 @@ const PROVINCES = [
  */
 @Component({
   selector: 'app-event-edit',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './event-edit.html',
   styleUrl: './event-create.css',
 })
@@ -54,7 +55,7 @@ export class EventEdit {
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
   readonly provinces = PROVINCES;
   readonly describe = describeZone;
 

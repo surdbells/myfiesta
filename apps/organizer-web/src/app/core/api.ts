@@ -1,9 +1,15 @@
-import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpParams } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpEventType,
+  HttpInterceptorFn,
+  HttpParams,
+} from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import {
   AttendeeMessage,
   CancellationPreview,
@@ -25,6 +31,7 @@ import {
   PromoCode,
   Session,
   TicketType,
+  UploadProgress,
   Overview,
 } from './api.types';
 import { SessionStore } from './session';
@@ -323,12 +330,25 @@ export class Api {
    * multipart boundary — setting it manually produces a request the server
    * cannot parse, with an error that says nothing about why.
    */
+  /**
+   * Reports its progress, because a flyer is not a small file.
+   *
+   * Club posters come off a phone at three to eight megabytes, and on the
+   * upload half of a domestic connection that is ten to thirty seconds of a
+   * screen that previously said nothing at all. People conclude it did not
+   * work and press the button again, which is how the same flyer ends up in a
+   * gallery four times.
+   *
+   * `observe: 'events'` with `reportProgress` turns one request into a stream:
+   * a series of UploadProgress values and then the finished image. The caller
+   * decides what to draw.
+   */
   uploadImage(
     eventId: string,
     file: File,
     kind: 'banner' | 'gallery',
     caption?: string,
-  ): Observable<EventImage> {
+  ): Observable<UploadProgress | EventImage> {
     const body = new FormData();
 
     body.append('file', file);
@@ -336,13 +356,50 @@ export class Api {
 
     if (caption) body.append('caption', caption);
 
-    return this.http.post<EventImage>(`${this.base}/api/organizer/events/${eventId}/images`, body);
+    return this.http
+      .post<EventImage>(`${this.base}/api/organizer/events/${eventId}/images`, body, {
+        reportProgress: true,
+        observe: 'events',
+      })
+      .pipe(
+        map((event) => {
+          if (event.type === HttpEventType.UploadProgress) {
+            return {
+              uploading: true as const,
+              // `total` is absent on some proxies. Reporting a percentage we
+              // cannot compute would be a bar that jumps; the caller shows an
+              // indeterminate one instead.
+              percent: event.total ? Math.round((event.loaded / event.total) * 100) : null,
+            };
+          }
+
+          if (event.type === HttpEventType.Response) {
+            return event.body as EventImage;
+          }
+
+          return { uploading: true as const, percent: null };
+        }),
+      );
   }
 
   captionImage(eventId: string, id: string, caption: string | null): Observable<EventImage> {
     return this.http.patch<EventImage>(
       `${this.base}/api/organizer/events/${eventId}/images/${id}`,
       { caption },
+    );
+  }
+
+  /**
+   * Make a gallery picture the banner.
+   *
+   * One request, not two. The server demotes the sitting banner inside the
+   * same transaction — a client doing it in two steps would leave an event
+   * with no banner at all if the second never arrived.
+   */
+  setBanner(eventId: string, id: string): Observable<EventImage> {
+    return this.http.patch<EventImage>(
+      `${this.base}/api/organizer/events/${eventId}/images/${id}`,
+      { kind: 'banner' },
     );
   }
 

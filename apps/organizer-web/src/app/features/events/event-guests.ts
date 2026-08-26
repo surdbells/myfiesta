@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { Guest, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -15,7 +16,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './event-guests.html',
   styleUrl: './event-guests.css',
 })
@@ -24,7 +25,7 @@ export class EventGuests {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly guests = signal<Guest[]>([]);
   readonly total = signal(0);

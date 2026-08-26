@@ -73,10 +73,38 @@ class EventImageController extends Controller
         abort_unless($image->event_id === $event->id, 404);
 
         $data = $request->validate([
-            'caption' => ['nullable', 'string', 'max:255'],
+            'caption' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'kind' => ['sometimes', 'in:banner,gallery'],
         ]);
 
-        $image->update(['caption' => $data['caption'] ?? null]);
+        if (array_key_exists('caption', $data)) {
+            $image->update(['caption' => $data['caption']]);
+        }
+
+        /*
+         * Promoting a gallery picture to the banner.
+         *
+         * Organizers upload the flyer into the gallery constantly — it is the
+         * larger target — and the fix should not be delete it, find the file
+         * again, upload it a second time.
+         *
+         * A partial unique index allows one banner per event, so the sitting
+         * one has to step down inside the same transaction. Doing it in two
+         * requests would leave an event with no banner at all if the second
+         * never arrived.
+         */
+        if (($data['kind'] ?? $image->kind) !== $image->kind) {
+            DB::transaction(function () use ($event, $image, $data) {
+                if ($data['kind'] === 'banner') {
+                    $event->images()
+                        ->where('kind', 'banner')
+                        ->whereKeyNot($image->id)
+                        ->update(['kind' => 'gallery']);
+                }
+
+                $image->update(['kind' => $data['kind']]);
+            });
+        }
 
         return response()->json($this->present($image->refresh()));
     }

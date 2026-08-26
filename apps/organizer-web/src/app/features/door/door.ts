@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { ScanResult } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -21,7 +22,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-door',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './door.html',
   styleUrl: './door.css',
 })
@@ -30,7 +31,7 @@ export class Door {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly code = signal('');
   readonly party = signal('');

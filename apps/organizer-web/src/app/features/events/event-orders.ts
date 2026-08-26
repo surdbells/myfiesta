@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { OrderTicket, SoldOrder } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -21,7 +22,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-orders',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './event-orders.html',
   styleUrl: './event-orders.css',
 })
@@ -30,7 +31,7 @@ export class EventOrders {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
   readonly money = formatMoney;
 
   readonly orders = signal<SoldOrder[]>([]);

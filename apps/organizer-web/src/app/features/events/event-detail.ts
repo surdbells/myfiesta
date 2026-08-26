@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import {
   EventSummary,
@@ -29,7 +30,7 @@ export class EventDetail {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly event = signal<OrganizerEvent | null>(null);
   readonly ticketTypes = signal<TicketType[]>([]);

@@ -1,7 +1,8 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { OrganizerEventDetail, PromoCode } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -26,7 +27,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-codes',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule],
   templateUrl: './event-codes.html',
   styleUrl: './event-codes.css',
 })
@@ -37,7 +38,7 @@ export class EventCodes {
 
   private readonly document = inject(DOCUMENT);
 
-  readonly eventId = this.route.snapshot.paramMap.get('id')!;
+  readonly eventId = eventIdFrom(this.route);
 
   readonly event = signal<OrganizerEventDetail | null>(null);
   readonly codes = signal<PromoCode[]>([]);
