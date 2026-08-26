@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\EventImageController;
 use App\Http\Controllers\Api\Organizer\OverviewController;
+use App\Http\Controllers\Api\Organizer\PayoutController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\MessageController;
@@ -112,6 +113,13 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
     ->group(function () {
         // What somebody signs in to find out, in one request.
         Route::get('/overview', [OverviewController::class, 'index']);
+
+        // What is owed, what has been sent, and where it goes. Read-only
+        // for settlements: paying somebody out is a manual act against a
+        // real bank, and an endpoint for it would let an organizer mark
+        // themselves as paid.
+        Route::get('/payouts', [PayoutController::class, 'index']);
+        Route::put('/payout-details', [PayoutController::class, 'update']);
 
         Route::get('/events', [OrganizerEventController::class, 'index']);
         Route::post('/events', [OrganizerEventController::class, 'store']);

@@ -1,0 +1,295 @@
+<ui-page-header
+  title="Payouts"
+  subtitle="What you are owed, and what has already been sent."
+/>
+
+@if (loading()) {
+  <div class="lead"><ui-skeleton height="4rem" /></div>
+} @else if (refused()) {
+  <!--
+    Not an error state. The server is saying this account may not see the
+    money, and offering "try again" would have somebody retrying something
+    that will never work.
+  -->
+  <ui-empty
+    title="You cannot see the money for this organization"
+    hint="Payouts are limited to owners, managers and finance. Ask an owner if you need access."
+  >
+    <a uiButton variant="secondary" routerLink="/">Back to the dashboard</a>
+  </ui-empty>
+} @else if (failed()) {
+  <ui-error-state
+    title="Could not load your payouts"
+    detail="We could not reach the server. It is usually temporary."
+    (retried)="load()"
+  />
+} @else if (statement(); as statement) {
+  <!-- ------------------------------------------------------------- balance -->
+  <section class="lead">
+    <div class="lead__figure">
+      <p class="lead__label">Owed to you</p>
+      <p class="lead__amount">{{ cash(statement.balance) }}</p>
+      <p class="lead__note">Paid out after each event</p>
+    </div>
+
+    <div class="lead__figure lead__figure--quiet">
+      <p class="lead__label">Sent so far</p>
+      <p class="lead__amount">{{ cash(statement.settled) }}</p>
+    </div>
+  </section>
+
+  @if (needsDestination()) {
+    <!--
+      The most useful sentence on this screen. A balance that cannot be paid
+      is a balance nobody has told the organizer about, and it is why the
+      destination lives here rather than buried in settings.
+    -->
+    <div class="warn" role="alert">
+      <div>
+        <p class="warn__title">We have nowhere to send this</p>
+        <p class="warn__detail">
+          Add an Interac address or a bank account and your balance goes out
+          after the next event.
+        </p>
+      </div>
+
+      <button uiButton type="button" (click)="openForm()">Add payout details</button>
+    </div>
+  }
+
+  <!-- --------------------------------------------------------- by the night -->
+  <section class="block">
+    <h2 class="block__title">By event</h2>
+
+    @if (events().length === 0) {
+      <p class="block__none">Nothing has sold yet.</p>
+    } @else {
+      <ul class="rows">
+        @for (row of events(); track row.event_id ?? 'none') {
+          <li class="row">
+            <div class="row__what">
+              @if (row.event_id) {
+                <a class="row__title" [routerLink]="['/events', row.event_id]">{{ row.title }}</a>
+              } @else {
+                <span class="row__title row__title--plain">{{ row.title }}</span>
+              }
+              <p class="row__when">{{ when(row.starts_at) }}</p>
+            </div>
+
+            <p class="row__figure row__figure--quiet">
+              <span class="row__cap">Sold</span>
+              {{ cash(row.gross) }}
+            </p>
+
+            <p class="row__figure row__figure--quiet">
+              <span class="row__cap">Sent</span>
+              {{ cash(row.settled) }}
+            </p>
+
+            <p class="row__figure">
+              <span class="row__cap">Owed</span>
+              {{ cash(row.balance) }}
+            </p>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- ------------------------------------------------------------- payments -->
+  <section class="block">
+    <h2 class="block__title">Payments to you</h2>
+
+    @if (settlements().length === 0) {
+      <p class="block__none">Nothing has been sent yet.</p>
+    } @else {
+      <ul class="rows">
+        @for (payment of settlements(); track payment.id) {
+          <li class="row row--payment">
+            <div class="row__what">
+              <p class="row__title row__title--plain">
+                {{ cash(payment.amount) }}
+                <ui-badge [tone]="settlementTone(payment.type)">{{ payment.type }}</ui-badge>
+              </p>
+              <p class="row__when">
+                {{ when(payment.settled_at) }} · {{ railLabel(payment.rail) }}
+                @if (payment.event) {
+                  · {{ payment.event.title }}
+                }
+              </p>
+              @if (payment.note) {
+                <p class="row__note">{{ payment.note }}</p>
+              }
+            </div>
+
+            @if (payment.status !== 'success') {
+              <ui-badge tone="danger">{{ payment.status }}</ui-badge>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- ---------------------------------------------------------- destination -->
+  <section class="block">
+    <h2 class="block__title">Where it goes</h2>
+
+    @if (destination(); as where) {
+      <div class="dest">
+        <ui-icon
+          class="dest__mark"
+          [icon]="where.rail === 'interac' ? interacIcon : bankIcon"
+          size="lg"
+        />
+
+        <div class="dest__body">
+          <p class="dest__rail">
+            {{ railLabel(where.rail) }}
+            @if (where.verified_at) {
+              <span class="dest__verified">
+                <ui-icon [icon]="verifiedIcon" size="sm" />
+                Verified
+              </span>
+            }
+          </p>
+
+          <p class="dest__detail">
+            @if (where.rail === 'interac') {
+              {{ where.interac_email }}
+            } @else {
+              {{ where.bank_name }} ·
+              <!-- Only ever the last four. The rest never leaves the server. -->
+              account ending {{ where.account_last_four }}
+              @if (where.account_name) {
+                · {{ where.account_name }}
+              }
+            }
+          </p>
+        </div>
+
+        <button uiButton variant="secondary" size="sm" type="button" (click)="openForm()">
+          <ui-icon [icon]="editIcon" size="sm" />
+          Change
+        </button>
+      </div>
+    } @else {
+      <ui-empty
+        title="No payout details yet"
+        hint="Add an Interac address or a bank account so we know where to send your money."
+      >
+        <button uiButton type="button" (click)="openForm()">Add payout details</button>
+      </ui-empty>
+    }
+  </section>
+}
+
+<ui-modal
+  [open]="formOpen()"
+  heading="Where should we send your money?"
+  description="Changing these clears any verification, and we will re-check before the next payout."
+  (dismissed)="formOpen.set(false)"
+>
+  @if (formError(); as message) {
+    <p class="form-error" role="alert">{{ message }}</p>
+  }
+
+  <div class="form">
+    <ui-field label="How you want to be paid" required>
+      <select
+        name="rail"
+        [ngModel]="draft().rail"
+        (ngModelChange)="update('rail', $event)"
+      >
+        <option value="interac">Interac e-Transfer</option>
+        <option value="bank_transfer">Bank transfer</option>
+      </select>
+    </ui-field>
+
+    @if (draft().rail === 'interac') {
+      <ui-field
+        label="Interac email"
+        hint="The address your bank sends e-Transfers to."
+        required
+      >
+        <input
+          name="interac_email"
+          type="email"
+          inputmode="email"
+          autocomplete="off"
+          [ngModel]="draft().interac_email"
+          (ngModelChange)="update('interac_email', $event)"
+        />
+      </ui-field>
+    } @else {
+      <ui-field label="Account holder" required>
+        <input
+          name="account_name"
+          autocomplete="off"
+          [ngModel]="draft().account_name"
+          (ngModelChange)="update('account_name', $event)"
+        />
+      </ui-field>
+
+      <ui-field label="Bank" required>
+        <input
+          name="bank_name"
+          autocomplete="off"
+          [ngModel]="draft().bank_name"
+          (ngModelChange)="update('bank_name', $event)"
+        />
+      </ui-field>
+
+      <ui-field
+        label="Account number"
+        hint="We only ever show you the last four digits afterwards."
+        required
+      >
+        <input
+          name="account_number"
+          inputmode="numeric"
+          autocomplete="off"
+          [ngModel]="draft().account_number"
+          (ngModelChange)="update('account_number', $event)"
+        />
+      </ui-field>
+
+      <div class="form__row">
+        <ui-field label="Transit number" optionalMark>
+          <input
+            name="transit_number"
+            inputmode="numeric"
+            autocomplete="off"
+            [ngModel]="draft().transit_number"
+            (ngModelChange)="update('transit_number', $event)"
+          />
+        </ui-field>
+
+        <ui-field label="Institution number" optionalMark>
+          <input
+            name="institution_number"
+            inputmode="numeric"
+            autocomplete="off"
+            [ngModel]="draft().institution_number"
+            (ngModelChange)="update('institution_number', $event)"
+          />
+        </ui-field>
+      </div>
+    }
+  </div>
+
+  <ng-container modalActions>
+    <button uiButton variant="secondary" type="button" (click)="formOpen.set(false)">
+      Cancel
+    </button>
+    <button
+      uiButton
+      type="button"
+      [loading]="saving()"
+      [disabled]="!canSave() || saving()"
+      (click)="save()"
+    >
+      Save details
+    </button>
+  </ng-container>
+</ui-modal>

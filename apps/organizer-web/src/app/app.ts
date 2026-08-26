@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiToasts, type LucideIconData } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, Menu, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, Menu, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -62,12 +62,16 @@ export class App {
       },
     ];
 
-    // No Money section yet, deliberately.
-    //
-    // The settlement screens are not built, and a nav item pointing at a route
-    // that does not exist falls through the wildcard to the events list —
-    // which is worse than an absent link, because it looks like the console
-    // ignored the click. It goes in when the screen does.
+    // Money is a permission, and this is the one section where lacking it
+    // means the screen is refused outright rather than served quieter — so
+    // showing the link to somebody who cannot open it would be an invitation
+    // to a 403.
+    if (this.session.canSeeMoney()) {
+      groups.push({
+        title: 'Money',
+        items: [{ label: 'Payouts', link: '/payouts', glyph: Wallet }],
+      });
+    }
 
     return groups;
   });

@@ -84,6 +84,11 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'payouts',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/payouts/payouts').then((m) => m.Payouts),
+  },
+  {
     path: '',
     pathMatch: 'full',
     canActivate: [requireSession],

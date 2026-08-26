@@ -31,6 +31,8 @@ import {
   PromoCode,
   Session,
   TicketType,
+  PayoutStatement,
+  PayoutDestination,
   UploadProgress,
   Overview,
 } from './api.types';
@@ -157,6 +159,21 @@ export class Api {
   /** Everything the dashboard shows, in one request. */
   overview(): Observable<Overview> {
     return this.http.get<Overview>(`${this.base}/api/organizer/overview`);
+  }
+
+  /** The statement: what is owed, by which night, and what has been sent. */
+  payouts(): Observable<PayoutStatement> {
+    return this.http.get<PayoutStatement>(`${this.base}/api/organizer/payouts`);
+  }
+
+  /**
+   * Set where the money goes.
+   *
+   * Returns the masked view, not what was sent. A save that echoed a full
+   * account number back would put one in a response for no reason.
+   */
+  setPayoutDetails(body: Record<string, unknown>): Observable<PayoutDestination> {
+    return this.http.put<PayoutDestination>(`${this.base}/api/organizer/payout-details`, body);
   }
 
   events(): Observable<{ data: OrganizerEvent[] }> {

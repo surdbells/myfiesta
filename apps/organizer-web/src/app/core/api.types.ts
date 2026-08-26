@@ -377,3 +377,48 @@ export interface UploadProgress {
   /** Null where the total size is unknown — show an indeterminate bar. */
   percent: number | null;
 }
+
+/** Where an organization's money is sent. Masked — never the full number. */
+export interface PayoutDestination {
+  rail: 'interac' | 'bank_transfer';
+  currency: Money['currency'];
+  interac_email: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  /** The only part of an account number this API will ever return. */
+  account_last_four: string | null;
+  verified_at: string | null;
+}
+
+/** One night's contribution to the balance. */
+export interface PayoutEventRow {
+  /** Null for entries not tied to an event — an adjustment, a bulk payment. */
+  event_id: string | null;
+  title: string;
+  starts_at: string | null;
+  balance: Money;
+  gross: Money;
+  settled: Money;
+}
+
+/** Money actually sent. */
+export interface SettlementRow {
+  id: string;
+  amount: Money;
+  rail: string;
+  /** full, partial or overdraft — the reason a balance did not reach zero. */
+  type: 'full' | 'partial' | 'overdraft';
+  status: string;
+  note: string | null;
+  event: { id: string; title: string } | null;
+  settled_at: string | null;
+}
+
+export interface PayoutStatement {
+  currency: Money['currency'];
+  balance: Money;
+  settled: Money;
+  events: PayoutEventRow[];
+  settlements: SettlementRow[];
+  destination: PayoutDestination | null;
+}
