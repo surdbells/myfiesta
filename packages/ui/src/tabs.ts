@@ -6,6 +6,14 @@ export interface TabLink {
   route: unknown[];
   /** Shown after the label — an outstanding count, a total. */
   count?: number | null;
+  /**
+   * Match the whole URL rather than its prefix.
+   *
+   * Needed by the tab that points at the parent route itself — an
+   * Overview at /events/:id is a prefix of every sibling, so without this
+   * it stays lit on all of them and two tabs claim to be the current one.
+   */
+  exact?: boolean;
 }
 
 /**
@@ -31,6 +39,7 @@ export interface TabLink {
             <a
               [routerLink]="tab.route"
               routerLinkActive="is-active"
+              [routerLinkActiveOptions]="{ exact: tab.exact ?? false }"
               #active="routerLinkActive"
               [attr.aria-current]="active.isActive ? 'page' : null"
             >

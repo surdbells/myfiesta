@@ -27,7 +27,15 @@ public function index(Request $request, Event $event): JsonResponse
 
         return response()->json([
             'data' => TicketTypeResource::collection(
-                $event->ticketTypes()->orderBy('sort_order')->get()
+                $event->ticketTypes()
+                    // One extra query for the whole collection rather than one
+                    // per type. Only tickets that exist against the door count
+                    // — a refunded ticket freed its place back.
+                    ->withCount(['tickets as issued_count' => fn ($q) => $q->whereIn(
+                        'status', ['valid', 'checked_in']
+                    )])
+                    ->orderBy('sort_order')
+                    ->get()
             ),
         ]);
     }

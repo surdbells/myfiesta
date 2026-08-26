@@ -31,44 +31,57 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-create').then((m) => m.EventCreate),
   },
   {
-    path: 'events/:id/edit',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-edit').then((m) => m.EventEdit),
-  },
-  {
-    path: 'events/:id/pictures',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-pictures').then((m) => m.EventPictures),
-  },
-  {
-    path: 'events/:id/orders',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-orders').then((m) => m.EventOrders),
-  },
-  {
-    path: 'events/:id/messages',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-messages').then((m) => m.EventMessages),
-  },
-  {
-    path: 'events/:id/codes',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-codes').then((m) => m.EventCodes),
-  },
-  {
-    path: 'events/:id/door',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/door/door').then((m) => m.Door),
-  },
-  {
-    path: 'events/:id/guests',
-    canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-guests').then((m) => m.EventGuests),
-  },
-  {
+    /*
+     * One event, and every screen about it.
+     *
+     * Children rather than siblings: the workspace loads the event once and
+     * keeps its name, date and status on screen while somebody moves between
+     * the tickets, the door and the orders. As eight sibling routes each one
+     * re-fetched the event, drew its own heading, and offered no way back
+     * except the browser.
+     */
     path: 'events/:id',
     canActivate: [requireSession],
-    loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
+    loadComponent: () =>
+      import('./features/events/event-workspace').then((m) => m.EventWorkspace),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
+      },
+      {
+        path: 'tickets',
+        loadComponent: () => import('./features/events/event-tickets').then((m) => m.EventTickets),
+      },
+      {
+        path: 'guests',
+        loadComponent: () => import('./features/events/event-guests').then((m) => m.EventGuests),
+      },
+      {
+        path: 'door',
+        loadComponent: () => import('./features/door/door').then((m) => m.Door),
+      },
+      {
+        path: 'orders',
+        loadComponent: () => import('./features/events/event-orders').then((m) => m.EventOrders),
+      },
+      {
+        path: 'messages',
+        loadComponent: () => import('./features/events/event-messages').then((m) => m.EventMessages),
+      },
+      {
+        path: 'codes',
+        loadComponent: () => import('./features/events/event-codes').then((m) => m.EventCodes),
+      },
+      {
+        path: 'pictures',
+        loadComponent: () => import('./features/events/event-pictures').then((m) => m.EventPictures),
+      },
+      {
+        path: 'edit',
+        loadComponent: () => import('./features/events/event-edit').then((m) => m.EventEdit),
+      },
+    ],
   },
   {
     path: '',

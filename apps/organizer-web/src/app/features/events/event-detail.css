@@ -518,3 +518,26 @@ textarea:focus-visible {
   border-top: 1px dashed var(--border-subtle);
   color: var(--text-muted);
 }
+
+/*
+ * The publish control, now that the workspace owns the heading above it.
+ *
+ * Its own row at the top of the overview rather than beside the title: it is
+ * the action with the largest consequence on this screen and it should not sit
+ * in a header somebody's eye skims past on the way to the numbers.
+ */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.actions__blocked {
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}

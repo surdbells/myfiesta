@@ -1,37 +1,40 @@
 @if (loading()) {
   <p class="muted">Loading…</p>
 } @else if (event(); as event) {
-  <a class="back" routerLink="/events">← All events</a>
+  <!--
+    The one action that changes what the outside world can see, and it lives on
+    the overview rather than in the workspace header: publishing depends on
+    there being something on sale, and the ticket types are loaded here.
 
-  <header class="bar">
-    <div>
-      <h1>{{ event.title }}</h1>
-      <p class="sub">{{ when(event.starts_at, event.timezone) }} · {{ event.city }}</p>
-    </div>
-
-    <!--
-      A cancelled event is terminal. It cannot be published, taken down, edited
-      or copied back into life, so the actions that imply otherwise are absent
-      rather than disabled — a greyed-out Publish invites somebody to look for
-      the reason it is grey.
-    -->
-    @if (event.status !== 'cancelled' && session.canPublish()) {
+    A cancelled event is terminal. It cannot be published, taken down, edited or
+    copied back into life, so the control is absent rather than disabled — a
+    greyed-out Publish invites somebody to look for the reason it is grey.
+  -->
+  @if (event.status !== 'cancelled' && session.canPublish()) {
+    <div class="actions">
       <button
-        class="cta"
+        uiButton
+        [variant]="event.status === 'published' ? 'secondary' : 'primary'"
         type="button"
+        [loading]="publishing()"
         [disabled]="publishing() || (event.status !== 'published' && !canPublish())"
         (click)="togglePublished()"
       >
-        @if (publishing()) {
-          Saving…
-        } @else if (event.status === 'published') {
+        @if (event.status === 'published') {
           Take down
         } @else {
           Publish
         }
       </button>
-    }
-  </header>
+
+      @if (event.status !== 'published' && !canPublish()) {
+        <p class="actions__blocked">
+          Add a ticket type first. A published event with nothing on sale is a
+          link that disappoints everyone who follows it.
+        </p>
+      }
+    </div>
+  }
 
   @if (event.status === 'cancelled') {
     <p class="cancelled-banner" role="status">
@@ -46,13 +49,6 @@
   }
   @if (error(); as message) {
     <p class="error" role="alert">{{ message }}</p>
-  }
-
-  @if (event.status !== 'published' && !canPublish()) {
-    <p class="hint">
-      Add a ticket before publishing. A published event with nothing on sale is a link that
-      disappoints everyone who follows it.
-    </p>
   }
 
   <!-- Money is only fetched, and only shown, for roles the API would serve. -->
@@ -89,23 +85,6 @@
     </p>
   }
 
-  <nav class="jump">
-    <a [routerLink]="['/events', eventId, 'door']">Door · scan tickets →</a>
-    <a [routerLink]="['/events', eventId, 'guests']">Guests and check-in →</a>
-    @if (session.canEditEvents()) {
-      <a [routerLink]="['/events', eventId, 'pictures']">Pictures →</a>
-    }
-    @if (session.canSeeMoney() || session.canEditEvents()) {
-      <a [routerLink]="['/events', eventId, 'orders']">Orders and refunds →</a>
-    }
-    @if (session.canMessage()) {
-      <a [routerLink]="['/events', eventId, 'messages']">Message attendees →</a>
-      <a [routerLink]="['/events', eventId, 'codes']">Codes and promoters →</a>
-    }
-    @if (session.canEditEvents() && event.status !== 'cancelled') {
-      <a [routerLink]="['/events', eventId, 'edit']">Edit details →</a>
-    }
-  </nav>
 
   @if (series(); as s) {
     <h2 class="section">Repeats</h2>

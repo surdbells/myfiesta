@@ -1,0 +1,217 @@
+/* --- across the tiers ----------------------------------------------------- */
+
+.summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-7);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.summary__actions {
+  margin-left: auto;
+}
+
+.summary__label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.summary__value {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary__of {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
+}
+
+.summary__note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-subtle);
+}
+
+@media (max-width: 720px) {
+  .summary {
+    flex-wrap: wrap;
+    gap: var(--space-5);
+  }
+
+  .summary__actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* --- one tier ------------------------------------------------------------- */
+
+.tiers {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Three columns: what it is, how it is going, what you can do about it.
+ *
+ * The middle one is fixed width so the sold figures line up down the list —
+ * comparing tiers is the whole reason they are on one screen, and figures that
+ * start at a different x for each row cannot be compared at a glance.
+ */
+.tier {
+  display: grid;
+  grid-template-columns: 1fr 11rem auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.tier--loading {
+  display: block;
+  min-height: 5rem;
+}
+
+.tier__identity {
+  min-width: 0;
+}
+
+.tier__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.tier__desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  /* One line. A tier description can run to a paragraph and this is a list
+     somebody is scanning, not the page a buyer reads it on. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tier__facts {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.tier__facts span:first-child {
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.tier__sold {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tier__sold strong {
+  font-size: var(--font-size-lg);
+  color: var(--text);
+}
+
+/* The gap is a real space in the markup, not a margin: a margin is a
+   visual gap only, and this reads aloud as "0of 50". */
+.tier__of {
+  color: var(--text-muted);
+}
+
+.meter {
+  height: 0.375rem;
+  overflow: hidden;
+  background-color: var(--surface-inset);
+  border-radius: var(--radius-full);
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  background-color: var(--primary);
+  border-radius: var(--radius-full);
+  transition: width var(--motion-slow) var(--motion-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter__fill {
+    transition: none;
+  }
+}
+
+.tier__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .tier {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .tier__actions {
+    justify-content: flex-end;
+  }
+}
+
+/* --- the form ------------------------------------------------------------- */
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/*
+ * Pairs that belong together: price and admits, quantity and per-order cap,
+ * the two ends of the sale window. Each pair is one decision.
+ */
+.form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 560px) {
+  .form__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-error {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--danger-text);
+  background-color: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 26%, transparent);
+  border-radius: var(--radius-md);
+}

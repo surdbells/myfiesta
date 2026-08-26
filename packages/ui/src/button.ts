@@ -21,7 +21,19 @@ import { Directive, computed, input } from '@angular/core';
   },
 })
 export class UiButton {
-  readonly variant = input<'primary' | 'secondary' | 'soft' | 'ghost' | 'danger'>('secondary');
+  /**
+   * How much of the screen's attention this button asks for.
+   *
+   * Primary is the default, and it used to be secondary. Every bare `uiButton`
+   * in both applications turned out to be a primary action — Sign in, Create
+   * account, New event, Add ticket type — so the default was quietly
+   * downgrading eleven of them, including the submit button on the sign-in
+   * screen. Every call site that wanted something else already said so.
+   *
+   * A screen should still carry one primary button. That is a thing to notice
+   * in review, not something a default can decide.
+   */
+  readonly variant = input<'primary' | 'secondary' | 'soft' | 'ghost' | 'danger'>('primary');
   readonly size = input<'sm' | 'md' | 'lg'>('md');
   readonly block = input(false);
 

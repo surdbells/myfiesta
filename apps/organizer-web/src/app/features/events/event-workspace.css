@@ -1,0 +1,94 @@
+.ws {
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+.ws__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.ws__identity {
+  min-width: 0;
+}
+
+.ws__title {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-tight);
+  line-height: var(--font-leading-tight);
+  text-wrap: balance;
+}
+
+.ws__title--loading {
+  color: var(--text-subtle);
+  font-weight: var(--font-weight-regular);
+}
+
+/*
+ * Status, date and place on one line under the name.
+ *
+ * They wrap as a group rather than each taking a row: three facts stacked
+ * vertically read as three separate things to consider, and they are one
+ * answer to "which event am I looking at".
+ */
+.ws__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.ws__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ws__fact ui-icon {
+  color: var(--text-subtle);
+}
+
+.ws__view {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ws__view:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+/*
+ * The routed panel below the tabs.
+ *
+ * The gap is here rather than on each screen, so a tab that forgets it does
+ * not sit flush against the tab strip — which was happening on four of the
+ * eight before they had a common frame.
+ */
+.ws__panel {
+  padding-top: var(--space-6);
+}
+
+@media (max-width: 640px) {
+  .ws__head {
+    flex-direction: column;
+  }
+
+  .ws__title {
+    font-size: var(--font-size-2xl);
+  }
+}

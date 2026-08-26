@@ -1,4 +1,4 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, booleanAttribute, computed, input, output, signal } from '@angular/core';
 import { UiButton } from './button';
 import { UiModal } from './modal';
 
@@ -88,8 +88,10 @@ export class UiConfirm {
   readonly confirmLabel = input('Confirm');
   readonly busyLabel = input('Working…');
   readonly cancelLabel = input('Cancel');
-  readonly destructive = input(false);
-  readonly busy = input(false);
+  // Takes the bare attribute, so `<ui-confirm destructive>` reads the way it
+  // does on a native control instead of silently passing the empty string.
+  readonly destructive = input(false, { transform: booleanAttribute });
+  readonly busy = input(false, { transform: booleanAttribute });
 
   /** Reserve for the irreversible. Friction everywhere trains people past it. */
   readonly confirmWord = input<string | null>(null);

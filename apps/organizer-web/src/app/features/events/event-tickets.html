@@ -1,0 +1,270 @@
+@if (loading()) {
+  <div class="tiers">
+    @for (n of [0, 1, 2]; track n) {
+      <div class="tier tier--loading"><ui-skeleton height="3rem" /></div>
+    }
+  </div>
+} @else if (failed()) {
+  <ui-error-state
+    title="Could not load ticket types"
+    detail="We could not reach the server. It is usually temporary."
+    (retried)="load()"
+  />
+} @else {
+  <!--
+    The summary reads across the tiers, which is the thing no single row can
+    say: an event sells out in aggregate, not per tier, and an organizer
+    checking whether to open another release is asking about the total.
+  -->
+  @if (types().length > 0) {
+    <section class="summary">
+      <div class="summary__figure">
+        <p class="summary__label">Sold</p>
+        <p class="summary__value">
+          {{ totalSold() }}
+          @if (totalCapacity() !== null) {
+            <span class="summary__of">of {{ totalCapacity() }}</span>
+          }
+        </p>
+      </div>
+
+      @if (faceValue(); as value) {
+        <div class="summary__figure">
+          <p class="summary__label">At face value</p>
+          <p class="summary__value">{{ cash(value) }}</p>
+          <!-- Said out loud, because it is not the payout and somebody will
+               otherwise reconcile against it. -->
+          <p class="summary__note">Before discounts and refunds</p>
+        </div>
+      }
+
+      <div class="summary__actions">
+        <button uiButton type="button" (click)="openNew()">
+          <ui-icon [icon]="addIcon" size="sm" />
+          Add ticket type
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (types().length === 0) {
+    <ui-empty
+      title="Nothing on sale yet"
+      hint="Add a ticket type and this event can start selling. Most nights start with one general admission tier and add an early bird."
+    >
+      <button uiButton type="button" (click)="openNew()">
+        <ui-icon [icon]="addIcon" size="sm" />
+        Add ticket type
+      </button>
+    </ui-empty>
+  } @else {
+    <ul class="tiers">
+      @for (type of types(); track type.id) {
+        <li class="tier">
+          <div class="tier__identity">
+            <p class="tier__name">
+              {{ type.name }}
+              <ui-badge [tone]="tone(type)">{{ label(type) }}</ui-badge>
+            </p>
+
+            @if (type.description) {
+              <p class="tier__desc">{{ type.description }}</p>
+            }
+
+            <p class="tier__facts">
+              <span>{{ cash(type.price) }}</span>
+              @if (type.admits > 1) {
+                <span>Admits {{ type.admits }}</span>
+              }
+              @if (type.max_per_order) {
+                <span>Max {{ type.max_per_order }} per order</span>
+              }
+              @if (window(type); as when) {
+                <span>{{ when }}</span>
+              }
+            </p>
+          </div>
+
+          <div class="tier__sales">
+            <p class="tier__sold">
+              <strong>{{ type.sold }}</strong>
+              @if (type.quantity_available !== null && type.quantity_available !== undefined) {
+                <span class="tier__of">&nbsp;of {{ type.quantity_available }}</span>
+              } @else {
+                <span class="tier__of">&nbsp;sold · unlimited</span>
+              }
+            </p>
+
+            @if (percent(type); as pct) {
+              <div
+                class="meter"
+                role="progressbar"
+                [attr.aria-valuenow]="pct"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-label]="'Sold for ' + type.name"
+              >
+                <span class="meter__fill" [style.width.%]="pct"></span>
+              </div>
+            }
+          </div>
+
+          <div class="tier__actions">
+            <button
+              uiButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              (click)="openEdit(type)"
+            >
+              <ui-icon [icon]="editIcon" size="sm" />
+              Edit
+            </button>
+
+            <button
+              uiButton
+              variant="ghost"
+              size="sm"
+              type="button"
+              [attr.aria-label]="'Remove ' + type.name"
+              (click)="removing.set(type)"
+            >
+              <ui-icon [icon]="deleteIcon" size="sm" />
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+}
+
+<!-- One form for both, because the fields are identical and two would drift. -->
+<ui-modal
+  [open]="formOpen()"
+  [heading]="editing() ? 'Edit ticket type' : 'Add a ticket type'"
+  (dismissed)="formOpen.set(false)"
+>
+  @if (formError(); as message) {
+    <p class="form-error" role="alert">{{ message }}</p>
+  }
+
+  <div class="form">
+    <ui-field label="Name" hint="What a buyer sees. Early Bird, VIP, Table of 10." required>
+      <input
+        name="name"
+        maxlength="80"
+        [ngModel]="draft().name"
+        (ngModelChange)="update('name', $event)"
+      />
+    </ui-field>
+
+    <ui-field label="Description" optionalMark>
+      <textarea
+        name="description"
+        rows="2"
+        [ngModel]="draft().description"
+        (ngModelChange)="update('description', $event)"
+      ></textarea>
+    </ui-field>
+
+    <div class="form__row">
+      <ui-field label="Price" [error]="priceError()" required>
+        <input
+          name="price"
+          inputmode="decimal"
+          placeholder="25.00"
+          [ngModel]="draft().price"
+          (ngModelChange)="update('price', $event)"
+        />
+      </ui-field>
+
+      <ui-field
+        label="Admits"
+        hint="More than one for a table."
+      >
+        <input
+          name="admits"
+          type="number"
+          min="1"
+          max="50"
+          [ngModel]="draft().admits"
+          (ngModelChange)="update('admits', $event)"
+        />
+      </ui-field>
+    </div>
+
+    <div class="form__row">
+      <ui-field
+        label="How many"
+        hint="Leave empty for unlimited."
+        optionalMark
+      >
+        <input
+          name="quantity"
+          type="number"
+          min="0"
+          [ngModel]="draft().quantity"
+          (ngModelChange)="update('quantity', $event)"
+        />
+      </ui-field>
+
+      <ui-field label="Max per order" optionalMark>
+        <input
+          name="maxPerOrder"
+          type="number"
+          min="1"
+          max="100"
+          [ngModel]="draft().maxPerOrder"
+          (ngModelChange)="update('maxPerOrder', $event)"
+        />
+      </ui-field>
+    </div>
+
+    <div class="form__row">
+      <ui-field label="On sale from" optionalMark>
+        <input
+          name="salesStart"
+          type="datetime-local"
+          [ngModel]="draft().salesStart"
+          (ngModelChange)="update('salesStart', $event)"
+        />
+      </ui-field>
+
+      <ui-field label="On sale until" optionalMark>
+        <input
+          name="salesEnd"
+          type="datetime-local"
+          [ngModel]="draft().salesEnd"
+          (ngModelChange)="update('salesEnd', $event)"
+        />
+      </ui-field>
+    </div>
+  </div>
+
+  <ng-container modalActions>
+    <button uiButton variant="secondary" type="button" (click)="formOpen.set(false)">
+      Cancel
+    </button>
+    <button
+      uiButton
+      type="button"
+      [loading]="saving()"
+      [disabled]="!canSave() || saving()"
+      (click)="save()"
+    >
+      {{ editing() ? 'Save changes' : 'Add ticket type' }}
+    </button>
+  </ng-container>
+</ui-modal>
+
+@if (removing(); as type) {
+  <ui-confirm
+    [open]="true"
+    [heading]="'Remove ' + type.name + '?'"
+    [consequence]="consequence(type)"
+    confirmLabel="Remove"
+    destructive
+    (confirmed)="confirmRemove()"
+    (cancelled)="removing.set(null)"
+  />
+}

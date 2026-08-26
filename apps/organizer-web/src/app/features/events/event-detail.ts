@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
@@ -19,7 +20,7 @@ import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-detail',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, UiButton],
   templateUrl: './event-detail.html',
   styleUrl: './event-detail.css',
 })

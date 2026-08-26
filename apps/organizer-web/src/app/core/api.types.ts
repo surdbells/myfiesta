@@ -103,8 +103,17 @@ export interface TicketType {
   price: Money;
   admits: number;
   max_per_order: number | null;
-  quantity_available?: number | null;
+  /** Null is unlimited, and is not the same as zero. */
+  quantity_available: number | null;
   status: 'on_sale' | 'sold_out' | 'hidden' | 'closed';
+
+  /** Tickets that exist against the door. A refund gives its place back. */
+  sold: number;
+  /** Null where the tier is unlimited — there is nothing to count down. */
+  remaining: number | null;
+
+  sales_start_at: string | null;
+  sales_end_at: string | null;
 }
 
 /**

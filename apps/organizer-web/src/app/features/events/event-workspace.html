@@ -1,0 +1,58 @@
+<ui-breadcrumb [crumbs]="crumbs()" />
+
+<header class="ws">
+  @if (loading()) {
+    <h1 class="ws__title ws__title--loading">Loading…</h1>
+  } @else if (event(); as event) {
+    <div class="ws__head">
+      <div class="ws__identity">
+        <h1 class="ws__title">{{ event.title }}</h1>
+
+        <p class="ws__meta">
+          <!--
+            Status first. Everything else on this page means something
+            different depending on whether the event is live, and an organizer
+            who has forgotten they never published it will read every figure
+            below as a disaster rather than as a draft.
+          -->
+          <ui-badge [tone]="statusTone()">{{ event.status }}</ui-badge>
+
+          <span class="ws__fact">
+            <ui-icon [icon]="whenIcon" size="sm" />
+            {{ when(event) }}
+          </span>
+
+          <span class="ws__fact">
+            <ui-icon [icon]="whereIcon" size="sm" />
+            {{ event.city }}
+          </span>
+        </p>
+      </div>
+
+      <!--
+        The public page, for the two things an organizer does with it
+        constantly: check what a buyer sees, and copy the link into a post.
+        Absent while the event is a draft, because the link 404s until it is
+        published and a dead link in the console reads as a broken console.
+      -->
+      @if (event.status === 'published') {
+        <a class="ws__view" [href]="publicUrl(event)" target="_blank" rel="noopener">
+          View public page
+        </a>
+      }
+    </div>
+  } @else {
+    <h1 class="ws__title">Event not found</h1>
+    <p class="ws__meta">
+      <a routerLink="/events">Back to all events</a>
+    </p>
+  }
+</header>
+
+@if (event()) {
+  <ui-tabs [tabs]="tabs()" label="Sections of this event" />
+}
+
+<div class="ws__panel">
+  <router-outlet />
+</div>
