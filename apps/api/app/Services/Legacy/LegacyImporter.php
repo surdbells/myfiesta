@@ -10,10 +10,12 @@ use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Models\Venue;
 use App\Services\Payments\GatewayFee;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -143,16 +145,35 @@ class LegacyImporter
 
             $this->map->record('user_accounts', $row->id, 'user', $user->id, $inferred);
 
+            // The brand, which is what buyers actually saw. Without it an
+            // organization ends up named after the person rather than the
+            // promoter — "Ada Okoro" where every poster said "Lagos Nights".
+            $brand = $this->brandFor($row->id);
+
+            $organizationName = $brand?->brand_name ?: $name;
+
+            if ($organizationName === '') {
+                $organizationName = (string) $row->email_address;
+            }
+
             $organization = Organization::create([
-                'name' => $name === '' ? (string) $row->email_address : $name,
+                'name' => $organizationName,
                 'slug' => $this->uniqueSlug(
                     Organization::class,
-                    LegacyRules::slugify($name, 'organizer-'.$row->id),
+                    LegacyRules::slugify($organizationName, 'organizer-'.$row->id),
                 ),
-                'contact_email' => strtolower(trim((string) $row->email_address)),
-                'contact_phone' => $row->phone_number ?: null,
+                'description' => $brand?->brand_description ?: null,
+                'contact_email' => strtolower(trim(
+                    $brand?->brand_email_address ?: (string) $row->email_address
+                )),
+                'contact_phone' => $brand?->brand_number ?: ($row->phone_number ?: null),
+                'instagram' => $brand?->brand_instagram ?: null,
+                'facebook' => $brand?->brand_facebook ?: null,
+                'x_handle' => $brand?->brand_twitter ?: null,
                 'created_at' => $row->_registered ?? now(),
             ]);
+
+            $this->importLogo($organization, $brand?->extra_id);
 
             $organization->members()->attach($user->id, [
                 'role' => 'owner',
@@ -164,6 +185,101 @@ class LegacyImporter
             $this->map->record('organization_for_account', $row->id, 'organization', $organization->id);
             $this->tick('organizations');
         }
+    }
+
+    /**
+     * The venue, promoted from a string to a row.
+     *
+     * `events._venue` is a varchar the organizer typed. The same room appears
+     * on every event they run there, so one venue is created per organization
+     * per name and reused — which is the point of the table, and turns "where
+     * is this?" from a string comparison into a relationship.
+     *
+     * Matched case-insensitively on a trimmed name. "The Room" and "the room "
+     * are the same place and an organizer typing it monthly will produce both.
+     */
+    private function venueFor(
+        string $organizationId,
+        ?string $name,
+        string $city,
+        ?string $subdivision,
+        string $timezone,
+    ): ?string {
+        $name = trim((string) $name);
+
+        if ($name === '') {
+            return null;
+        }
+
+        $key = strtolower($name);
+        $cached = $this->map->find('venue_for_org', $organizationId.':'.$key);
+
+        if ($cached) {
+            return $cached;
+        }
+
+        $venue = Venue::create([
+            'organization_id' => $organizationId,
+            'name' => $name,
+            'city' => $city,
+            'subdivision' => $subdivision ?: null,
+            'country' => 'CA',
+            'timezone' => $timezone,
+        ]);
+
+        $this->map->record('venue_for_org', $organizationId.':'.$key, 'venue', $venue->id);
+        $this->tick('venues');
+
+        return $venue->id;
+    }
+
+    /**
+     * The organizer's brand, out of `extra_data`.
+     *
+     * Only the public half of that table. It also holds bank and Interac
+     * payout details and a set of identity documents — legal name, date of
+     * birth, government ID number and a photograph of the document — and none
+     * of that is carried across. Organizers re-verify, and payout details are
+     * confirmed as part of that, so importing bank details that cannot be paid
+     * out until verification completes would move the liability without
+     * bringing forward the moment anybody can be paid.
+     */
+    private function brandFor(int|string $accountId): ?object
+    {
+        return $this->legacy()->table('extra_data')
+            ->select([
+                'extra_id', 'brand_name', 'brand_description', 'brand_number',
+                'brand_email_address', 'brand_twitter', 'brand_facebook', 'brand_instagram',
+            ])
+            ->where('user_account', (string) $accountId)
+            ->first();
+    }
+
+    /**
+     * The organization's logo, which is a data URI in a longtext column.
+     */
+    private function importLogo(Organization $organization, int|string|null $extraId): void
+    {
+        if ($extraId === null) {
+            return;
+        }
+
+        $row = $this->legacy()->table('extra_logo')->where('extra', (string) $extraId)->first();
+
+        $image = LegacyRules::decodeImage($row->logo ?? null);
+
+        if ($image === null) {
+            return;
+        }
+
+        $path = 'organizations/'.$organization->id.'/logo-'.Str::random(8)
+            .'.'.LegacyRules::extensionFor($image['mime']);
+
+        Storage::disk('public')->put($path, $image['bytes']);
+
+        $organization->update(['logo_path' => $path]);
+
+        $this->tick('logos');
     }
 
     /**
@@ -241,6 +357,7 @@ class LegacyImporter
 
             $event = Event::create([
                 'organization_id' => $organizationId,
+                'venue_id' => $this->venueFor($organizationId, $row->_venue, $city, $row->_province, $timezone),
                 'slug' => $this->uniqueSlug(
                     Event::class,
                     LegacyRules::slugify((string) ($row->_slug ?: $row->_title), 'event-'.$row->id),
@@ -367,13 +484,19 @@ class LegacyImporter
 
             $total = $netRevenue->plus($serviceCharge);
 
-            $buyerEmail = $this->buyerEmail($row->_guest);
+            // `First|Last|email`, on every row in that table. Reading it as an
+            // address and falling back to a placeholder threw away the email
+            // for all 2,694 of them, which is where every ticket was sent.
+            $buyer = LegacyRules::parseBuyer($row->_guest);
+
+            $buyerEmail = $buyer['email']
+                ?? 'unknown-'.Str::random(12).'@imported.invalid';
 
             $order = Order::create([
                 'organization_id' => $event->organization_id,
                 'event_id' => $eventId,
                 'buyer_email' => $buyerEmail,
-                'buyer_name' => (string) $row->_guest,
+                'buyer_name' => $buyer['name'] !== '' ? $buyer['name'] : $buyerEmail,
                 'currency' => $event->currency,
                 'subtotal_amount' => $netRevenue->amount,
                 'discount_amount' => 0,
@@ -401,9 +524,71 @@ class LegacyImporter
 
             $this->map->record('tickets_sales', $row->sales_id, 'order', $order->id);
 
+            $this->importOrderLines($order, $row, $netRevenue->amount);
+
             if ($status === 'paid') {
                 $this->writeLedger($order);
             }
+        }
+    }
+
+    /**
+     * What was in the basket.
+     *
+     * Not decoration. Refunds allocate by order line weight — a table of ten
+     * refunds a table's worth and a single ticket refunds a single ticket's —
+     * so an order with no lines has every weight at zero and cannot be
+     * refunded correctly at all. It is also the only record of what anybody
+     * bought, which is the first thing an organizer looks for.
+     *
+     * The basket is in `_ticket`, in two formats from two eras, and every one
+     * of the 2,694 rows reconciles against `_cost` under one of them.
+     */
+    private function importOrderLines(Order $order, object $row, int $expected): void
+    {
+        $lines = LegacyRules::parseBasket($row->_ticket ?? null, $expected);
+
+        if ($lines === []) {
+            $this->note("order {$row->sales_id} has no readable basket");
+
+            return;
+        }
+
+        $written = 0;
+
+        foreach ($lines as $line) {
+            $typeId = $this->map->find('event_tickets', $line['legacy_type_id']);
+
+            if (! $typeId) {
+                // The ticket type was deleted before the dump. The line cannot
+                // be written — order_lines requires the type — and the order
+                // is still worth keeping without it.
+                $this->note(
+                    "order {$row->sales_id}: ticket type {$line['legacy_type_id']} is gone, line dropped"
+                );
+
+                continue;
+            }
+
+            $type = TicketType::find($typeId);
+            $quantity = max(1, $line['quantity']);
+
+            OrderLine::create([
+                'order_id' => $order->id,
+                'ticket_type_id' => $typeId,
+                // Snapshotted, as it is for a live order: the type's price can
+                // change afterwards and this has to stay what was charged.
+                'ticket_type_name' => $type?->name ?? 'Ticket',
+                'unit_price_amount' => intdiv($line['line_total'], $quantity),
+                'quantity' => $quantity,
+                'line_total_amount' => $line['line_total'],
+            ]);
+
+            $written++;
+        }
+
+        if ($written === 0) {
+            $this->note("order {$row->sales_id} imported with no lines at all");
         }
     }
 
@@ -532,25 +717,6 @@ class LegacyImporter
         }
     }
 
-    /**
-     * The buyer's address, which the source does not reliably hold.
-     *
-     * `tickets_sales._guest` is a varchar that is sometimes an email and
-     * sometimes a name. Where there is no address, a placeholder on an
-     * unroutable domain is used rather than a blank: the column is required,
-     * and an address that cannot be delivered to is safer than one that might
-     * belong to somebody else.
-     */
-    private function buyerEmail(?string $guest): string
-    {
-        $guest = trim((string) $guest);
-
-        if (filter_var($guest, FILTER_VALIDATE_EMAIL)) {
-            return strtolower($guest);
-        }
-
-        return 'unknown-'.Str::random(12).'@imported.invalid';
-    }
 
     /**
      * A slug nothing else is using.

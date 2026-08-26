@@ -11,10 +11,14 @@ use Illuminate\Support\Str;
 /**
  * The posters, which are 96% of the old database.
  *
- * `events._poster` is a longblob. 286 rows hold 288 MB — roughly a megabyte of
- * JPEG per event, inside the table that every listing query reads. Selecting a
- * page of events meant dragging their posters through the connection whether
- * or not anybody was going to look at one.
+ * `events._poster` is a longblob holding 288 MB across 286 rows, inside the
+ * table every listing query reads. Selecting a page of events meant dragging
+ * their posters through the connection whether or not anybody was going to
+ * look at one.
+ *
+ * And it is not even images: each row holds the *text* of a data URI, so a
+ * third of that quarter-gigabyte is base64 overhead on top of pictures that
+ * should never have been in a table in the first place.
  *
  * They move to object storage here, which is the actual fix. The row keeps a
  * path.
@@ -64,20 +68,23 @@ class LegacyPosterImporter
                 ->select(['_poster', '_poster_url'])
                 ->first();
 
-            $blob = $row->_poster ?? null;
+            // Not the raw column. It holds the text of a data URI, so it is
+            // decoded to actual image bytes first — see LegacyRules.
+            $image = LegacyRules::decodeImage($row->_poster ?? null);
 
-            if ($blob === null || strlen($blob) < 100) {
-                // Under a hundred bytes is not an image. Several rows hold an
-                // empty string or a stray byte where an upload failed years
-                // ago, and the placeholder filename in `_poster_url` is the
-                // tell.
+            if ($image === null) {
+                // Several rows hold an empty string or a stray byte where an
+                // upload failed years ago, and the placeholder filename in
+                // `_poster_url` is the tell.
                 $empty++;
 
                 continue;
             }
 
+            $blob = $image['bytes'];
+
             try {
-                $extension = $this->extensionFor($blob);
+                $extension = LegacyRules::extensionFor($image['mime']);
                 $path = 'events/'.$eventId.'/banner-'.Str::random(8).'.'.$extension;
 
                 Storage::disk('public')->put($path, $blob);
@@ -89,7 +96,7 @@ class LegacyPosterImporter
                 // of object storage.
                 $size = @getimagesizefromstring($blob) ?: null;
 
-                $image = EventImage::create([
+                $record = EventImage::create([
                     'event_id' => $eventId,
                     // The poster is the banner. There is no separate poster
                     // concept in this schema — events.poster_path was replaced
@@ -99,11 +106,11 @@ class LegacyPosterImporter
                     'width' => $size[0] ?? null,
                     'height' => $size[1] ?? null,
                     'byte_size' => strlen($blob),
-                    'mime' => $size['mime'] ?? null,
+                    'mime' => $image['mime'],
                     'position' => 0,
                 ]);
 
-                $this->map->record('event_poster', $legacyId, 'event_image', $image->id);
+                $this->map->record('event_poster', $legacyId, 'event_image', $record->id);
 
                 $moved++;
                 $bytes += strlen($blob);
@@ -121,20 +128,4 @@ class LegacyPosterImporter
         return ['moved' => $moved, 'empty' => $empty, 'failed' => $failed, 'bytes' => $bytes];
     }
 
-    /**
-     * What kind of image this is, from its first bytes.
-     *
-     * Not from `_poster_url`, which is a filename somebody typed and is
-     * 'placeholder.png' on most rows regardless of what the blob holds.
-     */
-    private function extensionFor(string $blob): string
-    {
-        return match (true) {
-            str_starts_with($blob, "\xFF\xD8\xFF") => 'jpg',
-            str_starts_with($blob, "\x89PNG") => 'png',
-            str_starts_with($blob, 'GIF8') => 'gif',
-            str_starts_with($blob, 'RIFF') && str_contains(substr($blob, 0, 16), 'WEBP') => 'webp',
-            default => 'bin',
-        };
-    }
 }

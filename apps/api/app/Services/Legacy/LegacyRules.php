@@ -171,6 +171,244 @@ final class LegacyRules
     }
 
     /**
+     * The buyer, out of a pipe-delimited string.
+     *
+     * `tickets_sales._guest` is not an email address. It is
+     * `First|Last|email`, on all 2,694 rows without exception — which means a
+     * check for "does this validate as an email" fails on every one of them,
+     * and an importer that falls back to a placeholder throws away the
+     * address every ticket on the platform was ever sent to.
+     *
+     * @return array{name: string, email: ?string}
+     */
+    public static function parseBuyer(?string $guest): array
+    {
+        $parts = array_map(trim(...), explode('|', (string) $guest));
+
+        // Take the address from wherever it is rather than from position 3.
+        // A name with a pipe in it, or an older two-part row, would otherwise
+        // shift everything along by one.
+        $email = null;
+
+        foreach ($parts as $i => $part) {
+            if (filter_var($part, FILTER_VALIDATE_EMAIL)) {
+                $email = strtolower($part);
+                unset($parts[$i]);
+
+                break;
+            }
+        }
+
+        $name = trim(implode(' ', array_filter($parts)));
+
+        return ['name' => $name, 'email' => $email];
+    }
+
+    /**
+     * What was in the basket.
+     *
+     * Held in `_ticket` (and duplicated in `_quantity`) in two formats, from
+     * two eras of the same writer:
+     *
+     *   pipe    `82|1|50-83|2|20` — lines joined by `-`, fields by `|`,
+     *           as id, quantity, and an amount in whole dollars
+     *   base64  a JSON array of every ticket type on the event, each with a
+     *           `quantity` that is zero for the ones not bought
+     *
+     * The third pipe field is the ambiguous one: on 478 of the 575 rows where
+     * quantity exceeds one it is the line total, and on the other 97 it is the
+     * unit price. Nothing in the row says which. So both are tried and the one
+     * that reconciles against what was actually charged wins — every one of
+     * the 1,761 pipe rows reconciles under exactly one of them.
+     *
+     * @return list<array{legacy_type_id: string, quantity: int, line_total: int}>
+     */
+    public static function parseBasket(?string $basket, int $costMinor): array
+    {
+        $basket = trim((string) $basket);
+
+        if ($basket === '') {
+            return [];
+        }
+
+        $decoded = self::decodeJsonBasket($basket);
+
+        if ($decoded !== null) {
+            return $decoded;
+        }
+
+        $segments = array_map(
+            fn (string $s) => array_map(trim(...), explode('|', $s)),
+            explode('-', $basket),
+        );
+
+        foreach ($segments as $parts) {
+            if (count($parts) !== 3 || ! is_numeric($parts[1]) || ! is_numeric($parts[2])) {
+                return [];
+            }
+        }
+
+        // Whole dollars in the source; minor units everywhere here.
+        $asLineTotal = array_map(fn (array $p) => [
+            'legacy_type_id' => $p[0],
+            'quantity' => (int) $p[1],
+            'line_total' => (int) $p[2] * 100,
+        ], $segments);
+
+        $asUnitPrice = array_map(fn (array $p) => [
+            'legacy_type_id' => $p[0],
+            'quantity' => (int) $p[1],
+            'line_total' => (int) $p[1] * (int) $p[2] * 100,
+        ], $segments);
+
+        $sum = fn (array $lines) => array_sum(array_column($lines, 'line_total'));
+
+        if ($sum($asLineTotal) === $costMinor) {
+            return $asLineTotal;
+        }
+
+        if ($sum($asUnitPrice) === $costMinor) {
+            return $asUnitPrice;
+        }
+
+        // Neither reconciles. Return the more common reading rather than
+        // nothing — an order with lines that are slightly wrong is still an
+        // order somebody can look at, and the importer records that it did
+        // not balance.
+        return $asLineTotal;
+    }
+
+    /**
+     * The base64 form: a snapshot of every ticket type, most with quantity 0.
+     *
+     * Returns null when the string is not that format, so the caller can fall
+     * through to the pipe reading.
+     *
+     * @return list<array{legacy_type_id: string, quantity: int, line_total: int}>|null
+     */
+    private static function decodeJsonBasket(string $basket): ?array
+    {
+        if (! str_starts_with($basket, 'W3si')) {
+            return null;
+        }
+
+        $json = base64_decode($basket, true);
+
+        if ($json === false) {
+            return null;
+        }
+
+        $rows = json_decode($json, true);
+
+        if (! is_array($rows)) {
+            return null;
+        }
+
+        $lines = [];
+
+        foreach ($rows as $row) {
+            $quantity = (int) ($row['quantity'] ?? 0);
+
+            // The snapshot lists everything that was on sale. Only the ones
+            // with a quantity were bought.
+            if ($quantity <= 0 || ! isset($row['id'])) {
+                continue;
+            }
+
+            // `total` is the line total in dollars, and `price` is a string
+            // like "45.00" on newer rows and a bare number on older ones.
+            $total = $row['total'] ?? null;
+
+            $lines[] = [
+                'legacy_type_id' => (string) $row['id'],
+                'quantity' => $quantity,
+                'line_total' => $total !== null
+                    ? (int) round(((float) $total) * 100)
+                    : (int) round(((float) ($row['price'] ?? 0)) * 100) * $quantity,
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The actual image bytes out of a "blob".
+     *
+     * `events._poster` is declared longblob and does not hold an image. It
+     * holds the *text* of a data URI — `data:image/jpeg;base64,/9j/4AAQ...` —
+     * and so do `event_posters._poster`, `extra_logo.logo` and
+     * `user_accounts.photo`. There is not one raw JPEG header anywhere in that
+     * database.
+     *
+     * Which is also most of why it is 354 MB: base64 costs a third again on
+     * top of the images, and the images were already in the table.
+     *
+     * Writing the column straight to storage produces 286 files full of
+     * base64 text that no browser will render, named for a magic number that
+     * was never there.
+     *
+     * @return array{bytes: string, mime: ?string}|null
+     */
+    public static function decodeImage(?string $blob): ?array
+    {
+        $blob = (string) $blob;
+
+        if (strlen($blob) < 32) {
+            return null;
+        }
+
+        if (preg_match('#^data:([-\w./+]+)?;base64,#i', $blob, $m) === 1) {
+            $bytes = base64_decode(substr($blob, strlen($m[0])), true);
+
+            if ($bytes === false || strlen($bytes) < 32) {
+                return null;
+            }
+
+            // The declared type is a claim, not evidence. Sniffed below and
+            // only used when sniffing finds nothing.
+            return ['bytes' => $bytes, 'mime' => self::sniffMime($bytes) ?? ($m[1] ?? null)];
+        }
+
+        // Bare base64 with no header, which a handful of rows use.
+        if (preg_match('#^[A-Za-z0-9+/\r\n]+={0,2}$#', substr($blob, 0, 128)) === 1) {
+            $bytes = base64_decode($blob, true);
+
+            if ($bytes !== false && self::sniffMime($bytes) !== null) {
+                return ['bytes' => $bytes, 'mime' => self::sniffMime($bytes)];
+            }
+        }
+
+        // Already an image.
+        $mime = self::sniffMime($blob);
+
+        return $mime === null ? null : ['bytes' => $blob, 'mime' => $mime];
+    }
+
+    /** The type from the first bytes, which is the only trustworthy source. */
+    public static function sniffMime(string $bytes): ?string
+    {
+        return match (true) {
+            str_starts_with($bytes, "\xFF\xD8\xFF") => 'image/jpeg',
+            str_starts_with($bytes, "\x89PNG") => 'image/png',
+            str_starts_with($bytes, 'GIF8') => 'image/gif',
+            str_starts_with($bytes, 'RIFF') && str_contains(substr($bytes, 0, 16), 'WEBP') => 'image/webp',
+            default => null,
+        };
+    }
+
+    /** The file extension for a sniffed mime type. */
+    public static function extensionFor(?string $mime): string
+    {
+        return match ($mime) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => 'bin',
+        };
+    }
+
+    /**
      * A slug for an organization or event that has none.
      *
      * The old events table has a `_slug` text column that is frequently null.

@@ -150,6 +150,27 @@ class LegacyImportTest extends TestCase
             $t->boolean('is_checkedin')->default(false);
         });
 
+        $this->legacy()->create('extra_data', function ($t) {
+            $t->integer('extra_id')->primary();
+            $t->string('user_account');
+            $t->string('brand_name')->nullable();
+            $t->text('brand_description')->nullable();
+            $t->string('brand_number')->nullable();
+            $t->string('brand_email_address')->nullable();
+            $t->string('brand_twitter')->nullable();
+            $t->string('brand_facebook')->nullable();
+            $t->string('brand_instagram')->nullable();
+            // The columns this import deliberately does not read.
+            $t->string('bank_account_number')->nullable();
+            $t->string('legal_doc_num')->nullable();
+        });
+
+        $this->legacy()->create('extra_logo', function ($t) {
+            $t->integer('id')->primary();
+            $t->string('extra');
+            $t->text('logo');
+        });
+
         $this->legacy()->create('settlements', function ($t) {
             $t->integer('id')->primary();
             $t->string('event');
@@ -220,16 +241,18 @@ class LegacyImportTest extends TestCase
 
         $db->table('tickets_sales')->insert([
             [
-                'sales_id' => 17, '_event' => '176', '_ticket' => '58',
-                '_guest' => 'buyer@example.test', '_quantity' => '3',
-                '_cost' => 1500,               // $15.00, in cents
+                'sales_id' => 17, '_event' => '176', '_ticket' => '58|3|15',
+                // The real shape: First|Last|email, on every row in that
+                // table. A basket of three at $5.
+                '_guest' => 'Ada|Buyer|buyer@example.test',
+                '_quantity' => '58|3|15', '_cost' => 1500,
                 '_ticket_status' => 'PAID', '_checkout' => 'cs_live_abc123',
                 '_payment_status' => 'paid', '_pdate' => '2024-05-11 18:00:00',
             ],
             [
                 // One of the 981. Two years at PENDING.
-                'sales_id' => 18, '_event' => '176', '_ticket' => '58',
-                '_guest' => 'Someone Who Left', '_quantity' => '1',
+                'sales_id' => 18, '_event' => '176', '_ticket' => '58|1|5',
+                '_guest' => 'Someone|Who Left|left@example.test', '_quantity' => '58|1|5',
                 '_cost' => 500, '_ticket_status' => 'PENDING',
                 '_checkout' => 'AWAITING', '_payment_status' => 'PENDING',
                 '_pdate' => '2024-05-11 18:05:00',
@@ -251,6 +274,25 @@ class LegacyImportTest extends TestCase
             ],
         ]);
 
+        $db->table('extra_data')->insert([[
+            'extra_id' => 12, 'user_account' => '26',
+            'brand_name' => 'Lagos Nights', 'brand_description' => 'Afrobeats, monthly.',
+            'brand_number' => '+14165550199', 'brand_email_address' => 'hello@lagosnights.test',
+            'brand_twitter' => 'lagosnights', 'brand_facebook' => 'lagosnightsto',
+            'brand_instagram' => 'lagos.nights',
+            // Present, and deliberately not carried across.
+            'bank_account_number' => '000123456', 'legal_doc_num' => 'AB1234567',
+        ]]);
+
+        // A one-pixel PNG, as a data URI — which is how every image in that
+        // database is actually stored, longblob column or not.
+        $db->table('extra_logo')->insert([[
+            'id' => 5, 'extra' => '12',
+            'logo' => 'data:image/png;base64,'.base64_encode(base64_decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+            )),
+        ]]);
+
         $db->table('settlements')->insert([[
             'id' => 40, 'event' => '176', 'organizer' => '26',
             'amount' => 12.34, 'type' => 'full', 'note' => 'Paid by Interac',
@@ -271,7 +313,9 @@ class LegacyImportTest extends TestCase
         $this->import();
 
         $user = User::where('email', 'ada@lagosnights.test')->firstOrFail();
-        $organization = Organization::where('contact_email', 'ada@lagosnights.test')->firstOrFail();
+        // The account's own address, not the organization's: the brand has a
+        // public one of its own and they are different things.
+        $organization = Organization::where('name', 'Lagos Nights')->firstOrFail();
 
         $this->assertSame('Ada Okoro', $user->name);
         // The old system had no organizations. One is derived per organizer,
@@ -353,6 +397,95 @@ class LegacyImportTest extends TestCase
         // Recomputed, not carried. The source stored this as a generated
         // column that added 0.30 to an amount in cents.
         $this->assertSame(77, $order->gateway_fee_amount, '2.9% of 1620, plus thirty cents.');
+    }
+
+    public function test_the_buyers_real_email_and_name_survive(): void
+    {
+        $this->import();
+
+        $order = Order::where('status', 'paid')->firstOrFail();
+
+        // `_guest` is First|Last|email on every row in that table. Treating it
+        // as an address and falling back to a placeholder lost the real one
+        // for all 2,694 orders — and with it any chance of a buyer finding
+        // their own ticket.
+        $this->assertSame('buyer@example.test', $order->buyer_email);
+        $this->assertSame('Ada Buyer', $order->buyer_name);
+        $this->assertStringNotContainsString('imported.invalid', $order->buyer_email);
+    }
+
+    public function test_an_order_arrives_with_the_basket_that_was_bought(): void
+    {
+        $this->import();
+
+        $order = Order::where('status', 'paid')->with('lines')->firstOrFail();
+
+        $this->assertCount(1, $order->lines);
+
+        $line = $order->lines->first();
+
+        $this->assertSame(3, $line->quantity);
+        $this->assertSame(500, $line->unit_price_amount);
+        $this->assertSame(1500, $line->line_total_amount);
+        $this->assertSame('Standard Ticket', $line->ticket_type_name);
+
+        // The lines have to add up to what was charged, or refunds allocate
+        // against weights that do not describe the order.
+        $this->assertSame(
+            $order->net_revenue_amount,
+            (int) $order->lines->sum('line_total_amount'),
+        );
+    }
+
+    public function test_a_migrated_order_can_actually_be_refunded(): void
+    {
+        $this->import();
+
+        $order = Order::where('status', 'paid')->firstOrFail();
+
+        // The reason order lines are not decoration. RefundService allocates
+        // by line weight; with no lines every weight is zero and the refund
+        // is refused as being worth nothing.
+        $share = (new \ReflectionMethod(\App\Services\Refunds\RefundService::class, 'shareFor'))
+            ->invoke(app(\App\Services\Refunds\RefundService::class), $order, $order->tickets);
+
+        $this->assertGreaterThan(0, $share['amount']);
+    }
+
+    public function test_the_organization_is_named_for_the_brand_not_the_person(): void
+    {
+        $this->import();
+
+        // Every poster said "Lagos Nights". The account is in somebody's own
+        // name, and naming the organization after the account puts the wrong
+        // one in front of buyers.
+        $organization = Organization::where('name', 'Lagos Nights')->firstOrFail();
+
+        $this->assertSame('Afrobeats, monthly.', $organization->description);
+        $this->assertSame('hello@lagosnights.test', $organization->contact_email);
+        $this->assertSame('lagos.nights', $organization->instagram);
+        $this->assertNotNull($organization->logo_path, 'The logo is a data URI, not image bytes.');
+    }
+
+    public function test_bank_details_and_identity_documents_are_left_behind(): void
+    {
+        $this->import();
+
+        // Organizers re-verify. Carrying payout details across without the
+        // verification that releases them moves the liability without
+        // bringing forward the moment anybody can be paid.
+        $this->assertSame(0, DB::table('organization_payout_details')->count());
+        $this->assertSame(0, DB::table('organization_identity_documents')->count());
+    }
+
+    public function test_the_venue_becomes_a_row_and_is_reused(): void
+    {
+        $this->import();
+
+        $event = Event::where('title', 'Standard Night')->firstOrFail();
+
+        $this->assertNotNull($event->venue_id);
+        $this->assertSame('The Room', $event->venue->name);
     }
 
     public function test_an_abandoned_checkout_arrives_cancelled(): void
