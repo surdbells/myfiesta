@@ -1,4 +1,6 @@
 import { Component, ElementRef, computed, effect, inject, input, output, viewChild } from '@angular/core';
+import { X } from 'lucide-angular';
+import { UiIcon } from './icon';
 
 /**
  * A dialog, built on the native `<dialog>`.
@@ -15,6 +17,7 @@ import { Component, ElementRef, computed, effect, inject, input, output, viewChi
  */
 @Component({
   selector: 'ui-modal',
+  imports: [UiIcon],
   template: `
     <dialog #dialog class="modal" (close)="dismissed.emit()" (click)="onBackdrop($event)">
       <div class="modal__panel">
@@ -26,7 +29,7 @@ import { Component, ElementRef, computed, effect, inject, input, output, viewChi
             aria-label="Close"
             (click)="close()"
           >
-            ×
+            <ui-icon [icon]="closeIcon" />
           </button>
         </header>
 
@@ -77,7 +80,7 @@ import { Component, ElementRef, computed, effect, inject, input, output, viewChi
     }
     .modal__x {
       /* 44px, because this is the control somebody reaches for in a hurry and
-         a 24px × is a miss on a phone. */
+         a 24px close target is a miss on a phone. */
       width: 44px;
       height: 44px;
       margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0;
@@ -108,6 +111,9 @@ import { Component, ElementRef, computed, effect, inject, input, output, viewChi
   `,
 })
 export class UiModal {
+  /** Not a signal: it never changes, and a computed would only add ceremony. */
+  protected readonly closeIcon = X;
+
   readonly heading = input.required<string>();
   readonly description = input<string | null>(null);
 
@@ -115,7 +121,7 @@ export class UiModal {
   readonly open = input(false);
 
   /**
-   * Closed by Escape, the backdrop, or the ×.
+   * Closed by Escape, the backdrop, or the close button.
    *
    * Named for what happened rather than what to do about it: the caller decides
    * whether dismissing means cancelling.

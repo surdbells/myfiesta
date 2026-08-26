@@ -1,4 +1,6 @@
 import { Component, Injectable, computed, inject, signal } from '@angular/core';
+import { X } from 'lucide-angular';
+import { UiIcon } from './icon';
 
 export interface Toast {
   id: number;
@@ -53,12 +55,15 @@ export class ToastStore {
  */
 @Component({
   selector: 'ui-toasts',
+  imports: [UiIcon],
   template: `
     <div class="toasts" role="status" aria-live="polite">
       @for (toast of store.toasts(); track toast.id) {
         <div class="toast" [class]="'toast--' + toast.tone">
           <span>{{ toast.message }}</span>
-          <button type="button" aria-label="Dismiss" (click)="store.dismiss(toast.id)">×</button>
+          <button type="button" aria-label="Dismiss" (click)="store.dismiss(toast.id)">
+            <ui-icon [icon]="closeIcon" size="sm" />
+          </button>
         </div>
       }
     </div>
@@ -115,5 +120,7 @@ export class ToastStore {
   `,
 })
 export class UiToasts {
+  protected readonly closeIcon = X;
+
   readonly store = inject(ToastStore);
 }

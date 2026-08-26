@@ -11,6 +11,9 @@
  * CSS turned out to be.
  */
 
+// Icons
+export { UiIcon, type IconSize, type LucideIconData } from './icon';
+
 // Actions
 export { UiButton } from './button';
 

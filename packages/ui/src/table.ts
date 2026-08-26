@@ -1,4 +1,6 @@
 import { Component, computed, input, output } from '@angular/core';
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-angular';
+import { UiIcon, type LucideIconData } from './icon';
 
 /** Which way a column is sorted, or not. */
 export type SortDirection = 'asc' | 'desc' | null;
@@ -123,6 +125,7 @@ export class UiTable {
  */
 @Component({
   selector: 'th[uiSort]',
+  imports: [UiIcon],
   host: {
     '[attr.aria-sort]': 'ariaSort()',
     scope: 'col',
@@ -130,7 +133,7 @@ export class UiTable {
   template: `
     <button type="button" class="sort" (click)="toggle()">
       <span>{{ label() }}</span>
-      <span class="sort__mark" aria-hidden="true">{{ mark() }}</span>
+      <ui-icon class="sort__mark" [class.is-sorted]="isSorted()" [icon]="mark()" size="sm" />
     </button>
   `,
   styles: `
@@ -150,11 +153,16 @@ export class UiTable {
     }
     .sort:hover { color: var(--text); background-color: var(--surface-inset); }
     .sort__mark {
-      /* Reserved whether or not this column is the sorted one, so turning
-         sorting on does not shift every other heading sideways. */
-      width: 0.75em;
-      font-size: var(--font-size-xs);
+      /* Always present, so turning sorting on does not shift every other
+         heading sideways — and faded until this is the sorted column, so it
+         reads as an invitation rather than as a claim. */
+      color: var(--text-subtle);
+      opacity: 0.5;
+    }
+    .sort:hover .sort__mark { opacity: 0.9; }
+    .sort__mark.is-sorted {
       color: var(--primary-text);
+      opacity: 1;
     }
   `,
 })
@@ -183,10 +191,23 @@ export class UiSortHeader {
         : 'none';
   });
 
-  readonly mark = computed(() => {
+  /**
+   * The glyph, including one for "sortable, but not sorted".
+   *
+   * The unsorted state used to render nothing, which cost two things: the
+   * heading shifted sideways the moment somebody sorted it, and a column gave
+   * no sign it could be sorted until it already had been. A faded double
+   * chevron answers both — it holds the space and it is the conventional
+   * invitation.
+   */
+  readonly mark = computed<LucideIconData>(() => {
     const direction = this.direction();
-    return direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '';
+
+    return direction === 'asc' ? ChevronUp : direction === 'desc' ? ChevronDown : ChevronsUpDown;
   });
+
+  /** Whether this column is the one being sorted by. Drives the fade. */
+  readonly isSorted = computed(() => this.direction() !== null);
 
   toggle(): void {
     this.sorted.emit({

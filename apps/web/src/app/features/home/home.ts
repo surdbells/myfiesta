@@ -5,6 +5,8 @@ import { Api } from '../../core/api';
 import { CONSOLE_URL } from '../../core/console-url';
 import { Discovery, EventSummary } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
+import { ArrowRight, Search } from 'lucide-angular';
+import { UiIcon } from '@myfiesta/ui';
 import { EventCard } from '../../shared/event-card';
 import { OrganizerPitch } from '../../shared/organizer-pitch';
 
@@ -31,11 +33,14 @@ interface Rail {
  */
 @Component({
   selector: 'app-home',
-  imports: [RouterLink, FormsModule, EventCard, OrganizerPitch],
+  imports: [RouterLink, FormsModule, EventCard, OrganizerPitch, UiIcon],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })
 export class Home {
+  protected readonly arrowIcon = ArrowRight;
+  protected readonly searchIcon = Search;
+
   private readonly api = inject(Api);
   private readonly router = inject(Router);
 

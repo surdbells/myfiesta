@@ -1,4 +1,6 @@
 import { Component, ElementRef, effect, input, output, viewChild } from '@angular/core';
+import { X } from 'lucide-angular';
+import { UiIcon } from './icon';
 
 /**
  * A panel that slides in from the edge.
@@ -18,6 +20,7 @@ import { Component, ElementRef, effect, input, output, viewChild } from '@angula
  */
 @Component({
   selector: 'ui-drawer',
+  imports: [UiIcon],
   template: `
     <dialog
       #dialog
@@ -29,7 +32,9 @@ import { Component, ElementRef, effect, input, output, viewChild } from '@angula
       <div class="drawer__panel">
         <header class="drawer__head">
           <h2 class="drawer__title">{{ heading() }}</h2>
-          <button type="button" class="drawer__x" aria-label="Close" (click)="close()">×</button>
+          <button type="button" class="drawer__x" aria-label="Close" (click)="close()">
+            <ui-icon [icon]="closeIcon" />
+          </button>
         </header>
 
         <div class="drawer__body"><ng-content /></div>
@@ -119,6 +124,8 @@ import { Component, ElementRef, effect, input, output, viewChild } from '@angula
   `,
 })
 export class UiDrawer {
+  protected readonly closeIcon = X;
+
   readonly heading = input.required<string>();
 
   /** Which edge it comes from. `end` (the right) unless it is navigation. */

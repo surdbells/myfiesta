@@ -221,10 +221,6 @@
   background-color: var(--primary-hover);
 }
 
-.finder__go-mark {
-  display: none;
-}
-
 @media (max-width: 640px) {
   .hero__inner {
     padding-block: var(--space-7) var(--space-6);
@@ -234,15 +230,11 @@
     font-size: var(--font-size-base);
   }
 
-  /* The word goes, the arrow arrives: a full-width label would push the two
-     fields down to nothing on a narrow screen. */
+  /* The word goes and the magnifier stays, which is the one icon that needs
+     no label. A full-width "Search" would push the two fields down to nothing
+     on a narrow screen. */
   .finder__go-word {
     display: none;
-  }
-
-  .finder__go-mark {
-    display: inline;
-    font-size: var(--font-size-lg);
   }
 
   .finder__go {
@@ -368,6 +360,9 @@
 }
 
 .all a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-weight: var(--font-weight-medium);
   color: var(--primary-text);
   text-decoration: none;

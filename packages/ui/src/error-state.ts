@@ -1,4 +1,6 @@
 import { Component, input, output } from '@angular/core';
+import { CircleAlert, RotateCw } from 'lucide-angular';
+import { UiIcon } from './icon';
 import { UiButton } from './button';
 
 /**
@@ -15,10 +17,10 @@ import { UiButton } from './button';
  */
 @Component({
   selector: 'ui-error-state',
-  imports: [UiButton],
+  imports: [UiButton, UiIcon],
   template: `
     <div class="err" role="alert">
-      <span class="err__mark" aria-hidden="true">!</span>
+      <span class="err__mark"><ui-icon [icon]="markIcon" /></span>
 
       <div class="err__body">
         <p class="err__title">{{ title() }}</p>
@@ -32,6 +34,7 @@ import { UiButton } from './button';
       </div>
 
       <button uiButton variant="secondary" size="sm" type="button" (click)="retried.emit()">
+        <ui-icon [icon]="retryIcon" size="sm" />
         Try again
       </button>
     </div>
@@ -52,7 +55,6 @@ import { UiButton } from './button';
       flex-shrink: 0;
       width: 2rem;
       height: 2rem;
-      font-weight: var(--font-weight-semibold);
       color: var(--danger-text);
       background-color: color-mix(in srgb, var(--danger) 12%, transparent);
       border-radius: var(--radius-full);
@@ -68,6 +70,9 @@ import { UiButton } from './button';
   `,
 })
 export class UiErrorState {
+  protected readonly markIcon = CircleAlert;
+  protected readonly retryIcon = RotateCw;
+
   readonly title = input('Something went wrong');
 
   /**

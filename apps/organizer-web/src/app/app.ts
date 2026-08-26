@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiToasts } from '@myfiesta/ui';
+import { UiIcon, UiToasts, type LucideIconData } from '@myfiesta/ui';
+import { CalendarDays, LayoutDashboard, Menu, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -8,7 +9,7 @@ import { SessionStore } from './core/session';
 interface NavItem {
   readonly label: string;
   readonly link: string;
-  readonly glyph: string;
+  readonly glyph: LucideIconData;
   /** Only `/` needs exact matching; everything else owns its subtree. */
   readonly exact?: boolean;
 }
@@ -20,7 +21,7 @@ interface NavGroup {
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -28,6 +29,9 @@ export class App {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
+
+  protected readonly menuIcon = Menu;
+  protected readonly closeIcon = X;
 
   /** The drawer, on a small screen. Closed on every navigation. */
   readonly navOpen = signal(false);
@@ -50,11 +54,11 @@ export class App {
     const groups: NavGroup[] = [
       {
         title: 'Overview',
-        items: [{ label: 'Dashboard', link: '/', glyph: '◧', exact: true }],
+        items: [{ label: 'Dashboard', link: '/', glyph: LayoutDashboard, exact: true }],
       },
       {
         title: 'Programme',
-        items: [{ label: 'Events', link: '/events', glyph: '▤' }],
+        items: [{ label: 'Events', link: '/events', glyph: CalendarDays }],
       },
     ];
 

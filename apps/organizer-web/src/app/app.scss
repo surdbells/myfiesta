@@ -165,11 +165,15 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* Dimmed against the label, which is the thing being read. The current
+   section inherits its colour below and comes back to full strength. */
 .nav__glyph {
-  width: 1.25rem;
-  font-size: var(--font-size-sm);
-  text-align: center;
-  opacity: 0.9;
+  color: var(--text-subtle);
+}
+
+.nav__link:hover .nav__glyph,
+.nav__link.is-current .nav__glyph {
+  color: inherit;
 }
 
 /* --- who, and the way out ------------------------------------------------- */

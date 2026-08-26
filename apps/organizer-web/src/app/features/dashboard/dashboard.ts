@@ -5,8 +5,10 @@ import {
   UiEmpty,
   UiErrorState,
   UiPageHeader,
+  UiIcon,
   UiSkeleton,
 } from '@myfiesta/ui';
+import { PencilLine, Plus, Ticket, TrendingUp, Wallet } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { Money, NextEvent, Overview } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
@@ -26,11 +28,17 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink, UiPageHeader, UiButton, UiSkeleton, UiEmpty, UiErrorState],
+  imports: [RouterLink, UiPageHeader, UiButton, UiSkeleton, UiEmpty, UiErrorState, UiIcon],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
 })
 export class Dashboard {
+  protected readonly addIcon = Plus;
+  protected readonly walletIcon = Wallet;
+  protected readonly soldIcon = TrendingUp;
+  protected readonly ticketIcon = Ticket;
+  protected readonly draftIcon = PencilLine;
+
   private readonly api = inject(Api);
   readonly session = inject(SessionStore);
 

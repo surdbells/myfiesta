@@ -3,7 +3,10 @@
   [subtitle]="session.current()?.name ?? null"
 >
   @if (session.canEditEvents()) {
-    <a uiButton routerLink="/events/new">New event</a>
+    <a uiButton routerLink="/events/new">
+      <ui-icon [icon]="addIcon" size="sm" />
+      New event
+    </a>
   }
 </ui-page-header>
 
@@ -54,26 +57,26 @@
   <div class="stats">
     @if (data.money; as money) {
       <div class="stat stat--lead">
-        <p class="stat__label">Owed to you</p>
+        <p class="stat__label"><ui-icon [icon]="walletIcon" size="sm" />Owed to you</p>
         <p class="stat__figure">{{ cash(money.balance) }}</p>
         <p class="stat__note">Paid out after each event</p>
       </div>
 
       <div class="stat">
-        <p class="stat__label">Sold, last 7 days</p>
+        <p class="stat__label"><ui-icon [icon]="soldIcon" size="sm" />Sold, last 7 days</p>
         <p class="stat__figure">{{ cash(money.sold_7d) }}</p>
         <p class="stat__note">{{ money.orders_7d }} orders</p>
       </div>
     }
 
     <div class="stat">
-      <p class="stat__label">Tickets out</p>
+      <p class="stat__label"><ui-icon [icon]="ticketIcon" size="sm" />Tickets out</p>
       <p class="stat__figure">{{ data.selling.tickets_upcoming }}</p>
       <p class="stat__note">Across {{ data.selling.upcoming_events }} upcoming events</p>
     </div>
 
     <div class="stat">
-      <p class="stat__label">Drafts</p>
+      <p class="stat__label"><ui-icon [icon]="draftIcon" size="sm" />Drafts</p>
       <p class="stat__figure">{{ data.selling.draft_events }}</p>
       <p class="stat__note">Not visible to anybody</p>
     </div>

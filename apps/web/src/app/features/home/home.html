@@ -32,7 +32,7 @@
         <p class="hero__actions">
           <a class="hero__cta" [routerLink]="['/', event.slug]">
             {{ price(event) }}
-            <span aria-hidden="true">→</span>
+            <ui-icon [icon]="arrowIcon" size="sm" />
           </a>
         </p>
       } @else {
@@ -78,9 +78,15 @@
         </datalist>
       </div>
 
-      <button class="finder__go" type="submit">
+      <!--
+        Labelled on the button rather than left to the word inside it. Below
+        640px that word is `display: none`, which takes it out of the
+        accessibility tree as well as off the screen — leaving a submit button
+        holding nothing but a decorative icon, and no name at all.
+      -->
+      <button class="finder__go" type="submit" aria-label="Search">
+        <ui-icon [icon]="searchIcon" size="sm" />
         <span class="finder__go-word">Search</span>
-        <span class="finder__go-mark" aria-hidden="true">→</span>
       </button>
     </form>
   </div>
@@ -161,7 +167,12 @@
       </section>
     }
 
-    <p class="all"><a routerLink="/events">See everything on sale →</a></p>
+    <p class="all">
+      <a routerLink="/events">
+        See everything on sale
+        <ui-icon [icon]="arrowIcon" size="sm" />
+      </a>
+    </p>
   }
 </div>
 

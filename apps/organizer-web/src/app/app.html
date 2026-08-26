@@ -19,7 +19,7 @@
           aria-label="Close menu"
           (click)="navOpen.set(false)"
         >
-          ×
+          <ui-icon [icon]="closeIcon" />
         </button>
       </div>
 
@@ -63,7 +63,7 @@
                 [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
                 (click)="navOpen.set(false)"
               >
-                <span class="nav__glyph" aria-hidden="true">{{ item.glyph }}</span>
+                <ui-icon class="nav__glyph" [icon]="item.glyph" size="sm" />
                 <span>{{ item.label }}</span>
               </a>
             }
@@ -103,7 +103,7 @@
           [attr.aria-expanded]="navOpen()"
           (click)="navOpen.set(!navOpen())"
         >
-          <span aria-hidden="true">☰</span>
+          <ui-icon [icon]="menuIcon" />
         </button>
 
         @if (session.current(); as org) {

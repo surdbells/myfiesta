@@ -1,4 +1,6 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
+import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-angular';
+import { UiIcon, type LucideIconData } from './icon';
 
 /** The four things an alert can be telling you. */
 export type AlertTone = 'success' | 'danger' | 'warning' | 'info';
@@ -16,9 +18,10 @@ export type AlertTone = 'success' | 'danger' | 'warning' | 'info';
  */
 @Component({
   selector: 'ui-alert',
+  imports: [UiIcon],
   template: `
     <div class="alert" [class]="'alert--' + tone()" [attr.role]="tone() === 'danger' ? 'alert' : 'status'">
-      <span class="alert__mark" aria-hidden="true">{{ mark() }}</span>
+      <ui-icon class="alert__mark" [icon]="mark()" />
       <div class="alert__body">
         @if (title()) {
           <p class="alert__title">{{ title() }}</p>
@@ -37,8 +40,10 @@ export type AlertTone = 'success' | 'danger' | 'warning' | 'info';
       border-radius: var(--radius-md);
     }
     .alert__mark {
-      font-weight: var(--font-weight-bold);
-      line-height: var(--font-leading-normal);
+      /* Nudged down to sit on the first line of the text rather than above it:
+         an icon aligned to the box centres itself against a two-line message
+         and floats away from the sentence it belongs to. */
+      margin-top: 1px;
     }
     .alert__body { min-width: 0; }
     .alert__title {
@@ -72,15 +77,20 @@ export class UiAlert {
   readonly tone = input<AlertTone>('info');
   readonly title = input<string | null>(null);
 
-  /** Keyed by the tone union, so a new tone cannot be added without a mark. */
-  private static readonly marks: Record<AlertTone, string> = {
-    success: '✓',
-    danger: '!',
-    warning: '!',
-    info: 'i',
+  /**
+   * Keyed by the tone union, so a new tone cannot be added without a mark.
+   *
+   * Danger and warning get different glyphs now, which typing them as a
+   * bare exclamation mark could not do — a circle reads as a stop and a
+   * triangle as a caution, and that distinction is the whole reason the two
+   * tones exist.
+   */
+  private static readonly marks: Record<AlertTone, LucideIconData> = {
+    success: CircleCheck,
+    danger: CircleAlert,
+    warning: TriangleAlert,
+    info: Info,
   };
 
-  mark(): string {
-    return UiAlert.marks[this.tone()];
-  }
+  readonly mark = computed(() => UiAlert.marks[this.tone()]);
 }
