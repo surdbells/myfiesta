@@ -25,6 +25,7 @@ import {
   PromoCode,
   Session,
   TicketType,
+  Overview,
 } from './api.types';
 import { SessionStore } from './session';
 
@@ -144,6 +145,11 @@ export class Api {
     password_confirmation: string;
   }): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.base}/api/auth/password`, body);
+  }
+
+  /** Everything the dashboard shows, in one request. */
+  overview(): Observable<Overview> {
+    return this.http.get<Overview>(`${this.base}/api/organizer/overview`);
   }
 
   events(): Observable<{ data: OrganizerEvent[] }> {

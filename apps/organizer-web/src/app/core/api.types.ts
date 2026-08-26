@@ -315,3 +315,43 @@ export interface CancellationResult {
   /** Refunds a provider refused. These need a person. */
   failed: number;
 }
+
+/** The next event, with enough to know whether it is going well. */
+export interface NextEvent {
+  id: string;
+  title: string;
+  starts_at: string;
+  timezone: string;
+  city: string;
+  tickets_issued: number;
+  /** Null where any ticket type is unlimited — there is no denominator then. */
+  capacity: number | null;
+}
+
+export interface AttentionItem {
+  event_id: string;
+  title: string;
+  reason: string;
+  detail: string;
+  severity: 'danger' | 'warning';
+}
+
+export interface Overview {
+  organization: { id: string; name: string };
+  currency: Money['currency'];
+  /** Null where this person may not see money, which is not the same as zero. */
+  money: {
+    balance: Money;
+    settled: Money;
+    sold_7d: Money;
+    sold_30d: Money;
+    orders_7d: number;
+  } | null;
+  selling: {
+    upcoming_events: number;
+    draft_events: number;
+    tickets_upcoming: number;
+  };
+  next_event: NextEvent | null;
+  attention: AttentionItem[];
+}

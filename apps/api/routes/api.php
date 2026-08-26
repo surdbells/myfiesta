@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\EventImageController;
+use App\Http\Controllers\Api\Organizer\OverviewController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\MessageController;
@@ -109,6 +110,9 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'token.scope:organizer'])
     ->prefix('organizer')
     ->group(function () {
+        // What somebody signs in to find out, in one request.
+        Route::get('/overview', [OverviewController::class, 'index']);
+
         Route::get('/events', [OrganizerEventController::class, 'index']);
         Route::post('/events', [OrganizerEventController::class, 'store']);
         Route::get('/events/{event:id}', [OrganizerEventController::class, 'show']);

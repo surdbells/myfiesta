@@ -70,6 +70,11 @@ export const routes: Routes = [
     canActivate: [requireSession],
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
   },
-  { path: '', pathMatch: 'full', redirectTo: 'events' },
+  {
+    path: '',
+    pathMatch: 'full',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+  },
   { path: '**', redirectTo: 'events' },
 ];

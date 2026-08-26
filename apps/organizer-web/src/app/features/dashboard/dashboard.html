@@ -1,0 +1,140 @@
+<ui-page-header
+  [title]="greeting()"
+  [subtitle]="session.current()?.name ?? null"
+>
+  @if (session.canEditEvents()) {
+    <a uiButton routerLink="/events/new">New event</a>
+  }
+</ui-page-header>
+
+@if (loading()) {
+  <div class="stats">
+    @for (n of [0, 1, 2, 3]; track n) {
+      <div class="stat stat--loading"><ui-skeleton height="2rem" /></div>
+    }
+  </div>
+} @else if (error()) {
+  <ui-error-state
+    title="Could not load your dashboard"
+    detail="We could not reach the server. It is usually temporary."
+    (retried)="load()"
+  />
+} @else if (overview(); as data) {
+  <!--
+    The things that need doing come first, above the numbers.
+
+    A dashboard that opens with takings is a dashboard for admiring. The
+    reason to look at this screen at all is to find out whether something is
+    wrong, and an event that is published with nothing on sale is losing money
+    every hour it stays that way.
+  -->
+  @if (data.attention.length > 0) {
+    <section class="todo">
+      <h2 class="todo__title">Needs you</h2>
+
+      <ul class="todo__list">
+        @for (item of data.attention; track item.event_id + item.reason) {
+          <li class="todo__item" [class.todo__item--danger]="item.severity === 'danger'">
+            <div>
+              <p class="todo__reason">{{ item.reason }}</p>
+              <p class="todo__detail">
+                <strong>{{ item.title }}</strong> — {{ item.detail }}
+              </p>
+            </div>
+
+            <a uiButton variant="secondary" size="sm" [routerLink]="['/events', item.event_id]">
+              Open
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  <div class="stats">
+    @if (data.money; as money) {
+      <div class="stat stat--lead">
+        <p class="stat__label">Owed to you</p>
+        <p class="stat__figure">{{ cash(money.balance) }}</p>
+        <p class="stat__note">Paid out after each event</p>
+      </div>
+
+      <div class="stat">
+        <p class="stat__label">Sold, last 7 days</p>
+        <p class="stat__figure">{{ cash(money.sold_7d) }}</p>
+        <p class="stat__note">{{ money.orders_7d }} orders</p>
+      </div>
+    }
+
+    <div class="stat">
+      <p class="stat__label">Tickets out</p>
+      <p class="stat__figure">{{ data.selling.tickets_upcoming }}</p>
+      <p class="stat__note">Across {{ data.selling.upcoming_events }} upcoming events</p>
+    </div>
+
+    <div class="stat">
+      <p class="stat__label">Drafts</p>
+      <p class="stat__figure">{{ data.selling.draft_events }}</p>
+      <p class="stat__note">Not visible to anybody</p>
+    </div>
+  </div>
+
+  @if (data.next_event; as next) {
+    <section class="next">
+      <header class="next__head">
+        <div>
+          <p class="next__label">Next up</p>
+          <h2 class="next__title">
+            <a [routerLink]="['/events', next.id]">{{ next.title }}</a>
+          </h2>
+          <p class="next__when">{{ when(next) }} · {{ next.city }}</p>
+        </div>
+
+        <p class="next__countdown">
+          <span class="next__days">{{ daysAway(next) }}</span>
+          <span class="next__days-word">{{ daysAway(next) === 1 ? 'day' : 'days' }}</span>
+        </p>
+      </header>
+
+      <div class="next__sales">
+        <p class="next__sold">
+          <strong>{{ next.tickets_issued }}</strong>
+          @if (next.capacity !== null) {
+            of {{ next.capacity }} tickets out
+          } @else {
+            tickets out
+          }
+        </p>
+
+        @if (next.capacity !== null && next.capacity > 0) {
+          <!--
+            A bar only where there is a capacity to measure against. With an
+            unlimited ticket type on the event there is no denominator, and a
+            bar drawn against a made-up one is a figure somebody plans a door
+            around.
+          -->
+          <div
+            class="meter"
+            role="progressbar"
+            [attr.aria-valuenow]="soldPercent(next)"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            [attr.aria-label]="'Tickets sold for ' + next.title"
+          >
+            <span class="meter__fill" [style.width.%]="soldPercent(next)"></span>
+          </div>
+          <p class="next__percent">{{ soldPercent(next) }}% sold</p>
+        }
+      </div>
+    </section>
+  } @else {
+    <ui-empty
+      title="Nothing coming up"
+      hint="Create an event, add a ticket type, and share the link."
+    >
+      @if (session.canEditEvents()) {
+        <a uiButton routerLink="/events/new">New event</a>
+      }
+    </ui-empty>
+  }
+}

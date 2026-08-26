@@ -1,20 +1,124 @@
 @if (session.signedIn()) {
-  <header class="chrome">
-    <span class="brand">myFiesta</span>
+  <div class="shell">
+    <!--
+      One sidebar, rendered once, rather than a header each screen re-states.
+      Everything below the outlet is a page inside it, which is what makes the
+      console feel like an application rather than a set of pages that happen
+      to share a stylesheet.
+    -->
+    <aside class="side" [class.side--open]="navOpen()">
+      <div class="side__top">
+        <a class="side__brand" routerLink="/">
+          <span class="side__mark" aria-hidden="true"></span>
+          <span class="side__word">myFiesta</span>
+        </a>
 
-    <div class="who">
-      @if (session.current(); as org) {
-        <span class="org">{{ org.name }}</span>
-        <span class="role">{{ org.role }}</span>
+        <button
+          type="button"
+          class="side__dismiss"
+          aria-label="Close menu"
+          (click)="navOpen.set(false)"
+        >
+          ×
+        </button>
+      </div>
+
+      <!--
+        The organization switcher. A native select, because somebody who runs
+        four venues switches between them constantly and a custom dropdown
+        would have to reimplement type-ahead, keyboard selection and the whole
+        mobile picker to be no better than this.
+      -->
+      @if (session.organizations().length > 1) {
+        <div class="switcher">
+          <label class="switcher__label" for="org">Organization</label>
+          <select
+            id="org"
+            class="switcher__select"
+            [value]="session.current()?.id"
+            (change)="switchOrganization($event)"
+          >
+            @for (org of session.organizations(); track org.id) {
+              <option [value]="org.id">{{ org.name }}</option>
+            }
+          </select>
+        </div>
+      } @else if (session.current(); as org) {
+        <div class="switcher">
+          <span class="switcher__label">Organization</span>
+          <p class="switcher__only">{{ org.name }}</p>
+        </div>
       }
-      <button type="button" (click)="signOut()">Sign out</button>
-    </div>
-  </header>
-}
 
-<main class="page">
+      <nav class="nav" aria-label="Sections">
+        @for (group of navigation(); track group.title) {
+          <div class="nav__group">
+            <h2 class="nav__heading">{{ group.title }}</h2>
+
+            @for (item of group.items; track item.link) {
+              <a
+                class="nav__link"
+                [routerLink]="item.link"
+                routerLinkActive="is-current"
+                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                (click)="navOpen.set(false)"
+              >
+                <span class="nav__glyph" aria-hidden="true">{{ item.glyph }}</span>
+                <span>{{ item.label }}</span>
+              </a>
+            }
+          </div>
+        }
+      </nav>
+
+      <div class="side__foot">
+        @if (session.user(); as user) {
+          <p class="who">
+            <span class="who__name">{{ user.name }}</span>
+            @if (session.current(); as org) {
+              <span class="who__role">{{ org.role }}</span>
+            }
+          </p>
+        }
+        <button type="button" class="side__out" (click)="signOut()">Sign out</button>
+      </div>
+    </aside>
+
+    <!-- Only present while the drawer is, and only on a small screen. -->
+    @if (navOpen()) {
+      <button
+        type="button"
+        class="scrim"
+        aria-label="Close menu"
+        (click)="navOpen.set(false)"
+      ></button>
+    }
+
+    <div class="body">
+      <header class="topbar">
+        <button
+          type="button"
+          class="topbar__menu"
+          aria-label="Open menu"
+          [attr.aria-expanded]="navOpen()"
+          (click)="navOpen.set(!navOpen())"
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+
+        @if (session.current(); as org) {
+          <span class="topbar__org">{{ org.name }}</span>
+        }
+      </header>
+
+      <main class="page">
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+} @else {
   <router-outlet />
-</main>
+}
 
 <!-- Mounted once. Every screen reports success through the store rather
      than carrying its own notice paragraph. -->

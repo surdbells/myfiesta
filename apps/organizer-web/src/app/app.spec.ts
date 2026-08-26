@@ -59,9 +59,10 @@ describe('App shell', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
 
-    // The sign-in screen should not be wrapped in an organization header for
-    // an organization nobody has proved they belong to.
-    expect(fixture.nativeElement.querySelector('.chrome')).toBeNull();
+    // The sign-in screen is not wrapped in the console shell: there is no
+    // organization to put in a sidebar for somebody who has not proved they
+    // belong to one.
+    expect(fixture.nativeElement.querySelector('.side')).toBeNull();
   });
 
   it('names the organization and the role once signed in', () => {
@@ -70,13 +71,33 @@ describe('App shell', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
 
-    const chrome = fixture.nativeElement.querySelector('.chrome') as HTMLElement;
+    const side = fixture.nativeElement.querySelector('.side') as HTMLElement;
 
-    expect(chrome).not.toBeNull();
-    expect(chrome.textContent).toContain('Lagos Nights');
+    expect(side).not.toBeNull();
+    expect(side.textContent).toContain('Lagos Nights');
     // Shown deliberately: a permission error makes far more sense when the
     // role is already on screen.
-    expect(chrome.textContent).toContain('finance');
+    expect(side.textContent).toContain('finance');
+  });
+
+  it('only offers sections that have a route behind them', () => {
+    TestBed.inject(SessionStore).start(sessionWith('owner'));
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const links = Array.from<HTMLAnchorElement>(
+      fixture.nativeElement.querySelectorAll('.nav__link'),
+    ).map((a) => a.getAttribute('href'));
+
+    // Every wildcard in this router redirects to the events list, so a nav
+    // item pointing at a route nobody wrote does not 404 — it silently
+    // lands somewhere else, which reads as the console ignoring the click.
+    const known = ['/', '/events'];
+
+    for (const href of links) {
+      expect(known).toContain(href);
+    }
   });
 });
 
