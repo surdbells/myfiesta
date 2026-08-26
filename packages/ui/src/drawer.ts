@@ -61,7 +61,7 @@ import { Component, ElementRef, effect, input, output, viewChild } from '@angula
     }
     .drawer::backdrop { background-color: rgba(8, 12, 9, 0.55); }
 
-    .drawer[open] { animation: drawer-in var(--motion-medium) var(--motion-ease-out); }
+    .drawer[open] { animation: drawer-in var(--motion-base) var(--motion-ease); }
     @keyframes drawer-in {
       from { transform: translateX(100%); }
     }

@@ -7,6 +7,6 @@
   "scripts": {
     "build": "node build.mjs",
     "contrast": "node contrast.mjs",
-    "check": "node build.mjs && git diff --exit-code dist/ ../../apps/mobile/lib/design/ && node contrast.mjs"
+    "check": "node build.mjs && git diff --exit-code dist/ ../../apps/mobile/lib/design/ && node contrast.mjs && node usage.mjs"
   }
 }

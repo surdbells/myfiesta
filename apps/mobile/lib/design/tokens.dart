@@ -120,6 +120,9 @@ abstract final class LightTheme {
   static const String shadowCard = "0 1px 2px rgba(9, 30, 14, 0.06)";
   static const String shadowRaised = "0 2px 8px rgba(9, 30, 14, 0.08)";
   static const String shadowOverlay = "0 8px 24px rgba(9, 30, 14, 0.10)";
+  static const Color borderSubtle = Color(0xFFECEFEC);
+  static const Color surfaceHover = Color(0xFFF6F8F6);
+  static const Color dangerText = Color(0xFFC0392B);
 }
 
 /// The semantic layer, dark.
@@ -153,4 +156,7 @@ abstract final class DarkTheme {
   static const String shadowCard = "0 1px 2px rgba(0, 0, 0, 0.4)";
   static const String shadowRaised = "0 2px 8px rgba(0, 0, 0, 0.45)";
   static const String shadowOverlay = "0 8px 24px rgba(0, 0, 0, 0.55)";
+  static const Color borderSubtle = Color(0xFF232823);
+  static const Color surfaceHover = Color(0xFF232823);
+  static const Color dangerText = Color(0xFFEC7263);
 }

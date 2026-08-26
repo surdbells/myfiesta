@@ -1,212 +1,335 @@
-/*
- * The front page.
- *
- * One real event at full width, then everything else in the same card the
- * browse screen uses. The repetition is deliberate: a card that looks the same
- * everywhere is one people learn once.
- */
-
 .wrap {
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 0 var(--space-5) var(--space-9);
+  padding: 0 var(--space-5);
 }
 
-.wrap > section {
-  margin-top: var(--space-8);
-}
-
-h2 {
-  margin-bottom: var(--space-4);
-  font-size: var(--font-size-xl);
-}
-
-/* --- the hero ------------------------------------------------------------ */
+/* --- hero ----------------------------------------------------------------- */
 
 .hero {
-  margin-bottom: var(--space-2);
+  position: relative;
+  display: grid;
+  align-items: end;
+  min-height: min(70vh, 34rem);
+  /* Its own dark ground regardless of theme. The hero is a photograph with
+     text on it, and text over a photograph needs one contrast story, not two. */
+  background-color: var(--color-neutral-950);
+  color: var(--color-neutral-0);
+  overflow: hidden;
 }
 
-.hero a {
+.hero--empty {
+  min-height: 22rem;
+  background-image: linear-gradient(
+    140deg,
+    var(--color-brand-900),
+    var(--color-neutral-950) 60%
+  );
+}
+
+.hero__media {
+  position: absolute;
+  inset: 0;
+}
+
+.hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Blurred and pushed back: it is atmosphere behind the text, and a poster
+     rendered sharp behind type competes with the type. */
+  filter: blur(2px) saturate(1.1);
+  transform: scale(1.06);
+}
+
+/*
+ * Two stops, not one. A single flat overlay dims the whole image to make the
+ * corner where the text sits legible; this keeps the top of the poster nearly
+ * untouched and puts the weight where the words are.
+ */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to top, rgba(8, 12, 9, 0.94) 0%, rgba(8, 12, 9, 0.55) 45%, rgba(8, 12, 9, 0.25) 100%),
+    linear-gradient(to right, rgba(8, 12, 9, 0.7) 0%, transparent 65%);
+}
+
+.hero__inner {
   position: relative;
-  display: block;
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-9) var(--space-5) var(--space-7);
+}
+
+.hero__lead {
+  max-width: 46rem;
+}
+
+.hero__eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-gold-300);
+}
+
+.hero__title {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--font-leading-tight);
+  letter-spacing: var(--font-tracking-tight);
+  text-wrap: balance;
+}
+
+.hero__title a {
   color: inherit;
   text-decoration: none;
 }
 
-.hero img,
-.hero__placeholder {
-  width: 100%;
-  /* Wide on a desktop, taller on a phone — a 21:9 crop at 375px is a letterbox
-     with nothing readable in it. */
-  aspect-ratio: 21 / 9;
-  max-height: 62vh;
-  object-fit: cover;
-  background-color: var(--surface-inset);
+.hero__title a:focus-visible {
+  outline: 2px solid var(--color-neutral-0);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
 }
 
-@media (max-width: 720px) {
-  .hero img,
-  .hero__placeholder {
-    aspect-ratio: 4 / 3;
-  }
-}
-
-.hero__placeholder {
-  background-image: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--primary) 22%, var(--surface-inset)),
-    color-mix(in srgb, var(--accent) 18%, var(--surface-inset))
-  );
-}
-
-/*
- * The text sits on a scrim, not straight on the photograph.
- *
- * An organizer's banner can be any brightness at all, and white text over a
- * pale sky is invisible. The gradient guarantees the contrast regardless of
- * what was uploaded — which is the only way to keep this readable without
- * inspecting every image.
- */
-.hero__text {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-8) var(--space-5) var(--space-6);
-  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
-  color: #ffffff;
-}
-
-.hero__text .eyebrow {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.hero h1 {
-  max-width: 20ch;
-  font-size: clamp(var(--font-size-2xl), 5vw, var(--font-size-4xl));
-  line-height: var(--font-leading-tight);
-}
-
-.hero__when {
+.hero__meta {
+  margin: var(--space-3) 0 0;
   font-size: var(--font-size-lg);
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--color-neutral-200);
+}
+
+.hero__actions {
+  margin: var(--space-5) 0 0;
 }
 
 .hero__cta {
-  justify-self: start;
-  margin-top: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--on-primary);
   background-color: var(--primary);
-  border-radius: var(--radius-md);
-}
-
-.hero a:focus-visible {
-  outline: 3px solid var(--primary);
-  outline-offset: -3px;
-}
-
-/* --- cards --------------------------------------------------------------- */
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-5);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.card {
-  background-color: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-  transition:
-    transform var(--motion-base) var(--motion-ease),
-    border-color var(--motion-base) var(--motion-ease),
-    box-shadow var(--motion-base) var(--motion-ease);
-}
-.card:hover {
-  transform: translateY(-2px);
-  border-color: var(--primary);
-  box-shadow: var(--shadow-raised);
-}
-
-/* The whole card is one link — a linked title beside a linked image gives a
-   keyboard user two stops for one destination. */
-.card a {
-  display: block;
-  color: inherit;
+  border-radius: var(--radius-full);
   text-decoration: none;
+  transition: transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
 }
-.card a:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
+
+.hero__cta:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__cta {
+    transition: none;
+  }
+
+  .hero__cta:hover {
+    transform: none;
+  }
+}
+
+/* --- the search bar ------------------------------------------------------- */
+
+.finder {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  max-width: 46rem;
+  padding: var(--space-2);
+  background-color: var(--surface-raised);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-overlay);
+}
+
+.finder__field {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-5);
+}
+
+.finder__field label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/*
+ * Borderless inside the pill. The pill is the control; a second border around
+ * each field inside it reads as two nested inputs.
+ */
+.finder__field input {
+  font: inherit;
+  font-size: var(--font-size-base);
+  color: var(--text);
+  background: none;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.finder__field input::placeholder {
+  color: var(--text-subtle);
+}
+
+.finder__field input:focus {
+  outline: none;
+}
+
+/* The focus ring goes on the field, since the input has no box of its own. */
+.finder__field:focus-within {
+  background-color: var(--surface-inset);
   border-radius: var(--radius-lg);
 }
 
-.card img,
-.placeholder {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  background-color: var(--surface-inset);
+.finder__divider {
+  width: 1px;
+  margin: var(--space-2) 0;
+  background-color: var(--border);
 }
 
-.placeholder {
-  background-image: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--primary) 14%, var(--surface-inset)),
-    color-mix(in srgb, var(--accent) 12%, var(--surface-inset))
-  );
-}
-
-.card__body {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-4);
-}
-
-.card h3 {
-  font-size: var(--font-size-base);
+.finder__go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  font: inherit;
   font-weight: var(--font-weight-semibold);
-  /* Two lines then ellipsis, so one long title cannot make its card twice the
-     height of everything beside it. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.when {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--primary-text);
-  font-variant-numeric: tabular-nums;
+.finder__go:hover {
+  background-color: var(--primary-hover);
 }
 
-.where {
+.finder__go-mark {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .hero__inner {
+    padding-block: var(--space-7) var(--space-6);
+  }
+
+  .hero__meta {
+    font-size: var(--font-size-base);
+  }
+
+  /* The word goes, the arrow arrives: a full-width label would push the two
+     fields down to nothing on a narrow screen. */
+  .finder__go-word {
+    display: none;
+  }
+
+  .finder__go-mark {
+    display: inline;
+    font-size: var(--font-size-lg);
+  }
+
+  .finder__go {
+    padding-inline: var(--space-4);
+  }
+
+  .finder__field {
+    padding-inline: var(--space-3);
+  }
+}
+
+/* --- rails ---------------------------------------------------------------- */
+
+.rail-block {
+  margin-top: var(--space-8);
+}
+
+.rail-block__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.rail-block__title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-tight);
+}
+
+.rail-block__head .rail-block__title {
+  margin-bottom: 0;
+}
+
+.rail-block__hint {
+  margin: 0;
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
-.price {
-  margin-top: var(--space-2);
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
+.rail-block__head + .rail {
+  margin-top: var(--space-4);
 }
 
-/* --- browse chips -------------------------------------------------------- */
+/*
+ * A scrolling row, not a wrapping grid.
+ *
+ * A grid of twenty events is a wall; a row says "there is more this way" and
+ * costs one gesture to see it. Snapping stops it settling mid-card, which is
+ * what makes a scroll row feel unfinished.
+ */
+.rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 15rem);
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0 0 var(--space-3);
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  /* Bleeds to the edge of the viewport so the last card is visibly cut off
+     rather than sitting neatly inside a margin, which reads as the end. */
+  margin-inline: calc(-1 * var(--space-5));
+  padding-inline: var(--space-5);
+}
+
+.rail__item {
+  scroll-snap-align: start;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .rail {
+    grid-auto-columns: minmax(0, 11rem);
+    gap: var(--space-4);
+  }
+}
+
+/* --- chips ---------------------------------------------------------------- */
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -216,60 +339,100 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 44px;
-  padding: 0 var(--space-4);
+  padding: var(--space-2) var(--space-4);
   font: inherit;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--text);
   background-color: var(--surface-raised);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition:
-    border-color var(--motion-fast) var(--motion-ease),
-    color var(--motion-fast) var(--motion-ease);
-}
-.chips button:hover {
-  color: var(--primary-text);
-  border-color: var(--primary);
+  transition: border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
 }
 
-/* The count is what tells somebody whether the tap is worth it. */
-.count {
+.chips button:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.chips__count {
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  color: var(--text-subtle);
 }
-
-/* --- odds and ends ------------------------------------------------------- */
 
 .all {
-  margin-top: var(--space-8);
-  font-size: var(--font-size-sm);
+  margin: var(--space-8) 0 0;
 }
 
-.empty {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-3);
-  padding: var(--space-9) var(--space-5);
-  text-align: center;
-}
-
-.cta {
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 var(--space-5);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border-radius: var(--radius-md);
+.all a {
+  font-weight: var(--font-weight-medium);
+  color: var(--primary-text);
   text-decoration: none;
 }
 
-.muted {
+.all a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- loading and failure -------------------------------------------------- */
+
+.shimmer {
+  display: block;
+  background-color: var(--surface-inset);
+  border-radius: var(--radius-md);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.shimmer--sm { width: 8rem; height: 0.9rem; }
+.shimmer--md { width: 12rem; height: 1.4rem; }
+.shimmer--lg { width: min(30rem, 80%); height: 3rem; }
+.shimmer--card { aspect-ratio: 3 / 4; height: auto; }
+
+/* On the hero's own dark ground, not the theme's. */
+.hero .shimmer {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+@keyframes shimmer {
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; opacity: 0.7; }
+}
+
+.notice {
+  padding: var(--space-6);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.notice h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-lg);
+}
+
+.notice p {
+  margin: 0 0 var(--space-4);
   color: var(--text-muted);
+}
+
+.notice__retry {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.notice__retry:hover {
+  background-color: var(--surface-hover);
 }

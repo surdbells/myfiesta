@@ -16,7 +16,7 @@
 .skip:focus {
   left: var(--space-4);
   top: var(--space-4);
-  z-index: 10;
+  z-index: 100;
   padding: var(--space-3);
   color: var(--text);
   background-color: var(--surface-raised);
@@ -24,62 +24,223 @@
   box-shadow: var(--shadow-overlay);
 }
 
+/* --- header --------------------------------------------------------------- */
+
 .site-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
-  background-color: var(--surface);
+  /*
+   * Sticky, because the two things it carries — search and the organizer
+   * door — are both things somebody decides on halfway down a page of events
+   * rather than at the top of one.
+   */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--border);
 }
 
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-5);
+}
+
 .brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/*
+ * A mark rather than a word alone. On a phone the word is trimmed away and
+ * this is the whole logo, so it has to be recognisable at 24px.
+ */
+.brand__mark {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  background-image: linear-gradient(135deg, var(--primary), var(--accent));
+}
+
+.brand__word {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--font-tracking-tight);
-  color: var(--primary-text);
-  text-decoration: none;
+  color: var(--text);
 }
 
-.site-header nav a {
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-right: auto;
+}
+
+.site-nav a {
+  position: relative;
+  padding: var(--space-2) 0;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--text-muted);
   text-decoration: none;
 }
-.site-header nav a:hover {
-  color: var(--primary-text);
+
+.site-nav a:hover {
+  color: var(--text);
 }
 
-.site-footer {
-  display: grid;
+/* The current page is marked by a rule under it, not by colour alone. */
+.site-nav a.is-current {
+  color: var(--text);
+}
+
+.site-nav a.is-current::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background-color: var(--primary);
+  border-radius: var(--radius-full);
+}
+
+.site-header__actions {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.site-header__signin {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-header__signin:hover {
+  color: var(--text);
+}
+
+.site-header__sell {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.site-header__sell:hover {
+  background-color: var(--primary-hover);
+}
+
+/*
+ * On a phone the nav links go and the two actions stay. Somebody on a small
+ * screen is either looking for an event, which the page itself offers, or is
+ * an organizer, and the organizer is the one who cannot find their way back
+ * without a link.
+ */
+@media (max-width: 700px) {
+  .site-header__inner {
+    gap: var(--space-3);
+  }
+
+  .site-nav {
+    display: none;
+  }
+
+  .brand__word {
+    display: none;
+  }
+
+  .site-header__signin {
+    display: none;
+  }
+
+  .site-header__actions {
+    margin-left: auto;
+  }
+}
+
+/* --- footer --------------------------------------------------------------- */
+
+.site-footer {
   margin-top: var(--space-9);
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-8) var(--space-5) var(--space-5);
   font-size: var(--font-size-sm);
   color: var(--text-muted);
-  background-color: var(--surface);
+  background-color: var(--surface-sunken);
   border-top: 1px solid var(--border);
 }
 
+.site-footer__inner {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: var(--space-6);
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.site-footer__brand p {
+  margin: var(--space-2) 0 0;
+  max-width: 32ch;
+  color: var(--text-subtle);
+  text-wrap: pretty;
+}
+
 .site-footer nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.site-footer h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
 
 .site-footer a {
   color: var(--text-muted);
   text-decoration: none;
+  width: fit-content;
 }
+
 .site-footer a:hover {
-  color: var(--primary-text);
+  color: var(--text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.site-footer p {
-  margin: 0;
+.site-footer__fine {
+  max-width: 1240px;
+  margin: var(--space-7) auto 0;
+  padding-top: var(--space-4);
   color: var(--text-subtle);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 700px) {
+  .site-footer__inner {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+  }
+
+  .site-footer__brand {
+    grid-column: 1 / -1;
+  }
 }

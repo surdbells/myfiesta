@@ -1,81 +1,123 @@
-@if (loading()) {
-  <section class="wrap"><p class="muted" role="status">Loading what's on…</p></section>
-} @else if (discovery(); as d) {
-  <!--
-    The hero is one real event, not a stock photograph and a slogan. A ticketing
-    front page has exactly one job — show somebody something they might go to —
-    and the fastest version of that is the next good night, at full size.
-  -->
-  @if (lead(); as event) {
-    <section class="hero">
-      <a [routerLink]="['/', event.slug]">
-        @if (event.poster_url) {
-          <img [src]="event.poster_url" alt="" fetchpriority="high" />
-        } @else {
-          <div class="hero__placeholder" aria-hidden="true"></div>
-        }
+<!--
+  The hero is one real event, not a stock photograph and a slogan. A ticketing
+  front page has exactly one job — show somebody something they might go to —
+  and the fastest version of that is the next good night, at full size.
 
-        <div class="hero__text">
-          <p class="eyebrow">{{ event.organizer.name }}</p>
-          <h1>{{ event.title }}</h1>
-          <p class="hero__when">{{ when(event) }} · {{ event.city }}</p>
-          <span class="hero__cta">{{ price(event) }} →</span>
-        </div>
-      </a>
-    </section>
-  } @else {
-    <section class="wrap empty">
-      <h1>Nothing on sale yet</h1>
-      <p class="muted">Check back shortly, or search for something specific.</p>
-      <a class="cta" routerLink="/events">Search events</a>
-    </section>
+  The search sits on top of it rather than below, because somebody who arrived
+  looking for a specific event should not have to scroll past somebody else's.
+-->
+<section class="hero" [class.hero--empty]="!lead() && !loading()">
+  @if (lead(); as event) {
+    <div class="hero__media">
+      @if (event.poster_url) {
+        <img [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
+      }
+      <div class="hero__scrim" aria-hidden="true"></div>
+    </div>
   }
 
-  <div class="wrap">
-    @if (rest().length > 0) {
-      <section>
-        <h2>Featured</h2>
-        <ul class="grid">
-          @for (event of rest(); track event.slug) {
-            <li class="card">
-              <a [routerLink]="['/', event.slug]">
-                @if (event.poster_url) {
-                  <img [src]="event.poster_url" alt="" loading="lazy" />
-                } @else {
-                  <div class="placeholder" aria-hidden="true"></div>
-                }
-                <div class="card__body">
-                  <h3>{{ event.title }}</h3>
-                  <p class="when">{{ when(event) }}</p>
-                  <p class="where">{{ event.city }}</p>
-                  <p class="price">{{ price(event) }}</p>
-                </div>
-              </a>
-            </li>
-          }
-        </ul>
-      </section>
-    }
+  <div class="hero__inner">
+    <div class="hero__lead">
+      @if (loading()) {
+        <p class="hero__eyebrow"><span class="shimmer shimmer--sm"></span></p>
+        <h1><span class="shimmer shimmer--lg"></span></h1>
+      } @else if (lead(); as event) {
+        <p class="hero__eyebrow">{{ event.organizer.name }}</p>
+        <h1 class="hero__title">
+          <a [routerLink]="['/', event.slug]">{{ event.title }}</a>
+        </h1>
+        <p class="hero__meta">
+          {{ when(event) }} <span aria-hidden="true">·</span> {{ event.city }}
+        </p>
+        <p class="hero__actions">
+          <a class="hero__cta" [routerLink]="['/', event.slug]">
+            {{ price(event) }}
+            <span aria-hidden="true">→</span>
+          </a>
+        </p>
+      } @else {
+        <h1 class="hero__title">Nights out, ticketed properly</h1>
+        <p class="hero__meta">Nothing on sale right now. Search, or check back shortly.</p>
+      }
+    </div>
 
-    @if (upcoming().length > 0) {
-      <section>
-        <h2>Coming up</h2>
-        <ul class="grid">
-          @for (event of upcoming(); track event.slug) {
-            <li class="card">
-              <a [routerLink]="['/', event.slug]">
-                @if (event.poster_url) {
-                  <img [src]="event.poster_url" alt="" loading="lazy" />
-                } @else {
-                  <div class="placeholder" aria-hidden="true"></div>
-                }
-                <div class="card__body">
-                  <h3>{{ event.title }}</h3>
-                  <p class="when">{{ when(event) }}</p>
-                  <p class="where">{{ event.city }}</p>
-                  <p class="price">{{ price(event) }}</p>
-                </div>
-              </a>
+    <!--
+      Two fields, not five. What and where is the whole question at this
+      stage; a date range and a price filter on a front page are controls
+      people close rather than use.
+    -->
+    <form class="finder" (ngSubmit)="search()" role="search">
+      <div class="finder__field">
+        <label for="q">What</label>
+        <input
+          id="q"
+          name="q"
+          type="search"
+          placeholder="Artist, night, or venue"
+          [ngModel]="query()"
+          (ngModelChange)="query.set($event)"
+        />
+      </div>
+
+      <div class="finder__divider" aria-hidden="true"></div>
+
+      <div class="finder__field">
+        <label for="where">Where</label>
+        <input
+          id="where"
+          name="where"
+          list="cities"
+          placeholder="Any city"
+          [ngModel]="city()"
+          (ngModelChange)="city.set($event)"
+        />
+        <datalist id="cities">
+          @for (name of cityNames(); track name) {
+            <option [value]="name"></option>
+          }
+        </datalist>
+      </div>
+
+      <button class="finder__go" type="submit">
+        <span class="finder__go-word">Search</span>
+        <span class="finder__go-mark" aria-hidden="true">→</span>
+      </button>
+    </form>
+  </div>
+</section>
+
+<div class="wrap">
+  @if (loading()) {
+    <section class="rail-block">
+      <h2 class="rail-block__title"><span class="shimmer shimmer--md"></span></h2>
+      <ul class="rail">
+        @for (n of [0, 1, 2, 3, 4]; track n) {
+          <li class="rail__item"><span class="shimmer shimmer--card"></span></li>
+        }
+      </ul>
+    </section>
+  } @else if (failed()) {
+    <section class="rail-block">
+      <div class="notice" role="alert">
+        <h2>We could not load what's on</h2>
+        <p>It is usually temporary.</p>
+        <button type="button" class="notice__retry" (click)="load()">Try again</button>
+      </div>
+    </section>
+  } @else {
+    @for (rail of rails(); track rail.title) {
+      <section class="rail-block">
+        <header class="rail-block__head">
+          <h2 class="rail-block__title">{{ rail.title }}</h2>
+          @if (rail.hint) {
+            <p class="rail-block__hint">{{ rail.hint }}</p>
+          }
+        </header>
+
+        <ul class="rail">
+          @for (event of rail.events; track event.slug) {
+            <li class="rail__item">
+              <app-event-card [event]="event" [eager]="$first" />
             </li>
           }
         </ul>
@@ -87,15 +129,15 @@
       leads to an empty page is worse than not offering it, and the count is
       what tells somebody whether it is worth the tap.
     -->
-    @if (d.cities.length > 0) {
-      <section>
-        <h2>By city</h2>
+    @if (cities().length > 0) {
+      <section class="rail-block">
+        <h2 class="rail-block__title">Browse by city</h2>
         <ul class="chips">
-          @for (place of d.cities; track place.city) {
+          @for (place of cities(); track place.city + place.country) {
             <li>
               <button type="button" (click)="browseCity(place.city)">
-                {{ place.city }}
-                <span class="count">{{ place.events }}</span>
+                {{ place.label }}
+                <span class="chips__count">{{ place.events }}</span>
               </button>
             </li>
           }
@@ -103,15 +145,15 @@
       </section>
     }
 
-    @if (d.categories.length > 0) {
-      <section>
-        <h2>By kind of night</h2>
+    @if (categories().length > 0) {
+      <section class="rail-block">
+        <h2 class="rail-block__title">Browse by kind of night</h2>
         <ul class="chips">
-          @for (kind of d.categories; track kind.category) {
+          @for (kind of categories(); track kind.category) {
             <li>
               <button type="button" (click)="browseCategory(kind.category)">
                 {{ kind.category }}
-                <span class="count">{{ kind.events }}</span>
+                <span class="chips__count">{{ kind.events }}</span>
               </button>
             </li>
           }
@@ -120,5 +162,7 @@
     }
 
     <p class="all"><a routerLink="/events">See everything on sale →</a></p>
-  </div>
-}
+  }
+</div>
+
+<app-organizer-pitch />

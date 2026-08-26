@@ -1,10 +1,28 @@
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="site-header">
-  <a class="brand" routerLink="/">myFiesta</a>
-  <nav>
-    <a routerLink="/events">What's on</a>
-  </nav>
+  <div class="site-header__inner">
+    <a class="brand" routerLink="/" aria-label="myFiesta home">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span class="brand__word">myFiesta</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Main">
+      <a routerLink="/events" routerLinkActive="is-current">What's on</a>
+      <a routerLink="/help" routerLinkActive="is-current">Help</a>
+    </nav>
+
+    <div class="site-header__actions">
+      <!--
+        The organizer door, on every page rather than only on the front one.
+        Somebody who came to buy a ticket and left thinking they could run
+        their own night is the most valuable visitor this site gets, and they
+        decide that while looking at somebody else's event.
+      -->
+      <a class="site-header__sell" [href]="consoleUrl + '/register'">Sell tickets</a>
+      <a class="site-header__signin" [href]="consoleUrl">Organizer sign in</a>
+    </div>
+  </div>
 </header>
 
 <main id="main">
@@ -18,11 +36,32 @@
   from every page, not a URL somebody has to be told.
 -->
 <footer class="site-footer">
-  <nav>
-    <a routerLink="/help">Help</a>
-    <a routerLink="/terms">Terms</a>
-    <a routerLink="/privacy">Privacy</a>
-    <a routerLink="/contact">Contact</a>
-  </nav>
-  <p>&copy; myFiesta</p>
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <span class="brand__word">myFiesta</span>
+      <p>Tickets for the night out, in Canada and Nigeria.</p>
+    </div>
+
+    <nav aria-label="Going out">
+      <h2>Going out</h2>
+      <a routerLink="/events">What's on</a>
+      <a routerLink="/tickets">Find my tickets</a>
+      <a routerLink="/help">Help</a>
+    </nav>
+
+    <nav aria-label="Organizers">
+      <h2>Organizers</h2>
+      <a [href]="consoleUrl + '/register'">Sell tickets</a>
+      <a [href]="consoleUrl">Sign in</a>
+      <a routerLink="/contact">Contact us</a>
+    </nav>
+
+    <nav aria-label="Legal">
+      <h2>Legal</h2>
+      <a routerLink="/terms">Terms</a>
+      <a routerLink="/privacy">Privacy</a>
+    </nav>
+  </div>
+
+  <p class="site-footer__fine">&copy; myFiesta</p>
 </footer>
