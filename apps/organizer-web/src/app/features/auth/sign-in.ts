@@ -10,7 +10,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-sign-in',
   imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './sign-in.html',
-  styleUrl: './sign-in.css',
 })
 export class SignIn {
   private readonly api = inject(Api);

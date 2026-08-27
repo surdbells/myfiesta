@@ -1,26 +1,81 @@
-<a class="skip" href="#main">Skip to content</a>
+<!--
+  The shell, styled in place. The first class on each element is its name —
+  kept for tests and for reading the DOM — and everything after it is the
+  styling, in utilities that resolve to the same tokens the old stylesheet
+  read. Spacing note for the translation: the token scale is 4/8/12/16/24/32,
+  so space-5 is gap-6 and space-6 is gap-8 here.
+-->
 
-<header class="site-header">
-  <div class="site-header__inner">
-    <a class="brand" routerLink="/" aria-label="myFiesta home">
-      <img class="brand__mark" src="/brand/mark-64.png" alt="" width="28" height="28" />
-      <span class="brand__word">myfiesta</span>
+<!-- Present but hidden until focused: keyboard users should not have to tab
+     through the header on every page to reach the content. -->
+<a
+  class="skip absolute -left-[9999px] focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-surface-raised focus:p-3 focus:text-text focus:shadow-(--shadow-overlay)"
+  href="#main"
+  >Skip to content</a
+>
+
+<!--
+  Sticky, because the two things it carries — search and the organizer door —
+  are both things somebody decides on halfway down a page of events rather
+  than at the top of one.
+-->
+<header
+  class="site-header sticky top-0 z-50 border-b border-border bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] backdrop-blur-[12px] backdrop-saturate-[1.8]"
+>
+  <div
+    class="site-header__inner mx-auto flex max-w-[1240px] items-center gap-8 px-6 py-3 max-[700px]:gap-3"
+  >
+    <a class="brand flex shrink-0 items-center gap-2 no-underline" routerLink="/" aria-label="myFiesta home">
+      <!--
+        The mark: the microphone from the wordmark, where the flash and the
+        cable make it readable at 24px. An image, not a recreation — a favicon
+        and a header mark from two different drawings drift.
+      -->
+      <img class="brand__mark block h-7 w-7" src="/brand/mark-64.png" alt="" width="28" height="28" />
+      <span class="brand__word text-lg font-bold tracking-[-0.02em] text-text max-[700px]:hidden"
+        >myfiesta</span
+      >
     </a>
 
-    <nav class="site-nav" aria-label="Main">
-      <a routerLink="/events" routerLinkActive="is-current">What's on</a>
-      <a routerLink="/help" routerLinkActive="is-current">Help</a>
+    <!--
+      On a phone the nav links go and the two actions stay. Somebody on a
+      small screen is either looking for an event, which the page itself
+      offers, or is an organizer, and the organizer is the one who cannot find
+      their way back without a link.
+    -->
+    <nav class="site-nav mr-auto flex items-center gap-6 max-[700px]:hidden" aria-label="Main">
+      <!-- The current page is marked by a rule under it, not by colour alone. -->
+      <a
+        class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"
+        routerLink="/events"
+        routerLinkActive="is-current text-text after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+        >What's on</a
+      >
+      <a
+        class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"
+        routerLink="/help"
+        routerLinkActive="is-current text-text after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+        >Help</a
+      >
     </nav>
 
-    <div class="site-header__actions">
+    <div class="site-header__actions flex shrink-0 items-center gap-3 max-[700px]:ml-auto">
       <!--
         The organizer door, on every page rather than only on the front one.
         Somebody who came to buy a ticket and left thinking they could run
         their own night is the most valuable visitor this site gets, and they
         decide that while looking at somebody else's event.
       -->
-      <a class="site-header__sell" [href]="consoleUrl + '/register'">Sell tickets</a>
-      <a class="site-header__signin" [href]="consoleUrl">Organizer sign in</a>
+      <a
+        class="site-header__sell whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
+        [href]="consoleUrl + '/register'"
+        >Sell tickets</a
+      >
+      <a
+        class="site-header__signin whitespace-nowrap text-sm font-medium text-text-muted no-underline hover:text-text max-[700px]:hidden"
+        [href]="consoleUrl"
+        >Organizer sign in</a
+      >
     </div>
   </div>
 </header>
@@ -35,33 +90,41 @@
   require a reachable operator on commercial email — which means a link to them
   from every page, not a URL somebody has to be told.
 -->
-<footer class="site-footer">
-  <div class="site-footer__inner">
-    <div class="site-footer__brand">
-      <span class="brand__word">myfiesta</span>
-      <p>Tickets for the night out, in Canada and Nigeria.</p>
+<footer
+  class="site-footer mt-24 border-t border-border bg-surface-sunken px-6 pb-6 pt-16 text-sm text-text-muted"
+>
+  <div
+    class="site-footer__inner mx-auto grid max-w-[1240px] grid-cols-[2fr_repeat(3,1fr)] gap-8 max-[700px]:grid-cols-2 max-[700px]:gap-6"
+  >
+    <div class="site-footer__brand max-[700px]:col-span-full">
+      <span class="brand__word text-lg font-bold tracking-[-0.02em] text-text">myfiesta</span>
+      <p class="mt-2 max-w-[32ch] text-pretty text-text-subtle">
+        Tickets for the night out, in Canada and Nigeria.
+      </p>
     </div>
 
-    <nav aria-label="Going out">
-      <h2>Going out</h2>
-      <a routerLink="/events">What's on</a>
-      <a routerLink="/tickets">Find my tickets</a>
-      <a routerLink="/help">Help</a>
+    <nav class="grid content-start gap-2" aria-label="Going out">
+      <h2 class="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Going out</h2>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/events">What's on</a>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/tickets">Find my tickets</a>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/help">Help</a>
     </nav>
 
-    <nav aria-label="Organizers">
-      <h2>Organizers</h2>
-      <a [href]="consoleUrl + '/register'">Sell tickets</a>
-      <a [href]="consoleUrl">Sign in</a>
-      <a routerLink="/contact">Contact us</a>
+    <nav class="grid content-start gap-2" aria-label="Organizers">
+      <h2 class="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Organizers</h2>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" [href]="consoleUrl + '/register'">Sell tickets</a>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" [href]="consoleUrl">Sign in</a>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/contact">Contact us</a>
     </nav>
 
-    <nav aria-label="Legal">
-      <h2>Legal</h2>
-      <a routerLink="/terms">Terms</a>
-      <a routerLink="/privacy">Privacy</a>
+    <nav class="grid content-start gap-2" aria-label="Legal">
+      <h2 class="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Legal</h2>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/terms">Terms</a>
+      <a class="w-fit text-text-muted no-underline hover:text-text hover:underline hover:underline-offset-2" routerLink="/privacy">Privacy</a>
     </nav>
   </div>
 
-  <p class="site-footer__fine">&copy; myFiesta</p>
+  <p class="site-footer__fine mx-auto mt-12 max-w-[1240px] border-t border-border pt-4 text-text-subtle">
+    &copy; myFiesta
+  </p>
 </footer>

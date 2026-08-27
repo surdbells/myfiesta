@@ -17,7 +17,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-register',
   imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './register.html',
-  styleUrl: './sign-in.css',
 })
 export class Register {
   private readonly api = inject(Api);

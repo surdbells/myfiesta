@@ -16,7 +16,6 @@ import { messageFor } from '../../core/errors';
   selector: 'app-forgot-password',
   imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './forgot-password.html',
-  styleUrl: './sign-in.css',
 })
 export class ForgotPassword {
   private readonly api = inject(Api);

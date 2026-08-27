@@ -1,9 +1,9 @@
-<main class="shell">
+<main class="shell grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
   @if (sent()) {
-    <div class="card">
-      <header class="card__head">
-        <h1>Check your email</h1>
-        <p class="sub">
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+      <header class="card__head mb-1 grid gap-1">
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">Check your email</h1>
+        <p class="sub text-pretty text-sm text-text-muted">
           If that address can be used, there is a message on its way with what to
           do next.
         </p>
@@ -11,10 +11,10 @@
       <a uiButton variant="secondary" routerLink="/sign-in">Back to sign in</a>
     </div>
   } @else {
-    <form class="card" (ngSubmit)="submit()">
-      <header class="card__head">
-        <h1>Create an account</h1>
-        <p class="sub">Start selling tickets on myFiesta.</p>
+    <form class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none" (ngSubmit)="submit()">
+      <header class="card__head mb-1 grid gap-1">
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">Create an account</h1>
+        <p class="sub text-pretty text-sm text-text-muted">Start selling tickets on myFiesta.</p>
       </header>
 
       @if (error(); as message) {
@@ -108,7 +108,7 @@
         @if (busy()) { Creating your account… } @else { Create account }
       </button>
 
-      <p class="alt">Already have one? <a routerLink="/sign-in">Sign in</a></p>
+      <p class="alt text-center text-sm text-text-muted">Already have one? <a class="text-primary-text" routerLink="/sign-in">Sign in</a></p>
     </form>
   }
 </main>

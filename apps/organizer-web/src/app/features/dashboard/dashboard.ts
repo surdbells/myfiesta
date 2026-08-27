@@ -30,7 +30,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-dashboard',
   imports: [RouterLink, UiPageHeader, UiButton, UiSkeleton, UiEmpty, UiErrorState, UiIcon],
   templateUrl: './dashboard.html',
-  styleUrl: './dashboard.css',
 })
 export class Dashboard {
   protected readonly addIcon = Plus;

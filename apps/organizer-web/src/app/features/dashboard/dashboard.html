@@ -11,9 +11,11 @@
 </ui-page-header>
 
 @if (loading()) {
-  <div class="stats">
+  <div class="stats grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
     @for (n of [0, 1, 2, 3]; track n) {
-      <div class="stat stat--loading"><ui-skeleton height="2rem" /></div>
+      <div class="stat min-h-[6.5rem] content-center rounded-lg border border-border bg-surface-raised p-6">
+        <ui-skeleton height="2rem" />
+      </div>
     }
   </div>
 } @else if (error()) {
@@ -32,15 +34,25 @@
     every hour it stays that way.
   -->
   @if (data.attention.length > 0) {
-    <section class="todo">
-      <h2 class="todo__title">Needs you</h2>
+    <section class="todo mb-8">
+      <h2 class="todo__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Needs you</h2>
 
-      <ul class="todo__list">
+      <ul class="todo__list m-0 grid list-none gap-2 p-0">
         @for (item of data.attention; track item.event_id + item.reason) {
-          <li class="todo__item" [class.todo__item--danger]="item.severity === 'danger'">
+          <!--
+            The severity is a stripe down the side rather than a coloured
+            background: a wall of red panels stops meaning urgent after the
+            second one. The stripe colour is one bound class rather than two
+            stacked ones — two same-property utilities fight, and which wins
+            is decided by the stylesheet, not the template.
+          -->
+          <li
+            class="todo__item flex items-center justify-between gap-4 rounded-lg border border-border border-l-[3px] bg-surface-raised p-4 max-sm:flex-col max-sm:items-stretch"
+            [class]="item.severity === 'danger' ? 'border-l-danger' : 'border-l-warning'"
+          >
             <div>
-              <p class="todo__reason">{{ item.reason }}</p>
-              <p class="todo__detail">
+              <p class="todo__reason font-semibold">{{ item.reason }}</p>
+              <p class="todo__detail mt-1 text-pretty text-sm text-text-muted">
                 <strong>{{ item.title }}</strong> — {{ item.detail }}
               </p>
             </div>
@@ -54,54 +66,67 @@
     </section>
   }
 
-  <div class="stats">
+  <div class="stats grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
     @if (data.money; as money) {
-      <div class="stat stat--lead">
-        <p class="stat__label"><ui-icon [icon]="walletIcon" size="sm" />Owed to you</p>
-        <p class="stat__figure">{{ cash(money.balance) }}</p>
-        <p class="stat__note">Paid out after each event</p>
+      <!--
+        The one figure somebody came for, given the weight to match. Every
+        other tile is the same size, so this reads as the answer rather than
+        as the first of four.
+      -->
+      <div
+        class="stat stat--lead grid content-start gap-1 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-6"
+      >
+        <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="walletIcon" size="sm" />Owed to you</p>
+        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(money.balance) }}</p>
+        <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
       </div>
 
-      <div class="stat">
-        <p class="stat__label"><ui-icon [icon]="soldIcon" size="sm" />Sold, last 7 days</p>
-        <p class="stat__figure">{{ cash(money.sold_7d) }}</p>
-        <p class="stat__note">{{ money.orders_7d }} orders</p>
+      <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
+        <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="soldIcon" size="sm" />Sold, last 7 days</p>
+        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(money.sold_7d) }}</p>
+        <p class="stat__note m-0 text-xs text-text-subtle">{{ money.orders_7d }} orders</p>
       </div>
     }
 
-    <div class="stat">
-      <p class="stat__label"><ui-icon [icon]="ticketIcon" size="sm" />Tickets out</p>
-      <p class="stat__figure">{{ data.selling.tickets_upcoming }}</p>
-      <p class="stat__note">Across {{ data.selling.upcoming_events }} upcoming events</p>
+    <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
+      <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="ticketIcon" size="sm" />Tickets out</p>
+      <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.tickets_upcoming }}</p>
+      <p class="stat__note m-0 text-xs text-text-subtle">Across {{ data.selling.upcoming_events }} upcoming events</p>
     </div>
 
-    <div class="stat">
-      <p class="stat__label"><ui-icon [icon]="draftIcon" size="sm" />Drafts</p>
-      <p class="stat__figure">{{ data.selling.draft_events }}</p>
-      <p class="stat__note">Not visible to anybody</p>
+    <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
+      <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="draftIcon" size="sm" />Drafts</p>
+      <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.draft_events }}</p>
+      <p class="stat__note m-0 text-xs text-text-subtle">Not visible to anybody</p>
     </div>
   </div>
 
   @if (data.next_event; as next) {
-    <section class="next">
-      <header class="next__head">
+    <section class="next mt-8 rounded-lg border border-border bg-surface-raised p-6">
+      <header class="next__head flex items-start justify-between gap-6 max-sm:flex-col">
         <div>
-          <p class="next__label">Next up</p>
-          <h2 class="next__title">
-            <a [routerLink]="['/events', next.id]">{{ next.title }}</a>
+          <p class="next__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Next up</p>
+          <h2 class="next__title text-xl font-semibold tracking-[-0.02em]">
+            <a class="text-inherit no-underline hover:text-primary-text" [routerLink]="['/events', next.id]">{{ next.title }}</a>
           </h2>
-          <p class="next__when">{{ when(next) }} · {{ next.city }}</p>
+          <p class="next__when mt-1 text-sm text-text-muted">{{ when(next) }} · {{ next.city }}</p>
         </div>
 
-        <p class="next__countdown">
-          <span class="next__days">{{ daysAway(next) }}</span>
-          <span class="next__days-word">{{ daysAway(next) === 1 ? 'day' : 'days' }}</span>
+        <!--
+          The countdown, which is the number an organizer actually plans
+          against. Large and set apart: it is the second thing the eye lands
+          on after the name, and it is the reason the rest of this panel is
+          urgent or is not.
+        -->
+        <p class="next__countdown m-0 grid shrink-0 justify-items-center rounded-lg bg-surface-inset px-4 py-2">
+          <span class="next__days text-2xl font-bold leading-none tabular-nums">{{ daysAway(next) }}</span>
+          <span class="next__days-word text-xs uppercase tracking-[0.08em] text-text-subtle">{{ daysAway(next) === 1 ? 'day' : 'days' }}</span>
         </p>
       </header>
 
-      <div class="next__sales">
-        <p class="next__sold">
-          <strong>{{ next.tickets_issued }}</strong>
+      <div class="next__sales mt-6">
+        <p class="next__sold mb-2 text-sm text-text-muted">
+          <strong class="text-lg text-text tabular-nums">{{ next.tickets_issued }}</strong>
           @if (next.capacity !== null) {
             of {{ next.capacity }} tickets out
           } @else {
@@ -117,16 +142,19 @@
             around.
           -->
           <div
-            class="meter"
+            class="meter h-2 overflow-hidden rounded-full bg-surface-inset"
             role="progressbar"
             [attr.aria-valuenow]="soldPercent(next)"
             aria-valuemin="0"
             aria-valuemax="100"
             [attr.aria-label]="'Tickets sold for ' + next.title"
           >
-            <span class="meter__fill" [style.width.%]="soldPercent(next)"></span>
+            <span
+              class="meter__fill block h-full rounded-full bg-primary transition-[width] duration-(--motion-slow) ease-(--motion-ease) motion-reduce:transition-none"
+              [style.width.%]="soldPercent(next)"
+            ></span>
           </div>
-          <p class="next__percent">{{ soldPercent(next) }}% sold</p>
+          <p class="next__percent mt-2 text-xs text-text-subtle tabular-nums">{{ soldPercent(next) }}% sold</p>
         }
       </div>
     </section>

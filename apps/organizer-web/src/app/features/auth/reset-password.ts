@@ -16,7 +16,6 @@ import { messageFor } from '../../core/errors';
   selector: 'app-reset-password',
   imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './reset-password.html',
-  styleUrl: './sign-in.css',
 })
 export class ResetPassword {
   private readonly api = inject(Api);

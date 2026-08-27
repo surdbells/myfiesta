@@ -7,7 +7,6 @@ import { CONSOLE_URL } from './core/console-url';
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.html',
-  styleUrl: './app.scss',
 })
 export class App {
   /** The console, for the links that turn a visitor into an organizer. */

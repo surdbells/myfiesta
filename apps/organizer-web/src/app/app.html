@@ -1,21 +1,36 @@
 @if (session.signedIn()) {
-  <div class="shell">
+  <!--
+    The shell, styled in place: the first class on each element is its name,
+    kept for tests and for reading the DOM; the utilities after it are the
+    styling, resolving to the same tokens the old stylesheet read. The one
+    thing left in app.scss is the current-section marker, which depends on a
+    router-applied class.
+  -->
+  <div class="shell grid min-h-dvh grid-cols-[15rem_1fr] bg-surface-sunken max-[900px]:grid-cols-1">
     <!--
       One sidebar, rendered once, rather than a header each screen re-states.
       Everything below the outlet is a page inside it, which is what makes the
       console feel like an application rather than a set of pages that happen
       to share a stylesheet.
+
+      On a small screen it goes off-canvas rather than collapsing to icons: an
+      icon rail needs every section to have a glyph somebody recognises
+      without its label, and "payouts" does not.
     -->
-    <aside class="side" [class.side--open]="navOpen()">
-      <div class="side__top">
-        <a class="side__brand" routerLink="/">
-          <img class="side__mark" src="/brand/mark-64.png" alt="" width="26" height="26" />
-          <span class="side__word">myfiesta</span>
+    <aside
+      class="side sticky top-0 grid h-dvh grid-rows-[auto_auto_1fr_auto] border-r border-border bg-surface max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-40 max-[900px]:w-[min(17rem,82vw)] max-[900px]:-translate-x-full max-[900px]:shadow-(--shadow-overlay) max-[900px]:transition-transform max-[900px]:duration-(--motion-base) max-[900px]:ease-(--motion-ease) max-[900px]:data-[open=true]:translate-x-0 motion-reduce:transition-none"
+      [attr.data-open]="navOpen()"
+    >
+      <div class="side__top flex items-center justify-between px-4 pb-3 pt-4">
+        <a class="side__brand flex items-center gap-2 no-underline" routerLink="/">
+          <img class="side__mark block h-[1.625rem] w-[1.625rem]" src="/brand/mark-64.png" alt="" width="26" height="26" />
+          <span class="side__word text-base font-bold tracking-[-0.02em] text-text">myfiesta</span>
         </a>
 
+        <!-- Only exists in the drawer. -->
         <button
           type="button"
-          class="side__dismiss"
+          class="side__dismiss hidden h-11 w-11 cursor-pointer rounded-md border-0 bg-transparent text-xl leading-none text-text-muted [font-family:inherit] max-[900px]:block"
           aria-label="Close menu"
           (click)="navOpen.set(false)"
         >
@@ -30,11 +45,11 @@
         mobile picker to be no better than this.
       -->
       @if (session.organizations().length > 1) {
-        <div class="switcher">
-          <label class="switcher__label" for="org">Organization</label>
+        <div class="switcher grid gap-1 px-4 pb-4">
+          <label class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="org">Organization</label>
           <select
             id="org"
-            class="switcher__select"
+            class="switcher__select w-full text-sm font-medium"
             [value]="session.current()?.id"
             (change)="switchOrganization($event)"
           >
@@ -44,26 +59,32 @@
           </select>
         </div>
       } @else if (session.current(); as org) {
-        <div class="switcher">
-          <span class="switcher__label">Organization</span>
-          <p class="switcher__only">{{ org.name }}</p>
+        <!-- The single-organization case, which is most of them. Still labelled,
+             so the sidebar does not change shape the day somebody is added to a
+             second one. -->
+        <div class="switcher grid gap-1 px-4 pb-4">
+          <span class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Organization</span>
+          <p class="switcher__only truncate py-2 text-sm font-medium text-text">{{ org.name }}</p>
         </div>
       }
 
-      <nav class="nav" aria-label="Sections">
+      <nav class="nav grid content-start gap-6 overflow-y-auto px-3" aria-label="Sections">
         @for (group of navigation(); track group.title) {
-          <div class="nav__group">
-            <h2 class="nav__heading">{{ group.title }}</h2>
+          <div class="nav__group grid gap-0.5">
+            <h2 class="nav__heading mb-1 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">{{ group.title }}</h2>
 
             @for (item of group.items; track item.link) {
               <a
-                class="nav__link"
+                class="nav__link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text-muted no-underline hover:bg-surface-hover hover:text-text"
                 [routerLink]="item.link"
                 routerLinkActive="is-current"
                 [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
                 (click)="navOpen.set(false)"
               >
-                <ui-icon class="nav__glyph" [icon]="item.glyph" size="sm" />
+                <!-- Dimmed against the label, which is the thing being read. The
+                     hovered and current states bring it back to full strength
+                     (app.scss, with the rest of the is-current marker). -->
+                <ui-icon class="nav__glyph text-text-subtle" [icon]="item.glyph" size="sm" />
                 <span>{{ item.label }}</span>
               </a>
             }
@@ -71,16 +92,22 @@
         }
       </nav>
 
-      <div class="side__foot">
+      <div class="side__foot grid gap-2 border-t border-border-subtle p-4">
         @if (session.user(); as user) {
-          <p class="who">
-            <span class="who__name">{{ user.name }}</span>
+          <p class="who m-0 grid min-w-0 gap-0.5">
+            <span class="who__name truncate text-sm font-medium text-text">{{ user.name }}</span>
             @if (session.current(); as org) {
-              <span class="who__role">{{ org.role }}</span>
+              <span class="who__role text-xs capitalize text-text-subtle">{{ org.role }}</span>
             }
           </p>
         }
-        <button type="button" class="side__out" (click)="signOut()">Sign out</button>
+        <button
+          type="button"
+          class="side__out cursor-pointer rounded-md border border-field-border bg-surface-raised px-3 py-2 text-sm text-text-muted [font-family:inherit] hover:bg-surface-hover hover:text-text"
+          (click)="signOut()"
+        >
+          Sign out
+        </button>
       </div>
     </aside>
 
@@ -88,17 +115,20 @@
     @if (navOpen()) {
       <button
         type="button"
-        class="scrim"
+        class="scrim hidden cursor-pointer border-0 p-0 max-[900px]:fixed max-[900px]:inset-0 max-[900px]:z-30 max-[900px]:block max-[900px]:bg-[rgba(8,12,9,0.45)]"
         aria-label="Close menu"
         (click)="navOpen.set(false)"
       ></button>
     }
 
-    <div class="body">
-      <header class="topbar">
+    <div class="body grid min-w-0 grid-rows-[auto_1fr]">
+      <!-- Only ever visible on a small screen: on a wide one the sidebar is the nav. -->
+      <header
+        class="topbar sticky top-0 z-20 hidden items-center gap-3 border-b border-border bg-surface px-4 py-2 max-[900px]:flex"
+      >
         <button
           type="button"
-          class="topbar__menu"
+          class="topbar__menu h-11 w-11 cursor-pointer rounded-md border-0 bg-transparent text-lg text-text [font-family:inherit]"
           aria-label="Open menu"
           [attr.aria-expanded]="navOpen()"
           (click)="navOpen.set(!navOpen())"
@@ -107,11 +137,13 @@
         </button>
 
         @if (session.current(); as org) {
-          <span class="topbar__org">{{ org.name }}</span>
+          <span class="topbar__org truncate text-sm font-medium text-text">{{ org.name }}</span>
         }
       </header>
 
-      <main class="page">
+      <!-- min-h-full so a short screen does not leave the page ground stopping
+           halfway down against the sunken shell behind it. -->
+      <main class="page min-h-full w-full min-w-0 max-w-[84rem] p-8 max-[900px]:px-4 max-[900px]:py-6">
         <router-outlet />
       </main>
     </div>

@@ -15,6 +15,9 @@
     "audit:fields": "node tools/audit-fields.cjs"
   },
   "devDependencies": {
-    "puppeteer-core": "^25.9.0"
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.26",
+    "puppeteer-core": "^25.9.0",
+    "tailwindcss": "^4.3.3"
   }
 }

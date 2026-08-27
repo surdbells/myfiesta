@@ -125,6 +125,69 @@ function toCss(primitives, light, dark) {
   ].join('\n');
 }
 
+/**
+ * The Tailwind theme, generated rather than written.
+ *
+ * Tailwind is a consumer of the token system, not a second one: bg-primary
+ * and var(--primary) must be the same colour forever, so the theme file is
+ * emitted here from the same source as everything else.
+ *
+ * Two blocks with different jobs. Primitives and scales are plain @theme with
+ * literal values — they do not change between light and dark. The semantic
+ * colours are @theme inline referencing the runtime custom properties, so a
+ * utility like bg-surface compiles to var(--surface) and follows the theme at
+ * runtime instead of freezing whichever palette was current at build time.
+ *
+ * The default palette is cleared first. bg-blue-500 compiling is how a colour
+ * from outside the system ends up shipped; the primitive ramps and the
+ * semantic roles are the whole vocabulary.
+ */
+function toTailwind(primitives, light) {
+  const isColorValue = (v) =>
+    typeof v === 'string' && /^(#|rgb|hsl|oklch|color-mix)/.test(v.trim());
+
+  const colorPrimitives = primitives.filter(([name]) => isColor(name));
+  const semanticColors = light.filter(([, value]) => isColorValue(value));
+
+  const px = (value) => (typeof value === 'number' ? value + 'px' : value);
+
+  const radius = primitives.filter(([name]) => name.startsWith('radius-'));
+  const sizes = primitives.filter(([name]) => name.startsWith('font-size-'));
+  const family = new Map(primitives.filter(([name]) => name.startsWith('font-family-')));
+
+  return [
+    BANNER,
+    '',
+    '@theme {',
+    '  /* No colour from outside the system compiles. */',
+    '  --color-*: initial;',
+    '  --color-white: #ffffff;',
+    '  --color-black: #000000;',
+    ...colorPrimitives.map(([name, value]) => '  --' + name + ': ' + value + ';'),
+    '',
+    '  --radius-*: initial;',
+    ...radius.map(([name, value]) => '  --' + name + ': ' + px(value) + ';'),
+    '',
+    "  --font-sans: " + family.get('font-family-sans') + ';',
+    "  --font-mono: " + family.get('font-family-mono') + ';',
+    '',
+    '  /* text-sm is font-size-sm, not nearly it. */',
+    ...sizes.map(
+      ([name, value]) => '  --text-' + name.slice('font-size-'.length) + ': ' + px(value) + ';',
+    ),
+    '}',
+    '',
+    '/* Semantic roles, inlined as var() so utilities follow the runtime theme.',
+    '   Shadows and the focus ring are not mapped — their token names collide',
+    "   with Tailwind's namespaces, and utilities reach them directly as",
+    '   shadow-(--shadow-card). */',
+    '@theme inline {',
+    ...semanticColors.map(([name]) => '  --color-' + name + ': var(--' + name + ');'),
+    '}',
+    '',
+  ].join('\n');
+}
+
 function dartFields(tokens, { colors }) {
   return tokens.map(([name, value]) => {
     const id = camel(name);
@@ -197,6 +260,7 @@ const dart = toDart(primitives, light, dark);
 
 await mkdir(join(here, 'dist'), { recursive: true });
 await writeFile(join(here, 'dist', 'tokens.css'), toCss(primitives, light, dark));
+await writeFile(join(here, 'dist', 'tailwind.css'), toTailwind(primitives, light));
 await writeFile(join(here, 'dist', 'tokens.dart'), dart);
 
 // Flutter cannot resolve a file outside its own package, so the Dart output is
@@ -209,5 +273,5 @@ await writeFile(join(mobileDesign, 'tokens.dart'), dart);
 
 console.log(
   `tokens: ${primitives.length} primitives + ${light.length} semantic (light and dark) ` +
-    '-> dist/tokens.css, dist/tokens.dart, apps/mobile/lib/design/tokens.dart'
+    '-> dist/tokens.css, dist/tailwind.css, dist/tokens.dart, apps/mobile/lib/design/tokens.dart'
 );

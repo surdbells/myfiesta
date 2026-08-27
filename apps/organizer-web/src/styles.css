@@ -1,0 +1,27 @@
+/*
+ * The style entry, ordered by cascade layer rather than by line.
+ *
+ * Layered styles lose to unlayered ones, so the order below is a precedence
+ * statement: utilities are declared last and therefore beat the base layer,
+ * which is what lets a template say text-lg on a heading the base layer has
+ * already sized. Per-screen component styles are unlayered and outrank
+ * everything here — deliberately, they are the most specific intent.
+ *
+ * Tailwind's preflight is not imported. base.css is this product's preflight,
+ * and two resets fighting over the same elements helps nobody.
+ *
+ * tailwind.css is generated from packages/tokens/tokens.json, same as
+ * tokens.css — bg-primary and var(--primary) are one colour by construction.
+ */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import '../../../packages/tokens/dist/tailwind.css';
+@import '../../../packages/tokens/fonts/fonts.css';
+@import '../../../packages/tokens/dist/tokens.css';
+@import '../../../packages/ui/styles/base.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Where the class names live: the app's templates, and the ui package's. */
+@source './app';
+@source '../../../packages/ui/src';
