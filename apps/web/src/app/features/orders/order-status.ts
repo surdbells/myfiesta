@@ -21,7 +21,6 @@ import { formatMoney } from '../../core/money';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './order-status.html',
-  styleUrl: './order-status.css',
 })
 export class OrderStatus implements OnDestroy {
   private readonly api = inject(Api);

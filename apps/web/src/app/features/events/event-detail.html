@@ -1,61 +1,62 @@
 @if (notFound()) {
-  <section class="wrap">
+  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
     <h1>Event not found</h1>
     <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
   </section>
 } @else if (event(); as ev) {
-  <article class="wrap">
+  <article class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12">
     @if (ev.poster_url) {
       <!-- Decorative: the title sits directly beneath it and says the same
            thing, so announcing the image as well only repeats it. Eager and
            high priority because this is the largest thing on the page and the
            one the load metric is measured against. -->
-      <img class="poster" [src]="ev.poster_url" alt="" fetchpriority="high" />
+      <img class="poster mb-8 aspect-[21/9] w-full rounded-lg bg-surface-inset object-cover max-[700px]:aspect-video min-[900px]:col-span-full" [src]="ev.poster_url" alt="" fetchpriority="high" />
     }
 
-    <header>
+    <header class="grid justify-items-start gap-2 min-[900px]:col-start-1">
       <h1>{{ ev.title }}</h1>
-      <p class="when">{{ when() }}</p>
-      <p class="where">
+      <p class="when text-lg font-medium text-primary-text">{{ when() }}</p>
+      <p class="where text-text">
         {{ ev.venue?.name ?? ev.city }}
         @if (ev.venue?.address) {
           <span class="muted">· {{ ev.venue?.address }}</span>
         }
       </p>
-      <p class="by">
+      <p class="by flex items-center gap-2 text-sm text-text-muted">
         By {{ ev.organizer.name }}
         @if (ev.organizer.is_verified) {
-          <span class="verified" title="Identity verified">✓</span>
+          <span class="verified inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-primary text-[11px] text-on-primary" title="Identity verified">✓</span>
         }
       </p>
       @if (ev.min_age) {
-        <p class="gate">
+        <p class="gate rounded-md bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-sm text-warning">
           {{ ev.min_age }}+ · photo ID {{ ev.id_required ? 'required' : 'may be requested' }}
         </p>
       }
     </header>
 
     @if (ev.description) {
-      <p class="description">{{ ev.description }}</p>
+      <p class="description mt-6 max-w-[66ch] whitespace-pre-line text-text-muted min-[900px]:col-start-1">{{ ev.description }}</p>
     }
 
-    <section class="tickets" aria-label="Tickets">
-      <h2>Tickets</h2>
+    <section class="tickets mt-8 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-raised) min-[900px]:sticky min-[900px]:top-6 min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:max-h-[calc(100vh-var(--space-7))] min-[900px]:overflow-y-auto" aria-label="Tickets">
+      <h2 class="mb-4 text-lg">Tickets</h2>
 
       @if (onSale().length === 0) {
         <p class="muted">Nothing is on sale for this event right now.</p>
       } @else {
         @for (type of onSale(); track type.id) {
-          <div class="ticket-row">
+          <div class="ticket-row flex items-start justify-between gap-4 border-t border-border py-4 first-of-type:border-t-0 first-of-type:pt-0">
             <div>
-              <h3>{{ type.name }}</h3>
+              <h3 class="text-base font-semibold">{{ type.name }}</h3>
               @if (type.description) {
-                <p class="muted">{{ type.description }}</p>
+                <p class="muted mt-[2px] max-w-[34ch] text-sm">{{ type.description }}</p>
               }
-              <p class="price">{{ formatMoney(type.price) }}</p>
+              <p class="price mt-2 text-lg font-semibold tabular-nums">{{ formatMoney(type.price) }}</p>
             </div>
-            <div class="stepper">
+            <div class="stepper flex shrink-0 items-center gap-1 rounded-md bg-surface-inset p-[3px]">
               <button
+                class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 type="button"
                 (click)="adjust(type, -1)"
                 [disabled]="quantity(type.id) === 0"
@@ -63,8 +64,9 @@
               >
                 −
               </button>
-              <span aria-live="polite">{{ quantity(type.id) }}</span>
+              <span class="min-w-9 text-center font-semibold tabular-nums" aria-live="polite">{{ quantity(type.id) }}</span>
               <button
+                class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 type="button"
                 (click)="adjust(type, 1)"
                 [attr.aria-label]="stepLabel(type, 'more')"
@@ -82,19 +84,20 @@
         buyer who goes looking for one often does not come back.
       -->
       @if (hasSelection()) {
-        <div class="promo">
+        <div class="promo mt-4 grid gap-2 border-t border-border pt-4">
           @if (appliedCode(); as applied) {
-            <p class="promo-applied">
+            <p class="promo-applied flex items-center justify-between gap-3 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-3 py-2 text-sm text-success">
               <span
                 ><strong>{{ applied }}</strong> applied</span
               >
-              <button type="button" class="link" (click)="clearCode()">Remove</button>
+              <button type="button" class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" (click)="clearCode()">Remove</button>
             </p>
           } @else {
-            <label for="promo">Have a code?</label>
-            <div class="promo-row">
+            <label class="text-sm font-normal text-text-muted" for="promo">Have a code?</label>
+            <div class="promo-row flex gap-2">
               <input
                 id="promo"
+              class="uppercase tracking-[0.04em]"
                 name="promo"
                 type="text"
                 inputmode="text"
@@ -105,24 +108,31 @@
                 (ngModelChange)="code.set($event)"
                 (keydown.enter)="applyCode(); $event.preventDefault()"
               />
-              <button type="button" (click)="applyCode()" [disabled]="!code().trim()">Apply</button>
+              <button
+                class="h-11 shrink-0 cursor-pointer rounded-md border-0 bg-primary-soft px-4 text-sm font-semibold text-primary-soft-text [font-family:inherit] disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                (click)="applyCode()"
+                [disabled]="!code().trim()"
+              >
+                Apply
+              </button>
             </div>
           }
         </div>
       }
 
       @if (quoteError(); as message) {
-        <p class="error" role="alert">{{ message }}</p>
+        <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
       }
 
       @if (quote(); as q) {
-        <dl class="totals">
-          <dt>Subtotal</dt>
-          <dd>{{ formatMoney(q.subtotal) }}</dd>
+        <dl class="totals m-0 mt-6 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
+          <dt class="text-text-muted">Subtotal</dt>
+          <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.subtotal) }}</dd>
 
           @if (q.discount.amount > 0) {
-            <dt>Discount</dt>
-            <dd>−{{ formatMoney(q.discount) }}</dd>
+            <dt class="text-text-muted">Discount</dt>
+            <dd class="m-0 text-right tabular-nums">−{{ formatMoney(q.discount) }}</dd>
           }
 
           @if (q.tax.amount > 0) {
@@ -131,23 +141,23 @@
               and "added" are different money, and a buyer who thinks tax is
               being added twice abandons the basket.
             -->
-            <dt>{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
-            <dd>{{ formatMoney(q.tax) }}</dd>
+            <dt class="text-text-muted">{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
+            <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.tax) }}</dd>
           }
 
-          <dt class="total">Total</dt>
-          <dd class="total">{{ formatMoney(q.total) }}</dd>
+          <dt class="total mt-2 border-t border-border pt-3 text-lg font-semibold text-text">Total</dt>
+          <dd class="total m-0 mt-2 border-t border-border pt-3 text-right text-lg font-semibold text-text tabular-nums">{{ formatMoney(q.total) }}</dd>
         </dl>
 
         @if (!checkingOut()) {
-          <button class="cta" type="button" [disabled]="!hasSelection()" (click)="beginCheckout()">
+          <button class="cta mt-6 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50" type="button" [disabled]="!hasSelection()" (click)="beginCheckout()">
             {{ q.requires_payment ? 'Get tickets' : 'Reserve free tickets' }}
           </button>
         } @else {
-          <form class="buyer" (ngSubmit)="placeOrder()" #f="ngForm" novalidate>
-            <h3>Where should the tickets go?</h3>
+          <form class="buyer mt-6 grid gap-2 border-t border-border pt-6" (ngSubmit)="placeOrder()" #f="ngForm" novalidate>
+            <h3 class="mb-2 text-base">Where should the tickets go?</h3>
 
-            <label for="buyer-name">Full name</label>
+            <label class="mt-2" for="buyer-name">Full name</label>
             <input
               id="buyer-name"
               name="name"
@@ -157,7 +167,7 @@
               required
             />
 
-            <label for="buyer-email">Email</label>
+            <label class="mt-2" for="buyer-email">Email</label>
             <!--
               The tickets are sent here, and it is how a guest gets back to them
               later without an account. Worth saying so rather than leaving the
@@ -173,9 +183,9 @@
               required
               aria-describedby="email-hint"
             />
-            <small id="email-hint" class="muted">Your tickets are sent here.</small>
+            <small id="email-hint" class="muted text-xs">Your tickets are sent here.</small>
 
-            <label for="buyer-phone">Phone <span class="muted">(optional)</span></label>
+            <label class="mt-2" for="buyer-phone">Phone <span class="muted">(optional)</span></label>
             <input
               id="buyer-phone"
               name="phone"
@@ -186,10 +196,10 @@
             />
 
             @if (orderError(); as err) {
-              <p class="error" role="alert">{{ err }}</p>
+              <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ err }}</p>
             }
 
-            <button class="cta" type="submit" [disabled]="placing()">
+            <button class="cta mt-4 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50" type="submit" [disabled]="placing()">
               @if (placing()) {
                 Placing your order…
               } @else if (q.requires_payment) {
@@ -200,7 +210,7 @@
             </button>
 
             <button
-              class="link"
+              class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]"
               type="button"
               (click)="checkingOut.set(false)"
               [disabled]="placing()"
@@ -213,17 +223,18 @@
     </section>
 
     @if (ev.gallery.length > 0) {
-      <section class="gallery" aria-label="Photographs from this event">
-        <h2>From the night</h2>
+      <section class="gallery mt-16 min-[900px]:col-span-full" aria-label="Photographs from this event">
+        <h2 class="mb-4 text-xl">From the night</h2>
 
-        <ul>
+        <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-0">
           @for (image of ev.gallery; track image.url) {
-            <li>
+            <li class="grid gap-2">
               <!-- Lazy, and below the tickets on purpose: somebody who came to
                    buy should reach the buy button before a dozen photographs
                    start downloading. -->
-              <a [href]="image.url" target="_blank" rel="noopener">
+              <a class="group block overflow-hidden rounded-md" [href]="image.url" target="_blank" rel="noopener">
                 <img
+                  class="aspect-square w-full bg-surface-inset object-cover transition-transform duration-(--motion-base) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                   [src]="image.thumb_url"
                   [alt]="image.caption || 'Photograph from this event'"
                   loading="lazy"
@@ -231,7 +242,7 @@
                 />
               </a>
               @if (image.caption) {
-                <p>{{ image.caption }}</p>
+                <p class="text-sm text-text-muted">{{ image.caption }}</p>
               }
             </li>
           }
@@ -240,5 +251,5 @@
     }
   </article>
 } @else {
-  <section class="wrap"><p class="muted" role="status">Loading…</p></section>
+  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }

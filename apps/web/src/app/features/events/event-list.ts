@@ -18,7 +18,6 @@ import { Seo } from '../../core/seo';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './event-list.html',
-  styleUrl: './event-list.css',
 })
 export class EventList {
   private readonly api = inject(Api);

@@ -1,19 +1,19 @@
 @if (loading()) {
-  <section class="wrap"><p class="muted" role="status">Finding your tickets…</p></section>
+  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8"><p class="muted" role="status">Finding your tickets…</p></section>
 } @else if (notFound()) {
-  <section class="wrap">
-    <h1>We cannot find those tickets</h1>
+  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8">
+    <h1 class="text-2xl">We cannot find those tickets</h1>
     <p class="muted">
       Check the link in your confirmation email — some email apps cut long links
       in half. Opening it from the message itself usually works.
     </p>
   </section>
 } @else if (order(); as o) {
-  <section class="wrap" (click)="requestFullBrightness()">
-    <header>
+  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8" (click)="requestFullBrightness()">
+    <header class="mb-8 grid justify-items-start gap-1">
       <p class="eyebrow">{{ o.event.organizer }}</p>
-      <h1>{{ o.event.title }}</h1>
-      <p class="when">{{ when(o.event.starts_at, o.event.timezone) }}</p>
+      <h1 class="text-2xl">{{ o.event.title }}</h1>
+      <p class="when text-lg font-medium text-primary-text">{{ when(o.event.starts_at, o.event.timezone) }}</p>
       <p class="where">
         {{ o.event.venue }}
         @if (o.event.address) {
@@ -21,7 +21,7 @@
         }
       </p>
       @if (o.event.min_age) {
-        <p class="gate">
+        <p class="gate mt-2 rounded-md bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-sm text-warning">
           {{ o.event.min_age }}+ · photo ID
           {{ o.event.id_required ? 'required' : 'may be requested' }}
         </p>
@@ -31,29 +31,32 @@
     @if (o.tickets.length === 0) {
       <p class="muted">There are no live tickets on this order.</p>
     } @else {
-      <ul class="tickets">
+      <ul class="tickets m-0 grid list-none gap-4 p-0">
         @for (ticket of o.tickets; track ticket.id) {
-          <li class="ticket" [class.used]="ticket.admitted >= ticket.admits">
+          <li
+            class="ticket grid justify-items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 text-center shadow-(--shadow-card)"
+            [class.opacity-70]="ticket.admitted >= ticket.admits"
+          >
             <!--
               The QR is the whole point of the screen, so it leads. Everything
               below it is what somebody checks after the scanner has beeped.
             -->
-            <div class="qr" [innerHTML]="qr(ticket.qr)"></div>
+            <div class="qr rounded-md bg-white p-3 [line-height:0] [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(260px,68vw)]" [innerHTML]="qr(ticket.qr)"></div>
 
-            <div class="detail">
-              <p class="type">{{ ticket.type }}</p>
+            <div class="detail grid gap-1">
+              <p class="type text-lg font-semibold">{{ ticket.type }}</p>
               @if (ticket.holder) {
-                <p class="holder">{{ ticket.holder }}</p>
+                <p class="holder text-text-muted">{{ ticket.holder }}</p>
               }
 
               <!--
                 Shown in the same grouping the code is printed in, because it
                 gets read aloud when a scanner will not focus.
               -->
-              <p class="code">{{ ticket.code }}</p>
+              <p class="code mt-1 select-all font-mono text-lg tracking-[0.12em] text-text">{{ ticket.code }}</p>
 
               @if (ticket.admits > 1) {
-                <p class="admits">
+                <p class="admits text-sm font-medium text-primary-text">
                   Admits {{ ticket.admits }}
                   @if (ticket.admitted > 0) {
                     · {{ ticket.admitted }} already in
@@ -62,24 +65,24 @@
               }
 
               @if (ticket.admitted >= ticket.admits) {
-                <p class="state">Checked in</p>
+                <p class="state mt-2 justify-self-center rounded-full bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-3 py-1 text-sm font-medium text-success">Checked in</p>
               }
             </div>
           </li>
         }
       </ul>
 
-      <p class="hint">
+      <p class="hint mt-4 text-center text-sm text-text-muted">
         Show this screen at the door. Turn your brightness up — a dim screen is
         the most common reason a scanner will not read a ticket.
       </p>
     }
 
-    <dl class="summary">
-      <dt>Order</dt>
-      <dd><code>{{ o.reference }}</code></dd>
+    <dl class="summary m-0 mt-8 flex justify-center gap-3 text-sm text-text-muted">
+      <dt class="m-0">Order</dt>
+      <dd class="m-0"><code class="select-all tracking-[0.06em]">{{ o.reference }}</code></dd>
     </dl>
 
-    <a class="back" [routerLink]="['/', o.event.slug]">← See the event</a>
+    <a class="back mt-6 inline-block text-sm text-text-muted no-underline hover:text-primary" [routerLink]="['/', o.event.slug]">← See the event</a>
   </section>
 }

@@ -1,41 +1,41 @@
-<section class="wrap">
+<section class="wrap mx-auto grid max-w-[620px] justify-items-start gap-4 px-6 pb-24 pt-16">
   @if (notFound()) {
-    <h1>We cannot find that order</h1>
-    <p class="muted">
+    <h1 class="text-2xl text-primary">We cannot find that order</h1>
+    <p class="muted max-w-[56ch] leading-[1.6]">
       Check the reference in your confirmation email. If you have just paid, the order may take a
       moment to appear.
     </p>
   } @else if (order(); as o) {
     @switch (o.status) {
       @case ('paid') {
-        <h1>You're going to {{ o.event.title }}</h1>
-        <p class="lead">{{ when() }}</p>
+        <h1 class="text-2xl text-primary">You're going to {{ o.event.title }}</h1>
+        <p class="lead text-lg font-medium">{{ when() }}</p>
 
-        <p>
+        <p class="max-w-[56ch] leading-[1.6]">
           {{ o.ticket_count }}
           {{ o.ticket_count === 1 ? 'ticket is' : 'tickets are' }} on the way to your inbox, with
           the QR code to show at the door.
         </p>
 
-        <dl class="summary">
-          <dt>Order</dt>
-          <dd>
-            <code>{{ o.reference }}</code>
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+          <dt class="text-text-muted">Order</dt>
+          <dd class="m-0 font-semibold tabular-nums">
+            <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
           </dd>
-          <dt>Paid</dt>
-          <dd>{{ formatMoney(o.total) }}</dd>
+          <dt class="text-text-muted">Paid</dt>
+          <dd class="m-0 font-semibold tabular-nums">{{ formatMoney(o.total) }}</dd>
         </dl>
 
         <!--
           Said explicitly. Guest checkout means most buyers have no account to
           log into, and the emailed link is the only way back to their tickets.
         -->
-        <p class="muted">Keep that email — the link inside is how you get back to your tickets.</p>
+        <p class="muted max-w-[56ch] leading-[1.6]">Keep that email — the link inside is how you get back to your tickets.</p>
       }
 
       @case ('pending') {
-        <h1>Confirming your payment</h1>
-        <p class="lead" role="status" aria-live="polite">
+        <h1 class="text-2xl text-primary">Confirming your payment</h1>
+        <p class="lead text-lg font-medium" role="status" aria-live="polite">
           @if (stillWaiting()) {
             Still confirming. This can take a moment — you can close this page and your tickets will
             arrive by email.
@@ -43,37 +43,37 @@
             One moment.
           }
         </p>
-        <dl class="summary">
-          <dt>Order</dt>
-          <dd>
-            <code>{{ o.reference }}</code>
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+          <dt class="text-text-muted">Order</dt>
+          <dd class="m-0 font-semibold tabular-nums">
+            <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
           </dd>
         </dl>
       }
 
       @case ('failed') {
-        <h1>That payment did not go through</h1>
-        <p class="lead">Nothing has been charged.</p>
-        <a class="cta" [href]="'/' + o.event.slug">Try again</a>
+        <h1 class="text-2xl text-primary">That payment did not go through</h1>
+        <p class="lead text-lg font-medium">Nothing has been charged.</p>
+        <a class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover" [href]="'/' + o.event.slug">Try again</a>
       }
 
       @case ('cancelled') {
-        <h1>Your order was cancelled</h1>
-        <p class="lead">Nothing has been charged.</p>
-        <a class="cta" [href]="'/' + o.event.slug">Back to the event</a>
+        <h1 class="text-2xl text-primary">Your order was cancelled</h1>
+        <p class="lead text-lg font-medium">Nothing has been charged.</p>
+        <a class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover" [href]="'/' + o.event.slug">Back to the event</a>
       }
 
       @case ('refunded') {
-        <h1>This order was refunded</h1>
-        <dl class="summary">
-          <dt>Order</dt>
-          <dd>
-            <code>{{ o.reference }}</code>
+        <h1 class="text-2xl text-primary">This order was refunded</h1>
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+          <dt class="text-text-muted">Order</dt>
+          <dd class="m-0 font-semibold tabular-nums">
+            <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
           </dd>
         </dl>
       }
     }
   } @else {
-    <p class="muted" role="status">Loading…</p>
+    <p class="muted max-w-[56ch] leading-[1.6]" role="status">Loading…</p>
   }
 </section>

@@ -3,6 +3,10 @@
  *
  * Long-form reading, so the only thing that matters is the measure and the
  * rhythm between headings. Everything else comes from the base layer.
+ *
+ * Kept as a stylesheet in the utilities era on purpose: this is article
+ * typography — the job Tailwind hands to its typography plugin — and styling
+ * elements inside one article scope is the design, not a leftover.
  */
 
 .wrap {

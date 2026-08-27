@@ -19,7 +19,6 @@ import { TicketAccess } from '../../core/api.types';
   selector: 'app-tickets',
   imports: [RouterLink],
   templateUrl: './tickets.html',
-  styleUrl: './tickets.css',
 })
 export class Tickets {
   private readonly api = inject(Api);

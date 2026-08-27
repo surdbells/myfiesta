@@ -1,26 +1,32 @@
-<section class="wrap">
-  <h1>What's on</h1>
+<section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <h1 class="mb-6 text-3xl">What's on</h1>
 
-  <form class="filters" (ngSubmit)="search()">
+  <form class="filters mb-8 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-raised p-4" (ngSubmit)="search()">
     <input
+      class="flex-[1_1_16rem]"
       type="search"
       name="q"
       placeholder="Search events"
       aria-label="Search events"
       [(ngModel)]="query"
     />
-    <input type="text" name="city" placeholder="City" aria-label="City" [(ngModel)]="city" />
-    <label class="check">
-      <input type="checkbox" name="free" [(ngModel)]="freeOnly" />
+    <input class="flex-[0_1_12rem]" type="text" name="city" placeholder="City" aria-label="City" [(ngModel)]="city" />
+    <label class="check inline-flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-normal text-text-muted">
+      <input class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary" type="checkbox" name="free" [(ngModel)]="freeOnly" />
       Free only
     </label>
-    <button type="submit">Search</button>
+    <button
+      class="h-11 cursor-pointer rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:bg-primary-hover"
+      type="submit"
+    >
+      Search
+    </button>
   </form>
 
   @if (category(); as chosen) {
-    <p class="applied">
+    <p class="applied -mt-3 mb-6 flex w-fit items-center gap-3 rounded-full bg-primary-soft px-4 py-2 text-sm text-primary-soft-text">
       Showing <strong>{{ chosen }}</strong>
-      <button type="button" class="clear" (click)="clearCategory()">Clear</button>
+      <button type="button" class="clear cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" (click)="clearCategory()">Clear</button>
     </p>
   }
 
@@ -29,22 +35,25 @@
   } @else if (events().length === 0) {
     <p class="muted">Nothing matches that yet. Try a different city, or clear the filters.</p>
   } @else {
-    <ul class="grid">
+    <ul class="grid m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6 p-0">
       @for (event of events(); track event.slug) {
-        <li class="card">
-          <a [routerLink]="['/', event.slug]">
+        <li class="card overflow-hidden rounded-lg border border-border bg-surface-raised p-0 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised)">
+          <a
+            class="block text-inherit no-underline focus-visible:rounded-lg focus-visible:outline-offset-[-2px]"
+            [routerLink]="['/', event.slug]"
+          >
             @if (event.poster_url) {
-              <img [src]="event.poster_url" [alt]="" loading="lazy" />
+              <img class="aspect-video w-full bg-surface-inset object-cover" [src]="event.poster_url" [alt]="" loading="lazy" />
             } @else {
-              <div class="poster-placeholder" aria-hidden="true"></div>
+              <div class="poster-placeholder aspect-video w-full bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_14%,var(--surface-inset)),color-mix(in_srgb,var(--accent)_12%,var(--surface-inset)))]" aria-hidden="true"></div>
             }
-            <div class="card-body">
-              <h2>{{ event.title }}</h2>
-              <p class="when">{{ when(event) }}</p>
-              <p class="where">{{ event.city }}</p>
-              <p class="price">
+            <div class="card-body grid gap-1 p-4">
+              <h2 class="line-clamp-2 text-base font-semibold">{{ event.title }}</h2>
+              <p class="when text-sm font-medium text-primary-text">{{ when(event) }}</p>
+              <p class="where text-sm text-text-muted">{{ event.city }}</p>
+              <p class="price mt-2 font-semibold tabular-nums">
                 @if (event.is_sold_out) {
-                  <span class="sold-out">Sold out</span>
+                  <span class="sold-out inline-block rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Sold out</span>
                 } @else {
                   {{ formatFrom(event.from_price, event.currency) }}
                 }
