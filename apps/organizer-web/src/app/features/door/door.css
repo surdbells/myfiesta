@@ -137,8 +137,15 @@ h1 {
   min-width: 0;
 }
 
+/*
+ * Wide enough for its own label.
+ *
+ * At 7rem the label wrapped mid-phrase — "How many of a" over "table" —
+ * which pushed this field a line lower than the one beside it and left the
+ * two sitting on different baselines.
+ */
 .narrow {
-  flex: 0 0 7rem;
+  flex: 0 0 8rem;
 }
 
 /* Codes are read off a screen and typed in a hurry. Monospace and spaced so a

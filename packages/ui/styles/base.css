@@ -256,16 +256,22 @@ label {
   color: var(--text);
 }
 
+/*
+ * Every field that is a box, named by what it is not.
+ *
+ * This was a list of the types it *is* — input[type='text'] and eight
+ * others — which missed the one case nobody writes down: an <input> with no
+ * type attribute at all. That is a text field by specification and matches
+ * none of those selectors, so it fell back to the browser default and
+ * rendered as a 21px hairline beside its properly boxed siblings.
+ *
+ * Nine of them across the console, on the guest list, the door, the codes,
+ * the message composer and event creation. Nothing failed; they just looked
+ * like a different application. Inverting the list also covers whatever type
+ * gets used next.
+ */
 .input,
-input[type='text'],
-input[type='email'],
-input[type='password'],
-input[type='search'],
-input[type='tel'],
-input[type='url'],
-input[type='number'],
-input[type='date'],
-input[type='datetime-local'],
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='range']):not([type='color']):not([type='image']):not([type='hidden']),
 select,
 textarea {
   display: block;
