@@ -5,7 +5,8 @@ namespace App\Filament\Resources\Organizations\Tables;
 use App\Enums\PlatformRole;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
-use App\Models\Settlement;
+use App\Services\Payouts\SettlementRecorder;
+use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -144,52 +145,38 @@ class OrganizationsTable
                             ->rows(3),
                     ])
                     ->action(function (Organization $record, array $data) {
-                        $currency = $data['currency'];
-                        $amount = new Money((int) round(((float) $data['amount']) * 100), $currency);
-
-                        $balances = LedgerEntry::balancesFor($record);
-                        $balance = $balances[$currency] ?? Money::zero($currency);
-
-                        $type = Settlement::classify($amount, $balance);
-
-                        if ($type === 'overdraft' && blank($data['note'] ?? null)) {
+                        /*
+                         * The rules live in SettlementRecorder, not here.
+                         *
+                         * Classifying the amount, refusing an unexplained
+                         * overdraft and writing the ledger entry alongside
+                         * the settlement are the most consequential rules on
+                         * this platform, and inside a table definition the
+                         * only way to exercise them was to drive this table.
+                         */
+                        try {
+                            $settlement = app(SettlementRecorder::class)->record(
+                                $record,
+                                new Money(
+                                    (int) round(((float) $data['amount']) * 100),
+                                    $data['currency'],
+                                ),
+                                $data['rail'],
+                                $data['note'] ?? null,
+                                auth()->user(),
+                            );
+                        } catch (SettlementRefused $refused) {
                             Notification::make()
-                                ->title('A note is required')
-                                ->body('This pays more than is owed, so it needs a reason on the record.')
+                                ->title('That could not be recorded')
+                                ->body($refused->getMessage())
                                 ->danger()
                                 ->send();
 
                             return;
                         }
 
-                        // The settlement and its ledger entry are one fact.
-                        // Writing either without the other leaves the balance
-                        // disagreeing with the payout history.
-                        DB::transaction(function () use ($record, $amount, $type, $data) {
-                            $settlement = Settlement::create([
-                                'organization_id' => $record->id,
-                                'amount' => $amount->amount,
-                                'currency' => $amount->currency,
-                                'rail' => $data['rail'],
-                                'type' => $type,
-                                'note' => $data['note'] ?? null,
-                                'status' => 'success',
-                                'settled_by' => auth()->id(),
-                                'settled_at' => now(),
-                            ]);
-
-                            LedgerEntry::create([
-                                'organization_id' => $record->id,
-                                'type' => 'settlement',
-                                'amount' => -$amount->amount,
-                                'currency' => $amount->currency,
-                                'reason' => 'Settlement '.$settlement->id,
-                                'occurred_at' => now(),
-                            ]);
-                        });
-
                         Notification::make()
-                            ->title(ucfirst($type).' settlement recorded')
+                            ->title(ucfirst($settlement->type).' settlement recorded')
                             ->success()
                             ->send();
                     }),
