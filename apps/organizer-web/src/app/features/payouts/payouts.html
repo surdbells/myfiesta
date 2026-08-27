@@ -4,7 +4,7 @@
 />
 
 @if (loading()) {
-  <div class="lead"><ui-skeleton height="4rem" /></div>
+  <div class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 max-[560px]:flex-col max-[560px]:gap-6"><ui-skeleton height="4rem" /></div>
 } @else if (refused()) {
   <!--
     Not an error state. The server is saying this account may not see the
@@ -25,16 +25,16 @@
   />
 } @else if (statement(); as statement) {
   <!-- ------------------------------------------------------------- balance -->
-  <section class="lead">
+  <section class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 max-[560px]:flex-col max-[560px]:gap-6">
     <div class="lead__figure">
-      <p class="lead__label">Owed to you</p>
-      <p class="lead__amount">{{ cash(statement.balance) }}</p>
-      <p class="lead__note">Paid out after each event</p>
+      <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Owed to you</p>
+      <p class="lead__amount text-3xl font-bold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(statement.balance) }}</p>
+      <p class="lead__note mt-1 text-xs text-text-subtle">Paid out after each event</p>
     </div>
 
     <div class="lead__figure lead__figure--quiet">
-      <p class="lead__label">Sent so far</p>
-      <p class="lead__amount">{{ cash(statement.settled) }}</p>
+      <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sent so far</p>
+      <p class="lead__amount text-xl font-semibold tracking-[-0.02em] text-text tabular-nums">{{ cash(statement.settled) }}</p>
     </div>
   </section>
 
@@ -44,10 +44,10 @@
       is a balance nobody has told the organizer about, and it is why the
       destination lives here rather than buried in settings.
     -->
-    <div class="warn" role="alert">
+    <div class="warn mt-4 flex flex-wrap items-center justify-between gap-6 rounded-lg border border-[color-mix(in_srgb,var(--warning)_34%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-6 py-4" role="alert">
       <div>
-        <p class="warn__title">We have nowhere to send this</p>
-        <p class="warn__detail">
+        <p class="warn__title font-semibold">We have nowhere to send this</p>
+        <p class="warn__detail mt-1 max-w-[52ch] text-pretty text-sm text-text-muted">
           Add an Interac address or a bank account and your balance goes out
           after the next event.
         </p>
@@ -58,11 +58,11 @@
   }
 
   <!-- --------------------------------------------------------- by the night -->
-  <section class="block">
-    <h2 class="block__title">By event</h2>
+  <section class="block mt-12">
+    <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">By event</h2>
 
     @if (events().length === 0) {
-      <p class="block__none">Nothing has sold yet.</p>
+      <p class="block__none rounded-lg border border-border bg-surface-raised p-6 text-sm text-text-muted">Nothing has sold yet.</p>
     } @else {
       <!--
         A heading row, because three money columns with no labels is three
@@ -70,37 +70,37 @@
         the words would be more chrome than the figures; looking at it, the
         figures without them are unreadable.
       -->
-      <p class="rows__head" aria-hidden="true">
+      <p class="rows__head mb-2 grid grid-cols-[1fr_repeat(3,8rem)] gap-4 px-6 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle max-[800px]:hidden" aria-hidden="true">
         <span></span>
-        <span>Sold</span>
-        <span>Sent</span>
-        <span>Owed</span>
+        <span class="text-right">Sold</span>
+        <span class="text-right">Sent</span>
+        <span class="text-right">Owed</span>
       </p>
 
-      <ul class="rows">
+      <ul class="rows m-0 grid list-none gap-2 p-0">
         @for (row of events(); track row.event_id ?? 'none') {
-          <li class="row">
-            <div class="row__what">
+          <li class="row grid grid-cols-[1fr_repeat(3,8rem)] items-center gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4 max-[800px]:grid-cols-2">
+            <div class="row__what min-w-0 max-[800px]:col-span-full">
               @if (row.event_id) {
-                <a class="row__title" [routerLink]="['/events', row.event_id]">{{ row.title }}</a>
+                <a class="row__title flex flex-wrap items-center gap-3 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]" [routerLink]="['/events', row.event_id]">{{ row.title }}</a>
               } @else {
-                <span class="row__title row__title--plain">{{ row.title }}</span>
+                <span class="row__title flex flex-wrap items-center gap-3 font-medium text-text no-underline">{{ row.title }}</span>
               }
-              <p class="row__when">{{ when(row.starts_at) }}</p>
+              <p class="row__when mt-1 text-sm text-text-muted">{{ when(row.starts_at) }}</p>
             </div>
 
-            <p class="row__figure row__figure--quiet">
-              <span class="row__cap">Sold</span>
+            <p class="row__figure text-right font-normal text-text-muted tabular-nums max-[800px]:flex max-[800px]:justify-between max-[800px]:text-left">
+              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Sold</span>
               {{ cash(row.gross) }}
             </p>
 
-            <p class="row__figure row__figure--quiet">
-              <span class="row__cap">Sent</span>
+            <p class="row__figure text-right font-normal text-text-muted tabular-nums max-[800px]:flex max-[800px]:justify-between max-[800px]:text-left">
+              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Sent</span>
               {{ cash(row.settled) }}
             </p>
 
-            <p class="row__figure">
-              <span class="row__cap">Owed</span>
+            <p class="row__figure text-right font-medium tabular-nums max-[800px]:flex max-[800px]:justify-between max-[800px]:text-left">
+              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Owed</span>
               {{ cash(row.balance) }}
             </p>
           </li>
@@ -110,28 +110,28 @@
   </section>
 
   <!-- ------------------------------------------------------------- payments -->
-  <section class="block">
-    <h2 class="block__title">Payments to you</h2>
+  <section class="block mt-12">
+    <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Payments to you</h2>
 
     @if (settlements().length === 0) {
-      <p class="block__none">Nothing has been sent yet.</p>
+      <p class="block__none rounded-lg border border-border bg-surface-raised p-6 text-sm text-text-muted">Nothing has been sent yet.</p>
     } @else {
-      <ul class="rows">
+      <ul class="rows m-0 grid list-none gap-2 p-0">
         @for (payment of settlements(); track payment.id) {
-          <li class="row row--payment">
-            <div class="row__what">
-              <p class="row__title row__title--plain">
+          <li class="row grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4">
+            <div class="row__what min-w-0 max-[800px]:col-span-full">
+              <p class="row__title flex flex-wrap items-center gap-3 font-medium text-text no-underline">
                 {{ cash(payment.amount) }}
                 <ui-badge [tone]="settlementTone(payment.type)">{{ payment.type }}</ui-badge>
               </p>
-              <p class="row__when">
+              <p class="row__when mt-1 text-sm text-text-muted">
                 {{ when(payment.settled_at) }} · {{ railLabel(payment.rail) }}
                 @if (payment.event) {
                   · {{ payment.event.title }}
                 }
               </p>
               @if (payment.note) {
-                <p class="row__note">{{ payment.note }}</p>
+                <p class="row__note mt-2 text-pretty text-sm text-text-subtle">{{ payment.note }}</p>
               }
             </div>
 
@@ -145,29 +145,29 @@
   </section>
 
   <!-- ---------------------------------------------------------- destination -->
-  <section class="block">
-    <h2 class="block__title">Where it goes</h2>
+  <section class="block mt-12">
+    <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Where it goes</h2>
 
     @if (destination(); as where) {
-      <div class="dest">
+      <div class="dest flex items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 max-[560px]:flex-wrap">
         <ui-icon
-          class="dest__mark"
+          class="dest__mark text-text-subtle"
           [icon]="where.rail === 'interac' ? interacIcon : bankIcon"
           size="lg"
         />
 
-        <div class="dest__body">
-          <p class="dest__rail">
+        <div class="dest__body min-w-0 flex-1">
+          <p class="dest__rail flex items-center gap-3 font-medium">
             {{ railLabel(where.rail) }}
             @if (where.verified_at) {
-              <span class="dest__verified">
+              <span class="dest__verified inline-flex items-center gap-1 text-xs font-medium text-success">
                 <ui-icon [icon]="verifiedIcon" size="sm" />
                 Verified
               </span>
             }
           </p>
 
-          <p class="dest__detail">
+          <p class="dest__detail mt-1 text-sm text-text-muted [overflow-wrap:anywhere]">
             @if (where.rail === 'interac') {
               {{ where.interac_email }}
             } @else {
@@ -204,10 +204,10 @@
   (dismissed)="formOpen.set(false)"
 >
   @if (formError(); as message) {
-    <p class="form-error" role="alert">{{ message }}</p>
+    <p class="form-error mb-4 rounded-md border border-[color-mix(in_srgb,var(--danger)_26%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] px-4 py-3 text-sm text-danger-text" role="alert">{{ message }}</p>
   }
 
-  <div class="form">
+  <div class="form grid gap-4">
     <ui-field label="How you want to be paid" required>
       <select
         name="rail"
@@ -267,7 +267,7 @@
         />
       </ui-field>
 
-      <div class="form__row">
+      <div class="form__row grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
         <ui-field label="Transit number" optionalMark>
           <input
             name="transit_number"

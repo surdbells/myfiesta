@@ -59,7 +59,6 @@ interface DestinationDraft {
     UiIcon,
   ],
   templateUrl: './payouts.html',
-  styleUrl: './payouts.css',
 })
 export class Payouts {
   private readonly api = inject(Api);
