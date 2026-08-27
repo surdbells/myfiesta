@@ -48,7 +48,6 @@ const PROVINCES = [
   selector: 'app-event-edit',
   imports: [FormsModule, UiButton],
   templateUrl: './event-edit.html',
-  styleUrl: './event-create.css',
 })
 export class EventEdit {
   private readonly api = inject(Api);

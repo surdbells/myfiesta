@@ -1,14 +1,14 @@
-<a class="back" routerLink="/events">← All events</a>
+<a class="back mb-4 inline-block text-sm text-text-muted no-underline hover:text-primary" routerLink="/events">← All events</a>
 
-<h1>New event</h1>
-<p class="sub">It starts as a draft. Nothing is public until you publish it.</p>
+<h1 class="text-2xl">New event</h1>
+<p class="sub mt-2 mb-8 max-w-[60ch] text-sm text-text-muted">It starts as a draft. Nothing is public until you publish it.</p>
 
 @if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
+  <p class="error rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
 
-<form (ngSubmit)="submit()">
-  <div class="field">
+<form class="grid max-w-[640px] gap-6" (ngSubmit)="submit()">
+  <div class="field min-w-0">
     <label for="title">What is it called?</label>
     <input
       id="title"
@@ -21,13 +21,13 @@
     />
   </div>
 
-  <div class="field">
+  <div class="field min-w-0">
     <label for="kind">Kind</label>
     <select id="kind" name="kind" [ngModel]="kind()" (ngModelChange)="kind.set($event)">
       <option value="ticketed">Ticketed — sold publicly</option>
       <option value="invitation">Invitation — guests you invite</option>
     </select>
-    <p class="help">
+    <p class="help text-xs text-text-muted">
       @if (kind() === 'invitation') {
         Invitation events never appear in public search. Only people you invite can find them.
       } @else {
@@ -36,7 +36,7 @@
     </p>
   </div>
 
-  <div class="field">
+  <div class="field min-w-0">
     <label for="description">Description</label>
     <textarea
       id="description"
@@ -49,8 +49,8 @@
     ></textarea>
   </div>
 
-  <div class="row">
-    <div class="field">
+  <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+    <div class="field min-w-0">
       <label for="country">Country</label>
       <select
         id="country"
@@ -65,7 +65,7 @@
     </div>
 
     @if (needsProvince()) {
-      <div class="field">
+      <div class="field min-w-0">
         <label for="subdivision">Province</label>
         <select
           id="subdivision"
@@ -79,11 +79,11 @@
         </select>
         <!-- Not cosmetic: Canadian sales tax is set by province, and the rate
              is looked up from this. -->
-        <p class="help">Sets the sales tax charged at checkout.</p>
+        <p class="help text-xs text-text-muted">Sets the sales tax charged at checkout.</p>
       </div>
     }
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="city">City</label>
       <input
         id="city"
@@ -96,8 +96,8 @@
     </div>
   </div>
 
-  <div class="row">
-    <div class="field">
+  <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+    <div class="field min-w-0">
       <label for="timezone">Time zone</label>
       <select
         id="timezone"
@@ -111,7 +111,7 @@
       </select>
     </div>
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="startsAt">Starts</label>
       <input
         id="startsAt"
@@ -123,7 +123,7 @@
       />
     </div>
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="endsAt">Ends <span class="optional">optional</span></label>
       <input
         id="endsAt"
@@ -138,13 +138,13 @@
   <!-- The wall clock typed and the zone picked combine into an instant the
        organizer cannot otherwise check. Shown before saving, not after. -->
   @if (preview(); as when) {
-    <p class="preview">
-      Doors: <strong>{{ when }}</strong>
+    <p class="preview rounded-md bg-primary-soft px-4 py-3 text-sm text-primary-soft-text">
+      Doors: <strong class="font-semibold">{{ when }}</strong>
     </p>
   }
 
-  <div class="row">
-    <div class="field">
+  <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+    <div class="field min-w-0">
       <label for="category">Category <span class="optional">optional</span></label>
       <input
         id="category"
@@ -155,7 +155,7 @@
       />
     </div>
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="minAge">Minimum age <span class="optional">optional</span></label>
       <input
         id="minAge"
@@ -172,7 +172,7 @@
 
   <!-- Said plainly because it is the one thing on this form that can never be
        undone. -->
-  <p class="permanent">
+  <p class="permanent flex gap-2 rounded-md bg-[color-mix(in_srgb,var(--warning)_9%,transparent)] p-3 text-xs text-warning">
     Sold in <strong>{{ currency() }}</strong
     >, set by the country. This cannot be changed once the event exists.
   </p>

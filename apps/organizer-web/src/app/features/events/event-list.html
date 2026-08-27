@@ -7,9 +7,9 @@
 @if (loading()) {
   <!-- Rows of the shape that is coming, not the word "Loading". The list
        arrives in place instead of the page jumping when it lands. -->
-  <ul class="list" aria-busy="true">
+  <ul class="list m-0 grid list-none gap-2 p-0" aria-busy="true">
     @for (row of [0, 1, 2, 3]; track row) {
-      <li class="row row--skeleton">
+      <li class="row grid gap-2 rounded-lg border border-border bg-surface-raised p-4">
         <ui-skeleton width="14rem" />
         <ui-skeleton width="22rem" height="0.85rem" />
         <ui-skeleton width="9rem" height="0.85rem" />
@@ -34,23 +34,33 @@
 } @else {
   @if (upcoming().length > 0) {
     <section class="section">
-      <h2 class="section__title">Upcoming</h2>
-      <ul class="list">
+      <h2 class="section__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Upcoming</h2>
+      <ul class="list m-0 grid list-none gap-2 p-0">
         @for (event of upcoming(); track event.id) {
           <li>
-            <a class="row" [routerLink]="['/events', event.id]">
-              <span class="row__title">
+            <!--
+              The row is a link, and the whole card is the target. Not the
+              title alone: on a phone the title is a short line in a tall card
+              and the rest of the card looks tappable because it is a card.
+              Making only the text work is the kind of thing that reads as
+              broken rather than as designed.
+            -->
+            <a
+              class="row grid gap-1 rounded-lg border border-border bg-surface-raised p-4 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong hover:bg-surface-hover"
+              [routerLink]="['/events', event.id]"
+            >
+              <span class="row__title flex flex-wrap items-center gap-3 font-medium">
                 {{ event.title }}
                 <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
               </span>
 
-              <span class="row__meta">
+              <span class="row__meta text-sm text-text-muted">
                 <!-- In the event's own zone. A Lagos event at 10pm should say
                      10pm to somebody reading in Toronto. -->
                 {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
               </span>
 
-              <span class="row__stats">
+              <span class="row__stats mt-1 flex gap-4 text-sm text-text-subtle tabular-nums max-[560px]:flex-wrap max-[560px]:gap-3">
                 <span>{{ event.tickets_issued }} issued</span>
                 @if (arrivalRate(event); as rate) {
                   <span>{{ rate }}% arrived</span>
@@ -64,17 +74,23 @@
   }
 
   @if (past().length > 0) {
-    <section class="section">
-      <h2 class="section__title">Past</h2>
-      <ul class="list list--past">
+    <!-- Past events are records, not work. Transparent ground until pointed
+         at, so the eye lands on the section above without the two needing a
+         divider. -->
+    <section class="section" [class.mt-12]="upcoming().length > 0">
+      <h2 class="section__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Past</h2>
+      <ul class="list m-0 grid list-none gap-2 p-0">
         @for (event of past(); track event.id) {
           <li>
-            <a class="row" [routerLink]="['/events', event.id]">
-              <span class="row__title">{{ event.title }}</span>
-              <span class="row__meta">
+            <a
+              class="row grid gap-1 rounded-lg border border-border bg-transparent p-4 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong hover:bg-surface-hover"
+              [routerLink]="['/events', event.id]"
+            >
+              <span class="row__title flex flex-wrap items-center gap-3 font-medium">{{ event.title }}</span>
+              <span class="row__meta text-sm text-text-muted">
                 {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
               </span>
-              <span class="row__stats">
+              <span class="row__stats mt-1 flex gap-4 text-sm text-text-subtle tabular-nums max-[560px]:flex-wrap max-[560px]:gap-3">
                 <span>{{ event.tickets_issued }} issued</span>
                 @if (arrivalRate(event); as rate) {
                   <span>{{ rate }}% arrived</span>

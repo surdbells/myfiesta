@@ -34,7 +34,6 @@ const PROVINCES = [
   selector: 'app-event-create',
   imports: [FormsModule, RouterLink, UiButton],
   templateUrl: './event-create.html',
-  styleUrl: './event-create.css',
 })
 export class EventCreate {
   private readonly api = inject(Api);

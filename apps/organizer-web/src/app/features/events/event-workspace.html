@@ -1,14 +1,20 @@
 <ui-breadcrumb [crumbs]="crumbs()" />
 
-<header class="ws">
+<header class="ws mt-4 mb-6">
   @if (loading()) {
-    <h1 class="ws__title ws__title--loading">Loading…</h1>
+    <h1 class="ws__title text-balance text-3xl font-normal leading-[1.15] tracking-[-0.02em] text-text-subtle max-sm:text-2xl">Loading…</h1>
   } @else if (event(); as event) {
-    <div class="ws__head">
-      <div class="ws__identity">
-        <h1 class="ws__title">{{ event.title }}</h1>
+    <div class="ws__head flex items-start justify-between gap-6 max-sm:flex-col">
+      <div class="ws__identity min-w-0">
+        <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">{{ event.title }}</h1>
 
-        <p class="ws__meta">
+        <!--
+          Status, date and place on one line under the name. They wrap as a
+          group rather than each taking a row: three facts stacked vertically
+          read as three separate things to consider, and they are one answer
+          to "which event am I looking at".
+        -->
+        <p class="ws__meta mt-3 flex flex-wrap items-center gap-4 text-sm text-text-muted">
           <!--
             Status first. Everything else on this page means something
             different depending on whether the event is live, and an organizer
@@ -17,13 +23,13 @@
           -->
           <ui-badge [tone]="statusTone()">{{ event.status }}</ui-badge>
 
-          <span class="ws__fact">
-            <ui-icon [icon]="whenIcon" size="sm" />
+          <span class="ws__fact inline-flex items-center gap-2">
+            <ui-icon class="text-text-subtle" [icon]="whenIcon" size="sm" />
             {{ when(event) }}
           </span>
 
-          <span class="ws__fact">
-            <ui-icon [icon]="whereIcon" size="sm" />
+          <span class="ws__fact inline-flex items-center gap-2">
+            <ui-icon class="text-text-subtle" [icon]="whereIcon" size="sm" />
             {{ event.city }}
           </span>
         </p>
@@ -36,14 +42,19 @@
         published and a dead link in the console reads as a broken console.
       -->
       @if (event.status === 'published') {
-        <a class="ws__view" [href]="publicUrl(event)" target="_blank" rel="noopener">
+        <a
+          class="ws__view shrink-0 whitespace-nowrap rounded-md border border-field-border bg-surface-raised px-4 py-2 text-sm font-medium text-text no-underline hover:border-border-strong hover:bg-surface-hover"
+          [href]="publicUrl(event)"
+          target="_blank"
+          rel="noopener"
+        >
           View public page
         </a>
       }
     </div>
   } @else {
-    <h1 class="ws__title">Event not found</h1>
-    <p class="ws__meta">
+    <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">Event not found</h1>
+    <p class="ws__meta mt-3 flex flex-wrap items-center gap-4 text-sm text-text-muted">
       <a routerLink="/events">Back to all events</a>
     </p>
   }
@@ -53,6 +64,11 @@
   <ui-tabs [tabs]="tabs()" label="Sections of this event" />
 }
 
-<div class="ws__panel">
+<!--
+  The routed panel below the tabs. The gap is here rather than on each screen,
+  so a tab that forgets it does not sit flush against the tab strip — which
+  was happening on four of the eight before they had a common frame.
+-->
+<div class="ws__panel pt-8">
   <router-outlet />
 </div>

@@ -30,7 +30,6 @@ import { SITE_URL } from '../../core/site-url';
   selector: 'app-event-workspace',
   imports: [RouterOutlet, RouterLink, UiTabs, UiBadge, UiBreadcrumb, UiIcon],
   templateUrl: './event-workspace.html',
-  styleUrl: './event-workspace.css',
 })
 export class EventWorkspace {
   private readonly api = inject(Api);

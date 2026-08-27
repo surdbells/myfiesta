@@ -17,7 +17,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-list',
   imports: [RouterLink, UiPageHeader, UiButton, UiBadge, UiEmpty, UiErrorState, UiSkeleton],
   templateUrl: './event-list.html',
-  styleUrl: './event-list.css',
 })
 export class EventList {
   private readonly api = inject(Api);

@@ -1,8 +1,8 @@
 @if (loading()) {
   <p class="muted">Loading…</p>
 } @else if (event(); as ev) {
-  <h1>Edit event</h1>
-  <p class="sub">
+  <h1 class="text-2xl">Edit event</h1>
+  <p class="sub mt-2 mb-8 max-w-[60ch] text-sm text-text-muted">
     <!-- Said once, plainly, rather than as two disabled inputs the organizer
          would otherwise spend time trying to change. -->
     Sold in {{ ev.currency }} at <code>/{{ ev.slug }}</code>. Neither can change —
@@ -10,14 +10,14 @@
   </p>
 
   @if (notice(); as message) {
-    <p class="notice" role="status">{{ message }}</p>
+    <p class="notice rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
   }
   @if (error(); as message) {
-    <p class="error" role="alert">{{ message }}</p>
+    <p class="error rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
   }
 
-  <form (ngSubmit)="submit()">
-    <div class="field">
+  <form class="grid max-w-[640px] gap-6" (ngSubmit)="submit()">
+    <div class="field min-w-0">
       <label for="title">What is it called?</label>
       <input
         id="title"
@@ -29,7 +29,7 @@
       />
     </div>
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="description">Description</label>
       <textarea
         id="description"
@@ -41,8 +41,8 @@
       ></textarea>
     </div>
 
-    <div class="row">
-      <div class="field">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="country">Country</label>
         <select
           id="country"
@@ -56,7 +56,7 @@
       </div>
 
       @if (needsProvince()) {
-        <div class="field">
+        <div class="field min-w-0">
           <label for="subdivision">Province</label>
           <select
             id="subdivision"
@@ -68,11 +68,11 @@
               <option [value]="province.code">{{ province.name }}</option>
             }
           </select>
-          <p class="help">Sets the sales tax charged at checkout.</p>
+          <p class="help text-xs text-text-muted">Sets the sales tax charged at checkout.</p>
         </div>
       }
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="city">City</label>
         <input
           id="city"
@@ -84,8 +84,8 @@
       </div>
     </div>
 
-    <div class="row">
-      <div class="field">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="timezone">Time zone</label>
         <select
           id="timezone"
@@ -99,7 +99,7 @@
         </select>
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="startsAt">Starts</label>
         <input
           id="startsAt"
@@ -111,7 +111,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="endsAt">Ends <span class="optional">optional</span></label>
         <input
           id="endsAt"
@@ -124,11 +124,11 @@
     </div>
 
     @if (preview(); as when) {
-      <p class="preview">Doors: <strong>{{ when }}</strong></p>
+      <p class="preview rounded-md bg-primary-soft px-4 py-3 text-sm text-primary-soft-text">Doors: <strong class="font-semibold">{{ when }}</strong></p>
     }
 
-    <div class="row">
-      <div class="field">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="category">Category <span class="optional">optional</span></label>
         <input
           id="category"
@@ -138,7 +138,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="minAge">Minimum age <span class="optional">optional</span></label>
         <input
           id="minAge"
@@ -152,13 +152,13 @@
       </div>
     </div>
 
-    <div class="actions">
+    <div class="actions flex items-center gap-4">
       <button uiButton type="submit" [loading]="saving()" [disabled]="saving()">
         @if (saving()) { Saving… } @else { Save changes }
       </button>
-      <button class="link" type="button" (click)="done()">Done</button>
+      <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text" type="button" (click)="done()">Done</button>
     </div>
   </form>
 } @else {
-  <p class="error">That event could not be found.</p>
+  <p class="error rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">That event could not be found.</p>
 }
