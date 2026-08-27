@@ -25,7 +25,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-door',
   imports: [FormsModule, UiButton],
   templateUrl: './door.html',
-  styleUrl: './door.css',
 })
 export class Door {
   private readonly api = inject(Api);

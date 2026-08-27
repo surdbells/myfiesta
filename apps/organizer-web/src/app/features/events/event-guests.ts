@@ -19,7 +19,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-guests',
   imports: [FormsModule, UiButton],
   templateUrl: './event-guests.html',
-  styleUrl: './event-guests.css',
 })
 export class EventGuests {
   private readonly api = inject(Api);

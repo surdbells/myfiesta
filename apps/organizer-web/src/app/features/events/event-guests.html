@@ -1,35 +1,35 @@
-<header class="bar">
-  <h1>Guests</h1>
+<header class="bar mb-8 flex flex-wrap items-center justify-between gap-6">
+  <h1 class="text-2xl">Guests</h1>
 
   <!-- The number an organizer is actually watching on the night. -->
-  <div class="arrivals">
-    <span class="figure"
-      >{{ arrived() }} <span class="of">of {{ total() }}</span></span
+  <div class="arrivals grid min-w-[220px] gap-2">
+    <span class="figure text-3xl font-bold leading-none text-primary tabular-nums"
+      >{{ arrived() }} <span class="of text-lg font-medium text-text-muted">of {{ total() }}</span></span
     >
-    <span class="label">arrived</span>
+    <span class="label text-sm font-medium">arrived</span>
     @if (arrivalRate(); as rate) {
-      <span class="bar-track"><i [style.width.%]="rate"></i></span>
+      <span class="bar-track block h-2 overflow-hidden rounded-full bg-surface-inset"><i class="block h-full rounded-full bg-primary transition-[width] duration-(--motion-slow) ease-(--motion-ease) motion-reduce:transition-none" [style.width.%]="rate"></i></span>
     }
   </div>
 </header>
 
 @if (notice(); as message) {
-  <p class="notice" role="status">{{ message }}</p>
+  <p class="notice mb-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
 }
 @if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
+  <p class="error mb-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
 
 @if (session.canEditEvents()) {
-  <form class="issue" (ngSubmit)="submitIssue()">
-    <h2>Add someone to the list</h2>
-    <p class="help">
+  <form class="issue mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submitIssue()">
+    <h2 class="mb-3 text-lg">Add someone to the list</h2>
+    <p class="help text-xs text-text-muted">
       Comps, guest list, cash at the door. These are ordinary tickets — they scan the same way and
       count against the room.
     </p>
 
-    <div class="row">
-      <div class="field">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="gname">Name</label>
         <input
           id="gname"
@@ -40,7 +40,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="gemail">Email</label>
         <input
           id="gemail"
@@ -52,7 +52,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="gtype">Ticket</label>
         <select
           id="gtype"
@@ -71,7 +71,7 @@
         </select>
       </div>
 
-      <div class="field narrow">
+      <div class="field min-w-0 max-w-36">
         <label for="gqty">How many</label>
         <input
           id="gqty"
@@ -85,7 +85,7 @@
       </div>
     </div>
 
-    <div class="field">
+    <div class="field min-w-0">
       <label for="gnote">Note <span class="optional">included in the email</span></label>
       <input
         id="gnote"
@@ -97,8 +97,9 @@
       />
     </div>
 
-    <label class="check">
+    <label class="check inline-flex cursor-pointer items-center gap-2 text-sm font-normal">
       <input
+        class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
         type="checkbox"
         name="gsend"
         [ngModel]="issue().send_email"
@@ -119,10 +120,11 @@
   </form>
 }
 
-<form class="search" (ngSubmit)="load()">
+<form class="search mb-4 flex gap-2" (ngSubmit)="load()">
   <label for="q" class="sr-only">Search guests</label>
   <input
     id="q"
+    class="flex-1"
     name="q"
     type="search"
     placeholder="Search by name or email"
@@ -143,15 +145,21 @@
     }
   </p>
 } @else {
-  <ul class="list">
+  <ul class="list m-0 grid list-none gap-px overflow-hidden rounded-lg border border-border bg-border p-0">
     @for (guest of guests(); track guest.id) {
-      <li [class.in]="guest.checked_in">
-        <span class="who">
-          <span class="name">{{ guest.name }}</span>
-          <span class="email">{{ guest.email }}</span>
+      <li
+        class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 px-4 py-3 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-y-1"
+        [class]="guest.checked_in ? 'bg-primary-soft' : 'bg-surface-raised'"
+      >
+        <span class="who grid min-w-0">
+          <span class="name truncate font-medium">{{ guest.name }}</span>
+          <span class="email truncate text-xs text-text-muted">{{ guest.email }}</span>
         </span>
-        <span class="type">{{ guest.ticket_type }}</span>
-        <span class="state">
+        <span class="type whitespace-nowrap text-sm text-text-muted max-sm:col-start-1 max-sm:row-start-2">{{ guest.ticket_type }}</span>
+        <span
+          class="state whitespace-nowrap text-sm font-medium"
+          [class]="guest.checked_in ? 'text-primary-soft-text' : 'text-text-subtle'"
+        >
           @if (guest.checked_in) {
             Arrived
           } @else {

@@ -25,7 +25,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-orders',
   imports: [FormsModule, UiButton],
   templateUrl: './event-orders.html',
-  styleUrl: './event-orders.css',
 })
 export class EventOrders {
   private readonly api = inject(Api);

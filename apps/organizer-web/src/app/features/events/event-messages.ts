@@ -24,7 +24,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-messages',
   imports: [FormsModule, UiButton],
   templateUrl: './event-messages.html',
-  styleUrl: './event-messages.css',
 })
 export class EventMessages {
   private readonly api = inject(Api);

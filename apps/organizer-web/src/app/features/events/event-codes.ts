@@ -30,7 +30,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-codes',
   imports: [FormsModule, UiButton],
   templateUrl: './event-codes.html',
-  styleUrl: './event-codes.css',
 })
 export class EventCodes {
   private readonly api = inject(Api);

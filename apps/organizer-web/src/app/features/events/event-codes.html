@@ -1,7 +1,7 @@
-<header class="bar">
+<header class="bar mb-8 flex flex-wrap items-end justify-between gap-6">
   <div>
-    <h1>Codes</h1>
-    <p class="sub">
+    <h1 class="text-2xl">Codes</h1>
+    <p class="sub mt-2 max-w-[60ch] text-sm text-text-muted">
       A code can take money off, credit a promoter for the sale, or do both.
       Promoter codes also work as a link, so nobody has to type anything.
     </p>
@@ -9,19 +9,20 @@
 </header>
 
 @if (notice(); as message) {
-  <p class="notice" role="status">{{ message }}</p>
+  <p class="notice mb-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
 }
 @if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
+  <p class="error mb-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
 
 @if (session.canMessage()) {
-  <form class="new" (ngSubmit)="submit()">
-    <div class="row">
-      <div class="field">
+  <form class="new mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="code">Code</label>
         <input
           id="code"
+          class="font-medium uppercase tracking-[0.08em]"
           name="code"
           required
           maxlength="64"
@@ -29,10 +30,10 @@
           [ngModel]="form().code"
           (ngModelChange)="form.set({ ...form(), code: $event })"
         />
-        <p class="help">What a buyer types. Case does not matter.</p>
+        <p class="help text-xs text-text-muted">What a buyer types. Case does not matter.</p>
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="kind">What it does</label>
         <select
           id="kind"
@@ -46,7 +47,7 @@
         </select>
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="label">Note to yourself <span class="optional">optional</span></label>
         <input
           id="label"
@@ -60,8 +61,8 @@
     </div>
 
     @if (discounts()) {
-      <div class="row">
-        <div class="field">
+      <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+        <div class="field min-w-0">
           <label for="discountType">Discount</label>
           <select
             id="discountType"
@@ -74,7 +75,7 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field min-w-0">
           <label for="discountValue">
             @if (form().discount_type === 'percentage') { How much off (%) } @else {
               How much off ({{ currency() }})
@@ -91,7 +92,7 @@
             (ngModelChange)="form.set({ ...form(), discount_value: $event })"
           />
           @if (form().discount_type === 'fixed') {
-            <p class="help">
+            <p class="help text-xs text-text-muted">
               Only usable on events priced in {{ currency() }} — a fixed amount carries
               its currency with it.
             </p>
@@ -101,8 +102,8 @@
     }
 
     @if (attributes()) {
-      <div class="row">
-        <div class="field">
+      <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+        <div class="field min-w-0">
           <label for="promoterName">Promoter</label>
           <input
             id="promoterName"
@@ -112,10 +113,10 @@
             [ngModel]="form().promoter_name"
             (ngModelChange)="form.set({ ...form(), promoter_name: $event })"
           />
-          <p class="help">Who gets credited when this code is used.</p>
+          <p class="help text-xs text-text-muted">Who gets credited when this code is used.</p>
         </div>
 
-        <div class="field">
+        <div class="field min-w-0">
           <label for="refSlug">Link tag <span class="optional">optional</span></label>
           <input
             id="refSlug"
@@ -125,13 +126,13 @@
             [ngModel]="form().ref_slug"
             (ngModelChange)="form.set({ ...form(), ref_slug: $event })"
           />
-          <p class="help">Goes on the end of their link. Defaults to the code itself.</p>
+          <p class="help text-xs text-text-muted">Goes on the end of their link. Defaults to the code itself.</p>
         </div>
       </div>
     }
 
-    <div class="row">
-      <div class="field">
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
         <label for="maxRedemptions">Total uses <span class="optional">optional</span></label>
         <input
           id="maxRedemptions"
@@ -144,7 +145,7 @@
         />
       </div>
 
-      <div class="field">
+      <div class="field min-w-0">
         <label for="maxPerCustomer">Per buyer <span class="optional">optional</span></label>
         <input
           id="maxPerCustomer"
@@ -164,37 +165,44 @@
   </form>
 }
 
-<h2 class="section">In use</h2>
+<h2 class="section mt-8 mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">In use</h2>
 
 @if (loading()) {
   <p class="muted">Loading…</p>
 } @else if (codes().length === 0) {
   <p class="muted">No codes yet.</p>
 } @else {
-  <ul class="codes">
+  <ul class="codes m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 p-0">
     @for (code of codes(); track code.id) {
-      <li [class.off]="!code.usable">
-        <div class="head">
-          <code class="name">{{ code.code }}</code>
+      <li
+        class="grid gap-2 rounded-lg border p-4"
+        [class]="code.usable ? 'border-border bg-surface-raised' : 'border-dashed border-border bg-transparent'"
+      >
+        <div class="head flex flex-wrap items-center gap-2">
+          <code
+            class="name font-mono text-base font-semibold tracking-[0.06em]"
+            [class.text-text-subtle]="!code.usable"
+            [class.line-through]="!code.usable"
+          >{{ code.code }}</code>
 
           @if (code.usable) {
-            <span class="tag live">Working</span>
+            <span class="tag whitespace-nowrap rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Working</span>
           } @else if (!code.is_active) {
-            <span class="tag">Turned off</span>
+            <span class="tag whitespace-nowrap rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Turned off</span>
           } @else if (code.max_redemptions !== null && code.redemption_count >= code.max_redemptions) {
-            <span class="tag">Used up</span>
+            <span class="tag whitespace-nowrap rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Used up</span>
           } @else {
             <!-- Active, within its limits, and still not usable: it is scoped
                  elsewhere, outside its dates, or in another currency. -->
-            <span class="tag">Not usable here</span>
+            <span class="tag whitespace-nowrap rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Not usable here</span>
           }
 
           @if (!code.event_scoped) {
-            <span class="tag wide">All your events</span>
+            <span class="tag whitespace-nowrap rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">All your events</span>
           }
         </div>
 
-        <p class="what">
+        <p class="what text-sm font-medium text-primary-soft-text">
           {{ describeDiscount(code) }}
           @if (code.promoter_name) {
             · credits {{ code.promoter_name }}
@@ -204,7 +212,7 @@
           }
         </p>
 
-        <p class="uses">
+        <p class="uses text-sm text-text-muted tabular-nums">
           {{ code.redemption_count }}
           @if (code.max_redemptions !== null) {
             of {{ code.max_redemptions }}
@@ -213,8 +221,8 @@
         </p>
 
         @if (linkFor(code); as link) {
-          <div class="share">
-            <input readonly [value]="link" (focus)="$any($event.target).select()" />
+          <div class="share mt-2 flex items-center gap-2">
+            <input class="flex-1 font-mono text-xs" readonly [value]="link" (focus)="$any($event.target).select()" />
             <button uiButton variant="secondary" size="sm" type="button" (click)="copy(code)">
               @if (copied() === code.id) { Copied } @else { Copy }
             </button>

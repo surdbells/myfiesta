@@ -1,219 +1,30 @@
-.block + .block {
-  margin-top: var(--space-8);
-}
-
-.block__head {
-  margin-bottom: var(--space-4);
-}
-
-.block__title {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--font-tracking-tight);
-}
-
-.block__hint {
-  margin: var(--space-1) 0 0;
-  max-width: 60ch;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  text-wrap: pretty;
-}
-
-/* --- the drop zone -------------------------------------------------------- */
-
-.drop {
-  position: relative;
-  overflow: hidden;
-  background-color: var(--surface-inset);
-  border: 2px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
-  transition: border-color var(--motion-fast) var(--motion-ease),
-    background-color var(--motion-fast) var(--motion-ease);
-}
-
 /*
- * 1200x630, the ratio every link preview crops to.
+ * What is left after the move to utilities: the three things a class list in
+ * a template cannot say.
  *
- * Showing the flyer in that shape here is the whole point: an organizer who
- * uploads a tall portrait poster should find out on this screen that the
- * sides will be cut, not from a shared link in a group chat.
+ * The focus ring is drawn on the label because the real file input beside it
+ * is visually hidden; the sibling combinator is the whole mechanism. And
+ * where the browser does not know an upload's total size the bar slides
+ * instead of filling — an invented percentage that sits at 60% for a minute
+ * is worse than one that only claims to be moving.
  */
-.drop--banner {
-  aspect-ratio: 40 / 21;
-}
-
-.drop--gallery {
-  min-height: 9rem;
-}
-
-.drop.is-over {
-  border-color: var(--primary);
-  background-color: var(--primary-soft);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .drop {
-    transition: none;
-  }
-}
-
-.drop__shot {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/*
- * The controls over a banner that already exists.
- *
- * Always visible rather than revealed on hover: a hover-only control does not
- * exist on a touch screen, and half of this console is used on a phone in a
- * venue.
- */
-.drop__over {
-  position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  display: flex;
-  gap: var(--space-2);
-}
-
-/* --- the file picker ------------------------------------------------------ */
-
-.picker {
-  display: block;
-  cursor: pointer;
-}
-
-.picker--empty {
-  display: grid;
-  place-items: center;
-  min-height: 100%;
-  padding: var(--space-7) var(--space-5);
-}
-
-/* The real input is present and focusable; the label is what is drawn. */
-.picker input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.picker__face {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-2);
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.picker--empty .picker__face strong {
-  font-size: var(--font-size-base);
-  color: var(--text);
-}
-
-.picker__note {
-  font-size: var(--font-size-sm);
-  color: var(--text-subtle);
-}
-
-/* The replace control, sitting on a photograph. */
-.drop__over .picker__face {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-inverse);
-  background-color: rgba(8, 12, 9, 0.72);
-  border-radius: var(--radius-md);
-  backdrop-filter: blur(4px);
-}
-
 .picker input:focus-visible + .picker__face {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* --- progress ------------------------------------------------------------- */
-
-.progress {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  margin-top: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-
-.progress--failed {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
-}
-
-.progress__name {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.progress__error {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--danger-text);
-}
-
-.progress__pct {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 4ch;
-  text-align: right;
-}
-
-.bar {
-  height: 0.375rem;
-  overflow: hidden;
-  background-color: var(--surface-inset);
-  border-radius: var(--radius-full);
-}
-
-.bar__fill {
-  display: block;
-  height: 100%;
-  background-color: var(--primary);
-  border-radius: var(--radius-full);
-  transition: width var(--motion-fast) linear;
-}
-
-/*
- * Where the total size is unknown the bar slides instead of filling.
- *
- * A percentage nobody can compute would have to be invented, and an invented
- * bar that sits at 60% for a minute is worse than one that only claims to be
- * moving.
- */
 .bar--unknown .bar__fill {
   width: 35% !important;
   animation: bar-slide 1.4s ease-in-out infinite;
 }
 
 @keyframes bar-slide {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(320%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -226,63 +37,4 @@
     width: 100% !important;
     opacity: 0.5;
   }
-}
-
-/* --- the gallery ---------------------------------------------------------- */
-
-.shots {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-3);
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.shot {
-  position: relative;
-  aspect-ratio: 1;
-  overflow: hidden;
-  background-color: var(--surface-inset);
-  border-radius: var(--radius-md);
-}
-
-.shot img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.shot__over {
-  position: absolute;
-  inset: auto var(--space-2) var(--space-2) auto;
-  display: flex;
-  gap: var(--space-1);
-}
-
-.shot__act {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  color: var(--text-inverse);
-  background-color: rgba(8, 12, 9, 0.72);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-
-.shot__act:hover {
-  background-color: rgba(8, 12, 9, 0.9);
-}
-
-.shot__act--danger:hover {
-  background-color: var(--danger);
-}
-
-.shot__act:focus-visible {
-  outline: 2px solid var(--color-neutral-0);
-  outline-offset: 2px;
 }

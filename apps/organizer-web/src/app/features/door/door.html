@@ -1,12 +1,12 @@
-<header class="bar">
+<header class="bar mb-6 flex flex-wrap items-end justify-between gap-6">
   <div>
-    <h1>Door</h1>
-    <p class="sub">Scan a ticket, or type the code from it.</p>
+    <h1 class="text-2xl">Door</h1>
+    <p class="sub mt-1 text-sm text-text-muted">Scan a ticket, or type the code from it.</p>
   </div>
 
-  <p class="tally">
-    <span class="figure">{{ admittedHere() }}</span>
-    <span class="of">admitted here · {{ scannedHere() }} scanned</span>
+  <p class="tally flex items-baseline gap-2">
+    <span class="figure text-2xl font-bold text-primary-text tabular-nums">{{ admittedHere() }}</span>
+    <span class="of text-sm text-text-muted">admitted here · {{ scannedHere() }} scanned</span>
   </p>
 </header>
 
@@ -16,8 +16,19 @@
   conversation that follows a refusal.
 -->
 @if (outcome(); as result) {
-  <section class="verdict" [class]="'verdict--' + verdict()" role="status" aria-live="assertive">
-    <p class="verdict__word">
+  <section
+    class="verdict mb-6 grid gap-2 rounded-lg border-2 px-6 py-8 text-center"
+    [class]="
+      verdict() === 'in'
+        ? 'border-success text-success bg-[color-mix(in_srgb,var(--success)_12%,transparent)]'
+        : verdict() === 'partial'
+          ? 'border-warning text-warning bg-[color-mix(in_srgb,var(--warning)_12%,transparent)]'
+          : 'border-danger text-danger bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]'
+    "
+    role="status"
+    aria-live="assertive"
+  >
+    <p class="verdict__word text-3xl font-bold leading-[1.15]">
       @switch (verdict()) {
         @case ('in') {
           Let them in
@@ -31,10 +42,10 @@
       }
     </p>
 
-    <p class="verdict__why">{{ result.message }}</p>
+    <p class="verdict__why text-base">{{ result.message }}</p>
 
     @if (result.ticket; as ticket) {
-      <p class="verdict__who">
+      <p class="verdict__who text-sm opacity-85">
         {{ ticket.holder_name ?? 'No name on ticket' }}
         @if (ticket.type) {
           · {{ ticket.type }}
@@ -48,7 +59,7 @@
 }
 
 @if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
+  <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
 
 <!--
@@ -56,11 +67,12 @@
   lens, a flat battery or a guest whose screen will not brighten all end here,
   and at that moment nobody is hunting for a disclosure triangle.
 -->
-<form class="entry" (ngSubmit)="submit()">
-  <div class="field">
+<form class="entry flex flex-wrap items-end gap-3" (ngSubmit)="submit()">
+  <div class="field min-w-0 flex-[1_1_14rem]">
     <label for="code">Ticket code</label>
     <input
       id="code"
+      class="font-mono text-lg uppercase tracking-[0.08em]"
       name="code"
       autocomplete="off"
       autocapitalize="characters"
@@ -71,7 +83,7 @@
     />
   </div>
 
-  <div class="field narrow">
+  <div class="field min-w-0 flex-[0_0_8rem]">
     <label for="party">How many</label>
     <input
       id="party"
@@ -96,12 +108,12 @@
   </button>
 </form>
 
-<p id="party-hint" class="help">
+<p id="party-hint" class="help mt-3 max-w-[60ch] text-xs text-text-muted">
   Leave the number blank for an ordinary ticket. For a table arriving in two
   groups, put in how many are going in now — the rest stay outstanding.
 </p>
 
-<h2 class="section">Camera</h2>
+<h2 class="section mt-12 mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Camera</h2>
 
 @if (!cameraSupported) {
   <p class="muted">
@@ -111,14 +123,14 @@
 } @else if (!scanning()) {
   <button uiButton variant="secondary" type="button" (click)="startCamera()">Use the camera</button>
   @if (cameraError(); as message) {
-    <p class="error">{{ message }}</p>
+    <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">{{ message }}</p>
   }
 } @else {
-  <div class="camera">
+  <div class="camera relative mb-3 max-w-[420px] overflow-hidden rounded-lg bg-black">
     <!-- muted and playsinline, or iOS refuses to play it inline and Chrome
          blocks autoplay outright. -->
-    <video id="door-camera" muted playsinline></video>
-    <div class="reticle" aria-hidden="true"></div>
+    <video id="door-camera" class="block aspect-[4/3] w-full object-cover" muted playsinline></video>
+    <div class="reticle absolute inset-[22%_26%] rounded-md border-[3px] border-[rgba(255,255,255,0.85)] shadow-[0_0_0_100vmax_rgba(0,0,0,0.35)]" aria-hidden="true"></div>
   </div>
   <button uiButton variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
 }

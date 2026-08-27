@@ -1,7 +1,7 @@
-<header class="bar">
+<header class="bar mb-6">
   <div>
-    <h1>Message ticket holders</h1>
-    <p class="sub">
+    <h1 class="text-2xl">Message ticket holders</h1>
+    <p class="sub mt-2 max-w-[60ch] text-sm text-text-muted">
       Sent from myFiesta with your name on it, so it lands in an inbox rather
       than a spam folder. Replies come back to you.
     </p>
@@ -9,14 +9,14 @@
 </header>
 
 @if (notice(); as message) {
-  <p class="notice" role="status">{{ message }}</p>
+  <p class="notice mb-4 max-w-[640px] rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
 }
 @if (error(); as message) {
-  <p class="error" role="alert">{{ message }}</p>
+  <p class="error mb-4 max-w-[640px] rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
 
 @if (session.canMessage()) {
-  <form class="compose" (ngSubmit)="submit()">
+  <form class="compose grid max-w-[640px] gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
     <div class="field">
       <label for="subject">Subject</label>
       <input
@@ -41,7 +41,7 @@
         [ngModel]="body()"
         (ngModelChange)="body.set($event)"
       ></textarea>
-      <p class="help">
+      <p class="help text-xs text-text-muted">
         The event name, date and venue are added automatically — you do not need
         to repeat them.
       </p>
@@ -52,8 +52,9 @@
       is choosing to email people who asked not to be emailed, and the label is
       the only place that is made plain.
     -->
-    <label class="check">
+    <label class="check flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
       <input
+        class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
         type="checkbox"
         name="important"
         [ngModel]="important()"
@@ -62,9 +63,9 @@
       They need this before they travel — send even to people who turned emails off
     </label>
 
-    <div class="reach">
+    <div class="reach grid gap-1 rounded-md bg-surface-inset px-4 py-3 text-sm">
       <p>
-        <strong>{{ willReach() }}</strong>
+        <strong class="text-lg tabular-nums">{{ willReach() }}</strong>
         {{ willReach() === 1 ? 'person' : 'people' }} will get this.
       </p>
       @if (suppressed() > 0 && !important()) {
@@ -73,7 +74,7 @@
           turned event emails off.
         </p>
       } @else if (suppressed() > 0 && important()) {
-        <p class="warn">
+        <p class="warn text-warning">
           Includes {{ suppressed() }} who turned event emails off. Only do this
           when not knowing would waste their journey.
         </p>
@@ -92,25 +93,25 @@
   <p class="muted">Your role does not include messaging attendees.</p>
 }
 
-<h2 class="section">Already sent</h2>
+<h2 class="section mt-12 mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Already sent</h2>
 
 @if (loading()) {
   <p class="muted">Loading…</p>
 } @else if (sent().length === 0) {
   <p class="muted">Nothing sent yet.</p>
 } @else {
-  <ul class="history">
+  <ul class="history m-0 grid max-w-[640px] list-none gap-3 p-0">
     @for (message of sent(); track message.id) {
-      <li>
-        <div class="head">
-          <span class="subject">{{ message.subject }}</span>
+      <li class="grid gap-2 rounded-lg border border-border bg-surface-raised p-4">
+        <div class="head flex flex-wrap items-center gap-2">
+          <span class="subject font-semibold">{{ message.subject }}</span>
           @if (message.important) {
-            <span class="tag">Important</span>
+            <span class="tag rounded-full bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] px-2 py-[2px] text-xs font-medium text-warning">Important</span>
           }
-          <span class="at">{{ when(message.sent_at) }}</span>
+          <span class="at ml-auto text-xs text-text-subtle tabular-nums">{{ when(message.sent_at) }}</span>
         </div>
-        <p class="body">{{ message.body }}</p>
-        <p class="stats">
+        <p class="body whitespace-pre-line text-sm text-text-muted">{{ message.body }}</p>
+        <p class="stats text-xs text-text-subtle tabular-nums">
           Sent to {{ message.recipients ?? 0 }}
           @if (message.suppressed) {
             · {{ message.suppressed }} opted out

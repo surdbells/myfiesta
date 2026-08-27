@@ -1,5 +1,5 @@
 @if (loading()) {
-  <div class="shots"><ui-skeleton height="14rem" /></div>
+  <div class="shots m-0 mt-4 grid list-none grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 p-0"><ui-skeleton height="14rem" /></div>
 } @else if (failed()) {
   <ui-error-state
     title="Could not load the pictures"
@@ -9,28 +9,28 @@
 } @else {
   <!-- ---------------------------------------------------------------- flyer -->
   <section class="block">
-    <header class="block__head">
-      <h2 class="block__title">Flyer</h2>
-      <p class="block__hint">
+    <header class="block__head mb-4">
+      <h2 class="block__title text-lg font-semibold tracking-[-0.02em]">Flyer</h2>
+      <p class="block__hint mt-1 max-w-[60ch] text-pretty text-sm text-text-muted">
         The picture people see when your link is shared. One per event, and
         the thing most worth getting right.
       </p>
     </header>
 
     <div
-      class="drop drop--banner"
-      [class.is-over]="draggingBanner()"
+      class="drop drop--banner relative aspect-[40/21] overflow-hidden rounded-lg border-2 border-dashed transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none"
+      [class]="draggingBanner() ? 'border-primary bg-primary-soft' : 'border-border-strong bg-surface-inset'"
       (dragover)="onDragOver($event, 'banner')"
       (dragleave)="setDragging('banner', false)"
       (drop)="onDropped($event, 'banner')"
     >
       @if (banner(); as image) {
-        <img class="drop__shot" [src]="image.display_url" alt="" />
+        <img class="drop__shot block h-full w-full object-cover" [src]="image.display_url" alt="" />
 
-        <div class="drop__over">
-          <label class="picker">
-            <input type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
-            <span class="picker__face">
+        <div class="drop__over absolute bottom-3 right-3 flex gap-2">
+          <label class="picker block cursor-pointer">
+            <input class="pointer-events-none absolute h-px w-px opacity-0" type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
+            <span class="picker__face inline-flex items-center gap-2 rounded-md bg-[rgba(8,12,9,0.72)] px-4 py-2 text-sm font-medium text-text-inverse backdrop-blur-[4px]">
               <ui-icon [icon]="uploadIcon" size="sm" />
               Replace
             </span>
@@ -48,23 +48,26 @@
           </button>
         </div>
       } @else {
-        <label class="picker picker--empty">
-          <input type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
-          <span class="picker__face">
+        <label class="picker grid min-h-full cursor-pointer place-items-center px-6 py-12">
+          <input class="pointer-events-none absolute h-px w-px opacity-0" type="file" accept="image/*" (change)="onPicked($event, 'banner')" />
+          <span class="picker__face grid justify-items-center gap-2 text-center text-text-muted">
             <ui-icon [icon]="addIcon" size="lg" />
-            <strong>Add a flyer</strong>
-            <span class="picker__note">Drop an image here, or choose one. Up to 10 MB.</span>
+            <strong class="text-base text-text">Add a flyer</strong>
+            <span class="picker__note text-sm text-text-subtle">Drop an image here, or choose one. Up to 10 MB.</span>
           </span>
         </label>
       }
     </div>
 
     @for (upload of bannerUploads(); track upload.id) {
-      <div class="progress" [class.progress--failed]="upload.failed">
-        <p class="progress__name">{{ upload.name }}</p>
+      <div
+        class="progress mt-3 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 rounded-md border bg-surface-raised px-4 py-3"
+        [class]="upload.failed ? 'border-[color-mix(in_srgb,var(--danger)_40%,var(--border))]' : 'border-border'"
+      >
+        <p class="progress__name col-span-full truncate text-sm font-medium">{{ upload.name }}</p>
 
         @if (upload.failed) {
-          <p class="progress__error" role="alert">{{ upload.error }}</p>
+          <p class="progress__error text-sm text-danger-text" role="alert">{{ upload.error }}</p>
           <button
             uiButton
             variant="ghost"
@@ -81,7 +84,7 @@
             worse than one that only says "still going".
           -->
           <div
-            class="bar"
+            class="bar h-1.5 overflow-hidden rounded-full bg-surface-inset"
             [class.bar--unknown]="upload.percent === null"
             role="progressbar"
             [attr.aria-valuenow]="upload.percent"
@@ -89,10 +92,10 @@
             aria-valuemax="100"
             [attr.aria-label]="'Uploading ' + upload.name"
           >
-            <span class="bar__fill" [style.width.%]="upload.percent ?? 100"></span>
+            <span class="bar__fill block h-full rounded-full bg-primary transition-[width] duration-(--motion-fast) ease-linear" [style.width.%]="upload.percent ?? 100"></span>
           </div>
 
-          <p class="progress__pct">
+          <p class="progress__pct min-w-[4ch] text-right text-sm text-text-muted tabular-nums">
             @if (upload.percent !== null) {
               {{ upload.percent }}%
             } @else {
@@ -105,38 +108,41 @@
   </section>
 
   <!-- -------------------------------------------------------------- gallery -->
-  <section class="block">
-    <header class="block__head">
-      <h2 class="block__title">Gallery</h2>
-      <p class="block__hint">
+  <section class="block mt-16">
+    <header class="block__head mb-4">
+      <h2 class="block__title text-lg font-semibold tracking-[-0.02em]">Gallery</h2>
+      <p class="block__hint mt-1 max-w-[60ch] text-pretty text-sm text-text-muted">
         Pictures from the last one. They sit under the event page and are the
         best argument that this is worth turning up to.
       </p>
     </header>
 
     <div
-      class="drop drop--gallery"
-      [class.is-over]="draggingGallery()"
+      class="drop drop--gallery relative min-h-36 overflow-hidden rounded-lg border-2 border-dashed transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none"
+      [class]="draggingGallery() ? 'border-primary bg-primary-soft' : 'border-border-strong bg-surface-inset'"
       (dragover)="onDragOver($event, 'gallery')"
       (dragleave)="setDragging('gallery', false)"
       (drop)="onDropped($event, 'gallery')"
     >
-      <label class="picker picker--empty">
-        <input type="file" accept="image/*" multiple (change)="onPicked($event, 'gallery')" />
-        <span class="picker__face">
+      <label class="picker grid min-h-full cursor-pointer place-items-center px-6 py-12">
+        <input class="pointer-events-none absolute h-px w-px opacity-0" type="file" accept="image/*" multiple (change)="onPicked($event, 'gallery')" />
+        <span class="picker__face grid justify-items-center gap-2 text-center text-text-muted">
           <ui-icon [icon]="addIcon" size="lg" />
-          <strong>Add pictures</strong>
-          <span class="picker__note">Drop several at once, or choose them.</span>
+          <strong class="text-base text-text">Add pictures</strong>
+          <span class="picker__note text-sm text-text-subtle">Drop several at once, or choose them.</span>
         </span>
       </label>
     </div>
 
     @for (upload of galleryUploads(); track upload.id) {
-      <div class="progress" [class.progress--failed]="upload.failed">
-        <p class="progress__name">{{ upload.name }}</p>
+      <div
+        class="progress mt-3 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 rounded-md border bg-surface-raised px-4 py-3"
+        [class]="upload.failed ? 'border-[color-mix(in_srgb,var(--danger)_40%,var(--border))]' : 'border-border'"
+      >
+        <p class="progress__name col-span-full truncate text-sm font-medium">{{ upload.name }}</p>
 
         @if (upload.failed) {
-          <p class="progress__error" role="alert">{{ upload.error }}</p>
+          <p class="progress__error text-sm text-danger-text" role="alert">{{ upload.error }}</p>
           <button
             uiButton
             variant="ghost"
@@ -148,7 +154,7 @@
           </button>
         } @else {
           <div
-            class="bar"
+            class="bar h-1.5 overflow-hidden rounded-full bg-surface-inset"
             [class.bar--unknown]="upload.percent === null"
             role="progressbar"
             [attr.aria-valuenow]="upload.percent"
@@ -156,10 +162,10 @@
             aria-valuemax="100"
             [attr.aria-label]="'Uploading ' + upload.name"
           >
-            <span class="bar__fill" [style.width.%]="upload.percent ?? 100"></span>
+            <span class="bar__fill block h-full rounded-full bg-primary transition-[width] duration-(--motion-fast) ease-linear" [style.width.%]="upload.percent ?? 100"></span>
           </div>
 
-          <p class="progress__pct">
+          <p class="progress__pct min-w-[4ch] text-right text-sm text-text-muted tabular-nums">
             @if (upload.percent !== null) {
               {{ upload.percent }}%
             } @else {
@@ -171,19 +177,19 @@
     }
 
     @if (gallery().length > 0) {
-      <ul class="shots">
+      <ul class="shots m-0 mt-4 grid list-none grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 p-0">
         @for (image of gallery(); track image.id) {
-          <li class="shot">
-            <img [src]="image.thumb_url" [alt]="image.caption ?? ''" loading="lazy" />
+          <li class="shot relative aspect-square overflow-hidden rounded-md bg-surface-inset">
+            <img class="block h-full w-full object-cover" [src]="image.thumb_url" [alt]="image.caption ?? ''" loading="lazy" />
 
-            <div class="shot__over">
+            <div class="shot__over absolute bottom-2 right-2 flex gap-1">
               <!--
                 Promote rather than delete-and-reupload. The flyer goes into
                 the gallery by mistake constantly — it is the bigger target.
               -->
               <button
                 type="button"
-                class="shot__act"
+                class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-[rgba(8,12,9,0.9)]"
                 [attr.aria-label]="'Make this the flyer'"
                 (click)="promote(image)"
               >
@@ -192,7 +198,7 @@
 
               <button
                 type="button"
-                class="shot__act shot__act--danger"
+                class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-danger"
                 [attr.aria-label]="'Remove this picture'"
                 (click)="removing.set(image)"
               >
