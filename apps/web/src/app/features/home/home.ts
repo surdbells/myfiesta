@@ -15,7 +15,21 @@ interface Rail {
   readonly title: string;
   readonly hint?: string;
   readonly events: EventSummary[];
+  /**
+   * Whether this row scrolls sideways or simply fills.
+   *
+   * A scrolling rail with two cards in it is 80% empty track, and reads as
+   * a page that failed to load rather than as a row with more beyond the
+   * edge. Below the point where a rail would actually overflow, the same
+   * events lay out as a grid instead.
+   */
+  readonly scrolls: boolean;
+  /** One or two events: the horizontal card, filling the row it was given. */
+  readonly wide: boolean;
 }
+
+/** Roughly what fits on a wide screen before a row needs to scroll. */
+const FILLS_A_ROW = 5;
 
 /**
  * The front page.
@@ -142,7 +156,7 @@ export class Home {
 
     const week = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
-    const rails: Rail[] = [
+    const rails = [
       {
         title: 'This week',
         hint: 'On in the next seven days',
@@ -154,7 +168,13 @@ export class Home {
       { title: 'Coming up', events: take(discovery.upcoming) },
     ];
 
-    return rails.filter((rail) => rail.events.length > 0);
+    return rails
+      .filter((rail) => rail.events.length > 0)
+      .map((rail) => ({
+        ...rail,
+        scrolls: rail.events.length > FILLS_A_ROW,
+        wide: rail.events.length <= 2,
+      }));
   });
 
   when(event: EventSummary): string {

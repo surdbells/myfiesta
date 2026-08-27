@@ -8,65 +8,33 @@
 
 .hero {
   position: relative;
-  display: grid;
-  align-items: end;
-  min-height: min(70vh, 34rem);
-  /* Its own dark ground regardless of theme. The hero is a photograph with
-     text on it, and text over a photograph needs one contrast story, not two. */
-  background-color: var(--color-neutral-950);
+  /* Its own dark ground regardless of theme. A hero is one atmosphere, and
+     two of them — one per colour scheme — is two designs to keep good. */
   color: var(--color-neutral-0);
+  background-image:
+    radial-gradient(90% 120% at 85% 0%, color-mix(in srgb, var(--color-brand-700) 70%, transparent), transparent 62%),
+    linear-gradient(160deg, var(--color-brand-900) 0%, var(--color-neutral-950) 58%);
   overflow: hidden;
 }
 
-.hero--empty {
-  min-height: 22rem;
-  background-image: linear-gradient(
-    140deg,
-    var(--color-brand-900),
-    var(--color-neutral-950) 60%
-  );
-}
-
-.hero__media {
-  position: absolute;
-  inset: 0;
-}
-
-.hero__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* Blurred and pushed back: it is atmosphere behind the text, and a poster
-     rendered sharp behind type competes with the type. */
-  filter: blur(2px) saturate(1.1);
-  transform: scale(1.06);
-}
-
-/*
- * Two stops, not one. A single flat overlay dims the whole image to make the
- * corner where the text sits legible; this keeps the top of the poster nearly
- * untouched and puts the weight where the words are.
- */
-.hero__scrim {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to top, rgba(8, 12, 9, 0.94) 0%, rgba(8, 12, 9, 0.55) 45%, rgba(8, 12, 9, 0.25) 100%),
-    linear-gradient(to right, rgba(8, 12, 9, 0.7) 0%, transparent 65%);
-}
-
 .hero__inner {
-  position: relative;
   display: grid;
-  gap: var(--space-6);
-  width: 100%;
+  grid-template-columns: 1fr minmax(0, 19rem);
+  align-items: center;
+  gap: var(--space-8);
   max-width: 1240px;
   margin: 0 auto;
-  padding: var(--space-9) var(--space-5) var(--space-7);
+  padding: var(--space-7) var(--space-5) var(--space-6);
+}
+
+.hero--empty .hero__inner {
+  grid-template-columns: 1fr;
+  padding-block: var(--space-8) var(--space-6);
 }
 
 .hero__lead {
-  max-width: 46rem;
+  max-width: 40rem;
+  min-width: 0;
 }
 
 .hero__eyebrow {
@@ -80,7 +48,7 @@
 
 .hero__title {
   margin: 0;
-  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-size: clamp(2rem, 4.6vw, 3.25rem);
   font-weight: var(--font-weight-bold);
   line-height: var(--font-leading-tight);
   letter-spacing: var(--font-tracking-tight);
@@ -129,13 +97,52 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero__cta {
-    transition: none;
+  .hero__cta { transition: none; }
+  .hero__cta:hover { transform: none; }
+}
+
+/*
+ * The poster, beside the words rather than behind them.
+ *
+ * 3:4 and undistorted, which is how the organizer made it. Behind the text it
+ * had to be blurred and scrimmed to be legible under a title, and it still
+ * collided — a club flyer has the name of the night printed on it, so the
+ * heading was always sitting on its own ghost.
+ */
+.hero__poster {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-overlay);
+}
+
+.hero__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero__initial {
+  font-size: 6rem;
+  font-weight: var(--font-weight-bold);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 860px) {
+  /* The poster goes. On a phone it would push the title and the search below
+     the fold, and the words are what sell the night. */
+  .hero__inner {
+    grid-template-columns: 1fr;
+    padding-block: var(--space-7) var(--space-5);
   }
 
-  .hero__cta:hover {
-    transform: none;
-  }
+  .hero__poster { display: none; }
 }
 
 /* --- the search bar ------------------------------------------------------- */
@@ -143,12 +150,28 @@
 .finder {
   display: flex;
   align-items: stretch;
-  gap: 0;
-  max-width: 46rem;
+  /* On the same 1240px grid as everything else, and aligned left with the
+     words above it. Centred in the viewport it floated free of the layout
+     and read as a component that had come loose. */
+  width: min(46rem, 100%);
+  max-width: 1240px;
+  margin: 0 auto var(--space-7);
   padding: var(--space-2);
   background-color: var(--surface-raised);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-overlay);
+}
+
+/* The rail the finder is aligned within, matching .hero__inner. */
+.hero > .finder {
+  margin-inline: auto;
+}
+
+@media (min-width: 1280px) {
+  .hero > .finder {
+    margin-left: calc((100vw - 1240px) / 2 + var(--space-5));
+    margin-right: auto;
+  }
 }
 
 .finder__field {
@@ -281,38 +304,57 @@
 }
 
 /*
- * A scrolling row, not a wrapping grid.
+ * A row that fills, and only scrolls when there is enough to scroll.
  *
- * A grid of twenty events is a wall; a row says "there is more this way" and
- * costs one gesture to see it. Snapping stops it settling mid-card, which is
- * what makes a scroll row feel unfinished.
+ * It was always a scrolling rail. With two events on the platform that is
+ * 80% empty track and reads as a page that failed to load — which is exactly
+ * how the front page looked at launch, when it matters most.
+ *
+ * So the default is a grid that fills the width, and the scrolling variant
+ * is switched on by the component once there are more events than a row
+ * holds. Snapping stops that version settling mid-card, which is what makes
+ * a scroll row feel unfinished.
  */
 .rail {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 15rem);
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
   gap: var(--space-5);
   margin: 0;
-  padding: 0 0 var(--space-3);
+  padding: 0;
   list-style: none;
+}
+
+.rail--scrolls {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 15rem);
   overflow-x: auto;
+  padding-bottom: var(--space-3);
   scroll-snap-type: x mandatory;
   scrollbar-width: thin;
-  /* Bleeds to the edge of the viewport so the last card is visibly cut off
-     rather than sitting neatly inside a margin, which reads as the end. */
+  /* Bleeds to the edge so the last card is visibly cut off rather than
+     sitting neatly inside a margin, which reads as the end. */
   margin-inline: calc(-1 * var(--space-5));
   padding-inline: var(--space-5);
 }
 
 .rail__item {
-  scroll-snap-align: start;
   min-width: 0;
+}
+
+.rail--scrolls .rail__item {
+  scroll-snap-align: start;
 }
 
 @media (max-width: 640px) {
   .rail {
-    grid-auto-columns: minmax(0, 11rem);
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
     gap: var(--space-4);
+  }
+
+  .rail--scrolls {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(0, 11rem);
   }
 }
 
@@ -430,4 +472,10 @@
 
 .notice__retry:hover {
   background-color: var(--surface-hover);
+}
+
+/* One or two events: stacked wide cards rather than a mostly empty row. */
+.rail--wide {
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
 }

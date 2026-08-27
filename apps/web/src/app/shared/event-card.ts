@@ -19,12 +19,12 @@ import { formatMoney } from '../core/money';
   selector: 'app-event-card',
   imports: [RouterLink],
   template: `
-    <article class="card" [class.card--sold]="event().is_sold_out">
-      <a class="card__link" [routerLink]="['/', event().slug]">
-        <div class="card__frame">
+    <article class="evt" [class.evt--sold]="event().is_sold_out" [class.evt--wide]="wide()">
+      <a class="evt__link" [routerLink]="['/', event().slug]">
+        <div class="evt__frame">
           @if (event().poster_url) {
             <img
-              class="card__poster"
+              class="evt__poster"
               [src]="event().poster_url"
               alt=""
               [loading]="eager() ? 'eager' : 'lazy'"
@@ -34,23 +34,23 @@ import { formatMoney } from '../core/money';
           } @else {
             <!-- Not a grey box. An event with no poster still has a name, and
                  the initial is enough to tell two cards apart in a rail. -->
-            <div class="card__fallback" aria-hidden="true">
+            <div class="evt__fallback" aria-hidden="true">
               <span>{{ initial() }}</span>
             </div>
           }
 
           @if (event().is_sold_out) {
-            <span class="card__flag">Sold out</span>
+            <span class="evt__flag">Sold out</span>
           } @else if (soon()) {
-            <span class="card__flag card__flag--soon">This week</span>
+            <span class="evt__flag evt__flag--soon">This week</span>
           }
         </div>
 
-        <div class="card__body">
-          <p class="card__when">{{ when() }}</p>
-          <h3 class="card__title">{{ event().title }}</h3>
-          <p class="card__where">{{ event().city }}</p>
-          <p class="card__price">{{ price() }}</p>
+        <div class="evt__body">
+          <p class="evt__when">{{ when() }}</p>
+          <h3 class="evt__title">{{ event().title }}</h3>
+          <p class="evt__where">{{ event().city }}</p>
+          <p class="evt__price">{{ price() }}</p>
         </div>
       </a>
     </article>
@@ -62,6 +62,16 @@ export class EventCard {
 
   /** Above the fold. Loads eagerly and at high priority. */
   readonly eager = input(false);
+
+  /**
+   * The horizontal layout: poster left, everything else beside it.
+   *
+   * Used where a section has only one or two events. A row sized for six
+   * cards holding one is not a sparse row, it is a broken one — and at
+   * launch that is most of the front page. Wide, the same event fills the
+   * space it was given and reads as a feature rather than as a remainder.
+   */
+  readonly wide = input(false);
 
   readonly initial = computed(() => this.event().title.trim().charAt(0).toUpperCase() || '?');
 

@@ -1,10 +1,10 @@
-.card {
+.evt {
   position: relative;
   height: 100%;
   min-width: 0;
 }
 
-.card__link {
+.evt__link {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: var(--space-3);
@@ -14,7 +14,7 @@
   border-radius: var(--radius-lg);
 }
 
-.card__link:focus-visible {
+.evt__link:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 4px;
 }
@@ -26,7 +26,7 @@
  * cards that each take their own height reads as a broken page rather than as
  * a catalogue. The frame is the design; the poster fills it.
  */
-.card__frame {
+.evt__frame {
   position: relative;
   aspect-ratio: 3 / 4;
   overflow: hidden;
@@ -34,7 +34,7 @@
   border-radius: var(--radius-lg);
 }
 
-.card__poster {
+.evt__poster {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -42,43 +42,59 @@
   transition: transform var(--motion-slow) var(--motion-ease);
 }
 
-.card__link:hover .card__poster {
+.evt__link:hover .evt__poster {
   transform: scale(1.04);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card__poster {
+  .evt__poster {
     transition: none;
   }
 
-  .card__link:hover .card__poster {
+  .evt__link:hover .evt__poster {
     transform: none;
   }
 }
 
 /*
- * The no-poster case, given a treatment rather than left grey. The initial is
- * huge and low-contrast so a rail of these still reads as a rail of distinct
- * events without any of them shouting.
+ * The no-poster case, given a treatment rather than left grey.
+ *
+ * It was a pale green wash with a huge low-contrast initial, which in a row
+ * of cards read as three images that had failed to load. This is a dark
+ * panel with the brand green in it and the initial set as a deliberate
+ * letterform — the point is that it looks chosen, because at launch most
+ * events will not have a poster and this is what the front page mostly is.
  */
-.card__fallback {
+.evt__fallback {
+  position: relative;
   display: grid;
   place-items: center;
   height: 100%;
-  background-image: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--primary) 16%, var(--surface-inset)),
-    var(--surface-inset)
-  );
+  overflow: hidden;
+  background-image:
+    radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--color-brand-500) 55%, transparent), transparent 60%),
+    linear-gradient(155deg, var(--color-brand-900), var(--color-neutral-950));
 }
 
-.card__fallback span {
-  font-size: 4rem;
+/* A band of the second brand colour, so two fallbacks side by side are
+   distinguishable as designs rather than as the same missing image. */
+.evt__fallback::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background-image: linear-gradient(90deg, var(--color-gold-400), transparent 70%);
+}
+
+.evt__fallback span {
+  font-size: 3.5rem;
   font-weight: var(--font-weight-bold);
-  color: color-mix(in srgb, var(--primary) 40%, transparent);
+  letter-spacing: var(--font-tracking-tight);
+  color: rgba(255, 255, 255, 0.92);
 }
 
-.card__flag {
+.evt__flag {
   position: absolute;
   top: var(--space-3);
   left: var(--space-3);
@@ -95,26 +111,26 @@
   backdrop-filter: blur(4px);
 }
 
-.card__flag--soon {
+.evt__flag--soon {
   color: var(--on-primary);
   background-color: var(--primary);
 }
 
-.card--sold .card__poster {
+.evt--sold .evt__poster {
   /* Dimmed, not hidden. Somebody scanning should be able to tell at a glance
      which ones are gone without reading every chip. */
   filter: grayscale(0.7);
   opacity: 0.62;
 }
 
-.card__body {
+.evt__body {
   display: grid;
   gap: var(--space-1);
   align-content: start;
   min-width: 0;
 }
 
-.card__when {
+.evt__when {
   margin: 0;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -123,7 +139,7 @@
   color: var(--primary-text);
 }
 
-.card__title {
+.evt__title {
   margin: 0;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
@@ -136,20 +152,95 @@
   overflow: hidden;
 }
 
-.card__where,
-.card__price {
+.evt__where,
+.evt__price {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
-.card__price {
+.evt__price {
   font-weight: var(--font-weight-medium);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-.card--sold .card__price {
+.evt--sold .evt__price {
   color: var(--text-subtle);
   font-weight: var(--font-weight-regular);
+}
+
+/* --- the wide layout ------------------------------------------------------ */
+
+/*
+ * Poster left, everything else beside it.
+ *
+ * For sections holding one or two events, which at launch is most of them. A
+ * row sized for six cards holding one is not sparse, it is broken — and this
+ * is the same card filling the space it was actually given.
+ */
+.evt--wide .evt__link {
+  grid-template-rows: none;
+  grid-template-columns: 12rem 1fr;
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.evt--wide .evt__link:hover {
+  border-color: var(--border-strong);
+}
+
+.evt--wide .evt__frame {
+  /* Squarer than the 3:4 of a grid card: at this height a tall frame would
+     set the row height off a poster nobody is looking at closely. */
+  aspect-ratio: 4 / 3;
+}
+
+.evt--wide .evt__body {
+  gap: var(--space-2);
+}
+
+.evt--wide .evt__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--font-tracking-tight);
+  -webkit-line-clamp: 2;
+}
+
+.evt--wide .evt__where,
+.evt--wide .evt__price {
+  font-size: var(--font-size-base);
+}
+
+.evt--wide .evt__price {
+  margin-top: var(--space-1);
+}
+
+.evt--wide .evt__fallback span {
+  font-size: 3rem;
+}
+
+@media (max-width: 640px) {
+  /* Back to the stacked card. Twelve rems of poster beside two lines of text
+     is a filmstrip, not a card. */
+  .evt--wide .evt__link {
+    grid-template-columns: none;
+    grid-template-rows: auto 1fr;
+    gap: var(--space-3);
+    padding: 0;
+    background: none;
+    border: 0;
+  }
+
+  .evt--wide .evt__frame {
+    aspect-ratio: 3 / 4;
+  }
+
+  .evt--wide .evt__title {
+    font-size: var(--font-size-base);
+  }
 }

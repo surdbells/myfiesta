@@ -3,19 +3,12 @@
   front page has exactly one job — show somebody something they might go to —
   and the fastest version of that is the next good night, at full size.
 
-  The search sits on top of it rather than below, because somebody who arrived
-  looking for a specific event should not have to scroll past somebody else's.
+  The poster sits beside the words rather than behind them. Blurred behind, it
+  competed with the title it was under — and it always would, because a club
+  flyer has the name of the night printed on it. Beside, it is also shown the
+  way the organizer made it rather than as wallpaper.
 -->
 <section class="hero" [class.hero--empty]="!lead() && !loading()">
-  @if (lead(); as event) {
-    <div class="hero__media">
-      @if (event.poster_url) {
-        <img [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
-      }
-      <div class="hero__scrim" aria-hidden="true"></div>
-    </div>
-  }
-
   <div class="hero__inner">
     <div class="hero__lead">
       @if (loading()) {
@@ -41,55 +34,65 @@
       }
     </div>
 
-    <!--
-      Two fields, not five. What and where is the whole question at this
-      stage; a date range and a price filter on a front page are controls
-      people close rather than use.
-    -->
-    <form class="finder" (ngSubmit)="search()" role="search">
-      <div class="finder__field">
-        <label for="q">What</label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          placeholder="Artist, night, or venue"
-          [ngModel]="query()"
-          (ngModelChange)="query.set($event)"
-        />
-      </div>
-
-      <div class="finder__divider" aria-hidden="true"></div>
-
-      <div class="finder__field">
-        <label for="where">Where</label>
-        <input
-          id="where"
-          name="where"
-          list="cities"
-          placeholder="Any city"
-          [ngModel]="city()"
-          (ngModelChange)="city.set($event)"
-        />
-        <datalist id="cities">
-          @for (name of cityNames(); track name) {
-            <option [value]="name"></option>
-          }
-        </datalist>
-      </div>
-
-      <!--
-        Labelled on the button rather than left to the word inside it. Below
-        640px that word is `display: none`, which takes it out of the
-        accessibility tree as well as off the screen — leaving a submit button
-        holding nothing but a decorative icon, and no name at all.
-      -->
-      <button class="finder__go" type="submit" aria-label="Search">
-        <ui-icon [icon]="searchIcon" size="sm" />
-        <span class="finder__go-word">Search</span>
-      </button>
-    </form>
+    @if (lead(); as event) {
+      <a class="hero__poster" [routerLink]="['/', event.slug]" tabindex="-1" aria-hidden="true">
+        @if (event.poster_url) {
+          <img [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
+        } @else {
+          <span class="hero__initial">{{ event.title.charAt(0) }}</span>
+        }
+      </a>
+    }
   </div>
+
+  <!--
+    Two fields, not five. What and where is the whole question at this stage;
+    a date range and a price filter on a front page are controls people close
+    rather than use.
+  -->
+  <form class="finder" (ngSubmit)="search()" role="search">
+    <div class="finder__field">
+      <label for="q">What</label>
+      <input
+        id="q"
+        name="q"
+        type="search"
+        placeholder="Artist, night, or venue"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+      />
+    </div>
+
+    <div class="finder__divider" aria-hidden="true"></div>
+
+    <div class="finder__field">
+      <label for="where">Where</label>
+      <input
+        id="where"
+        name="where"
+        list="cities"
+        placeholder="Any city"
+        [ngModel]="city()"
+        (ngModelChange)="city.set($event)"
+      />
+      <datalist id="cities">
+        @for (name of cityNames(); track name) {
+          <option [value]="name"></option>
+        }
+      </datalist>
+    </div>
+
+    <!--
+      Labelled on the button rather than left to the word inside it. Below
+      640px that word is display:none, which takes it out of the accessibility
+      tree as well as off the screen — leaving a submit button holding nothing
+      but a decorative icon, and no name at all.
+    -->
+    <button class="finder__go" type="submit" aria-label="Search">
+      <ui-icon [icon]="searchIcon" size="sm" />
+      <span class="finder__go-word">Search</span>
+    </button>
+  </form>
 </section>
 
 <div class="wrap">
@@ -120,10 +123,14 @@
           }
         </header>
 
-        <ul class="rail">
+        <ul
+          class="rail"
+          [class.rail--scrolls]="rail.scrolls"
+          [class.rail--wide]="rail.wide"
+        >
           @for (event of rail.events; track event.slug) {
             <li class="rail__item">
-              <app-event-card [event]="event" [eager]="$first" />
+              <app-event-card [event]="event" [eager]="$first" [wide]="rail.wide" />
             </li>
           }
         </ul>
