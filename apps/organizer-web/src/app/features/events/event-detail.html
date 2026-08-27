@@ -11,7 +11,7 @@
     greyed-out Publish invites somebody to look for the reason it is grey.
   -->
   @if (event.status !== 'cancelled' && session.canPublish()) {
-    <div class="actions">
+    <div class="actions mb-6 flex flex-wrap items-center gap-4">
       <button
         uiButton
         [variant]="event.status === 'published' ? 'secondary' : 'primary'"
@@ -28,7 +28,7 @@
       </button>
 
       @if (event.status !== 'published' && !canPublish()) {
-        <p class="actions__blocked">
+        <p class="actions__blocked max-w-[46ch] text-pretty text-sm text-text-muted">
           Add a ticket type first. A published event with nothing on sale is a
           link that disappoints everyone who follows it.
         </p>
@@ -37,7 +37,7 @@
   }
 
   @if (event.status === 'cancelled') {
-    <p class="cancelled-banner" role="status">
+    <p class="cancelled-banner mt-4 rounded-md border-l-[3px] border-l-danger bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-4 text-sm text-danger" role="status">
       <strong>This event was cancelled.</strong>
       Everybody holding a ticket was told. It cannot be put back on sale — copy
       it to a new date instead.
@@ -45,41 +45,41 @@
   }
 
   @if (notice(); as message) {
-    <p class="notice" role="status">{{ message }}</p>
+    <p class="notice mt-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
   }
   @if (error(); as message) {
-    <p class="error" role="alert">{{ message }}</p>
+    <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
   }
 
   <!-- Money is only fetched, and only shown, for roles the API would serve. -->
   @if (summary(); as totals) {
-    <section class="totals">
-      <div>
-        <span class="label">Gross</span><span class="figure">{{ money(totals.gross) }}</span>
+    <section class="totals mt-6 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border">
+      <div class="flex flex-col gap-1 bg-surface-raised p-4">
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Gross</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.gross) }}</span>
       </div>
-      <div>
-        <span class="label">Discounts</span
-        ><span class="figure">{{ money(totals.discounts) }}</span>
+      <div class="flex flex-col gap-1 bg-surface-raised p-4">
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Discounts</span
+        ><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.discounts) }}</span>
       </div>
-      <div>
-        <span class="label">Tax</span><span class="figure">{{ money(totals.tax) }}</span>
+      <div class="flex flex-col gap-1 bg-surface-raised p-4">
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Tax</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.tax) }}</span>
       </div>
-      <div class="aside">
+      <div class="aside flex flex-col gap-1 border-l border-dashed border-border-strong bg-surface-raised p-4 text-text-muted">
         <!--
           Outside the running total on purpose. This is what buyers paid us on
           top of the ticket price, and showing it in the same column as the
           deductions reads as money coming off the payout — which is exactly
           the thing it is not.
         -->
-        <span class="label">Service charge, paid by buyers</span
-        ><span class="figure">{{ money(totals.service_charge) }}</span>
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Service charge, paid by buyers</span
+        ><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.service_charge) }}</span>
       </div>
-      <div class="net">
-        <span class="label">Owed to you</span><span class="figure">{{ money(totals.net) }}</span>
+      <div class="net flex flex-col gap-1 bg-surface-raised p-4">
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Owed to you</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.net) }}</span>
       </div>
     </section>
 
-    <p class="counts">
+    <p class="counts mt-3 text-sm text-text-muted tabular-nums">
       {{ totals.orders }} orders · {{ totals.tickets_issued }} tickets ·
       {{ totals.checked_in }} arrived
     </p>
@@ -87,45 +87,45 @@
 
 
   @if (series(); as s) {
-    <h2 class="section">Repeats</h2>
+    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Repeats</h2>
 
     @if (s.status === 'ended') {
       <p class="muted">This event no longer repeats.</p>
     } @else if (upcoming().length === 0) {
       <p class="muted">No dates left in this series.</p>
     } @else {
-      <ul class="dates">
+      <ul class="dates m-0 grid list-none gap-2 p-0">
         @for (date of upcoming(); track date.id) {
-          <li>
-            <a [routerLink]="['/events', date.id]">{{ occurrenceDate(date.starts_at) }}</a>
+          <li class="flex items-center gap-2 text-sm">
+            <a class="min-w-[13rem] text-text no-underline tabular-nums hover:text-primary hover:underline" [routerLink]="['/events', date.id]">{{ occurrenceDate(date.starts_at) }}</a>
 
             @if (date.id === eventId) {
-              <span class="badge">This one</span>
+              <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">This one</span>
             }
             @if (date.moved) {
-              <span class="badge">Moved</span>
+              <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">Moved</span>
             }
             @if (date.status !== 'published') {
-              <span class="badge">{{ date.status }}</span>
+              <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">{{ date.status }}</span>
             }
 
             @if (session.canEditEvents() && date.id !== eventId) {
-              <button class="link" type="button" (click)="skip(date)">Skip</button>
+              <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger ml-auto" type="button" (click)="skip(date)">Skip</button>
             }
           </li>
         }
       </ul>
 
       @if (s.skipped.length > 0) {
-        <p class="help">
+        <p class="help mt-2 text-xs text-text-muted">
           {{ s.skipped.length }} {{ s.skipped.length === 1 ? 'date is' : 'dates are' }} skipped.
           They will not come back.
         </p>
       }
 
       @if (session.canEditEvents()) {
-        <button class="link" type="button" (click)="stopRepeating()">Stop repeating</button>
-        <p class="help">
+        <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger" type="button" (click)="stopRepeating()">Stop repeating</button>
+        <p class="help mt-2 text-xs text-text-muted">
           Dates people have already bought tickets for are kept.
         </p>
       }
@@ -133,14 +133,14 @@
   }
 
   @if (session.canEditEvents()) {
-    <section class="copy">
+    <section class="copy mt-6">
       @if (!copying()) {
-        <button class="link plain" type="button" (click)="copying.set(true)">
+        <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-primary" type="button" (click)="copying.set(true)">
           @if (series()) { Copy this to another date → } @else { Run this again → }
         </button>
       } @else {
         @if (!series()) {
-          <div class="copy-form">
+          <div class="copy-form flex flex-wrap items-center gap-3">
             <label for="freq">Repeat this</label>
             <select
               id="freq"
@@ -159,7 +159,7 @@
               type="number"
               min="2"
               max="104"
-              class="narrow"
+              class="narrow w-20"
               [ngModel]="repeatCount()"
               (ngModelChange)="repeatCount.set($event)"
             />
@@ -168,7 +168,7 @@
               @if (repeating()) { Setting up… } @else { Repeat }
             </button>
           </div>
-          <p class="help">
+          <p class="help mt-2 text-xs text-text-muted">
             Each date is its own event with its own tickets and door, so you can
             change one without touching the rest.
           </p>
@@ -176,9 +176,9 @@
       }
     </section>
 
-    <section class="copy">
+    <section class="copy mt-6">
       @if (copying()) {
-        <div class="copy-form">
+        <div class="copy-form flex flex-wrap items-center gap-3">
           <label for="copyDate">Same event, new date</label>
           <input
             id="copyDate"
@@ -190,9 +190,9 @@
           <button uiButton variant="secondary" size="sm" type="button" [loading]="duplicating()" [disabled]="duplicating()" (click)="duplicate()">
             @if (duplicating()) { Copying… } @else { Make a copy }
           </button>
-          <button class="link plain" type="button" (click)="copying.set(false)">Cancel</button>
+          <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-primary" type="button" (click)="copying.set(false)">Cancel</button>
         </div>
-        <p class="help">
+        <p class="help mt-2 text-xs text-text-muted">
           Tickets, prices, capacity and the banner come across. Sales and the
           gallery do not, and the copy starts as a draft.
         </p>
@@ -201,25 +201,25 @@
   }
 
   @if (event.status === 'published' && session.canCancel()) {
-    <h2 class="section">Danger</h2>
+    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Danger</h2>
 
     @if (!cancelling()) {
       <button uiButton variant="ghost" type="button" (click)="openCancel()">
         Cancel this event
       </button>
-      <p class="help">
+      <p class="help mt-2 text-xs text-text-muted">
         Tells everybody holding a ticket that it is off, and refunds them. It
         cannot be undone.
       </p>
     } @else {
-      <div class="cancel-panel">
+      <div class="cancel-panel grid max-w-[560px] gap-4 rounded-lg border border-danger bg-surface-raised p-6">
         @if (cancelPreview(); as preview) {
-          <p class="cancel-cost">
-            <strong>{{ preview.ticket_holders }}</strong>
+          <p class="cancel-cost rounded-md bg-surface-inset px-4 py-3 text-sm leading-[1.35]">
+            <strong class="text-lg tabular-nums">{{ preview.ticket_holders }}</strong>
             {{ preview.ticket_holders === 1 ? 'person' : 'people' }} will be told.
             @if (preview.orders_to_refund > 0) {
               <br />
-              <strong>{{ money(preview.refund_total) }}</strong>
+              <strong class="text-lg tabular-nums">{{ money(preview.refund_total) }}</strong>
               across {{ preview.orders_to_refund }}
               {{ preview.orders_to_refund === 1 ? 'order' : 'orders' }} will be returned.
             }
@@ -241,14 +241,15 @@
             (ngModelChange)="cancelReason.set($event)"
             aria-describedby="cancelReasonHint"
           ></textarea>
-          <p id="cancelReasonHint" class="help">
+          <p id="cancelReasonHint" class="help mt-2 text-xs text-text-muted">
             Sent to everyone holding a ticket, word for word. At least a
             sentence.
           </p>
         </div>
 
-        <label class="check">
+        <label class="check inline-flex cursor-pointer items-center gap-2 text-sm font-normal">
           <input
+            class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
             type="checkbox"
             name="cancelRefund"
             [ngModel]="cancelRefund()"
@@ -257,7 +258,7 @@
           Refund everybody now
         </label>
         @if (!cancelRefund()) {
-          <p class="help warn">
+          <p class="help mt-2 text-xs text-warning">
             Nobody will be refunded automatically. You will need to refund each
             order yourself from Orders and refunds.
           </p>
@@ -278,7 +279,7 @@
               Cancel the event
             }
           </button>
-          <button class="link plain" type="button" (click)="cancelling.set(false)">
+          <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-primary" type="button" (click)="cancelling.set(false)">
             Keep it running
           </button>
         </div>
@@ -286,7 +287,7 @@
     }
   }
 
-  <h2 class="section">Reminders</h2>
+  <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Reminders</h2>
 
   @if (liveReminders().length === 0) {
     <p class="muted">
@@ -294,18 +295,18 @@
       three hours before.
     </p>
   } @else {
-    <ul class="reminders">
+    <ul class="reminders m-0 grid list-none gap-2 p-0">
       @for (reminder of liveReminders(); track reminder.id) {
-        <li>
-          <span class="rl">{{ reminder.label }}</span>
-          <span class="rt">{{ sendTime(reminder.send_at) }}</span>
+        <li class="flex flex-wrap items-baseline gap-3 text-sm">
+          <span class="rl min-w-[9rem] font-medium">{{ reminder.label }}</span>
+          <span class="rt text-text-muted tabular-nums">{{ sendTime(reminder.send_at) }}</span>
 
           @if (reminder.status === 'sent') {
-            <span class="badge">
+            <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">
               Sent@if (reminder.recipients !== null) { · {{ reminder.recipients }} people }
             </span>
           } @else if (session.canEditEvents()) {
-            <button class="link" type="button" (click)="cancelReminder(reminder)">Turn off</button>
+            <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger" type="button" (click)="cancelReminder(reminder)">Turn off</button>
           }
         </li>
       }
@@ -313,7 +314,7 @@
   }
 
   @if (session.canEditEvents()) {
-    <form class="add-reminder" (ngSubmit)="addReminder()">
+    <form class="add-reminder mt-4 flex gap-2" (ngSubmit)="addReminder()">
       <select
         name="offset"
         aria-label="When to remind"
@@ -326,7 +327,7 @@
       </select>
       <button uiButton variant="secondary" type="submit" [loading]="savingReminder()" [disabled]="savingReminder()">Add</button>
     </form>
-    <p class="help">
+    <p class="help mt-2 text-xs text-text-muted">
       Everyone holding a ticket gets an email. Anyone who has unsubscribed does not.
     </p>
   }
@@ -335,5 +336,5 @@
        sale windows properly. A second, cruder editor here was two places for
        the same decision, and the lesser one always wins by being seen first. -->
 } @else {
-  <p class="error">That event could not be found.</p>
+  <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-3 text-sm text-danger">That event could not be found.</p>
 }

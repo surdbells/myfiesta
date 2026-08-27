@@ -23,7 +23,6 @@ import { SessionStore } from '../../core/session';
   selector: 'app-event-detail',
   imports: [FormsModule, RouterLink, UiButton],
   templateUrl: './event-detail.html',
-  styleUrl: './event-detail.css',
 })
 export class EventDetail {
   private readonly api = inject(Api);

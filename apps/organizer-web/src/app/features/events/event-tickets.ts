@@ -69,7 +69,6 @@ interface TicketDraft {
     UiIcon,
   ],
   templateUrl: './event-tickets.html',
-  styleUrl: './event-tickets.css',
 })
 export class EventTickets {
   private readonly api = inject(Api);

@@ -16,6 +16,14 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  /* Borders start at zero width, solid, in the text's colour, so a utility
+     like border-l or border-dashed composes predictably. Without this, the
+     browser's default `medium none` surfaces the moment any border-style is
+     set, and border-dashed alone draws a 3px box on all four sides. The one
+     piece of Tailwind's preflight this base layer adopts. */
+  border-width: 0;
+  border-style: solid;
+  border-color: currentColor;
 }
 
 html {

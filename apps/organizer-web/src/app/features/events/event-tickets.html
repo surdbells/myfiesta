@@ -1,7 +1,7 @@
 @if (loading()) {
-  <div class="tiers">
+  <div class="tiers m-0 grid list-none gap-3 p-0">
     @for (n of [0, 1, 2]; track n) {
-      <div class="tier tier--loading"><ui-skeleton height="3rem" /></div>
+      <div class="tier block min-h-[5rem] rounded-lg border border-border bg-surface-raised px-6 py-4"><ui-skeleton height="3rem" /></div>
     }
   </div>
 } @else if (failed()) {
@@ -17,28 +17,28 @@
     checking whether to open another release is asking about the total.
   -->
   @if (types().length > 0) {
-    <section class="summary">
+    <section class="summary mb-6 flex items-start gap-12 rounded-lg border border-border bg-surface-raised p-6 max-[720px]:flex-wrap max-[720px]:gap-6">
       <div class="summary__figure">
-        <p class="summary__label">Sold</p>
-        <p class="summary__value">
+        <p class="summary__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</p>
+        <p class="summary__value text-2xl font-semibold tracking-[-0.02em] tabular-nums">
           {{ totalSold() }}
           @if (totalCapacity() !== null) {
-            <span class="summary__of">of {{ totalCapacity() }}</span>
+            <span class="summary__of text-base font-normal text-text-muted">of {{ totalCapacity() }}</span>
           }
         </p>
       </div>
 
       @if (faceValue(); as value) {
         <div class="summary__figure">
-          <p class="summary__label">At face value</p>
-          <p class="summary__value">{{ cash(value) }}</p>
+          <p class="summary__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">At face value</p>
+          <p class="summary__value text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(value) }}</p>
           <!-- Said out loud, because it is not the payout and somebody will
                otherwise reconcile against it. -->
-          <p class="summary__note">Before discounts and refunds</p>
+          <p class="summary__note mt-1 text-xs text-text-subtle">Before discounts and refunds</p>
         </div>
       }
 
-      <div class="summary__actions">
+      <div class="summary__actions ml-auto max-[720px]:ml-0 max-[720px]:w-full">
         <button uiButton type="button" (click)="openNew()">
           <ui-icon [icon]="addIcon" size="sm" />
           Add ticket type
@@ -58,21 +58,21 @@
       </button>
     </ui-empty>
   } @else {
-    <ul class="tiers">
+    <ul class="tiers m-0 grid list-none gap-3 p-0">
       @for (type of types(); track type.id) {
-        <li class="tier">
-          <div class="tier__identity">
-            <p class="tier__name">
+        <li class="tier grid grid-cols-[minmax(0,1fr)_13rem_auto] items-center gap-6 rounded-lg border border-border bg-surface-raised px-6 py-4 max-[720px]:grid-cols-1 max-[720px]:gap-4">
+          <div class="tier__identity min-w-0">
+            <p class="tier__name flex flex-wrap items-center gap-3 font-semibold">
               {{ type.name }}
               <ui-badge [tone]="tone(type)">{{ label(type) }}</ui-badge>
             </p>
 
             @if (type.description) {
-              <p class="tier__desc">{{ type.description }}</p>
+              <p class="tier__desc mt-1 truncate text-sm text-text-muted">{{ type.description }}</p>
             }
 
-            <p class="tier__facts">
-              <span>{{ cash(type.price) }}</span>
+            <p class="tier__facts mt-2 flex flex-wrap gap-4 text-sm text-text-subtle tabular-nums">
+              <span class="font-medium text-text">{{ cash(type.price) }}</span>
               @if (type.admits > 1) {
                 <span>Admits {{ type.admits }}</span>
               }
@@ -86,30 +86,30 @@
           </div>
 
           <div class="tier__sales">
-            <p class="tier__sold">
-              <strong>{{ type.sold }}</strong>
+            <p class="tier__sold mb-2 text-sm text-text-muted tabular-nums">
+              <strong class="text-lg text-text">{{ type.sold }}</strong>
               @if (type.quantity_available !== null && type.quantity_available !== undefined) {
-                <span class="tier__of">&nbsp;of {{ type.quantity_available }}</span>
+                <span class="tier__of text-text-muted">&nbsp;of {{ type.quantity_available }}</span>
               } @else {
-                <span class="tier__of">&nbsp;sold · unlimited</span>
+                <span class="tier__of text-text-muted">&nbsp;sold · unlimited</span>
               }
             </p>
 
             @if (percent(type) !== null) {
               <div
-                class="meter"
+                class="meter h-1.5 overflow-hidden rounded-full bg-surface-inset"
                 role="progressbar"
                 [attr.aria-valuenow]="percent(type)"
                 aria-valuemin="0"
                 aria-valuemax="100"
                 [attr.aria-label]="'Sold for ' + type.name"
               >
-                <span class="meter__fill" [style.width.%]="percent(type)"></span>
+                <span class="meter__fill block h-full rounded-full bg-primary transition-[width] duration-(--motion-slow) ease-(--motion-ease) motion-reduce:transition-none" [style.width.%]="percent(type)"></span>
               </div>
             }
           </div>
 
-          <div class="tier__actions">
+          <div class="tier__actions flex gap-2 max-[720px]:justify-end">
             <button
               uiButton
               variant="secondary"
@@ -145,10 +145,10 @@
   (dismissed)="formOpen.set(false)"
 >
   @if (formError(); as message) {
-    <p class="form-error" role="alert">{{ message }}</p>
+    <p class="form-error mb-4 rounded-md border border-[color-mix(in_srgb,var(--danger)_26%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] px-4 py-3 text-sm text-danger-text" role="alert">{{ message }}</p>
   }
 
-  <div class="form">
+  <div class="form grid gap-4">
     <ui-field label="Name" hint="What a buyer sees. Early Bird, VIP, Table of 10." required>
       <input
         name="name"
@@ -167,7 +167,7 @@
       ></textarea>
     </ui-field>
 
-    <div class="form__row">
+    <div class="form__row grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
       <ui-field label="Price" [error]="priceError()" required>
         <input
           name="price"
@@ -193,7 +193,7 @@
       </ui-field>
     </div>
 
-    <div class="form__row">
+    <div class="form__row grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
       <ui-field
         label="How many"
         hint="Leave empty for unlimited."
@@ -220,7 +220,7 @@
       </ui-field>
     </div>
 
-    <div class="form__row">
+    <div class="form__row grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
       <ui-field label="On sale from" optionalMark>
         <input
           name="salesStart"
