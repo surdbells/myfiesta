@@ -9,7 +9,7 @@
 
 .shell {
   display: grid;
-  grid-template-columns: 16rem 1fr;
+  grid-template-columns: 15rem 1fr;
   min-height: 100dvh;
   background-color: var(--surface-sunken);
 }
@@ -270,6 +270,9 @@
   min-width: 0;
   max-width: 84rem;
   width: 100%;
+  /* Fills the viewport, so a short screen does not leave the page ground
+     stopping halfway down against the sunken shell behind it. */
+  min-height: 100%;
 }
 
 /* --- small screens -------------------------------------------------------- */

@@ -75,7 +75,10 @@
  */
 .tier {
   display: grid;
-  grid-template-columns: 1fr 11rem auto;
+  /* The name takes what it needs, the sold figures sit in a fixed track
+     right of it, and the actions hold the end. As 1fr the first column
+     stretched and left the figures marooned in the middle of the row. */
+  grid-template-columns: minmax(0, 1fr) 13rem auto;
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-4) var(--space-5);

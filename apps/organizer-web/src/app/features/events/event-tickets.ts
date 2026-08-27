@@ -325,7 +325,13 @@ export class EventTickets {
     ];
   }
 
-  /** Percentage sold, or null where there is no capacity to measure against. */
+  /**
+   * Percentage sold, or null where there is no capacity to measure against.
+   *
+   * Read with an explicit null check at the call site, never as a truthy
+   * test: a tier that has sold nothing returns 0, and 0 is falsy — which
+   * hid the track on exactly the tiers somebody is checking on.
+   */
   percent(type: TicketType): number | null {
     if (type.quantity_available == null || type.quantity_available === 0) return null;
 

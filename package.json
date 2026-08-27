@@ -10,6 +10,10 @@
   ],
   "scripts": {
     "tokens": "npm run build --workspace @myfiesta/tokens",
-    "check": "npm run check --workspace @myfiesta/tokens"
+    "check": "npm run check --workspace @myfiesta/tokens",
+    "shots": "node tools/screenshot.cjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.9.0"
   }
 }

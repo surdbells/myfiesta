@@ -64,6 +64,19 @@
     @if (events().length === 0) {
       <p class="block__none">Nothing has sold yet.</p>
     } @else {
+      <!--
+        A heading row, because three money columns with no labels is three
+        numbers nobody can tell apart. It was left out on the grounds that
+        the words would be more chrome than the figures; looking at it, the
+        figures without them are unreadable.
+      -->
+      <p class="rows__head" aria-hidden="true">
+        <span></span>
+        <span>Sold</span>
+        <span>Sent</span>
+        <span>Owed</span>
+      </p>
+
       <ul class="rows">
         @for (row of events(); track row.event_id ?? 'none') {
           <li class="row">
