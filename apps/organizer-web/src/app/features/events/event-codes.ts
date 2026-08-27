@@ -1,4 +1,5 @@
 import { DOCUMENT } from '@angular/common';
+import { UiButton } from '@myfiesta/ui';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -27,7 +28,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-codes',
-  imports: [FormsModule],
+  imports: [FormsModule, UiButton],
   templateUrl: './event-codes.html',
   styleUrl: './event-codes.css',
 })

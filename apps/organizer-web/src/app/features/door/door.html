@@ -87,7 +87,7 @@
     />
   </div>
 
-  <button class="cta" type="submit" [disabled]="busy() || !code().trim()">
+  <button uiButton type="submit" [loading]="busy()" [disabled]="busy() || !code().trim()">
     @if (busy()) {
       Checking…
     } @else {
@@ -109,7 +109,7 @@
     type the code above instead.
   </p>
 } @else if (!scanning()) {
-  <button class="secondary" type="button" (click)="startCamera()">Use the camera</button>
+  <button uiButton variant="secondary" type="button" (click)="startCamera()">Use the camera</button>
   @if (cameraError(); as message) {
     <p class="error">{{ message }}</p>
   }
@@ -120,5 +120,5 @@
     <video id="door-camera" muted playsinline></video>
     <div class="reticle" aria-hidden="true"></div>
   </div>
-  <button class="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
+  <button uiButton variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
 }

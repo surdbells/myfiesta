@@ -177,7 +177,7 @@
     >, set by the country. This cannot be changed once the event exists.
   </p>
 
-  <button class="cta" type="submit" [disabled]="saving()">
+  <button uiButton type="submit" [loading]="saving()" [disabled]="saving()">
     @if (saving()) {
       Creating…
     } @else {

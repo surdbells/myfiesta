@@ -45,20 +45,11 @@ export class EventDetail {
   /**
    * A new ticket type being written. Prices are entered in major units.
    *
-   * `admits` is how many people one of these lets in — a Couple admits 2, a
-   * Table of 5 admits 5 — and the door counts them in, so a table can arrive in
-   * two groups. The description is shown to buyers on the event page, which is
-   * where a table tier has to explain itself.
+   * Ticket types are read here only to gate publishing — managing them moved
+   * to the Tickets tab, which does inventory and sale windows properly. The
+   * cruder editor this screen carried was a second place for the same
+   * decision, and the lesser one always won by being seen first.
    */
-  readonly draft = signal({
-    name: '',
-    description: '',
-    price: '',
-    quantity: '' as string,
-    admits: '1',
-  });
-  readonly savingTicket = signal(false);
-
   readonly money = formatMoney;
   readonly when = longEventTime;
 
@@ -282,48 +273,6 @@ export class EventDetail {
       timeZoneName: 'short',
       ...(timeZone ? { timeZone } : {}),
     }).format(new Date(iso));
-  }
-
-  addTicketType(): void {
-    const draft = this.draft();
-
-    if (!draft.name.trim() || draft.price === '') return;
-
-    this.savingTicket.set(true);
-    this.error.set(null);
-
-    this.api
-      .createTicketType(this.eventId, {
-        name: draft.name.trim(),
-        description: draft.description.trim() || null,
-        // Converted at the edge. Everything inside is minor units.
-        price_amount: toMinorUnits(draft.price),
-        quantity_available: draft.quantity === '' ? null : Number(draft.quantity),
-        admits: Number(draft.admits) || 1,
-      })
-      .subscribe({
-        next: () => {
-          this.savingTicket.set(false);
-          this.draft.set({ name: '', description: '', price: '', quantity: '', admits: '1' });
-          this.api.ticketTypes(this.eventId).subscribe(({ data }) => this.ticketTypes.set(data));
-        },
-        error: (response) => {
-          this.savingTicket.set(false);
-          this.error.set(messageFor(response, 'That ticket could not be saved.'));
-        },
-      });
-  }
-
-  removeTicketType(type: TicketType): void {
-    this.api.deleteTicketType(this.eventId, type.id).subscribe({
-      next: (result) => {
-        // A type with tickets against it closes rather than disappears, and
-        // saying so avoids it looking like the delete failed.
-        this.notice.set(result.message);
-        this.api.ticketTypes(this.eventId).subscribe(({ data }) => this.ticketTypes.set(data));
-      },
-      error: () => this.error.set('That ticket could not be removed.'),
-    });
   }
 
   togglePublished(): void {

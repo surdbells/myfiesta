@@ -97,28 +97,6 @@ h1 {
   color: var(--warning);
 }
 
-.cta {
-  justify-self: start;
-  height: 48px;
-  padding: 0 var(--space-6);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-.cta:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* --- what has already gone out ------------------------------------------- */
 
 .history {

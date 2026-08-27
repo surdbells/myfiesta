@@ -94,28 +94,6 @@ h1 {
   font-weight: var(--font-weight-medium);
 }
 
-.cta {
-  justify-self: start;
-  height: 44px;
-  padding: 0 var(--space-5);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-.cta:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 /* --- the codes ----------------------------------------------------------- */
 
 .codes {
@@ -202,6 +180,26 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/*
+ * The promoter link and its copy button, as one row.
+ *
+ * This div used to borrow the .link class below — which styles text-link
+ * *buttons* — so a layout container was wearing an underline and a pointer
+ * cursor. Same name, two jobs; now two names.
+ */
+.share {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.share input {
+  flex: 1;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
 .link {
   padding: 0;
   font: inherit;
@@ -215,25 +213,6 @@ h1 {
 }
 .link:hover {
   color: var(--primary);
-}
-
-/* Turning a code off is not destructive — nothing is deleted and past
-   redemptions stand — so it does not get the danger colour. */
-.off-btn {
-  justify-self: start;
-  margin-top: var(--space-1);
-  padding: 0;
-  font: inherit;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.off-btn:hover {
-  color: var(--danger);
 }
 
 /* --- messages ------------------------------------------------------------ */

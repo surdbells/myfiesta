@@ -195,29 +195,6 @@ h1 {
   color: var(--text-subtle);
 }
 
-/* Refunding is destructive and never wears the brand colour. */
-.cta {
-  justify-self: start;
-  height: 44px;
-  padding: 0 var(--space-5);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-inverse);
-  background-color: var(--danger);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--danger) 85%, black);
-}
-.cta:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* The search button is an ordinary action and keeps the brand colour. */
 .search .cta {
   color: var(--on-primary);

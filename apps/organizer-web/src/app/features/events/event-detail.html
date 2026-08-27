@@ -164,7 +164,7 @@
               (ngModelChange)="repeatCount.set($event)"
             />
             <span class="muted">dates</span>
-            <button type="button" [disabled]="repeating()" (click)="makeRepeating()">
+            <button uiButton variant="secondary" size="sm" type="button" [loading]="repeating()" [disabled]="repeating()" (click)="makeRepeating()">
               @if (repeating()) { Setting up… } @else { Repeat }
             </button>
           </div>
@@ -187,7 +187,7 @@
             [ngModel]="copyDate()"
             (ngModelChange)="copyDate.set($event)"
           />
-          <button type="button" [disabled]="duplicating()" (click)="duplicate()">
+          <button uiButton variant="secondary" size="sm" type="button" [loading]="duplicating()" [disabled]="duplicating()" (click)="duplicate()">
             @if (duplicating()) { Copying… } @else { Make a copy }
           </button>
           <button class="link plain" type="button" (click)="copying.set(false)">Cancel</button>
@@ -204,7 +204,7 @@
     <h2 class="section">Danger</h2>
 
     @if (!cancelling()) {
-      <button class="btn-danger-quiet" type="button" (click)="openCancel()">
+      <button uiButton variant="ghost" type="button" (click)="openCancel()">
         Cancel this event
       </button>
       <p class="help">
@@ -265,8 +265,10 @@
 
         <div class="row">
           <button
-            class="btn-danger"
+            uiButton
+            variant="danger"
             type="button"
+            [loading]="cancelBusy()"
             [disabled]="!cancelReady() || cancelBusy()"
             (click)="confirmCancel()"
           >
@@ -322,113 +324,16 @@
           <option [value]="choice.minutes">{{ choice.label }}</option>
         }
       </select>
-      <button type="submit" [disabled]="savingReminder()">Add</button>
+      <button uiButton variant="secondary" type="submit" [loading]="savingReminder()" [disabled]="savingReminder()">Add</button>
     </form>
     <p class="help">
       Everyone holding a ticket gets an email. Anyone who has unsubscribed does not.
     </p>
   }
 
-  <h2 class="section">Tickets</h2>
-
-  @if (ticketTypes().length === 0) {
-    <p class="muted">Nothing on sale yet.</p>
-  } @else {
-    <ul class="tickets">
-      @for (type of ticketTypes(); track type.id) {
-        <li>
-          <span class="name">
-            {{ type.name }}
-            @if (type.status !== 'on_sale') {
-              <span class="badge">{{ type.status }}</span>
-            }
-          </span>
-          <span class="price">{{ money(type.price) }}</span>
-          @if (session.canEditEvents() && type.status === 'on_sale') {
-            <button class="link" type="button" (click)="removeTicketType(type)">Remove</button>
-          }
-        </li>
-      }
-    </ul>
-  }
-
-  @if (session.canEditEvents()) {
-    <form class="add" (ngSubmit)="addTicketType()">
-      <div class="field">
-        <label for="tname">Name</label>
-        <input
-          id="tname"
-          name="tname"
-          required
-          placeholder="Early bird"
-          [ngModel]="draft().name"
-          (ngModelChange)="draft.set({ ...draft(), name: $event })"
-        />
-      </div>
-
-      <div class="field wide">
-        <label for="tdesc">Description <span class="optional">shown to buyers</span></label>
-        <input
-          id="tdesc"
-          name="tdesc"
-          maxlength="500"
-          placeholder="Seats 5, bottle service included"
-          [ngModel]="draft().description"
-          (ngModelChange)="draft.set({ ...draft(), description: $event })"
-        />
-      </div>
-
-      <div class="field">
-        <label for="tprice">Price ({{ event.currency }})</label>
-        <input
-          id="tprice"
-          name="tprice"
-          type="number"
-          min="0"
-          step="0.01"
-          required
-          placeholder="25.00"
-          [ngModel]="draft().price"
-          (ngModelChange)="draft.set({ ...draft(), price: $event })"
-        />
-      </div>
-
-      <div class="field">
-        <label for="tadmits">Admits</label>
-        <input
-          id="tadmits"
-          name="tadmits"
-          type="number"
-          min="1"
-          max="50"
-          [ngModel]="draft().admits"
-          (ngModelChange)="draft.set({ ...draft(), admits: $event })"
-        />
-        <p class="help">People per ticket. A Couple admits 2, a Table of 5 admits 5.</p>
-      </div>
-
-      <div class="field">
-        <label for="tqty">How many</label>
-        <input
-          id="tqty"
-          name="tqty"
-          type="number"
-          min="0"
-          placeholder="Unlimited"
-          [ngModel]="draft().quantity"
-          (ngModelChange)="draft.set({ ...draft(), quantity: $event })"
-        />
-      </div>
-
-      <button type="submit" [disabled]="savingTicket()">
-        @if (savingTicket()) {
-          Saving…
-        } @else {
-          Add ticket
-        }
-      </button>
-    </form>
-  }
+  <!-- Ticket types live on the Tickets tab, which manages inventory and
+       sale windows properly. A second, cruder editor here was two places for
+       the same decision, and the lesser one always wins by being seen first. -->
 } @else {
   <p class="error">That event could not be found.</p>
 }

@@ -153,7 +153,7 @@
     </div>
 
     <div class="actions">
-      <button class="cta" type="submit" [disabled]="saving()">
+      <button uiButton type="submit" [loading]="saving()" [disabled]="saving()">
         @if (saving()) { Saving… } @else { Save changes }
       </button>
       <button class="link" type="button" (click)="done()">Done</button>

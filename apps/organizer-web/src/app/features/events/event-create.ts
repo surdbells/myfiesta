@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
@@ -31,7 +32,7 @@ const PROVINCES = [
 
 @Component({
   selector: 'app-event-create',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, UiButton],
   templateUrl: './event-create.html',
   styleUrl: './event-create.css',
 })

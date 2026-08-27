@@ -20,7 +20,10 @@
 
 .bar {
   display: flex;
-  align-items: flex-end;
+  /* Centred, not flex-end: the arrivals block is taller than the heading
+     (figure + label + track), so bottom-aligning left the two reading as
+     different rows rather than one header. */
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
   flex-wrap: wrap;
@@ -145,32 +148,6 @@ h2 {
 
 .search input {
   flex: 1;
-}
-
-.cta {
-  height: 44px;
-  padding: 0 var(--space-5);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-.cta:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.issue .cta {
-  justify-self: start;
 }
 
 /* --- the list ------------------------------------------------------------ */

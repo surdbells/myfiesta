@@ -137,6 +137,16 @@ hr {
 
 .btn {
   display: inline-flex;
+  /*
+   * A button hugs its label even when a grid places it.
+   *
+   * Grid items default to justify-self: stretch, so a submit button at the
+   * end of a grid form went full-width the moment the per-screen .cta
+   * classes were replaced — every one of those had quietly re-fixed this
+   * with its own justify-self. In flex layouts justify-self is ignored, so
+   * this costs nothing there; block below opts back into stretching.
+   */
+  justify-self: start;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -225,6 +235,7 @@ hr {
 }
 .btn--block {
   width: 100%;
+  justify-self: stretch;
 }
 
 /* A button that reads as a link. Still a button, so it is announced and

@@ -115,7 +115,7 @@
               {{ order.buyer_name }}, and those tickets stop working.
             </p>
 
-            <button class="cta" type="button" [disabled]="working()" (click)="submit(order)">
+            <button uiButton type="button" [loading]="working()" [disabled]="working()" (click)="submit(order)">
               @if (working()) { Sending… } @else { Send the refund }
             </button>
           </div>

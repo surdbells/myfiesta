@@ -157,45 +157,6 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Comfortably bigger than the 44px minimum — this is pressed with a thumb, in
-   the cold, while holding a phone in the other hand. */
-.cta {
-  height: 56px;
-  padding: 0 var(--space-6);
-  font: inherit;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--on-primary);
-  background-color: var(--primary);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--motion-fast) var(--motion-ease);
-}
-.cta:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-}
-.cta:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.secondary {
-  height: 48px;
-  padding: 0 var(--space-5);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text);
-  background-color: var(--surface-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-.secondary:hover {
-  background-color: var(--surface-inset);
-}
-
 .help {
   max-width: 60ch;
   margin-top: var(--space-3);

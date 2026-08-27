@@ -80,7 +80,7 @@
       }
     </div>
 
-    <button class="cta" type="submit" [disabled]="!ready() || sending() || willReach() === 0">
+    <button uiButton type="submit" [loading]="sending()" [disabled]="!ready() || sending() || willReach() === 0">
       @if (sending()) {
         Sending…
       } @else {

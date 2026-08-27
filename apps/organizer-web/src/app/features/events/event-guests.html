@@ -109,7 +109,7 @@
       Email the ticket now
     </label>
 
-    <button class="cta" type="submit" [disabled]="issuing()">
+    <button uiButton type="submit" [loading]="issuing()" [disabled]="issuing()">
       @if (issuing()) {
         Issuing…
       } @else {
@@ -129,7 +129,7 @@
     [ngModel]="search()"
     (ngModelChange)="search.set($event)"
   />
-  <button type="submit">Search</button>
+  <button uiButton variant="secondary" type="submit">Search</button>
 </form>
 
 @if (loading()) {
