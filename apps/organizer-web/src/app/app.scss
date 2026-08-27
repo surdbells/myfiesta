@@ -41,10 +41,9 @@
 }
 
 .side__mark {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-sm);
-  background-image: linear-gradient(135deg, var(--primary), var(--accent));
+  width: 1.625rem;
+  height: 1.625rem;
+  display: block;
 }
 
 .side__word {

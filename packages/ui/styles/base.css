@@ -282,7 +282,11 @@ label {
  * gets used next.
  */
 .input,
-input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='range']):not([type='color']):not([type='image']):not([type='hidden']),
+/* :where() zeroes the :not() chain's specificity — ten attribute :not()s
+   would otherwise weigh (0,10,1) and steamroll any screen's deliberate
+   override, which is exactly what happened to the borderless search
+   fields inside the home page's pill. */
+input:where(:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='range']):not([type='color']):not([type='image']):not([type='hidden'])),
 select,
 textarea {
   display: block;
