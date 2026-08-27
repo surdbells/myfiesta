@@ -8,38 +8,41 @@
   flyer has the name of the night printed on it. Beside, it is also shown the
   way the organizer made it rather than as wallpaper.
 -->
-<section class="hero" [class.hero--empty]="!lead() && !loading()">
-  <div class="hero__inner">
-    <div class="hero__lead">
+<section
+  class="hero group relative overflow-hidden text-neutral-0 bg-[radial-gradient(90%_120%_at_85%_0%,color-mix(in_srgb,var(--color-brand-700)_70%,transparent),transparent_62%),linear-gradient(160deg,var(--color-brand-900)_0%,var(--color-neutral-950)_58%)]"
+  [attr.data-empty]="!lead() && !loading() ? '' : null"
+>
+  <div class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[1fr_minmax(0,19rem)] items-center gap-16 px-6 pt-12 pb-8 group-data-[empty]:grid-cols-[1fr] group-data-[empty]:pt-16 max-[860px]:grid-cols-[1fr] max-[860px]:pb-6 max-sm:pb-8">
+    <div class="hero__lead min-w-0 max-w-[40rem]">
       @if (loading()) {
-        <p class="hero__eyebrow"><span class="shimmer shimmer--sm"></span></p>
-        <h1><span class="shimmer shimmer--lg"></span></h1>
+        <p class="hero__eyebrow mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-gold-300"><span class="shimmer h-[0.9rem] w-32"></span></p>
+        <h1><span class="shimmer h-12 w-[min(30rem,80%)]"></span></h1>
       } @else if (lead(); as event) {
-        <p class="hero__eyebrow">{{ event.organizer.name }}</p>
-        <h1 class="hero__title">
-          <a [routerLink]="['/', event.slug]">{{ event.title }}</a>
+        <p class="hero__eyebrow mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-gold-300">{{ event.organizer.name }}</p>
+        <h1 class="hero__title text-balance text-[clamp(2rem,4.6vw,3.25rem)] font-bold leading-[1.15] tracking-[-0.02em]">
+          <a class="text-inherit no-underline focus-visible:outline-neutral-0" [routerLink]="['/', event.slug]">{{ event.title }}</a>
         </h1>
-        <p class="hero__meta">
+        <p class="hero__meta mt-3 text-lg text-neutral-200 max-sm:text-base">
           {{ when(event) }} <span aria-hidden="true">·</span> {{ event.city }}
         </p>
-        <p class="hero__actions">
-          <a class="hero__cta" [routerLink]="['/', event.slug]">
+        <p class="hero__actions mt-6">
+          <a class="hero__cta inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-base font-semibold text-on-primary no-underline transition-[background-color,transform] duration-(--motion-fast) ease-(--motion-ease) hover:-translate-y-px hover:bg-primary-hover motion-reduce:transition-none motion-reduce:hover:translate-y-0" [routerLink]="['/', event.slug]">
             {{ price(event) }}
             <ui-icon [icon]="arrowIcon" size="sm" />
           </a>
         </p>
       } @else {
-        <h1 class="hero__title">Nights out, ticketed properly</h1>
-        <p class="hero__meta">Nothing on sale right now. Search, or check back shortly.</p>
+        <h1 class="hero__title text-balance text-[clamp(2rem,4.6vw,3.25rem)] font-bold leading-[1.15] tracking-[-0.02em]">Nights out, ticketed properly</h1>
+        <p class="hero__meta mt-3 text-lg text-neutral-200 max-sm:text-base">Nothing on sale right now. Search, or check back shortly.</p>
       }
     </div>
 
     @if (lead(); as event) {
-      <a class="hero__poster" [routerLink]="['/', event.slug]" tabindex="-1" aria-hidden="true">
+      <a class="hero__poster relative grid aspect-[4/5] place-items-center overflow-hidden rounded-xl border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.06)] shadow-(--shadow-overlay) max-[860px]:hidden" [routerLink]="['/', event.slug]" tabindex="-1" aria-hidden="true">
         @if (event.poster_url) {
-          <img [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
+          <img class="block h-full w-full object-cover" [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
         } @else {
-          <span class="hero__initial">{{ event.title.charAt(0) }}</span>
+          <span class="hero__initial text-[6rem] font-bold text-[rgba(255,255,255,0.35)]">{{ event.title.charAt(0) }}</span>
         }
       </a>
     }
@@ -50,11 +53,12 @@
     a date range and a price filter on a front page are controls people close
     rather than use.
   -->
-  <form class="finder" (ngSubmit)="search()" role="search">
-    <div class="finder__field">
-      <label for="q">What</label>
+  <form class="finder mx-auto mb-12 flex w-[min(46rem,100%)] max-w-[1240px] items-stretch rounded-full bg-surface-raised p-2 shadow-(--shadow-overlay) min-[1280px]:ml-[calc((100vw-1240px)/2+var(--space-5))] min-[1280px]:mr-auto" (ngSubmit)="search()" role="search">
+    <div class="finder__field grid min-w-0 flex-1 gap-0.5 px-6 py-2 focus-within:rounded-lg focus-within:bg-surface-inset max-sm:px-3">
+      <label class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="q">What</label>
       <input
         id="q"
+        class="m-0 min-w-0 rounded-none border-0 bg-transparent p-0 text-base text-text placeholder:text-text-subtle focus:shadow-none"
         name="q"
         type="search"
         placeholder="Artist, night, or venue"
@@ -63,12 +67,13 @@
       />
     </div>
 
-    <div class="finder__divider" aria-hidden="true"></div>
+    <div class="finder__divider my-2 w-px bg-border" aria-hidden="true"></div>
 
-    <div class="finder__field">
-      <label for="where">Where</label>
+    <div class="finder__field grid min-w-0 flex-1 gap-0.5 px-6 py-2 focus-within:rounded-lg focus-within:bg-surface-inset max-sm:px-3">
+      <label class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="where">Where</label>
       <input
         id="where"
+        class="m-0 min-w-0 rounded-none border-0 bg-transparent p-0 text-base text-text placeholder:text-text-subtle focus:shadow-none"
         name="where"
         list="cities"
         placeholder="Any city"
@@ -88,48 +93,47 @@
       tree as well as off the screen — leaving a submit button holding nothing
       but a decorative icon, and no name at all.
     -->
-    <button class="finder__go" type="submit" aria-label="Search">
+    <button class="finder__go inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-primary px-8 font-semibold text-on-primary [font-family:inherit] hover:bg-primary-hover max-sm:px-4" type="submit" aria-label="Search">
       <ui-icon [icon]="searchIcon" size="sm" />
-      <span class="finder__go-word">Search</span>
+      <span class="finder__go-word max-sm:hidden">Search</span>
     </button>
   </form>
 </section>
 
-<div class="wrap">
+<div class="wrap mx-auto max-w-[1240px] px-6">
   @if (loading()) {
-    <section class="rail-block">
-      <h2 class="rail-block__title"><span class="shimmer shimmer--md"></span></h2>
-      <ul class="rail">
+    <section class="rail-block mt-16">
+      <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]"><span class="shimmer h-[1.4rem] w-48"></span></h2>
+      <ul class="rail m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
         @for (n of [0, 1, 2, 3, 4]; track n) {
-          <li class="rail__item"><span class="shimmer shimmer--card"></span></li>
+          <li class="rail__item min-w-0 snap-start"><span class="shimmer aspect-[3/4]"></span></li>
         }
       </ul>
     </section>
   } @else if (failed()) {
-    <section class="rail-block">
-      <div class="notice" role="alert">
-        <h2>We could not load what's on</h2>
-        <p>It is usually temporary.</p>
-        <button type="button" class="notice__retry" (click)="load()">Try again</button>
+    <section class="rail-block mt-16">
+      <div class="notice rounded-lg border border-border bg-surface-raised p-8" role="alert">
+        <h2 class="mb-1 text-lg">We could not load what's on</h2>
+        <p class="mb-4 text-text-muted">It is usually temporary.</p>
+        <button type="button" class="notice__retry cursor-pointer rounded-md border border-field-border bg-surface px-4 py-2 font-medium text-text [font-family:inherit] hover:bg-surface-hover" (click)="load()">Try again</button>
       </div>
     </section>
   } @else {
     @for (rail of rails(); track rail.title) {
-      <section class="rail-block">
-        <header class="rail-block__head">
-          <h2 class="rail-block__title">{{ rail.title }}</h2>
+      <section class="rail-block mt-16">
+        <header class="rail-block__head mb-4 flex flex-wrap items-baseline gap-4">
+          <h2 class="rail-block__title text-xl font-semibold tracking-[-0.02em]">{{ rail.title }}</h2>
           @if (rail.hint) {
-            <p class="rail-block__hint">{{ rail.hint }}</p>
+            <p class="rail-block__hint text-sm text-text-muted">{{ rail.hint }}</p>
           }
         </header>
 
         <ul
-          class="rail"
-          [class.rail--scrolls]="rail.scrolls"
-          [class.rail--wide]="rail.wide"
+          class="rail m-0 grid list-none p-0"
+          [class]="rail.scrolls ? 'grid-flow-col auto-cols-[minmax(0,15rem)] gap-6 overflow-x-auto pb-3 snap-x snap-mandatory [scrollbar-width:thin] -mx-6 px-6 max-sm:auto-cols-[minmax(0,11rem)] max-sm:gap-4' : rail.wide ? 'grid-cols-[1fr] gap-3' : 'grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4'"
         >
           @for (event of rail.events; track event.slug) {
-            <li class="rail__item">
+            <li class="rail__item min-w-0 snap-start">
               <app-event-card [event]="event" [eager]="$first" [wide]="rail.wide" />
             </li>
           }
@@ -143,14 +147,16 @@
       what tells somebody whether it is worth the tap.
     -->
     @if (cities().length > 0) {
-      <section class="rail-block">
-        <h2 class="rail-block__title">Browse by city</h2>
-        <ul class="chips">
+      <section class="rail-block mt-16">
+        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by city</h2>
+        <ul class="chips m-0 flex list-none flex-wrap gap-3 p-0">
           @for (place of cities(); track place.city + place.country) {
             <li>
-              <button type="button" (click)="browseCity(place.city)">
+              <button
+                class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:border-border-strong hover:bg-surface-hover"
+                type="button" (click)="browseCity(place.city)">
                 {{ place.label }}
-                <span class="chips__count">{{ place.events }}</span>
+                <span class="chips__count text-xs text-text-subtle tabular-nums">{{ place.events }}</span>
               </button>
             </li>
           }
@@ -159,14 +165,16 @@
     }
 
     @if (categories().length > 0) {
-      <section class="rail-block">
-        <h2 class="rail-block__title">Browse by kind of night</h2>
-        <ul class="chips">
+      <section class="rail-block mt-16">
+        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by kind of night</h2>
+        <ul class="chips m-0 flex list-none flex-wrap gap-3 p-0">
           @for (kind of categories(); track kind.category) {
             <li>
-              <button type="button" (click)="browseCategory(kind.category)">
+              <button
+                class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:border-border-strong hover:bg-surface-hover"
+                type="button" (click)="browseCategory(kind.category)">
                 {{ kind.category }}
-                <span class="chips__count">{{ kind.events }}</span>
+                <span class="chips__count text-xs text-text-subtle tabular-nums">{{ kind.events }}</span>
               </button>
             </li>
           }
@@ -174,8 +182,8 @@
       </section>
     }
 
-    <p class="all">
-      <a routerLink="/events">
+    <p class="all mt-16">
+      <a class="inline-flex items-center gap-2 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]" routerLink="/events">
         See everything on sale
         <ui-icon [icon]="arrowIcon" size="sm" />
       </a>

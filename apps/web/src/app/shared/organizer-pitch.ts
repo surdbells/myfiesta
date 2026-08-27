@@ -20,7 +20,6 @@ import { CONSOLE_URL } from '../core/console-url';
 @Component({
   selector: 'app-organizer-pitch',
   templateUrl: './organizer-pitch.html',
-  styleUrl: './organizer-pitch.css',
 })
 export class OrganizerPitch {
   readonly consoleUrl = inject(CONSOLE_URL);

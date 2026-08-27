@@ -7,41 +7,41 @@
   price an organizer sets is the amount they are paid. Most of the market
   deducts theirs.
 -->
-<section class="pitch">
-  <div class="pitch__inner">
+<section class="pitch mt-24 bg-[linear-gradient(135deg,var(--color-brand-800)_0%,var(--color-brand-900)_45%,var(--color-neutral-950)_100%)] px-6 py-24 text-neutral-0">
+  <div class="pitch__inner mx-auto grid max-w-[1240px] grid-cols-[1.1fr_1fr] items-start gap-16 max-[860px]:grid-cols-1 max-[860px]:gap-12">
     <div class="pitch__lead">
-      <p class="pitch__eyebrow">Run events?</p>
-      <h2 class="pitch__title">Set the price. Keep the price.</h2>
-      <p class="pitch__body">
+      <p class="pitch__eyebrow mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-gold-300">Run events?</p>
+      <h2 class="pitch__title text-balance text-[clamp(1.75rem,4vw,2.75rem)] font-bold leading-[1.15] tracking-[-0.02em]">Set the price. Keep the price.</h2>
+      <p class="pitch__body mt-4 max-w-[42ch] text-pretty text-lg leading-[1.6] text-neutral-200">
         Our 8% service charge is added at checkout and paid by the buyer. A $50
         ticket pays you $50 — we never take a cut of what you set, and there is
         nothing to pay to list.
       </p>
 
-      <div class="pitch__actions">
-        <a class="pitch__cta" [href]="consoleUrl + '/register'">Start selling</a>
-        <a class="pitch__secondary" [href]="consoleUrl">I already have an account</a>
+      <div class="pitch__actions mt-8 flex flex-wrap items-center gap-6">
+        <a class="pitch__cta rounded-full bg-gold-400 px-8 py-3 font-semibold text-neutral-950 no-underline hover:bg-gold-300" [href]="consoleUrl + '/register'">Start selling</a>
+        <a class="pitch__secondary text-sm text-neutral-200 underline underline-offset-[3px] hover:text-neutral-0" [href]="consoleUrl">I already have an account</a>
       </div>
     </div>
 
-    <ul class="pitch__points">
-      <li>
-        <h3>Paid out after the night</h3>
-        <p>
+    <ul class="pitch__points m-0 grid list-none gap-6 p-0">
+      <li class="border-l-2 border-[color-mix(in_srgb,var(--color-gold-400)_60%,transparent)] pl-4">
+        <h3 class="mb-1 text-base font-semibold">Paid out after the night</h3>
+        <p class="text-pretty text-sm leading-[1.6] text-neutral-300">
           By Interac or bank transfer, against a statement that shows every
           order, refund and fee behind the number.
         </p>
       </li>
-      <li>
-        <h3>A door that works offline</h3>
-        <p>
+      <li class="border-l-2 border-[color-mix(in_srgb,var(--color-gold-400)_60%,transparent)] pl-4">
+        <h3 class="mb-1 text-base font-semibold">A door that works offline</h3>
+        <p class="text-pretty text-sm leading-[1.6] text-neutral-300">
           Scan tickets from a phone with no signal. Each one admits once, and
           a table of ten admits ten.
         </p>
       </li>
-      <li>
-        <h3>Built for the way nights sell</h3>
-        <p>
+      <li class="border-l-2 border-[color-mix(in_srgb,var(--color-gold-400)_60%,transparent)] pl-4">
+        <h3 class="mb-1 text-base font-semibold">Built for the way nights sell</h3>
+        <p class="text-pretty text-sm leading-[1.6] text-neutral-300">
           Early bird tiers, promoter links that track who actually sold, guest
           lists, comps, and refunds by ticket rather than by amount.
         </p>
