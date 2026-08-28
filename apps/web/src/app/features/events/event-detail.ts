@@ -2,6 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { UiIcon } from '@myfiesta/ui';
+import { BadgeCheck, CalendarDays, Clock, MapPin } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { EventDetail as EventDetailModel, Quote, TicketType } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
@@ -17,7 +19,7 @@ import { Seo } from '../../core/seo';
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, UiIcon],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {
@@ -46,6 +48,11 @@ export class EventDetail {
 
   /** Captured from the link and carried to the order, so a promoter gets credit. */
   private ref: string | null = null;
+
+  protected readonly whenIcon = CalendarDays;
+  protected readonly timeIcon = Clock;
+  protected readonly whereIcon = MapPin;
+  protected readonly verifiedIcon = BadgeCheck;
 
   readonly formatMoney = formatMoney;
 
@@ -145,6 +152,42 @@ export class EventDetail {
       timeStyle: 'short',
       timeZone: event.timezone,
     }).format(new Date(event.starts_at));
+  }
+
+  /** The calendar date alone, spelled out for the details card. */
+  dateLong(): string {
+    const event = this.event();
+    if (!event) return '';
+
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: event.timezone,
+    }).format(new Date(event.starts_at));
+  }
+
+  /** Doors to close, in the venue's zone with the abbreviation that proves it. */
+  timeRange(): string {
+    const event = this.event();
+    if (!event) return '';
+
+    const clock = (iso: string, zoneName: boolean) =>
+      new Intl.DateTimeFormat('en-CA', {
+        hour: 'numeric',
+        minute: '2-digit',
+        ...(zoneName ? { timeZoneName: 'short' } : {}),
+        timeZone: event.timezone,
+      }).format(new Date(iso));
+
+    return event.ends_at
+      ? clock(event.starts_at, false) + ' – ' + clock(event.ends_at, true)
+      : clock(event.starts_at, true);
+  }
+
+  organizerInitial(): string {
+    return (this.event()?.organizer.name.trim().charAt(0) ?? '?').toUpperCase();
   }
 
   stepLabel(type: TicketType, direction: 'more' | 'fewer'): string {

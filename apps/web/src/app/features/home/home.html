@@ -1,50 +1,130 @@
 <!--
-  The hero is one real event, not a stock photograph and a slogan. A ticketing
-  front page has exactly one job — show somebody something they might go to —
-  and the fastest version of that is the next good night, at full size.
-
-  The poster sits beside the words rather than behind them. Blurred behind, it
-  competed with the title it was under — and it always would, because a club
-  flyer has the name of the night printed on it. Beside, it is also shown the
-  way the organizer made it rather than as wallpaper.
+  The hero: the pitch on the left, the proof on the right. The words sell the
+  platform to a stranger; the collage beside them is real events on sale right
+  now, not stock photography — the fastest honest answer to "is anything
+  actually happening here".
 -->
 <section
-  class="hero group relative overflow-hidden text-neutral-0 bg-[radial-gradient(90%_120%_at_85%_0%,color-mix(in_srgb,var(--color-brand-700)_70%,transparent),transparent_62%),linear-gradient(160deg,var(--color-brand-900)_0%,var(--color-neutral-950)_58%)]"
-  [attr.data-empty]="!lead() && !loading() ? '' : null"
+  class="hero bg-surface bg-[radial-gradient(60%_80%_at_90%_0%,color-mix(in_srgb,var(--primary)_8%,transparent),transparent_60%)]"
 >
-  <div class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[1fr_minmax(0,19rem)] items-center gap-16 px-6 pt-12 pb-8 group-data-[empty]:grid-cols-[1fr] group-data-[empty]:pt-16 max-[860px]:grid-cols-[1fr] max-[860px]:pb-6 max-sm:pb-8">
-    <div class="hero__lead min-w-0 max-w-[40rem]">
+  <div
+    class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[1.05fr_1fr] items-center gap-16 px-6 pb-10 pt-14 max-[900px]:grid-cols-1 max-[900px]:gap-10 max-[900px]:pt-10"
+  >
+    <div class="hero__lead min-w-0">
       @if (loading()) {
-        <p class="hero__eyebrow mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-gold-300"><span class="shimmer h-[0.9rem] w-32"></span></p>
+        <p class="hero__eyebrow"><span class="shimmer h-[0.9rem] w-32"></span></p>
         <h1><span class="shimmer h-12 w-[min(30rem,80%)]"></span></h1>
-      } @else if (lead(); as event) {
-        <p class="hero__eyebrow mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-gold-300">{{ event.organizer.name }}</p>
-        <h1 class="hero__title text-balance text-[clamp(2rem,4.6vw,3.25rem)] font-bold leading-[1.15] tracking-[-0.02em]">
-          <a class="text-inherit no-underline focus-visible:outline-neutral-0" [routerLink]="['/', event.slug]">{{ event.title }}</a>
-        </h1>
-        <p class="hero__meta mt-3 text-lg text-neutral-200 max-sm:text-base">
-          {{ when(event) }} <span aria-hidden="true">·</span> {{ event.city }}
+      } @else {
+        <p
+          class="hero__eyebrow w-fit rounded-full bg-primary-soft px-4 py-1.5 text-sm font-semibold text-primary-soft-text"
+        >
+          Tickets for the night out
         </p>
-        <p class="hero__actions mt-6">
-          <a class="hero__cta inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-base font-semibold text-on-primary no-underline transition-[background-color,transform] duration-(--motion-fast) ease-(--motion-ease) hover:-translate-y-px hover:bg-primary-hover motion-reduce:transition-none motion-reduce:hover:translate-y-0" [routerLink]="['/', event.slug]">
-            {{ price(event) }}
+        <h1
+          class="hero__title mt-4 text-balance text-[clamp(2.25rem,4.6vw,3.5rem)] font-bold leading-[1.1] tracking-[-0.02em]"
+        >
+          Your next night out<span class="block text-primary-text">starts here.</span>
+        </h1>
+        <p class="hero__meta mt-4 max-w-[46ch] text-pretty text-lg text-text-muted max-sm:text-base">
+          Concerts, club nights and festivals from organizers across Canada and
+          Nigeria. Find it, tap twice, you're in.
+        </p>
+
+        <p class="hero__actions mt-8 flex flex-wrap items-center gap-4">
+          <a
+            class="hero__cta inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-base font-semibold text-on-primary no-underline transition-[background-color,transform] duration-(--motion-fast) ease-(--motion-ease) hover:-translate-y-px hover:bg-primary-hover motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+            routerLink="/events"
+          >
+            Explore events
             <ui-icon [icon]="arrowIcon" size="sm" />
           </a>
+          <a
+            class="inline-flex items-center gap-2 rounded-full border border-field-border bg-surface-raised px-8 py-3 text-base font-semibold text-text no-underline hover:bg-surface-hover"
+            [href]="consoleUrl + '/register'"
+          >
+            Sell tickets
+          </a>
         </p>
-      } @else {
-        <h1 class="hero__title text-balance text-[clamp(2rem,4.6vw,3.25rem)] font-bold leading-[1.15] tracking-[-0.02em]">Nights out, ticketed properly</h1>
-        <p class="hero__meta mt-3 text-lg text-neutral-200 max-sm:text-base">Nothing on sale right now. Search, or check back shortly.</p>
+
+        <!-- True claims only: verification exists, and cards never touch our
+             servers — checkout happens at Stripe or Paystack. -->
+        <p class="mt-8 flex flex-wrap items-center gap-6 text-sm text-text-muted">
+          <span class="inline-flex items-center gap-2">
+            <ui-icon class="text-primary" [icon]="verifiedIcon" size="sm" />
+            Verified organizers
+          </span>
+          <span class="inline-flex items-center gap-2">
+            <ui-icon class="text-primary" [icon]="secureIcon" size="sm" />
+            Secure checkout
+          </span>
+        </p>
       }
     </div>
 
     @if (lead(); as event) {
-      <a class="hero__poster relative grid aspect-[4/5] place-items-center overflow-hidden rounded-xl border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.06)] shadow-(--shadow-overlay) max-[860px]:hidden" [routerLink]="['/', event.slug]" tabindex="-1" aria-hidden="true">
-        @if (event.poster_url) {
-          <img class="block h-full w-full object-cover" [src]="event.poster_url" alt="" fetchpriority="high" decoding="async" />
-        } @else {
-          <span class="hero__initial text-[6rem] font-bold text-[rgba(255,255,255,0.35)]">{{ event.title.charAt(0) }}</span>
+      <div class="hero__collage grid grid-cols-[1.35fr_1fr] gap-4 max-[900px]:hidden">
+        <a
+          class="group relative row-span-2 block overflow-hidden rounded-2xl no-underline"
+          [routerLink]="['/', event.slug]"
+        >
+          @if (event.poster_url) {
+            <img
+              class="aspect-[3/4] h-full w-full bg-surface-inset object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              [src]="event.poster_url"
+              alt=""
+              fetchpriority="high"
+              decoding="async"
+            />
+          } @else {
+            <div
+              class="aspect-[3/4] h-full w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]"
+              aria-hidden="true"
+            ></div>
+          }
+          <span
+            class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.85)_0%,rgba(5,10,7,0.2)_45%,transparent_65%)]"
+            aria-hidden="true"
+          ></span>
+          <span class="absolute left-4 top-4 rounded-full bg-[rgba(8,12,9,0.72)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-0 backdrop-blur-[4px]">
+            Next up
+          </span>
+          <span class="absolute inset-x-0 bottom-0 grid gap-1 p-5 text-neutral-0">
+            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-gold-300">{{ chipWhen(event) }}</span>
+            <span class="text-xl font-bold leading-[1.2]">{{ event.title }}</span>
+            <span class="text-sm text-neutral-200">{{ event.city }}</span>
+          </span>
+        </a>
+
+        @for (side of sideEvents(); track side.slug) {
+          <a
+            class="group relative block overflow-hidden rounded-xl no-underline"
+            [routerLink]="['/', side.slug]"
+          >
+            @if (side.poster_url) {
+              <img
+                class="aspect-[5/4] w-full bg-surface-inset object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                [src]="side.poster_url"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+            } @else {
+              <div
+                class="aspect-[5/4] w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_45%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-800),var(--color-neutral-950))]"
+                aria-hidden="true"
+              ></div>
+            }
+            <span
+              class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.85)_0%,transparent_60%)]"
+              aria-hidden="true"
+            ></span>
+            <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-4 text-neutral-0">
+              <span class="text-sm font-semibold leading-snug">{{ side.title }}</span>
+              <span class="text-xs text-neutral-200">{{ chipWhen(side) }}</span>
+            </span>
+          </a>
         }
-      </a>
+      </div>
     }
   </div>
 
@@ -53,7 +133,11 @@
     a date range and a price filter on a front page are controls people close
     rather than use.
   -->
-  <form class="finder mx-auto mb-12 flex w-[min(46rem,100%)] max-w-[1240px] items-stretch rounded-full bg-surface-raised p-2 shadow-(--shadow-overlay) min-[1280px]:ml-[calc((100vw-1240px)/2+var(--space-5))] min-[1280px]:mr-auto" (ngSubmit)="search()" role="search">
+  <form
+    class="finder mx-auto mb-12 flex w-[min(46rem,100%)] max-w-[1240px] items-stretch rounded-full border border-border bg-surface-raised p-2 shadow-(--shadow-overlay) min-[1280px]:ml-[calc((100vw-1240px)/2+var(--space-5))] min-[1280px]:mr-auto"
+    (ngSubmit)="search()"
+    role="search"
+  >
     <div class="finder__field grid min-w-0 flex-1 gap-0.5 px-6 py-2 focus-within:rounded-lg focus-within:bg-surface-inset max-sm:px-3">
       <label class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="q">What</label>
       <input
@@ -93,7 +177,11 @@
       tree as well as off the screen — leaving a submit button holding nothing
       but a decorative icon, and no name at all.
     -->
-    <button class="finder__go inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-primary px-8 font-semibold text-on-primary [font-family:inherit] hover:bg-primary-hover max-sm:px-4" type="submit" aria-label="Search">
+    <button
+      class="finder__go inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border-0 bg-primary px-8 font-semibold text-on-primary [font-family:inherit] hover:bg-primary-hover max-sm:px-4"
+      type="submit"
+      aria-label="Search"
+    >
       <ui-icon [icon]="searchIcon" size="sm" />
       <span class="finder__go-word max-sm:hidden">Search</span>
     </button>
@@ -106,7 +194,7 @@
       <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]"><span class="shimmer h-[1.4rem] w-48"></span></h2>
       <ul class="rail m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
         @for (n of [0, 1, 2, 3, 4]; track n) {
-          <li class="rail__item min-w-0 snap-start"><span class="shimmer aspect-[3/4]"></span></li>
+          <li class="rail__item min-w-0"><span class="shimmer aspect-[3/4]"></span></li>
         }
       </ul>
     </section>
@@ -115,7 +203,13 @@
       <div class="notice rounded-lg border border-border bg-surface-raised p-8" role="alert">
         <h2 class="mb-1 text-lg">We could not load what's on</h2>
         <p class="mb-4 text-text-muted">It is usually temporary.</p>
-        <button type="button" class="notice__retry cursor-pointer rounded-md border border-field-border bg-surface px-4 py-2 font-medium text-text [font-family:inherit] hover:bg-surface-hover" (click)="load()">Try again</button>
+        <button
+          type="button"
+          class="notice__retry cursor-pointer rounded-md border border-field-border bg-surface px-4 py-2 font-medium text-text [font-family:inherit] hover:bg-surface-hover"
+          (click)="load()"
+        >
+          Try again
+        </button>
       </div>
     </section>
   } @else {
@@ -146,6 +240,38 @@
       leads to an empty page is worse than not offering it, and the count is
       what tells somebody whether it is worth the tap.
     -->
+    @if (categories().length > 0) {
+      <section class="rail-block mt-16">
+        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by kind of night</h2>
+        <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4 p-0">
+          @for (kind of categories(); track kind.category) {
+            <li>
+              <!-- There are no category photographs, so the tile's ground is
+                   the brand's own gradients, cycled in order — a designed set
+                   rather than a random one. -->
+              <button
+                class="group relative h-28 w-full cursor-pointer overflow-hidden rounded-xl border-0 p-0 text-left [font-family:inherit]"
+                type="button"
+                [style.background]="tileBg($index)"
+                (click)="browseCategory(kind.category)"
+              >
+                <span
+                  class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.45),transparent_55%)] transition-opacity duration-(--motion-fast) ease-(--motion-ease) group-hover:opacity-60"
+                  aria-hidden="true"
+                ></span>
+                <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-4">
+                  <span class="font-semibold text-neutral-0">{{ kind.category }}</span>
+                  <span class="text-xs text-neutral-200 tabular-nums">
+                    {{ kind.events }} {{ kind.events === 1 ? 'event' : 'events' }}
+                  </span>
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
     @if (cities().length > 0) {
       <section class="rail-block mt-16">
         <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by city</h2>
@@ -154,7 +280,9 @@
             <li>
               <button
                 class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:border-border-strong hover:bg-surface-hover"
-                type="button" (click)="browseCity(place.city)">
+                type="button"
+                (click)="browseCity(place.city)"
+              >
                 {{ place.label }}
                 <span class="chips__count text-xs text-text-subtle tabular-nums">{{ place.events }}</span>
               </button>
@@ -164,26 +292,11 @@
       </section>
     }
 
-    @if (categories().length > 0) {
-      <section class="rail-block mt-16">
-        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by kind of night</h2>
-        <ul class="chips m-0 flex list-none flex-wrap gap-3 p-0">
-          @for (kind of categories(); track kind.category) {
-            <li>
-              <button
-                class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:border-border-strong hover:bg-surface-hover"
-                type="button" (click)="browseCategory(kind.category)">
-                {{ kind.category }}
-                <span class="chips__count text-xs text-text-subtle tabular-nums">{{ kind.events }}</span>
-              </button>
-            </li>
-          }
-        </ul>
-      </section>
-    }
-
     <p class="all mt-16">
-      <a class="inline-flex items-center gap-2 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]" routerLink="/events">
+      <a
+        class="inline-flex items-center gap-2 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]"
+        routerLink="/events"
+      >
         See everything on sale
         <ui-icon [icon]="arrowIcon" size="sm" />
       </a>

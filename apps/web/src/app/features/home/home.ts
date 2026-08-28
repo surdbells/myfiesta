@@ -5,7 +5,7 @@ import { Api } from '../../core/api';
 import { CONSOLE_URL } from '../../core/console-url';
 import { Discovery, EventSummary } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
-import { ArrowRight, Search } from 'lucide-angular';
+import { ArrowRight, BadgeCheck, Search, ShieldCheck } from 'lucide-angular';
 import { UiIcon } from '@myfiesta/ui';
 import { EventCard } from '../../shared/event-card';
 import { OrganizerPitch } from '../../shared/organizer-pitch';
@@ -53,6 +53,8 @@ const FILLS_A_ROW = 5;
 })
 export class Home {
   protected readonly arrowIcon = ArrowRight;
+  protected readonly verifiedIcon = BadgeCheck;
+  protected readonly secureIcon = ShieldCheck;
   protected readonly searchIcon = Search;
 
   private readonly api = inject(Api);
@@ -127,6 +129,52 @@ export class Home {
   readonly lead = computed<EventSummary | null>(
     () => this.discovery()?.featured[0] ?? this.discovery()?.upcoming[0] ?? null,
   );
+
+  /** The two events beside the lead in the hero collage. */
+  readonly sideEvents = computed<EventSummary[]>(() => {
+    const discovery = this.discovery();
+    const lead = this.lead();
+    if (!discovery || !lead) return [];
+
+    const pool = [...discovery.featured, ...discovery.upcoming];
+    const seen = new Set([lead.slug]);
+
+    return pool
+      .filter((e) => {
+        if (seen.has(e.slug)) return false;
+        seen.add(e.slug);
+        return true;
+      })
+      .slice(0, 2);
+  });
+
+  /** Short form for the collage chips: "Fri, Aug 28 · 6:00 p.m." */
+  chipWhen(event: EventSummary): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: event.timezone,
+    }).format(new Date(event.starts_at));
+  }
+
+  /**
+   * A ground for a category tile. There are no category photographs, so the
+   * tiles cycle through the brand's own gradients — the same few, in order,
+   * so the row reads as a designed set rather than a random one.
+   */
+  tileBg(index: number): string {
+    const grounds = [
+      'linear-gradient(135deg, var(--color-brand-600), var(--color-brand-900))',
+      'linear-gradient(135deg, var(--color-gold-400), var(--color-brand-700))',
+      'linear-gradient(135deg, var(--color-brand-400), var(--color-brand-800))',
+      'linear-gradient(135deg, var(--color-neutral-800), var(--color-brand-900))',
+    ];
+
+    return grounds[index % grounds.length];
+  }
 
   /**
    * The rows, in the order somebody scans them.
