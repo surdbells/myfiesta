@@ -49,6 +49,13 @@ class OverviewController extends Controller
             'selling' => $this->selling($organization),
             'next_event' => $this->nextEvent($organization),
             'attention' => $this->attention($organization),
+            // The dashboard's depth: a month of daily sales for the chart,
+            // the latest orders, and every upcoming event's progress. The
+            // first two are money and gated like it; the third is ticket
+            // counts with its money field withheld instead of the whole list.
+            'sales_by_day' => $maySeeMoney ? $this->salesByDay($organization) : null,
+            'recent_orders' => $maySeeMoney ? $this->recentOrders($organization) : null,
+            'selling_events' => $this->sellingEvents($organization, $maySeeMoney),
         ]);
     }
 
@@ -151,6 +158,122 @@ class OverviewController extends Controller
                 ->whereIn('status', ['valid', 'checked_in'])
                 ->count(),
         ];
+    }
+
+    /**
+     * A month of days, every one present.
+     *
+     * Zero-filled server-side: a chart client that has to invent the quiet
+     * days will eventually invent them differently from another client, and
+     * a bar chart with missing days silently lies about the pace.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function salesByDay(Organization $organization): array
+    {
+        $currency = $this->currency($organization);
+
+        $rows = Order::query()
+            ->where('organization_id', $organization->id)
+            ->where('status', 'paid')
+            ->where('currency', $currency)
+            ->where('paid_at', '>=', now()->subDays(29)->startOfDay())
+            ->selectRaw('date(paid_at) as day, sum(net_revenue_amount) as net, count(*) as orders')
+            ->groupBy('day')
+            ->get()
+            ->keyBy(fn ($row) => (string) $row->day);
+
+        $days = [];
+
+        for ($i = 29; $i >= 0; $i--) {
+            $day = now()->subDays($i)->toDateString();
+            $row = $rows->get($day);
+
+            $days[] = [
+                'date' => $day,
+                'net' => ['amount' => (int) ($row->net ?? 0), 'currency' => $currency],
+                'orders' => (int) ($row->orders ?? 0),
+            ];
+        }
+
+        return $days;
+    }
+
+    /**
+     * The latest sales, newest first — the pulse line of the dashboard.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function recentOrders(Organization $organization): array
+    {
+        return Order::query()
+            ->where('organization_id', $organization->id)
+            ->where('status', 'paid')
+            ->with('event:id,title')
+            ->orderByDesc('paid_at')
+            ->limit(8)
+            ->get()
+            ->map(fn (Order $order) => [
+                'reference' => $order->reference,
+                'buyer_name' => $order->buyer_name,
+                'event_title' => $order->event?->title ?? '',
+                'total' => ['amount' => (int) $order->total_amount, 'currency' => $order->currency],
+                'paid_at' => $order->paid_at,
+            ])
+            ->all();
+    }
+
+    /**
+     * Every upcoming event's progress, soonest first.
+     *
+     * The list itself is ticket counts and open to every role; the takings
+     * column is withheld per event rather than costing everyone the list.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function sellingEvents(Organization $organization, bool $maySeeMoney): array
+    {
+        $events = Event::query()
+            ->where('organization_id', $organization->id)
+            ->where('status', 'published')
+            ->where('starts_at', '>=', now())
+            ->with(['banner', 'ticketTypes'])
+            ->withCount(['tickets as tickets_issued' => fn ($q) => $q->whereIn('status', ['valid', 'checked_in'])])
+            ->orderBy('starts_at')
+            ->limit(5)
+            ->get();
+
+        $net = $maySeeMoney
+            ? Order::query()
+                ->whereIn('event_id', $events->pluck('id'))
+                ->where('status', 'paid')
+                ->selectRaw('event_id, sum(net_revenue_amount) as net')
+                ->groupBy('event_id')
+                ->pluck('net', 'event_id')
+            : collect();
+
+        return $events->map(function (Event $event) use ($maySeeMoney, $net) {
+            // Null where any type is unlimited — same rule as the next-event
+            // panel, for the same reason: a percentage against a capacity
+            // that does not exist is a number somebody would plan against.
+            $capacity = $event->ticketTypes->contains(fn ($t) => $t->quantity_available === null)
+                ? null
+                : (int) $event->ticketTypes->sum('quantity_available');
+
+            return [
+                'id' => $event->id,
+                'title' => $event->title,
+                'starts_at' => $event->starts_at,
+                'timezone' => $event->timezone,
+                'city' => $event->city,
+                'poster_url' => $event->banner?->renditionUrl('thumb'),
+                'tickets_issued' => (int) $event->tickets_issued,
+                'capacity' => $capacity,
+                'net' => $maySeeMoney
+                    ? ['amount' => (int) ($net[$event->id] ?? 0), 'currency' => $event->currency]
+                    : null,
+            ];
+        })->all();
     }
 
     /**

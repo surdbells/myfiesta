@@ -8,23 +8,29 @@ import {
   UiIcon,
   UiSkeleton,
 } from '@myfiesta/ui';
-import { PencilLine, Plus, Ticket, TrendingUp, Wallet } from 'lucide-angular';
+import { PencilLine, Plus, ReceiptText, Ticket, TrendingUp, Wallet } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { Money, NextEvent, Overview } from '../../core/api.types';
+import { Money, Overview } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
+
+/** One bar of the sales chart, in viewBox units. */
+interface Bar {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+}
 
 /**
  * The screen the console opens on.
  *
- * It opened on a list of events, which answers "what have I got on" and none
- * of the questions somebody actually signs in with: am I owed anything, is the
- * next one selling, and have I forgotten something.
- *
- * So the order here is deliberate and is not the order of a report. What needs
- * doing comes first, then the money, then the next event. An organizer whose
- * event is published with nothing on sale is losing money every hour it stays
- * that way, and that belongs above the takings rather than below them.
+ * The order here is deliberate and is not the order of a report. What needs
+ * doing comes first, then the money, then the pace — a month of sales and
+ * the latest orders side by side — then every upcoming event's progress. An
+ * organizer whose event is published with nothing on sale is losing money
+ * every hour it stays that way, and that belongs above the takings.
  */
 @Component({
   selector: 'app-dashboard',
@@ -37,6 +43,7 @@ export class Dashboard {
   protected readonly soldIcon = TrendingUp;
   protected readonly ticketIcon = Ticket;
   protected readonly draftIcon = PencilLine;
+  protected readonly orderIcon = ReceiptText;
 
   private readonly api = inject(Api);
   readonly session = inject(SessionStore);
@@ -44,6 +51,10 @@ export class Dashboard {
   readonly overview = signal<Overview | null>(null);
   readonly loading = signal(true);
   readonly error = signal(false);
+
+  /** The chart's drawing space. Wider than tall: it is a pulse, not a poster. */
+  readonly chartWidth = 600;
+  readonly chartHeight = 120;
 
   constructor() {
     this.load();
@@ -81,39 +92,99 @@ export class Dashboard {
     return name ? `${time}, ${name}` : time;
   });
 
+  /**
+   * The month's bars, scaled to the best day.
+   *
+   * A quiet day keeps a 2-unit stub rather than vanishing: thirty bars with
+   * gaps where nothing sold reads as a broken chart, and the stub is the
+   * honest height of zero once the scale is drawn.
+   */
+  readonly bars = computed<Bar[]>(() => {
+    const series = this.overview()?.sales_by_day ?? [];
+    if (series.length === 0) return [];
+
+    const max = Math.max(...series.map((d) => d.net.amount), 1);
+    const slot = this.chartWidth / series.length;
+    const width = Math.max(slot - 4, 2);
+
+    return series.map((day, i) => {
+      const height = day.net.amount === 0 ? 2 : Math.max((day.net.amount / max) * this.chartHeight, 3);
+
+      return {
+        x: i * slot + (slot - width) / 2,
+        y: this.chartHeight - height,
+        width,
+        height,
+        label: `${this.chartDay(day.date)} — ${formatMoney(day.net)} · ${day.orders} ${day.orders === 1 ? 'order' : 'orders'}`,
+      };
+    });
+  });
+
+  readonly monthTotal = computed<Money | null>(() => {
+    const series = this.overview()?.sales_by_day;
+    if (!series || series.length === 0) return null;
+
+    return {
+      amount: series.reduce((sum, day) => sum + day.net.amount, 0),
+      currency: series[0].net.currency,
+    };
+  });
+
+  readonly chartRange = computed(() => {
+    const series = this.overview()?.sales_by_day ?? [];
+    if (series.length === 0) return null;
+
+    return {
+      from: this.chartDay(series[0].date),
+      to: this.chartDay(series[series.length - 1].date),
+    };
+  });
+
   cash(money: Money): string {
     return formatMoney(money);
   }
 
-  when(event: NextEvent): string {
+  initial(name: string): string {
+    return name.trim().charAt(0).toUpperCase() || '?';
+  }
+
+  /** "2h ago" — the pulse reads at a glance or not at all. */
+  ago(iso: string): string {
+    const minutes = Math.max(Math.round((Date.now() - new Date(iso).getTime()) / 60_000), 0);
+
+    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h ago`;
+
+    return `${Math.round(minutes / (60 * 24))}d ago`;
+  }
+
+  sellWhen(startsAt: string, timezone: string): string {
     return new Intl.DateTimeFormat('en-CA', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
       hour: 'numeric',
       minute: '2-digit',
-      // The event's own zone. An organizer running Toronto and Lagos nights
-      // needs each one to say the time it starts where it starts.
-      timeZone: event.timezone,
-    }).format(new Date(event.starts_at));
+      // The venue's zone, never the reader's.
+      timeZone: timezone,
+    }).format(new Date(startsAt));
   }
 
-  /**
-   * Days until the doors.
-   *
-   * Rounded up, and never below zero. An event starting in six hours is "1
-   * day", not "0" — zero reads as cancelled.
-   */
-  daysAway(event: NextEvent): number {
-    const ms = new Date(event.starts_at).getTime() - Date.now();
-
-    return Math.max(1, Math.ceil(ms / 86_400_000));
+  daysAway(startsAt: string): number {
+    return Math.max(Math.ceil((new Date(startsAt).getTime() - Date.now()) / 86_400_000), 0);
   }
 
-  /** Capped at 100: comps and guest lists can push issued past capacity. */
-  soldPercent(event: NextEvent): number {
-    if (!event.capacity) return 0;
+  soldPercent(issued: number, capacity: number | null): number | null {
+    if (capacity === null || capacity === 0) return null;
 
-    return Math.min(100, Math.round((event.tickets_issued / event.capacity) * 100));
+    return Math.min(Math.round((issued / capacity) * 100), 100);
+  }
+
+  private chartDay(date: string): string {
+    return new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' }).format(
+      // Parsed as a local date, not UTC midnight — 'YYYY-MM-DD' alone would
+      // shift a day west of Greenwich.
+      new Date(date + 'T12:00:00'),
+    );
   }
 }

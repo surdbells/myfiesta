@@ -13,7 +13,7 @@
 @if (loading()) {
   <div class="stats grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
     @for (n of [0, 1, 2, 3]; track n) {
-      <div class="stat min-h-[6.5rem] content-center rounded-lg border border-border bg-surface-raised p-6">
+      <div class="stat min-h-[6.5rem] content-center rounded-xl border border-border bg-surface-raised p-6">
         <ui-skeleton height="2rem" />
       </div>
     }
@@ -39,15 +39,8 @@
 
       <ul class="todo__list m-0 grid list-none gap-2 p-0">
         @for (item of data.attention; track item.event_id + item.reason) {
-          <!--
-            The severity is a stripe down the side rather than a coloured
-            background: a wall of red panels stops meaning urgent after the
-            second one. The stripe colour is one bound class rather than two
-            stacked ones — two same-property utilities fight, and which wins
-            is decided by the stylesheet, not the template.
-          -->
           <li
-            class="todo__item flex items-center justify-between gap-4 rounded-lg border border-border border-l-[3px] bg-surface-raised p-4 max-sm:flex-col max-sm:items-stretch"
+            class="todo__item flex items-center justify-between gap-4 rounded-xl border border-border border-l-[3px] bg-surface-raised p-4 max-sm:flex-col max-sm:items-stretch"
             [class]="item.severity === 'danger' ? 'border-l-danger' : 'border-l-warning'"
           >
             <div>
@@ -66,6 +59,7 @@
     </section>
   }
 
+  <!-- The figures, each behind its glyph. -->
   <div class="stats grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
     @if (data.money; as money) {
       <!--
@@ -74,98 +68,209 @@
         as the first of four.
       -->
       <div
-        class="stat stat--lead grid content-start gap-1 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-6"
+        class="stat stat--lead grid content-start gap-3 rounded-xl border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-6"
       >
-        <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="walletIcon" size="sm" />Owed to you</p>
-        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(money.balance) }}</p>
-        <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
+        <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary text-on-primary">
+          <ui-icon [icon]="walletIcon" size="sm" />
+        </span>
+        <div class="grid gap-1">
+          <p class="stat__label m-0 text-sm text-text-muted">Owed to you</p>
+          <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(money.balance) }}</p>
+          <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
+        </div>
       </div>
 
-      <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
-        <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="soldIcon" size="sm" />Sold, last 7 days</p>
-        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(money.sold_7d) }}</p>
-        <p class="stat__note m-0 text-xs text-text-subtle">{{ money.orders_7d }} orders</p>
+      <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+        <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
+          <ui-icon [icon]="soldIcon" size="sm" />
+        </span>
+        <div class="grid gap-1">
+          <p class="stat__label m-0 text-sm text-text-muted">Sold, last 7 days</p>
+          <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(money.sold_7d) }}</p>
+          <p class="stat__note m-0 text-xs text-text-subtle">{{ money.orders_7d }} {{ money.orders_7d === 1 ? 'order' : 'orders' }}</p>
+        </div>
       </div>
     }
 
-    <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
-      <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="ticketIcon" size="sm" />Tickets out</p>
-      <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.tickets_upcoming }}</p>
-      <p class="stat__note m-0 text-xs text-text-subtle">Across {{ data.selling.upcoming_events }} upcoming events</p>
+    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+      <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
+        <ui-icon [icon]="ticketIcon" size="sm" />
+      </span>
+      <div class="grid gap-1">
+        <p class="stat__label m-0 text-sm text-text-muted">Tickets out</p>
+        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.tickets_upcoming }}</p>
+        <p class="stat__note m-0 text-xs text-text-subtle">Across {{ data.selling.upcoming_events }} upcoming events</p>
+      </div>
     </div>
 
-    <div class="stat grid content-start gap-1 rounded-lg border border-border bg-surface-raised p-6">
-      <p class="stat__label m-0 flex items-center gap-2 text-sm text-text-muted"><ui-icon [icon]="draftIcon" size="sm" />Drafts</p>
-      <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.draft_events }}</p>
-      <p class="stat__note m-0 text-xs text-text-subtle">Not visible to anybody</p>
+    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+      <span class="grid h-10 w-10 place-items-center rounded-lg bg-surface-inset text-text-muted">
+        <ui-icon [icon]="draftIcon" size="sm" />
+      </span>
+      <div class="grid gap-1">
+        <p class="stat__label m-0 text-sm text-text-muted">Drafts</p>
+        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.draft_events }}</p>
+        <p class="stat__note m-0 text-xs text-text-subtle">Not visible to anybody</p>
+      </div>
     </div>
   </div>
 
-  @if (data.next_event; as next) {
-    <section class="next mt-8 rounded-lg border border-border bg-surface-raised p-6">
-      <header class="next__head flex items-start justify-between gap-6 max-sm:flex-col">
-        <div>
-          <p class="next__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Next up</p>
-          <h2 class="next__title text-xl font-semibold tracking-[-0.02em]">
-            <a class="text-inherit no-underline hover:text-primary-text" [routerLink]="['/events', next.id]">{{ next.title }}</a>
-          </h2>
-          <p class="next__when mt-1 text-sm text-text-muted">{{ when(next) }} · {{ next.city }}</p>
-        </div>
+  <!-- The pace: a month of sales beside the latest orders. Money, so absent
+       for the roles the endpoint answers without it. -->
+  @if (data.sales_by_day && data.recent_orders) {
+    <div class="mt-6 grid grid-cols-[3fr_2fr] items-start gap-4 max-[900px]:grid-cols-1">
+      <section class="chart rounded-xl border border-border bg-surface-raised p-6" aria-label="Sales, last 30 days">
+        <header class="flex flex-wrap items-baseline gap-3">
+          <h2 class="text-lg">Sales</h2>
+          <p class="text-sm text-text-muted">Last 30 days</p>
+          @if (monthTotal(); as total) {
+            <p class="ml-auto font-semibold text-primary-text tabular-nums">{{ cash(total) }}</p>
+          }
+        </header>
 
-        <!--
-          The countdown, which is the number an organizer actually plans
-          against. Large and set apart: it is the second thing the eye lands
-          on after the name, and it is the reason the rest of this panel is
-          urgent or is not.
-        -->
-        <p class="next__countdown m-0 grid shrink-0 justify-items-center rounded-lg bg-surface-inset px-4 py-2">
-          <span class="next__days text-2xl font-bold leading-none tabular-nums">{{ daysAway(next) }}</span>
-          <span class="next__days-word text-xs uppercase tracking-[0.08em] text-text-subtle">{{ daysAway(next) === 1 ? 'day' : 'days' }}</span>
-        </p>
+        <svg
+          class="mt-4 block w-full"
+          [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="Daily net sales for the last 30 days"
+        >
+          @for (bar of bars(); track bar.x) {
+            <rect
+              [attr.x]="bar.x"
+              [attr.y]="bar.y"
+              [attr.width]="bar.width"
+              [attr.height]="bar.height"
+              rx="1.5"
+              [attr.fill]="bar.height <= 2 ? 'var(--surface-inset)' : 'var(--primary)'"
+            >
+              <title>{{ bar.label }}</title>
+            </rect>
+          }
+        </svg>
+
+        @if (chartRange(); as range) {
+          <div class="mt-2 flex justify-between text-xs text-text-subtle">
+            <span>{{ range.from }}</span>
+            <span>{{ range.to }}</span>
+          </div>
+        }
+      </section>
+
+      <section class="orders rounded-xl border border-border bg-surface-raised p-6" aria-label="Recent orders">
+        <header class="flex items-baseline justify-between gap-3">
+          <h2 class="text-lg">Recent orders</h2>
+          <span class="grid h-8 w-8 place-items-center rounded-lg bg-surface-inset text-text-muted">
+            <ui-icon [icon]="orderIcon" size="sm" />
+          </span>
+        </header>
+
+        @if (data.recent_orders.length === 0) {
+          <p class="mt-3 text-sm text-text-muted">Nothing has sold yet. The first order lands here.</p>
+        } @else {
+          <ul class="m-0 mt-4 grid list-none gap-4 p-0">
+            @for (order of data.recent_orders; track order.reference) {
+              <li class="flex items-center gap-3">
+                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary-soft-text" aria-hidden="true">
+                  {{ initial(order.buyer_name) }}
+                </span>
+                <span class="grid min-w-0 flex-1 gap-0.5">
+                  <span class="truncate text-sm font-medium">{{ order.buyer_name }}</span>
+                  <span class="truncate text-xs text-text-muted">{{ order.event_title }}</span>
+                </span>
+                <span class="grid shrink-0 justify-items-end gap-0.5">
+                  <span class="text-sm font-semibold tabular-nums">{{ cash(order.total) }}</span>
+                  <span class="text-xs text-text-subtle">{{ ago(order.paid_at) }}</span>
+                </span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+  }
+
+  <!-- Every upcoming event's progress, soonest first. -->
+  @if (data.selling_events.length > 0) {
+    <section class="selling mt-6 rounded-xl border border-border bg-surface-raised p-6" aria-label="Selling now">
+      <header class="flex items-baseline justify-between gap-3">
+        <h2 class="text-lg">Selling now</h2>
+        <a class="text-sm font-medium text-primary-text no-underline hover:underline" routerLink="/events">All events</a>
       </header>
 
-      <div class="next__sales mt-6">
-        <p class="next__sold mb-2 text-sm text-text-muted">
-          <strong class="text-lg text-text tabular-nums">{{ next.tickets_issued }}</strong>
-          @if (next.capacity !== null) {
-            of {{ next.capacity }} tickets out
-          } @else {
-            tickets out
-          }
-        </p>
+      <ul class="m-0 mt-4 grid list-none gap-2 p-0">
+        @for (event of data.selling_events; track event.id) {
+          <li>
+            <a
+              class="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-4 rounded-lg p-2 text-inherit no-underline hover:bg-surface-hover max-sm:grid-cols-[3.5rem_minmax(0,1fr)]"
+              [routerLink]="['/events', event.id]"
+            >
+              @if (event.poster_url) {
+                <img class="aspect-square w-full rounded-md bg-surface-inset object-cover" [src]="event.poster_url" alt="" loading="lazy" />
+              } @else {
+                <span
+                  class="grid aspect-square w-full place-items-center rounded-md bg-[linear-gradient(155deg,var(--color-brand-700),var(--color-brand-900))] text-lg font-bold text-[rgba(255,255,255,0.9)]"
+                  aria-hidden="true"
+                  >{{ initial(event.title) }}</span
+                >
+              }
 
-        @if (next.capacity !== null && next.capacity > 0) {
-          <!--
-            A bar only where there is a capacity to measure against. With an
-            unlimited ticket type on the event there is no denominator, and a
-            bar drawn against a made-up one is a figure somebody plans a door
-            around.
-          -->
-          <div
-            class="meter h-2 overflow-hidden rounded-full bg-surface-inset"
-            role="progressbar"
-            [attr.aria-valuenow]="soldPercent(next)"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            [attr.aria-label]="'Tickets sold for ' + next.title"
-          >
-            <span
-              class="meter__fill block h-full rounded-full bg-primary transition-[width] duration-(--motion-slow) ease-(--motion-ease) motion-reduce:transition-none"
-              [style.width.%]="soldPercent(next)"
-            ></span>
-          </div>
-          <p class="next__percent mt-2 text-xs text-text-subtle tabular-nums">{{ soldPercent(next) }}% sold</p>
+              <span class="grid min-w-0 gap-1">
+                <span class="truncate font-medium">{{ event.title }}</span>
+                <span class="text-sm text-text-muted">
+                  {{ sellWhen(event.starts_at, event.timezone) }} · {{ event.city }}
+                </span>
+                @if (soldPercent(event.tickets_issued, event.capacity) !== null) {
+                  <span
+                    class="meter block h-1.5 max-w-[16rem] overflow-hidden rounded-full bg-surface-inset"
+                    role="progressbar"
+                    [attr.aria-valuenow]="soldPercent(event.tickets_issued, event.capacity)"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    [attr.aria-label]="'Tickets sold for ' + event.title"
+                  >
+                    <span
+                      class="block h-full rounded-full bg-primary"
+                      [style.width.%]="soldPercent(event.tickets_issued, event.capacity)"
+                    ></span>
+                  </span>
+                }
+                <span class="text-xs text-text-subtle tabular-nums">
+                  {{ event.tickets_issued }}
+                  @if (event.capacity !== null) {
+                    of {{ event.capacity }}
+                  }
+                  tickets out
+                </span>
+              </span>
+
+              <span class="grid justify-items-end gap-1 max-sm:hidden">
+                @if (event.net; as net) {
+                  <span class="font-semibold text-primary-text tabular-nums">{{ cash(net) }}</span>
+                }
+                <span class="rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted tabular-nums">
+                  @if (daysAway(event.starts_at) === 0) {
+                    Today
+                  } @else {
+                    in {{ daysAway(event.starts_at) }}{{ daysAway(event.starts_at) === 1 ? ' day' : ' days' }}
+                  }
+                </span>
+              </span>
+            </a>
+          </li>
         }
-      </div>
+      </ul>
     </section>
   } @else {
-    <ui-empty
-      title="Nothing coming up"
-      hint="Create an event, add a ticket type, and share the link."
-    >
-      @if (session.canEditEvents()) {
-        <a uiButton routerLink="/events/new">New event</a>
-      }
-    </ui-empty>
+    <div class="mt-6">
+      <ui-empty
+        title="Nothing coming up"
+        hint="Create an event, add a ticket type, and share the link."
+      >
+        @if (session.canEditEvents()) {
+          <a uiButton routerLink="/events/new">New event</a>
+        }
+      </ui-empty>
+    </div>
   }
 }

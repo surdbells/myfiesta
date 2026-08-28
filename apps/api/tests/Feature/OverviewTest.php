@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Enums\TokenAbility;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Models\Order;
 use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -160,5 +161,100 @@ class OverviewTest extends TestCase
         $this->assertNull($overview['next_event']);
         $this->assertSame(0, $overview['selling']['upcoming_events']);
         $this->assertSame([], $overview['attention']);
+    }
+
+    /** A paid order on a given day, for the series and the pulse. */
+    private function paidOrder(Event $event, int $net, \DateTimeInterface $paidAt): Order
+    {
+        return Order::create([
+            'organization_id' => $this->org->id,
+            'event_id' => $event->id,
+            'reference' => strtoupper(Str::random(10)),
+            'buyer_email' => 'ada@example.com',
+            'buyer_name' => 'Ada Okafor',
+            'currency' => 'CAD',
+            'subtotal_amount' => $net,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+            'net_revenue_amount' => $net,
+            'service_charge_amount' => 0,
+            'total_amount' => $net,
+            'gateway' => 'stripe',
+            'gateway_reference' => 'pi_'.Str::random(6),
+            'status' => 'paid',
+            'paid_at' => $paidAt,
+        ]);
+    }
+
+    public function test_the_sales_series_is_a_full_month_with_the_quiet_days_at_zero(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $event = $this->event();
+
+        $this->paidOrder($event, 6000, now());
+        $this->paidOrder($event, 4000, now()->subDays(3));
+
+        $series = $this->overview()['sales_by_day'];
+
+        // Zero-filled server-side: a chart with missing days lies about pace.
+        $this->assertCount(30, $series);
+        $this->assertSame(now()->toDateString(), $series[29]['date']);
+        $this->assertSame(6000, $series[29]['net']['amount']);
+        $this->assertSame(4000, $series[26]['net']['amount']);
+        $this->assertSame(0, $series[25]['net']['amount']);
+        $this->assertSame(1, $series[29]['orders']);
+    }
+
+    public function test_recent_orders_run_newest_first(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $event = $this->event(['title' => 'A Night']);
+
+        $this->paidOrder($event, 3000, now()->subHours(5));
+        $newest = $this->paidOrder($event, 5000, now()->subHour());
+
+        $orders = $this->overview()['recent_orders'];
+
+        $this->assertCount(2, $orders);
+        $this->assertSame($newest->reference, $orders[0]['reference']);
+        $this->assertSame('Ada Okafor', $orders[0]['buyer_name']);
+        $this->assertSame('A Night', $orders[0]['event_title']);
+        $this->assertSame(5000, $orders[0]['total']['amount']);
+    }
+
+    public function test_door_staff_get_the_progress_list_but_none_of_the_new_money(): void
+    {
+        $this->signedInAs(Role::Door);
+        $event = $this->event();
+
+        TicketType::create([
+            'event_id' => $event->id, 'name' => 'General', 'price_amount' => 5000,
+            'status' => 'on_sale', 'quantity_available' => 40,
+        ]);
+
+        $overview = $this->overview();
+
+        // The series and the pulse are money and gated like it; the progress
+        // list is ticket counts, with its takings column withheld instead of
+        // the whole list.
+        $this->assertNull($overview['sales_by_day']);
+        $this->assertNull($overview['recent_orders']);
+        $this->assertCount(1, $overview['selling_events']);
+        $this->assertSame($event->id, $overview['selling_events'][0]['id']);
+        $this->assertSame(40, $overview['selling_events'][0]['capacity']);
+        $this->assertNull($overview['selling_events'][0]['net']);
+    }
+
+    public function test_the_progress_list_carries_each_events_takings_for_an_owner(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $event = $this->event();
+
+        $this->paidOrder($event, 6000, now());
+
+        $row = $this->overview()['selling_events'][0];
+
+        $this->assertSame(6000, $row['net']['amount']);
+        $this->assertSame('CAD', $row['net']['currency']);
     }
 }

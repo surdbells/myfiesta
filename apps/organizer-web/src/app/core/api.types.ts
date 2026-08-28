@@ -363,6 +363,28 @@ export interface Overview {
   };
   next_event: NextEvent | null;
   attention: AttentionItem[];
+  /** A month of days, zero-filled — null where this person may not see money. */
+  sales_by_day: { date: string; net: Money; orders: number }[] | null;
+  /** Newest first — null where this person may not see money. */
+  recent_orders: {
+    reference: string;
+    buyer_name: string;
+    event_title: string;
+    total: Money;
+    paid_at: string;
+  }[] | null;
+  /** Every upcoming event's progress; net is null per row without money. */
+  selling_events: {
+    id: string;
+    title: string;
+    starts_at: string;
+    timezone: string;
+    city: string;
+    poster_url: string | null;
+    tickets_issued: number;
+    capacity: number | null;
+    net: Money | null;
+  }[];
 }
 
 /**
