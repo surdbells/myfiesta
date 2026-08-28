@@ -5,7 +5,7 @@ import { Api } from '../../core/api';
 import { CONSOLE_URL } from '../../core/console-url';
 import { Discovery, EventSummary } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
-import { ArrowLeft, ArrowRight, BadgeCheck, Search, ShieldCheck } from 'lucide-angular';
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, MapPin, Search, ShieldCheck } from 'lucide-angular';
 import { UiIcon } from '@myfiesta/ui';
 import { EventCard } from '../../shared/event-card';
 import { OrganizerPitch } from '../../shared/organizer-pitch';
@@ -54,6 +54,8 @@ const FILLS_A_ROW = 5;
 export class Home {
   protected readonly arrowIcon = ArrowRight;
   protected readonly backIcon = ArrowLeft;
+  protected readonly whereIcon = MapPin;
+  protected readonly whenIcon = CalendarDays;
   protected readonly verifiedIcon = BadgeCheck;
   protected readonly secureIcon = ShieldCheck;
   protected readonly searchIcon = Search;
