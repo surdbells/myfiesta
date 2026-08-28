@@ -129,9 +129,9 @@
   </div>
 
   <!--
-    Two fields, not five. What and where is the whole question at this stage;
-    a date range and a price filter on a front page are controls people close
-    rather than use.
+    Three fields, not five: what, where, when. A price filter on a front page
+    is a control people close rather than use — it lives on the listing, with
+    the rest of the filters.
   -->
   <form
     class="finder mx-auto mb-12 flex w-[min(46rem,100%)] max-w-[1240px] items-stretch rounded-full border border-border bg-surface-raised p-2 shadow-(--shadow-overlay) min-[1280px]:ml-[calc((100vw-1240px)/2+var(--space-5))] min-[1280px]:mr-auto"
@@ -169,6 +169,20 @@
           <option [value]="name"></option>
         }
       </datalist>
+    </div>
+
+    <div class="finder__divider my-2 w-px bg-border max-[860px]:hidden" aria-hidden="true"></div>
+
+    <div class="finder__field grid min-w-0 flex-1 gap-0.5 px-6 py-2 focus-within:rounded-lg focus-within:bg-surface-inset max-[860px]:hidden">
+      <label class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="on">When</label>
+      <input
+        id="on"
+        class="m-0 min-w-0 rounded-none border-0 bg-transparent p-0 text-base text-text placeholder:text-text-subtle focus:shadow-none"
+        name="on"
+        type="date"
+        [ngModel]="on()"
+        (ngModelChange)="on.set($event)"
+      />
     </div>
 
     <!--
@@ -215,14 +229,35 @@
   } @else {
     @for (rail of rails(); track rail.title) {
       <section class="rail-block mt-16">
-        <header class="rail-block__head mb-4 flex flex-wrap items-baseline gap-4">
+        <header class="rail-block__head mb-4 flex flex-wrap items-center gap-4">
           <h2 class="rail-block__title text-xl font-semibold tracking-[-0.02em]">{{ rail.title }}</h2>
           @if (rail.hint) {
             <p class="rail-block__hint text-sm text-text-muted">{{ rail.hint }}</p>
           }
+          @if (rail.scrolls) {
+            <span class="ml-auto flex gap-2">
+              <button
+                class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover"
+                type="button"
+                aria-label="Scroll back"
+                (click)="nudge(railEl, -1)"
+              >
+                <ui-icon [icon]="backIcon" size="sm" />
+              </button>
+              <button
+                class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover"
+                type="button"
+                aria-label="Scroll forward"
+                (click)="nudge(railEl, 1)"
+              >
+                <ui-icon [icon]="arrowIcon" size="sm" />
+              </button>
+            </span>
+          }
         </header>
 
         <ul
+          #railEl
           class="rail m-0 grid list-none p-0"
           [class]="rail.scrolls ? 'grid-flow-col auto-cols-[minmax(0,15rem)] gap-6 overflow-x-auto pb-3 snap-x snap-mandatory [scrollbar-width:thin] -mx-6 px-6 max-sm:auto-cols-[minmax(0,11rem)] max-sm:gap-4' : rail.wide ? 'grid-cols-[1fr] gap-3' : 'grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4'"
         >
@@ -242,26 +277,30 @@
     -->
     @if (categories().length > 0) {
       <section class="rail-block mt-16">
-        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by kind of night</h2>
-        <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4 p-0">
+        <header class="mb-4 flex flex-wrap items-baseline justify-between gap-4">
+          <h2 class="rail-block__title text-xl font-semibold tracking-[-0.02em]">Explore by category</h2>
+          <a class="text-sm font-medium text-primary-text no-underline hover:underline" routerLink="/events">View all</a>
+        </header>
+        <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-5 p-0">
           @for (kind of categories(); track kind.category) {
             <li>
-              <!-- There are no category photographs, so the tile's ground is
-                   the brand's own gradients, cycled in order — a designed set
-                   rather than a random one. -->
+              <!-- There are no category photographs, so the tile ground is
+                   the brand gradients, cycled in order — a designed set
+                   rather than a random one. The words sit under the picture,
+                   where the reference puts them. -->
               <button
-                class="group relative h-28 w-full cursor-pointer overflow-hidden rounded-xl border-0 p-0 text-left [font-family:inherit]"
+                class="group grid w-full cursor-pointer justify-items-start gap-3 border-0 bg-transparent p-0 text-left [font-family:inherit]"
                 type="button"
-                [style.background]="tileBg($index)"
                 (click)="browseCategory(kind.category)"
               >
                 <span
-                  class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.45),transparent_55%)] transition-opacity duration-(--motion-fast) ease-(--motion-ease) group-hover:opacity-60"
+                  class="block h-28 w-full overflow-hidden rounded-xl transition-transform duration-(--motion-fast) ease-(--motion-ease) group-hover:-translate-y-0.5"
+                  [style.background]="tileBg($index)"
                   aria-hidden="true"
                 ></span>
-                <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-4">
-                  <span class="font-semibold text-neutral-0">{{ kind.category }}</span>
-                  <span class="text-xs text-neutral-200 tabular-nums">
+                <span class="grid gap-0.5">
+                  <span class="font-semibold text-text">{{ kind.category }}</span>
+                  <span class="text-sm text-text-muted tabular-nums">
                     {{ kind.events }} {{ kind.events === 1 ? 'event' : 'events' }}
                   </span>
                 </span>

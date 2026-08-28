@@ -5,7 +5,7 @@ import { Api } from '../../core/api';
 import { CONSOLE_URL } from '../../core/console-url';
 import { Discovery, EventSummary } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
-import { ArrowRight, BadgeCheck, Search, ShieldCheck } from 'lucide-angular';
+import { ArrowLeft, ArrowRight, BadgeCheck, Search, ShieldCheck } from 'lucide-angular';
 import { UiIcon } from '@myfiesta/ui';
 import { EventCard } from '../../shared/event-card';
 import { OrganizerPitch } from '../../shared/organizer-pitch';
@@ -53,6 +53,7 @@ const FILLS_A_ROW = 5;
 })
 export class Home {
   protected readonly arrowIcon = ArrowRight;
+  protected readonly backIcon = ArrowLeft;
   protected readonly verifiedIcon = BadgeCheck;
   protected readonly secureIcon = ShieldCheck;
   protected readonly searchIcon = Search;
@@ -68,6 +69,7 @@ export class Home {
 
   readonly query = signal('');
   readonly city = signal('');
+  readonly on = signal('');
 
   /**
    * Cities, with the country added only where the name alone is ambiguous.
@@ -256,8 +258,17 @@ export class Home {
 
     if (this.query().trim()) params['q'] = this.query().trim();
     if (this.city().trim()) params['city'] = this.city().trim();
+    if (this.on()) {
+      params['date'] = 'date';
+      params['on'] = this.on();
+    }
 
     void this.router.navigate(['/events'], { queryParams: params });
+  }
+
+  /** Scroll a rail by most of a viewport, in either direction. */
+  nudge(rail: HTMLElement, direction: -1 | 1): void {
+    rail.scrollBy({ left: direction * rail.clientWidth * 0.8, behavior: 'smooth' });
   }
 
   browseCity(city: string): void {

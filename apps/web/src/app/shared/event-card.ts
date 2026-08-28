@@ -1,63 +1,137 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { UiIcon } from '@myfiesta/ui';
+import { CalendarDays, Heart, MapPin } from 'lucide-angular';
 import { EventSummary } from '../core/api.types';
+import { Saves } from '../core/saves';
 import { formatMoney } from '../core/money';
 
 /**
- * One event, as a card.
+ * One event, as a card — and, wide, as a listing row.
  *
- * The poster does the selling. Everything else on this card is there to answer
- * the three questions somebody has while scanning — when, where, how much —
- * and they are answered in that order because that is the order they decide
- * in. A card that leads with the price is a card for somebody already sold.
- *
- * The whole card is one link. Not the title alone: on a phone the title is a
- * short line in a tall card and the rest of it looks tappable because it *is*
- * a card, so making only the text work reads as broken rather than as design.
+ * The poster does the selling; the chips on it answer category and date
+ * without leaving the picture. The whole card is one link, and the heart is
+ * the one control inside it that is not — it bookmarks without navigating,
+ * which is why it swallows the click.
  */
 @Component({
   selector: 'app-event-card',
-  imports: [RouterLink],
+  imports: [RouterLink, UiIcon],
   template: `
-    <article
-      class="evt group relative h-full min-w-0"
-      [attr.data-sold]="event().is_sold_out ? '' : null"
-      [attr.data-wide]="wide() ? '' : null"
-    >
-      <a class="evt__link grid h-full grid-rows-[auto_1fr] gap-3 rounded-lg text-inherit no-underline group-data-[wide]:grid-rows-none group-data-[wide]:grid-cols-[12rem_1fr] group-data-[wide]:items-center group-data-[wide]:gap-6 group-data-[wide]:rounded-lg group-data-[wide]:border group-data-[wide]:border-border group-data-[wide]:bg-surface-raised group-data-[wide]:p-4 group-data-[wide]:transition-colors group-data-[wide]:hover:border-border-strong group-data-[wide]:max-sm:grid-cols-none group-data-[wide]:max-sm:grid-rows-[auto_1fr] group-data-[wide]:max-sm:gap-3 group-data-[wide]:max-sm:border-0 group-data-[wide]:max-sm:bg-transparent group-data-[wide]:max-sm:p-0" [routerLink]="['/', event().slug]">
-        <div class="evt__frame relative aspect-[3/4] overflow-hidden rounded-lg bg-surface-inset group-data-[wide]:aspect-[4/3] group-data-[wide]:max-sm:aspect-[3/4]">
-          @if (event().poster_url) {
-            <img
-              class="evt__poster block h-full w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100 group-data-[sold]:opacity-[0.62] group-data-[sold]:grayscale-[0.7]"
-              [src]="event().poster_url"
-              alt=""
-              [loading]="eager() ? 'eager' : 'lazy'"
-              [attr.fetchpriority]="eager() ? 'high' : null"
-              decoding="async"
-            />
-          } @else {
-            <!-- Not a grey box. An event with no poster still has a name, and
-                 the initial is enough to tell two cards apart in a rail. -->
-            <div class="evt__fallback relative grid h-full place-items-center overflow-hidden bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))] after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:bg-[linear-gradient(90deg,var(--color-gold-400),transparent_70%)] after:content-['']" aria-hidden="true">
-              <span class="text-[3.5rem] font-bold tracking-[-0.02em] text-[rgba(255,255,255,0.92)] group-data-[wide]:text-[3rem]">{{ initial() }}</span>
-            </div>
-          }
+    @if (wide()) {
+      <!-- The listing row: poster left, the facts in the middle, the price
+           and the button holding the end. -->
+      <article
+        class="evt group relative h-full min-w-0 rounded-xl border border-border bg-surface-raised p-4 transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong"
+      >
+        <a
+          class="evt__link grid grid-cols-[14rem_minmax(0,1fr)_auto] items-center gap-6 text-inherit no-underline max-sm:grid-cols-1"
+          [routerLink]="['/', event().slug]"
+        >
+          <span class="relative block overflow-hidden rounded-lg">
+            @if (event().poster_url) {
+              <img
+                class="aspect-video w-full bg-surface-inset object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                [src]="event().poster_url"
+                alt=""
+                [loading]="eager() ? 'eager' : 'lazy'"
+                decoding="async"
+              />
+            } @else {
+              <span class="block aspect-video w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]" aria-hidden="true"></span>
+            }
+          </span>
 
-          @if (event().is_sold_out) {
-            <span class="evt__flag absolute left-3 top-3 rounded-full bg-[rgba(8,12,9,0.78)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-inverse backdrop-blur-[4px]">Sold out</span>
-          } @else if (soon()) {
-            <span class="evt__flag absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-on-primary">This week</span>
-          }
-        </div>
+          <span class="grid min-w-0 content-center gap-2">
+            <span class="flex flex-wrap items-center gap-3 text-xs">
+              @if (event().category) {
+                <span class="rounded-full bg-primary-soft px-3 py-1 font-semibold text-primary-soft-text">{{ event().category }}</span>
+              }
+              <span class="font-semibold uppercase tracking-[0.08em] text-primary-text">{{ shortWhen() }}</span>
+            </span>
+            <span class="evt__title line-clamp-2 text-xl font-semibold tracking-[-0.02em]">{{ event().title }}</span>
+            <span class="flex items-center gap-2 text-sm text-text-muted">
+              <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
+              {{ event().city }}
+            </span>
+          </span>
 
-        <div class="evt__body grid min-w-0 content-start gap-1 group-data-[wide]:gap-2">
-          <p class="evt__when text-xs font-semibold uppercase tracking-[0.08em] text-primary-text">{{ when() }}</p>
-          <h3 class="evt__title line-clamp-2 text-base font-semibold leading-[1.35] group-data-[wide]:text-xl group-data-[wide]:tracking-[-0.02em] group-data-[wide]:max-sm:text-base">{{ event().title }}</h3>
-          <p class="evt__where text-sm text-text-muted group-data-[wide]:text-base">{{ event().city }}</p>
-          <p class="evt__price text-sm font-medium text-text tabular-nums group-data-[sold]:font-normal group-data-[sold]:text-text-subtle group-data-[wide]:mt-1 group-data-[wide]:text-base">{{ price() }}</p>
-        </div>
-      </a>
-    </article>
+          <span class="grid justify-items-end gap-3 max-sm:justify-items-start">
+            <span class="evt__price text-lg font-semibold text-text tabular-nums" [class.text-text-subtle]="event().is_sold_out">{{ price() }}</span>
+            @if (!event().is_sold_out) {
+              <!-- An affordance, not a second destination: the whole card is
+                   the link, and this is where the eye expects the action. -->
+              <span class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-on-primary">Book now</span>
+            }
+          </span>
+        </a>
+      </article>
+    } @else {
+      <article class="evt group relative h-full min-w-0" [attr.data-sold]="event().is_sold_out ? '' : null">
+        <a
+          class="evt__link grid h-full grid-rows-[auto_1fr] rounded-xl border border-border bg-surface-raised text-inherit no-underline shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) overflow-hidden"
+          [routerLink]="['/', event().slug]"
+        >
+          <span class="evt__frame relative block overflow-hidden bg-surface-inset">
+            @if (event().poster_url) {
+              <img
+                class="evt__poster block aspect-[4/3] w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100 group-data-[sold]:opacity-[0.62] group-data-[sold]:grayscale-[0.7]"
+                [src]="event().poster_url"
+                alt=""
+                [loading]="eager() ? 'eager' : 'lazy'"
+                [attr.fetchpriority]="eager() ? 'high' : null"
+                decoding="async"
+              />
+            } @else {
+              <span
+                class="evt__fallback relative grid aspect-[4/3] w-full place-items-center overflow-hidden bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))] after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:bg-[linear-gradient(90deg,var(--color-gold-400),transparent_70%)] after:content-['']"
+                aria-hidden="true"
+              >
+                <span class="text-[3rem] font-bold tracking-[-0.02em] text-[rgba(255,255,255,0.92)]">{{ initial() }}</span>
+              </span>
+            }
+
+            @if (event().category) {
+              <span class="absolute left-3 top-3 rounded-full bg-surface-raised px-3 py-1 text-xs font-semibold text-primary-text shadow-(--shadow-card)">{{ event().category }}</span>
+            }
+
+            <span class="absolute bottom-3 left-3 rounded-full bg-[rgba(8,12,9,0.78)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.04em] text-neutral-0 backdrop-blur-[4px]">
+              @if (event().is_sold_out) {
+                Sold out
+              } @else {
+                {{ shortWhen() }}
+              }
+            </span>
+          </span>
+
+          <span class="evt__body grid content-start gap-2 p-4">
+            <span class="evt__title line-clamp-2 text-base font-semibold leading-[1.35]">{{ event().title }}</span>
+            <span class="evt__where flex items-center gap-2 text-sm text-text-muted">
+              <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
+              {{ event().city }}
+            </span>
+            <span class="mt-1 flex items-center justify-between gap-3 border-t border-border pt-3">
+              <span class="evt__price text-sm font-semibold text-primary-text tabular-nums group-data-[sold]:font-normal group-data-[sold]:text-text-subtle">{{ price() }}</span>
+              @if (!event().is_sold_out) {
+                <span class="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-on-primary">Details</span>
+              }
+            </span>
+          </span>
+        </a>
+
+        <!-- Inside the card, outside the link: a bookmark, not a navigation. -->
+        <button
+          class="absolute right-3 top-3 grid h-9 w-9 cursor-pointer place-items-center rounded-full border-0 bg-[rgba(8,12,9,0.55)] backdrop-blur-[4px] transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-[rgba(8,12,9,0.8)]"
+          [class]="saves.has(event().slug) ? 'text-gold-400' : 'text-neutral-0'"
+          type="button"
+          [attr.aria-pressed]="saves.has(event().slug)"
+          [attr.aria-label]="saves.has(event().slug) ? 'Saved — tap to remove' : 'Save this event'"
+          (click)="toggleSave($event)"
+        >
+          <ui-icon [icon]="saveIcon" size="sm" [class]="saves.has(event().slug) ? 'fill-current' : ''" />
+        </button>
+      </article>
+    }
   `,
 })
 export class EventCard {
@@ -66,19 +140,18 @@ export class EventCard {
   /** Above the fold. Loads eagerly and at high priority. */
   readonly eager = input(false);
 
-  /**
-   * The horizontal layout: poster left, everything else beside it.
-   *
-   * Used where a section has only one or two events. A row sized for six
-   * cards holding one is not a sparse row, it is a broken one — and at
-   * launch that is most of the front page. Wide, the same event fills the
-   * space it was given and reads as a feature rather than as a remainder.
-   */
+  /** The listing-row layout, for sections holding one or two events. */
   readonly wide = input(false);
+
+  readonly saves = inject(Saves);
+
+  protected readonly whereIcon = MapPin;
+  protected readonly whenIcon = CalendarDays;
+  protected readonly saveIcon = Heart;
 
   readonly initial = computed(() => this.event().title.trim().charAt(0).toUpperCase() || '?');
 
-  readonly when = computed(() =>
+  readonly shortWhen = computed(() =>
     new Intl.DateTimeFormat('en-CA', {
       weekday: 'short',
       day: 'numeric',
@@ -100,16 +173,9 @@ export class EventCard {
     return `From ${formatMoney(event.from_price)}`;
   });
 
-  /**
-   * Within the next seven days.
-   *
-   * Worth flagging because urgency is the whole reason somebody buys tonight
-   * rather than bookmarking. Only ever shown when it is true.
-   */
-  readonly soon = computed(() => {
-    const starts = new Date(this.event().starts_at).getTime();
-    const week = 7 * 24 * 60 * 60 * 1000;
-
-    return starts > Date.now() && starts - Date.now() < week;
-  });
+  toggleSave(click: Event): void {
+    click.preventDefault();
+    click.stopPropagation();
+    this.saves.toggle(this.event().slug);
+  }
 }
