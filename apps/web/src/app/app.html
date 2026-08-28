@@ -43,13 +43,26 @@
       offers, or is an organizer, and the organizer is the one who cannot find
       their way back without a link.
     -->
-    <nav class="site-nav mr-auto flex items-center gap-6 max-[700px]:hidden" aria-label="Main">
+    <nav class="site-nav mx-auto flex items-center gap-8 max-[700px]:hidden" aria-label="Main">
       <!-- The current page is marked by a rule under it, not by colour alone. -->
+      <a
+        class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"
+        routerLink="/"
+        routerLinkActive="is-current text-text after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+        [routerLinkActiveOptions]="{ exact: true }"
+        >Home</a
+      >
       <a
         class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"
         routerLink="/events"
         routerLinkActive="is-current text-text after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
-        >What's on</a
+        >Events</a
+      >
+      <a
+        class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"
+        routerLink="/tickets"
+        routerLinkActive="is-current text-text after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary after:content-['']"
+        >My tickets</a
       >
       <a
         class="relative py-2 text-sm font-medium text-text-muted no-underline hover:text-text"

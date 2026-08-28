@@ -1,65 +1,50 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Component, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
-import { BadgeCheck, CalendarDays, Clock, MapPin } from 'lucide-angular';
+import { BadgeCheck, CalendarDays, Clock, Heart, MapPin, Share2 } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { EventDetail as EventDetailModel, Quote, TicketType } from '../../core/api.types';
+import { EventDetail as EventDetailModel } from '../../core/api.types';
+import { CheckoutStore } from '../../core/checkout-store';
+import { Saves } from '../../core/saves';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
 
 /**
- * The page a shared link lands on, and where a sale happens.
- *
- * Quantities are the only thing this component ever sends. Every figure with a
- * currency in front of it comes back from the server — the previous platform
- * posted its own total to the payment gateway, so buyers set their own price.
+ * The page a shared link lands on. It sells the night; the buying moved to
+ * its own two steps at {slug}/tickets and {slug}/checkout, so this page's
+ * whole job is the answer to "do I want to go" — and one green button.
  */
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, UiIcon],
+  imports: [CommonModule, RouterLink, UiIcon],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly seo = inject(Seo);
-
-  readonly event = signal<EventDetailModel | null>(null);
-  readonly notFound = signal(false);
-  readonly quote = signal<Quote | null>(null);
-  readonly quoteError = signal<string | null>(null);
-
-  /** Opens once a basket exists, so the form is not in the way while browsing. */
-  readonly checkingOut = signal(false);
-  readonly placing = signal(false);
-  readonly orderError = signal<string | null>(null);
-
-  readonly buyer = { name: '', email: '', phone: '' };
-
-  /** A code the buyer typed, as opposed to the ref carried by a shared link. */
-  readonly code = signal('');
-
-  /** ticket type id -> quantity */
-  readonly basket = signal<Record<string, number>>({});
-
-  /** Captured from the link and carried to the order, so a promoter gets credit. */
-  private ref: string | null = null;
+  private readonly store = inject(CheckoutStore);
+  readonly saves = inject(Saves);
 
   protected readonly whenIcon = CalendarDays;
   protected readonly timeIcon = Clock;
   protected readonly whereIcon = MapPin;
   protected readonly verifiedIcon = BadgeCheck;
+  protected readonly saveIcon = Heart;
+  protected readonly shareIcon = Share2;
+
+  readonly event = signal<EventDetailModel | null>(null);
+  readonly notFound = signal(false);
+  readonly shared = signal(false);
 
   readonly formatMoney = formatMoney;
 
-  readonly hasSelection = computed(() => Object.values(this.basket()).some((q) => q > 0));
-
   constructor() {
-    this.ref = this.route.snapshot.queryParamMap.get('ref');
+    // A promoter's ref rides the shared link; kept for the order so the
+    // promoter gets credit even though checkout is two pages away.
+    this.store.ref.set(this.route.snapshot.queryParamMap.get('ref'));
 
     const slug = this.route.snapshot.paramMap.get('slug')!;
 
@@ -72,75 +57,53 @@ export class EventDetail {
     });
   }
 
-  onSale(): TicketType[] {
-    return this.event()?.ticket_types.filter((t) => t.status === 'on_sale') ?? [];
+  anythingOnSale(): boolean {
+    return (this.event()?.ticket_types ?? []).some((t) => t.status === 'on_sale');
   }
 
-  quantity(id: string): number {
-    return this.basket()[id] ?? 0;
+  startingFrom(): string {
+    const event = this.event();
+    if (!event) return '';
+    if (event.is_sold_out) return 'Sold out';
+    if (!event.from_price) return 'Free';
+
+    return formatMoney(event.from_price);
   }
 
-  adjust(type: TicketType, delta: number): void {
-    const current = this.quantity(type.id);
-    const ceiling = type.max_per_order ?? 20;
-    const next = Math.min(Math.max(current + delta, 0), ceiling);
+  /** A plain search link — no keys, no geocoding, and it opens their maps app. */
+  mapUrl(): string {
+    const event = this.event();
+    if (!event) return '';
 
-    if (next === current) return;
+    const where = [event.venue?.name, event.venue?.address, event.city]
+      .filter(Boolean)
+      .join(', ');
 
-    this.basket.update((b) => ({ ...b, [type.id]: next }));
-    this.reprice();
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}`;
   }
 
-  /**
-   * Re-price on every change.
-   *
-   * Free to call: quoting takes no locks and writes nothing, which is why it is
-   * a separate endpoint from placing an order.
-   */
-  private reprice(): void {
-    const items = this.items();
+  toggleSave(): void {
+    const event = this.event();
+    if (event) this.saves.toggle(event.slug);
+  }
 
-    if (items.length === 0) {
-      this.quote.set(null);
-      this.quoteError.set(null);
-      this.checkingOut.set(false);
-      return;
+  async share(): Promise<void> {
+    const event = this.event();
+    if (!event) return;
+
+    const url = `https://myfiesta.ca/${event.slug}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: event.title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        this.shared.set(true);
+        setTimeout(() => this.shared.set(false), 2000);
+      }
+    } catch {
+      // Dismissed the sheet; nothing to clean up.
     }
-
-    const typed = this.code().trim() || undefined;
-
-    this.api.quote(this.event()!.slug, items, typed, this.ref ?? undefined).subscribe({
-      next: (quote) => {
-        this.quote.set(quote);
-        this.quoteError.set(null);
-      },
-      error: (response) => {
-        this.quote.set(null);
-        // The server writes these for a person at a checkout, so they are shown
-        // as-is rather than replaced with something generic.
-        this.quoteError.set(response?.error?.message ?? 'That basket cannot be priced.');
-      },
-    });
-  }
-
-  /**
-   * Which code the server actually accepted.
-   *
-   * Read back from the quote rather than echoed from the input, so a code that
-   * was typed but rejected never appears applied. The server is the only thing
-   * that knows whether it counted.
-   */
-  readonly appliedCode = computed(() => this.quote()?.code_applied ?? null);
-
-  clearCode(): void {
-    this.code.set('');
-    this.reprice();
-  }
-
-  private items(): { ticket_type_id: string; quantity: number }[] {
-    return Object.entries(this.basket())
-      .filter(([, quantity]) => quantity > 0)
-      .map(([ticket_type_id, quantity]) => ({ ticket_type_id, quantity }));
   }
 
   when(): string {
@@ -148,8 +111,12 @@ export class EventDetail {
     if (!event) return '';
 
     return new Intl.DateTimeFormat('en-CA', {
-      dateStyle: 'full',
-      timeStyle: 'short',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
       timeZone: event.timezone,
     }).format(new Date(event.starts_at));
   }
@@ -188,78 +155,5 @@ export class EventDetail {
 
   organizerInitial(): string {
     return (this.event()?.organizer.name.trim().charAt(0) ?? '?').toUpperCase();
-  }
-
-  stepLabel(type: TicketType, direction: 'more' | 'fewer'): string {
-    return direction === 'more' ? `One more ${type.name}` : `One fewer ${type.name}`;
-  }
-
-  applyCode(): void {
-    if (!this.code().trim()) return;
-
-    // Goes through the same path as a quantity change. The discount, the tax
-    // on the discounted amount and the total all come back from the server
-    // together — nothing about a price is adjusted in the browser.
-    this.reprice();
-  }
-
-  beginCheckout(): void {
-    this.orderError.set(null);
-    this.checkingOut.set(true);
-  }
-
-  /**
-   * Place the order.
-   *
-   * Sends quantities and who the buyer is. No amount is sent, because none
-   * would be read — the server prices the basket again from its own rows and
-   * charges that.
-   *
-   * Two outcomes. A payable order comes back with somewhere to pay and the
-   * browser goes there. A free one — a comp, a full-value code, a free event —
-   * is already fulfilled, because there was never a gateway to involve.
-   */
-  placeOrder(): void {
-    if (this.placing()) return;
-
-    const name = this.buyer.name.trim();
-    const email = this.buyer.email.trim();
-
-    if (!name || !email) {
-      this.orderError.set('Your name and email are needed to send the tickets.');
-      return;
-    }
-
-    this.placing.set(true);
-    this.orderError.set(null);
-
-    this.api
-      .order(
-        this.event()!.slug,
-        this.items(),
-        { name, email, phone: this.buyer.phone.trim() || undefined },
-        this.code().trim() || undefined,
-        this.ref ?? undefined,
-      )
-      .subscribe({
-        next: (order) => {
-          if (order.payment?.redirect_url) {
-            // Leaving the app entirely. The return is cosmetic — a signed
-            // webhook decides whether this order is paid, not the redirect.
-            window.location.href = order.payment.redirect_url;
-            return;
-          }
-
-          this.router.navigate(['/order', order.reference]);
-        },
-        error: (response) => {
-          this.placing.set(false);
-          // Said plainly, because the worry at this moment is whether money
-          // has moved.
-          this.orderError.set(
-            response?.error?.message ?? 'That order could not be placed. Nothing has been charged.',
-          );
-        },
-      });
   }
 }

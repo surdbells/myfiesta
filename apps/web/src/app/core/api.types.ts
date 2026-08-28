@@ -100,6 +100,14 @@ export interface Quote {
   subtotal: Money;
   discount: Money;
   tax: Money;
+  /**
+   * The 8% the buyer pays on top — always sent by the server, and shown as
+   * its own line. Folding it silently into the total made the total
+   * unexplainable from the lines above it.
+   */
+  service_charge: Money;
+  /** What the organizer is paid: the ticket money, before tax and our charge. */
+  net_revenue: Money;
   total: Money;
   /** Whether tax was already inside the displayed price, or added at checkout. */
   tax_inclusive: boolean;

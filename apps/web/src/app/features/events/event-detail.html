@@ -125,212 +125,60 @@
               } @else if (ev.venue?.name) {
                 <span class="mt-[2px] block text-text-muted">{{ ev.city }}</span>
               }
+              <a
+                class="mt-1 block w-fit text-sm font-medium text-primary-text"
+                [href]="mapUrl()"
+                target="_blank"
+                rel="noopener"
+                >View on map</a
+              >
             </span>
           </p>
         </div>
       </section>
 
-      <!-- -------------------------------------------------------- tickets -->
-      <section class="tickets rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" aria-label="Tickets">
-        <h2 class="text-lg">Tickets</h2>
+      <!-- ---------------------------------------------------- the price -->
+      <section class="buy rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" aria-label="Tickets">
+        @if (anythingOnSale()) {
+          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Starting from</p>
+          <p class="mt-1 text-3xl font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
 
-        @if (onSale().length === 0) {
-          <p class="muted mt-3">Nothing is on sale for this event right now.</p>
+          <a
+            class="mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-md bg-primary text-base font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
+            [routerLink]="['/', ev.slug, 'tickets']"
+          >
+            Register now →
+          </a>
+        } @else if (ev.is_sold_out) {
+          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
+          <p class="mt-1 text-2xl font-bold text-text-muted">Sold out</p>
         } @else {
-          <div class="mt-4 grid gap-3">
-            @for (type of onSale(); track type.id) {
-              <!-- A tier is a card of its own, and picking a quantity lights
-                   its edge up — the selection should be visible from across
-                   the panel, not only in the stepper's digit. -->
-              <div
-                class="ticket-row rounded-lg border p-4"
-                [class]="quantity(type.id) > 0 ? 'border-primary bg-primary-soft/40' : 'border-border'"
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <h3 class="text-base font-semibold">{{ type.name }}</h3>
-                    @if (type.description) {
-                      <p class="muted mt-[2px] text-sm">{{ type.description }}</p>
-                    }
-                  </div>
-                  <div class="stepper flex shrink-0 items-center gap-1 rounded-md bg-surface-inset p-[3px]">
-                    <button
-                      class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                      type="button"
-                      (click)="adjust(type, -1)"
-                      [disabled]="quantity(type.id) === 0"
-                      [attr.aria-label]="stepLabel(type, 'fewer')"
-                    >
-                      −
-                    </button>
-                    <span class="min-w-9 text-center font-semibold tabular-nums" aria-live="polite">{{ quantity(type.id) }}</span>
-                    <button
-                      class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                      type="button"
-                      (click)="adjust(type, 1)"
-                      [attr.aria-label]="stepLabel(type, 'more')"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-                <p class="price mt-2 text-lg font-semibold text-primary-text tabular-nums">{{ formatMoney(type.price) }}</p>
-              </div>
-            }
-          </div>
+          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
+          <p class="mt-1 text-text-muted">Nothing is on sale right now.</p>
         }
 
-        <!--
-          Only offered once there is something to discount. A promo field on an
-          empty basket is an invitation to hunt for a code before buying, and a
-          buyer who goes looking for one often does not come back.
-        -->
-        @if (hasSelection()) {
-          <div class="promo mt-4 grid gap-2 border-t border-border pt-4">
-            @if (appliedCode(); as applied) {
-              <p class="promo-applied flex items-center justify-between gap-3 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-3 py-2 text-sm text-success">
-                <span
-                  ><strong>{{ applied }}</strong> applied</span
-                >
-                <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" type="button" (click)="clearCode()">Remove</button>
-              </p>
-            } @else {
-              <label class="text-sm font-normal text-text-muted" for="promo">Have a code?</label>
-              <div class="promo-row flex gap-2">
-                <input
-                  id="promo"
-                  class="uppercase tracking-[0.04em]"
-                  name="promo"
-                  type="text"
-                  inputmode="text"
-                  autocapitalize="characters"
-                  spellcheck="false"
-                  placeholder="EARLY20"
-                  [ngModel]="code()"
-                  (ngModelChange)="code.set($event)"
-                  (keydown.enter)="applyCode(); $event.preventDefault()"
-                />
-                <button
-                  class="h-11 shrink-0 cursor-pointer rounded-md border-0 bg-primary-soft px-4 text-sm font-semibold text-primary-soft-text [font-family:inherit] disabled:cursor-not-allowed disabled:opacity-50"
-                  type="button"
-                  (click)="applyCode()"
-                  [disabled]="!code().trim()"
-                >
-                  Apply
-                </button>
-              </div>
-            }
-          </div>
-        }
-
-        @if (quoteError(); as message) {
-          <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
-        }
-
-        @if (quote(); as q) {
-          <dl class="totals m-0 mt-6 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
-            <dt class="text-text-muted">Subtotal</dt>
-            <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.subtotal) }}</dd>
-
-            @if (q.discount.amount > 0) {
-              <dt class="text-text-muted">Discount</dt>
-              <dd class="m-0 text-right tabular-nums">−{{ formatMoney(q.discount) }}</dd>
-            }
-
-            @if (q.tax.amount > 0) {
-              <!--
-                Says which, and whether it was already in the price. "Included"
-                and "added" are different money, and a buyer who thinks tax is
-                being added twice abandons the basket.
-              -->
-              <dt class="text-text-muted">{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
-              <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.tax) }}</dd>
-            }
-
-            <dt class="total mt-2 border-t border-border pt-3 text-lg font-semibold text-text">Total</dt>
-            <dd class="total m-0 mt-2 border-t border-border pt-3 text-right text-lg font-semibold text-text tabular-nums">{{ formatMoney(q.total) }}</dd>
-          </dl>
-
-          @if (!checkingOut()) {
-            <button
-              class="cta mt-6 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-              type="button"
-              [disabled]="!hasSelection()"
-              (click)="beginCheckout()"
-            >
-              {{ q.requires_payment ? 'Get tickets' : 'Reserve free tickets' }}
-            </button>
-          } @else {
-            <form class="buyer mt-6 grid gap-2 border-t border-border pt-6" (ngSubmit)="placeOrder()" #f="ngForm" novalidate>
-              <h3 class="mb-2 text-base">Where should the tickets go?</h3>
-
-              <label class="mt-2" for="buyer-name">Full name</label>
-              <input
-                id="buyer-name"
-                name="name"
-                type="text"
-                autocomplete="name"
-                [(ngModel)]="buyer.name"
-                required
-              />
-
-              <label class="mt-2" for="buyer-email">Email</label>
-              <!--
-                The tickets are sent here, and it is how a guest gets back to them
-                later without an account. Worth saying so rather than leaving the
-                field bare.
-              -->
-              <input
-                id="buyer-email"
-                name="email"
-                type="email"
-                autocomplete="email"
-                inputmode="email"
-                [(ngModel)]="buyer.email"
-                required
-                aria-describedby="email-hint"
-              />
-              <small id="email-hint" class="muted text-xs">Your tickets are sent here.</small>
-
-              <label class="mt-2" for="buyer-phone">Phone <span class="muted">(optional)</span></label>
-              <input
-                id="buyer-phone"
-                name="phone"
-                type="tel"
-                autocomplete="tel"
-                inputmode="tel"
-                [(ngModel)]="buyer.phone"
-              />
-
-              @if (orderError(); as err) {
-                <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ err }}</p>
-              }
-
-              <button
-                class="cta mt-4 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-                type="submit"
-                [disabled]="placing()"
-              >
-                @if (placing()) {
-                  Placing your order…
-                } @else if (q.requires_payment) {
-                  Pay {{ formatMoney(q.total) }}
-                } @else {
-                  Reserve free tickets
-                }
-              </button>
-
-              <button
-                class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]"
-                type="button"
-                (click)="checkingOut.set(false)"
-                [disabled]="placing()"
-              >
-                Back to tickets
-              </button>
-            </form>
-          }
-        }
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <!-- A bookmark in this browser, not a synced favourite — there is
+               no account for it to live in, on purpose. -->
+          <button
+            class="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-field-border bg-surface-raised text-sm font-semibold [font-family:inherit] hover:bg-surface-hover"
+            [class]="saves.has(ev.slug) ? 'text-primary-text' : 'text-text'"
+            type="button"
+            [attr.aria-pressed]="saves.has(ev.slug)"
+            (click)="toggleSave()"
+          >
+            <ui-icon [icon]="saveIcon" size="sm" [class]="saves.has(ev.slug) ? 'fill-current' : ''" />
+            {{ saves.has(ev.slug) ? 'Saved' : 'Save' }}
+          </button>
+          <button
+            class="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-field-border bg-surface-raised text-sm font-semibold text-text [font-family:inherit] hover:bg-surface-hover"
+            type="button"
+            (click)="share()"
+          >
+            <ui-icon [icon]="shareIcon" size="sm" />
+            {{ shared() ? 'Link copied' : 'Share' }}
+          </button>
+        </div>
       </section>
 
       <!-- Who is behind the night — and whether somebody checked. -->

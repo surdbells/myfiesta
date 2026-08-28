@@ -66,6 +66,22 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets),
   },
   {
+    // "My tickets" with no account to sign in to: explains the emailed link,
+    // and looks an order reference up.
+    path: 'tickets',
+    loadComponent: () => import('./features/tickets/find-tickets').then((m) => m.FindTickets),
+  },
+  {
+    // The two checkout steps. Two-segment paths, so they cannot collide with
+    // the single-segment slug wildcard below.
+    path: ':slug/tickets',
+    loadComponent: () => import('./features/checkout/ticket-select').then((m) => m.TicketSelect),
+  },
+  {
+    path: ':slug/checkout',
+    loadComponent: () => import('./features/checkout/checkout').then((m) => m.Checkout),
+  },
+  {
     path: ':slug',
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
   },

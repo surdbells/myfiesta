@@ -1,0 +1,53 @@
+<section class="wrap mx-auto grid max-w-[620px] gap-6 px-6 pb-24 pt-12">
+  <div>
+    <h1 class="text-3xl">My tickets</h1>
+    <p class="mt-2 text-lg text-text-muted">
+      Your tickets live behind the link in your confirmation email.
+    </p>
+  </div>
+
+  <div class="rounded-xl border border-border bg-surface-raised p-8 max-sm:p-5">
+    <h2 class="text-lg">Open the email</h2>
+    <p class="mt-2 text-sm leading-[1.6] text-text-muted">
+      It is from myFiesta, sent the moment payment cleared, and the button in
+      it opens every ticket on the order — QR codes included. Nothing to sign
+      in to. If it is not there, check the spam folder for the address you
+      typed at checkout.
+    </p>
+  </div>
+
+  <form class="rounded-xl border border-border bg-surface-raised p-8 max-sm:p-5" (ngSubmit)="lookUp()">
+    <h2 class="text-lg">Or check an order</h2>
+    <p class="mt-2 text-sm leading-[1.6] text-text-muted">
+      The reference is the short code on your confirmation — it looks like
+      <code>YLQ7J68R</code>. The order page shows what you bought and where
+      the tickets were sent.
+    </p>
+    <div class="mt-4 flex gap-2">
+      <input
+        class="uppercase tracking-[0.04em]"
+        name="reference"
+        type="text"
+        placeholder="Order reference"
+        aria-label="Order reference"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="16"
+        [ngModel]="reference()"
+        (ngModelChange)="reference.set($event)"
+      />
+      <button
+        class="h-11 shrink-0 cursor-pointer rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+        type="submit"
+        [disabled]="!reference().trim()"
+      >
+        Look it up
+      </button>
+    </div>
+  </form>
+
+  <p class="text-sm text-text-muted">
+    Still stuck? <a routerLink="/contact">Get in touch</a> with the reference,
+    or the name and email from the order.
+  </p>
+</section>
