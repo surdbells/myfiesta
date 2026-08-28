@@ -1,14 +1,42 @@
-<section class="wrap mx-auto grid max-w-[620px] justify-items-start gap-4 px-6 pb-24 pt-16">
+<section class="wrap mx-auto grid max-w-[720px] justify-items-center gap-4 px-6 pb-24 pt-12 text-center">
   @if (notFound()) {
-    <h1 class="text-2xl text-primary">We cannot find that order</h1>
+    <h1 class="text-2xl">We cannot find that order</h1>
     <p class="muted max-w-[56ch] leading-[1.6]">
       Check the reference in your confirmation email. If you have just paid, the order may take a
       moment to appear.
     </p>
   } @else if (order(); as o) {
+    <!--
+      The journey, drawn done. Selection and payment are behind the buyer by
+      the time this page exists; the only step that can still be in motion is
+      the confirmation itself, while the webhook settles.
+    -->
+    @if (o.status === 'paid' || o.status === 'pending') {
+    <p class="steps mb-2 flex flex-wrap items-center justify-center gap-3 text-sm font-medium" aria-hidden="true">
+      <span class="inline-flex items-center gap-2">
+        <span class="grid h-7 w-7 place-items-center rounded-full bg-success text-xs font-bold text-text-inverse">✓</span>
+        Selection
+      </span>
+      <span class="h-px w-10 bg-border-strong"></span>
+      <span class="inline-flex items-center gap-2">
+        <span class="grid h-7 w-7 place-items-center rounded-full bg-success text-xs font-bold text-text-inverse">✓</span>
+        Payment
+      </span>
+      <span class="h-px w-10 bg-border-strong"></span>
+      <span class="inline-flex items-center gap-2 text-text-muted">
+        @if (o.status === 'paid') {
+          <span class="grid h-7 w-7 place-items-center rounded-full bg-success text-xs font-bold text-text-inverse">✓</span>
+        } @else {
+          <span class="grid h-7 w-7 place-items-center rounded-full border-2 border-border-strong bg-surface-raised text-xs font-bold text-text-muted">3</span>
+        }
+        Confirmation
+      </span>
+    </p>
+    }
+
     @switch (o.status) {
       @case ('paid') {
-        <h1 class="text-2xl text-primary">You're going to {{ o.event.title }}</h1>
+        <h1 class="text-balance text-3xl text-primary">You're going to {{ o.event.title }}</h1>
         <p class="lead text-lg font-medium">{{ when() }}</p>
 
         <p class="max-w-[56ch] leading-[1.6]">
@@ -17,7 +45,9 @@
           the QR code to show at the door.
         </p>
 
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm">
+          <dt class="text-text-muted">Event</dt>
+          <dd class="m-0 font-semibold">{{ o.event.title }}</dd>
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
@@ -35,7 +65,7 @@
 
       @case ('pending') {
         <h1 class="text-2xl text-primary">Confirming your payment</h1>
-        <p class="lead text-lg font-medium" role="status" aria-live="polite">
+        <p class="lead max-w-[46ch] text-lg font-medium" role="status" aria-live="polite">
           @if (stillWaiting()) {
             Still confirming. This can take a moment — you can close this page and your tickets will
             arrive by email.
@@ -43,7 +73,7 @@
             One moment.
           }
         </p>
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm">
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
@@ -54,18 +84,26 @@
       @case ('failed') {
         <h1 class="text-2xl text-primary">That payment did not go through</h1>
         <p class="lead text-lg font-medium">Nothing has been charged.</p>
-        <a class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover" [href]="'/' + o.event.slug">Try again</a>
+        <a
+          class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
+          [href]="'/' + o.event.slug"
+          >Try again</a
+        >
       }
 
       @case ('cancelled') {
         <h1 class="text-2xl text-primary">Your order was cancelled</h1>
         <p class="lead text-lg font-medium">Nothing has been charged.</p>
-        <a class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover" [href]="'/' + o.event.slug">Back to the event</a>
+        <a
+          class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
+          [href]="'/' + o.event.slug"
+          >Back to the event</a
+        >
       }
 
       @case ('refunded') {
         <h1 class="text-2xl text-primary">This order was refunded</h1>
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm">
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
@@ -74,6 +112,6 @@
       }
     }
   } @else {
-    <p class="muted max-w-[56ch] leading-[1.6]" role="status">Loading…</p>
+    <p class="muted" role="status">Loading…</p>
   }
 </section>

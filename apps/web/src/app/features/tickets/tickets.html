@@ -34,7 +34,7 @@
       <ul class="tickets m-0 grid list-none gap-4 p-0">
         @for (ticket of o.tickets; track ticket.id) {
           <li
-            class="ticket grid justify-items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 text-center shadow-(--shadow-card)"
+            class="ticket grid justify-items-center gap-4 rounded-xl border border-border bg-surface-raised p-6 text-center shadow-(--shadow-card) sm:grid-cols-[auto_1fr] sm:items-center sm:gap-6 sm:text-left"
             [class.opacity-70]="ticket.admitted >= ticket.admits"
           >
             <!--
@@ -43,7 +43,7 @@
             -->
             <div class="qr rounded-md bg-white p-3 [line-height:0] [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(260px,68vw)]" [innerHTML]="qr(ticket.qr)"></div>
 
-            <div class="detail grid gap-1">
+            <div class="detail grid gap-1 sm:justify-items-start sm:self-stretch sm:content-center sm:border-l sm:border-dashed sm:border-border-strong sm:pl-6">
               <p class="type text-lg font-semibold">{{ ticket.type }}</p>
               @if (ticket.holder) {
                 <p class="holder text-text-muted">{{ ticket.holder }}</p>
@@ -65,7 +65,7 @@
               }
 
               @if (ticket.admitted >= ticket.admits) {
-                <p class="state mt-2 justify-self-center rounded-full bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-3 py-1 text-sm font-medium text-success">Checked in</p>
+                <p class="state mt-2 justify-self-center rounded-full sm:justify-self-start bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-3 py-1 text-sm font-medium text-success">Checked in</p>
               }
             </div>
           </li>
