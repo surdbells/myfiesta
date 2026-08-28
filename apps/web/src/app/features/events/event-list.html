@@ -1,67 +1,268 @@
-<section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
-  <h1 class="mb-6 text-3xl">What's on</h1>
+<section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <h1 class="text-3xl">What's on</h1>
+  <p class="mt-2 max-w-[48ch] text-lg text-text-muted">
+    Concerts, club nights and everything in between — near you, on sale now.
+  </p>
 
-  <form class="filters mb-8 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-raised p-4" (ngSubmit)="search()">
-    <input
-      class="flex-[1_1_16rem]"
-      type="search"
-      name="q"
-      placeholder="Search events"
-      aria-label="Search events"
-      [(ngModel)]="query"
-    />
-    <input class="flex-[0_1_12rem]" type="text" name="city" placeholder="City" aria-label="City" [(ngModel)]="city" />
-    <label class="check inline-flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm font-normal text-text-muted">
-      <input class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary" type="checkbox" name="free" [(ngModel)]="freeOnly" />
-      Free only
-    </label>
-    <button
-      class="h-11 cursor-pointer rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:bg-primary-hover"
-      type="submit"
+  <div class="mt-8 grid grid-cols-[16.5rem_minmax(0,1fr)] items-start gap-8 max-[860px]:grid-cols-1">
+    <!-- ------------------------------------------------------------ filters -->
+    <aside
+      class="filters grid gap-6 rounded-xl border border-border bg-surface-raised p-6"
+      aria-label="Filters"
     >
-      Search
-    </button>
-  </form>
-
-  @if (category(); as chosen) {
-    <p class="applied -mt-3 mb-6 flex w-fit items-center gap-3 rounded-full bg-primary-soft px-4 py-2 text-sm text-primary-soft-text">
-      Showing <strong>{{ chosen }}</strong>
-      <button type="button" class="clear cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" (click)="clearCategory()">Clear</button>
-    </p>
-  }
-
-  @if (loading()) {
-    <p class="muted" role="status">Finding events…</p>
-  } @else if (events().length === 0) {
-    <p class="muted">Nothing matches that yet. Try a different city, or clear the filters.</p>
-  } @else {
-    <ul class="grid m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6 p-0">
-      @for (event of events(); track event.slug) {
-        <li class="card overflow-hidden rounded-lg border border-border bg-surface-raised p-0 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised)">
-          <a
-            class="block text-inherit no-underline focus-visible:rounded-lg focus-visible:outline-offset-[-2px]"
-            [routerLink]="['/', event.slug]"
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="text-lg">Filters</h2>
+        @if (anyFilter()) {
+          <button
+            class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-primary-text [font-family:inherit] hover:underline"
+            type="button"
+            (click)="clearAll()"
           >
-            @if (event.poster_url) {
-              <img class="aspect-video w-full bg-surface-inset object-cover" [src]="event.poster_url" [alt]="" loading="lazy" />
-            } @else {
-              <div class="poster-placeholder aspect-video w-full bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_14%,var(--surface-inset)),color-mix(in_srgb,var(--accent)_12%,var(--surface-inset)))]" aria-hidden="true"></div>
-            }
-            <div class="card-body grid gap-1 p-4">
-              <h2 class="line-clamp-2 text-base font-semibold">{{ event.title }}</h2>
-              <p class="when text-sm font-medium text-primary-text">{{ when(event) }}</p>
-              <p class="where text-sm text-text-muted">{{ event.city }}</p>
-              <p class="price mt-2 font-semibold tabular-nums">
-                @if (event.is_sold_out) {
-                  <span class="sold-out inline-block rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted">Sold out</span>
-                } @else {
-                  {{ formatFrom(event.from_price, event.currency) }}
-                }
-              </p>
-            </div>
-          </a>
-        </li>
+            Clear all
+          </button>
+        }
+      </div>
+
+      @if (categories().length > 0) {
+        <fieldset class="grid gap-2">
+          <legend class="mb-2 p-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">
+            Categories
+          </legend>
+          <!-- One at a time: the search takes a single category, and two boxes
+               ticked would silently mean OR to the reader and nothing to the
+               server. Ticking the same one again clears it. -->
+          @for (kind of categories(); track kind.category) {
+            <label class="flex cursor-pointer items-center gap-2 text-sm font-normal text-text">
+              <input
+                class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
+                type="checkbox"
+                name="category"
+                [checked]="category() === kind.category"
+                (change)="chooseCategory(kind.category)"
+              />
+              {{ kind.category }}
+              <span class="text-xs text-text-subtle tabular-nums">{{ kind.events }}</span>
+            </label>
+          }
+        </fieldset>
       }
-    </ul>
-  }
+
+      <fieldset class="grid gap-2">
+        <legend class="mb-2 p-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          Date
+        </legend>
+        @for (
+          choice of [
+            { value: 'any', label: 'Any date' },
+            { value: 'today', label: 'Today' },
+            { value: 'weekend', label: 'This weekend' },
+            { value: 'date', label: 'Pick a date…' },
+          ];
+          track choice.value
+        ) {
+          <label class="flex cursor-pointer items-center gap-2 text-sm font-normal text-text">
+            <input
+              class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
+              type="radio"
+              name="date"
+              [value]="choice.value"
+              [checked]="date() === choice.value"
+              (change)="chooseDate($any(choice.value))"
+            />
+            {{ choice.label }}
+          </label>
+        }
+        @if (date() === 'date') {
+          <input
+            class="mt-1"
+            type="date"
+            name="on"
+            aria-label="On this date"
+            [ngModel]="pickedDate()"
+            (ngModelChange)="pickedDate.set($event); search()"
+          />
+        }
+      </fieldset>
+
+      <fieldset class="grid gap-2">
+        <legend class="mb-2 p-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          Price
+        </legend>
+        <div class="flex gap-2">
+          <button
+            class="h-10 flex-1 cursor-pointer rounded-md border text-sm font-medium [font-family:inherit]"
+            [class]="
+              price() === 'free'
+                ? 'border-primary bg-primary-soft text-primary-soft-text'
+                : 'border-field-border bg-surface-raised text-text hover:bg-surface-hover'
+            "
+            type="button"
+            [attr.aria-pressed]="price() === 'free'"
+            (click)="choosePrice('free')"
+          >
+            Free
+          </button>
+          <button
+            class="h-10 flex-1 cursor-pointer rounded-md border text-sm font-medium [font-family:inherit]"
+            [class]="
+              price() === 'paid'
+                ? 'border-primary bg-primary-soft text-primary-soft-text'
+                : 'border-field-border bg-surface-raised text-text hover:bg-surface-hover'
+            "
+            type="button"
+            [attr.aria-pressed]="price() === 'paid'"
+            (click)="choosePrice('paid')"
+          >
+            Paid
+          </button>
+        </div>
+      </fieldset>
+
+      <fieldset class="grid gap-2">
+        <legend class="mb-2 p-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          City
+        </legend>
+        <input
+          type="text"
+          name="city"
+          placeholder="Any city"
+          aria-label="City"
+          [ngModel]="city()"
+          (ngModelChange)="city.set($event)"
+          (change)="search()"
+        />
+      </fieldset>
+    </aside>
+
+    <!-- ----------------------------------------------------------- results -->
+    <div class="min-w-0">
+      <form
+        class="toolbar flex items-center gap-4 rounded-xl border border-border bg-surface-raised p-3"
+        (ngSubmit)="search()"
+      >
+        <div class="relative min-w-0 flex-1">
+          <ui-icon
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
+            [icon]="searchIcon"
+            size="sm"
+          />
+          <input
+            class="rounded-full bg-surface-sunken pl-10"
+            type="search"
+            name="q"
+            placeholder="Search events by name, artist, or venue…"
+            aria-label="Search events"
+            [ngModel]="query()"
+            (ngModelChange)="query.set($event)"
+          />
+        </div>
+
+        <label class="flex shrink-0 items-center gap-2 text-sm font-normal text-text-muted max-sm:hidden">
+          Sort by
+          <select
+            class="w-auto rounded-full font-medium"
+            name="sort"
+            [ngModel]="sort()"
+            (ngModelChange)="sort.set($event)"
+          >
+            <option value="soon">Soonest</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+          </select>
+        </label>
+      </form>
+
+      @if (loading()) {
+        <p class="muted mt-6" role="status">Finding events…</p>
+      } @else if (visible().length === 0) {
+        <p class="muted mt-6">Nothing matches that yet. Try a different city, or clear the filters.</p>
+      } @else {
+        <p class="mt-4 text-sm text-text-muted">
+          Showing <strong class="text-text">{{ visible().length }}</strong>
+          {{ visible().length === 1 ? 'event' : 'events' }}
+        </p>
+
+        <ul class="mt-4 grid list-none grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6 p-0">
+          @for (event of visible(); track event.slug) {
+            <li
+              class="card overflow-hidden rounded-xl border border-border bg-surface-raised p-0 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised)"
+            >
+              <a
+                class="grid h-full grid-rows-[auto_1fr_auto] text-inherit no-underline focus-visible:rounded-xl focus-visible:outline-offset-[-2px]"
+                [routerLink]="['/', event.slug]"
+              >
+                <div class="relative">
+                  @if (event.poster_url) {
+                    <img
+                      class="aspect-video w-full bg-surface-inset object-cover"
+                      [src]="event.poster_url"
+                      alt=""
+                      loading="lazy"
+                    />
+                  } @else {
+                    <div
+                      class="aspect-video w-full bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_14%,var(--surface-inset)),color-mix(in_srgb,var(--accent)_12%,var(--surface-inset)))]"
+                      aria-hidden="true"
+                    ></div>
+                  }
+                  @if (event.category) {
+                    <!-- Its own light chip on the photograph, so it reads on a
+                         dark poster and a pale one alike. -->
+                    <span
+                      class="absolute left-3 top-3 rounded-full bg-surface-raised px-3 py-1 text-xs font-semibold text-primary-text shadow-(--shadow-card)"
+                    >
+                      {{ event.category }}
+                    </span>
+                  }
+                </div>
+
+                <div class="grid content-start gap-2 p-4">
+                  <h2 class="line-clamp-2 text-base font-semibold">{{ event.title }}</h2>
+                  <p class="flex items-center gap-2 text-sm text-text-muted">
+                    <ui-icon class="shrink-0 text-text-subtle" [icon]="whenIcon" size="sm" />
+                    {{ when(event) }}
+                  </p>
+                  <p class="flex items-center gap-2 text-sm text-text-muted">
+                    <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
+                    {{ event.city }}
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+                  <span class="truncate text-sm text-text-muted">{{ event.organizer.name }}</span>
+                  @if (event.is_sold_out) {
+                    <span
+                      class="shrink-0 rounded-full bg-surface-inset px-2 py-[2px] text-xs font-medium text-text-muted"
+                      >Sold out</span
+                    >
+                  } @else {
+                    <span class="shrink-0 font-semibold text-primary-text tabular-nums">
+                      {{ formatFrom(event.from_price, event.currency) }}
+                    </span>
+                  }
+                </div>
+              </a>
+            </li>
+          }
+        </ul>
+
+        @if (nextCursor()) {
+          <div class="mt-8 grid justify-center">
+            <button
+              class="h-11 cursor-pointer rounded-full border border-field-border bg-surface-raised px-8 text-sm font-semibold text-text [font-family:inherit] hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              [disabled]="loadingMore()"
+              (click)="loadMore()"
+            >
+              @if (loadingMore()) {
+                Loading…
+              } @else {
+                Show more events
+              }
+            </button>
+          </div>
+        }
+      }
+    </div>
+  </div>
 </section>
