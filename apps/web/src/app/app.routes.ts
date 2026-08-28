@@ -66,6 +66,24 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets),
   },
   {
+    // The guessable organizer paths. Accounts live on the console app;
+    // without these, myfiesta.ca/register fell through to the slug wildcard
+    // and answered "Event not found".
+    path: 'register',
+    data: { consolePath: '/register' },
+    loadComponent: () => import('./features/auth/go-console').then((m) => m.GoConsole),
+  },
+  {
+    path: 'sign-in',
+    data: { consolePath: '' },
+    loadComponent: () => import('./features/auth/go-console').then((m) => m.GoConsole),
+  },
+  {
+    path: 'login',
+    data: { consolePath: '' },
+    loadComponent: () => import('./features/auth/go-console').then((m) => m.GoConsole),
+  },
+  {
     // "My tickets" with no account to sign in to: explains the emailed link,
     // and looks an order reference up.
     path: 'tickets',

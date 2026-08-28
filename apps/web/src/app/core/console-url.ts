@@ -18,7 +18,7 @@ export const CONSOLE_URL = new InjectionToken<string>('CONSOLE_URL', {
   providedIn: 'root',
   factory: () => {
     if (typeof window === 'undefined') {
-      return process.env['CONSOLE_URL'] ?? 'http://localhost:4300';
+      return process.env['CONSOLE_URL'] ?? 'http://localhost:4310';
     }
 
     const meta = inject(DOCUMENT).querySelector<HTMLMetaElement>('meta[name="console-url"]');
