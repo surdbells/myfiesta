@@ -93,7 +93,7 @@ describe('App shell', () => {
     // Every wildcard in this router redirects to the events list, so a nav
     // item pointing at a route nobody wrote does not 404 — it silently
     // lands somewhere else, which reads as the console ignoring the click.
-    const known = ['/', '/events', '/payouts'];
+    const known = ['/', '/events', '/orders', '/payouts'];
 
     for (const href of links) {
       expect(known).toContain(href);

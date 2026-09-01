@@ -20,6 +20,7 @@ import {
   IssueResult,
   EventImage,
   EventImages,
+  OrganizationOrderPage,
   OrganizerEvent,
   OrganizerEventDetail,
   RefundResult,
@@ -159,6 +160,29 @@ export class Api {
   /** Everything the dashboard shows, in one request. */
   overview(): Observable<Overview> {
     return this.http.get<Overview>(`${this.base}/api/organizer/overview`);
+  }
+
+  /**
+   * Every order the organization has taken, searchable across its events.
+   *
+   * Params are dropped when empty rather than sent blank: an empty q would
+   * make the server run a LIKE '%%' over every row to no purpose.
+   */
+  organizationOrders(query: {
+    q?: string;
+    event_id?: string;
+    status?: string;
+    page?: number;
+  }): Observable<OrganizationOrderPage> {
+    let params = new HttpParams();
+
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') {
+        params = params.set(key, String(value));
+      }
+    }
+
+    return this.http.get<OrganizationOrderPage>(`${this.base}/api/organizer/orders`, { params });
   }
 
   /** The statement: what is owed, by which night, and what has been sent. */

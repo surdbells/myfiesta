@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiToasts, type LucideIconData } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, Menu, Wallet, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, Menu, ReceiptText, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -69,7 +69,10 @@ export class App {
     if (this.session.canSeeMoney()) {
       groups.push({
         title: 'Money',
-        items: [{ label: 'Payouts', link: '/payouts', glyph: Wallet }],
+        items: [
+          { label: 'Orders', link: '/orders', glyph: ReceiptText },
+          { label: 'Payouts', link: '/payouts', glyph: Wallet },
+        ],
       });
     }
 

@@ -84,6 +84,13 @@ export const routes: Routes = [
     ],
   },
   {
+    // Organization-wide, unlike the orders tab inside an event: support
+    // arrives with a reference or an address, never with the night.
+    path: 'orders',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/orders/orders').then((m) => m.Orders),
+  },
+  {
     path: 'payouts',
     canActivate: [requireSession],
     loadComponent: () => import('./features/payouts/payouts').then((m) => m.Payouts),

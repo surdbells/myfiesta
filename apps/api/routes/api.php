@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\EventImageController;
+use App\Http\Controllers\Api\Organizer\OrderController as OrganizerOrderController;
 use App\Http\Controllers\Api\Organizer\OverviewController;
 use App\Http\Controllers\Api\Organizer\PayoutController;
 use App\Http\Controllers\Api\Organizer\GuestController;
@@ -119,6 +120,11 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // real bank, and an endpoint for it would let an organizer mark
         // themselves as paid.
         Route::get('/payouts', [PayoutController::class, 'index']);
+
+        // Every order the organization has taken, across its events —
+        // searchable by reference, name or address, which is how support
+        // arrives rather than knowing which night it was.
+        Route::get('/orders', [OrganizerOrderController::class, 'index']);
         Route::put('/payout-details', [PayoutController::class, 'update']);
 
         Route::get('/events', [OrganizerEventController::class, 'index']);

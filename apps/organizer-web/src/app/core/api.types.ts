@@ -444,3 +444,34 @@ export interface PayoutStatement {
   settlements: SettlementRow[];
   destination: PayoutDestination | null;
 }
+
+/**
+ * One order, seen from the organization rather than from inside an event.
+ *
+ * Carries the event it was bought for, which is the whole reason this list
+ * exists: support is handed a reference or an address, never the night.
+ */
+export interface OrganizationOrder {
+  id: string;
+  reference: string;
+  buyer_name: string;
+  buyer_email: string;
+  status: 'paid' | 'partially_refunded' | 'refunded' | 'pending';
+  paid_at: string | null;
+  tickets_count: number;
+  event: { id: string; title: string } | null;
+  total: Money;
+  refunded: Money;
+}
+
+export interface OrganizationOrderPage {
+  data: OrganizationOrder[];
+  meta: {
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+    /** Null where the page spans currencies — two sets of money do not add. */
+    summary: { gross: Money; refunded: Money; net: Money } | null;
+  };
+}

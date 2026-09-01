@@ -1,0 +1,207 @@
+<ui-page-header
+  title="Orders"
+  subtitle="Every sale across your events. Search by reference, name or email."
+/>
+
+@if (refused()) {
+  <!--
+    Not an error state. The server is saying this account may not see the
+    money, and offering "try again" would have somebody retrying something
+    that will never work.
+  -->
+  <ui-empty
+    title="You cannot see orders for this organization"
+    hint="Orders are limited to owners, managers and finance. Ask an owner if you need access."
+  >
+    <a uiButton variant="secondary" routerLink="/">Back to the dashboard</a>
+  </ui-empty>
+} @else {
+  <!--
+    One row of controls. The search box takes the room because it is the one
+    somebody uses; the two selects are qualifiers beside it.
+  -->
+  <form
+    class="filters mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-raised p-4"
+    (ngSubmit)="refine()"
+  >
+    <div class="flex h-11 min-w-0 flex-[1_1_18rem] items-center gap-2 rounded-md border border-field-border bg-surface px-3">
+      <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
+      <input
+        id="q"
+        class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
+        name="q"
+        type="search"
+        placeholder="Reference, name or email"
+        aria-label="Search orders"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event); refine()"
+      />
+    </div>
+
+    <select
+      class="flex-[0_1_14rem]"
+      name="event"
+      aria-label="Event"
+      [ngModel]="eventId()"
+      (ngModelChange)="eventId.set($event); refine()"
+    >
+      <option value="">All events</option>
+      @for (event of events(); track event.id) {
+        <option [value]="event.id">{{ event.title }}</option>
+      }
+    </select>
+
+    <select
+      class="flex-[0_1_11rem]"
+      name="status"
+      aria-label="Status"
+      [ngModel]="status()"
+      (ngModelChange)="status.set($event); refine()"
+    >
+      <option value="">Any status</option>
+      <option value="paid">Paid</option>
+      <option value="partially_refunded">Part refunded</option>
+      <option value="refunded">Refunded</option>
+      <option value="pending">Confirming</option>
+    </select>
+
+    @if (filtered()) {
+      <button
+        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+        type="button"
+        (click)="clear()"
+      >
+        Clear
+      </button>
+    }
+  </form>
+
+  @if (loading()) {
+    <div class="grid gap-2">
+      @for (n of [0, 1, 2, 3, 4]; track n) {
+        <div class="rounded-xl border border-border bg-surface-raised p-4">
+          <ui-skeleton height="1.5rem" />
+        </div>
+      }
+    </div>
+  } @else if (failed()) {
+    <ui-error-state
+      title="Could not load your orders"
+      detail="We could not reach the server. It is usually temporary."
+      (retried)="load()"
+    />
+  } @else if (orders().length === 0) {
+    <ui-empty
+      [title]="filtered() ? 'Nothing matches that' : 'Nothing has sold yet'"
+      [hint]="
+        filtered()
+          ? 'Try the order reference from the confirmation email, or clear the filters.'
+          : 'When somebody buys a ticket to one of your events, the order appears here.'
+      "
+    />
+  } @else {
+    <!--
+      The takings for this page, said as this page. A figure that silently
+      means something other than the rows under it is worse than no figure,
+      and it is withheld entirely when the page spans two currencies.
+    -->
+    @if (summary(); as totals) {
+      <div class="mb-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 rounded-xl border border-border bg-surface-inset px-6 py-4">
+        <p class="text-sm text-text-muted">
+          On this page
+          <strong class="ml-2 text-base font-semibold text-text tabular-nums">{{ cash(totals.gross) }}</strong>
+        </p>
+        @if (totals.refunded.amount > 0) {
+          <p class="text-sm text-text-muted">
+            Refunded
+            <strong class="ml-2 text-base font-semibold text-warning tabular-nums">{{ cash(totals.refunded) }}</strong>
+          </p>
+          <p class="text-sm text-text-muted">
+            Net
+            <strong class="ml-2 text-base font-semibold text-primary-text tabular-nums">{{ cash(totals.net) }}</strong>
+          </p>
+        }
+      </div>
+    }
+
+    <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Buyer</th>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Event</th>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Reference</th>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">When</th>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Total</th>
+              <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (order of orders(); track order.id) {
+              <tr class="border-t border-border hover:bg-surface-hover">
+                <td class="px-4 py-3">
+                  <span class="grid min-w-0 gap-0.5">
+                    <span class="truncate font-medium">{{ order.buyer_name }}</span>
+                    <span class="truncate text-xs text-text-muted">{{ order.buyer_email }}</span>
+                  </span>
+                </td>
+
+                <td class="px-4 py-3">
+                  @if (order.event; as event) {
+                    <!--
+                      Through to the event's own orders screen, which is where
+                      a refund is actually made.
+                    -->
+                    <a
+                      class="font-medium text-primary-text no-underline hover:underline"
+                      [routerLink]="['/events', event.id, 'orders']"
+                      >{{ event.title }}</a
+                    >
+                  } @else {
+                    <span class="text-text-subtle">—</span>
+                  }
+                  <span class="mt-0.5 block text-xs text-text-subtle tabular-nums">
+                    {{ order.tickets_count }} {{ order.tickets_count === 1 ? 'ticket' : 'tickets' }}
+                  </span>
+                </td>
+
+                <td class="px-4 py-3">
+                  <!-- Selectable in one tap: this is the string somebody is
+                       about to read back down a phone. -->
+                  <code class="select-all text-xs tracking-[0.04em]">{{ order.reference }}</code>
+                </td>
+
+                <td class="whitespace-nowrap px-4 py-3 text-text-muted tabular-nums">{{ when(order.paid_at) }}</td>
+
+                <td class="whitespace-nowrap px-4 py-3 text-right">
+                  <span class="font-semibold tabular-nums">{{ cash(order.total) }}</span>
+                  @if (order.refunded.amount > 0) {
+                    <span class="mt-0.5 block text-xs text-warning tabular-nums">
+                      −{{ cash(order.refunded) }} back
+                    </span>
+                  }
+                </td>
+
+                <td class="px-4 py-3">
+                  <ui-badge [tone]="tone(order)">{{ label(order) }}</ui-badge>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (meta(); as page) {
+        <ui-pagination
+          [page]="page.current_page"
+          [perPage]="page.per_page"
+          [total]="page.total"
+          noun="orders"
+          (changed)="goToPage($event)"
+        />
+      }
+    </div>
+  }
+}
