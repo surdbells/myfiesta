@@ -2,12 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>OrganizerWeb</title>
+    <title>myfiesta — organizer console</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/png" sizes="32x32" href="brand/mark-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="brand/mark-192.png" />
     <link rel="apple-touch-icon" href="brand/mark-192.png" />
+    <!-- Installable, so door staff can put the console on a home screen and
+         open it like an app — and reopen it with no signal. -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#0e753b" />
     <meta name="api-base" content="" />
     <!-- Where the public site lives, so promoter links can be built here. The
          console and the site are separate deployments, so this origin is not

@@ -5,7 +5,9 @@ namespace App\Services\Door;
 use App\Models\Ticket;
 use App\Models\TicketScan;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Admission at the door.
@@ -30,35 +32,104 @@ class CheckInService
      * @param  int|null  $party  How many are going in now. Null admits everyone
      *                           still outstanding, which is the common case and
      *                           the right default for a single-admission ticket.
+     * @param  string|null  $clientId  The scan's own id, minted on the phone.
+     *                                 Sending the same scan twice — a request
+     *                                 that timed out after the server had
+     *                                 already admitted the guest — returns the
+     *                                 first result instead of refusing the
+     *                                 guest it let in.
      */
     public function scan(
         string $code,
         string $eventId,
         ?User $scanner = null,
         ?int $party = null,
+        ?string $clientId = null,
     ): ScanOutcome {
-        return DB::transaction(function () use ($code, $eventId, $scanner, $party) {
+        return $this->perform($code, $eventId, $scanner, $party, $clientId);
+    }
+
+    /**
+     * A scan the door already acted on while it had no connection.
+     *
+     * The door decided from its downloaded list and somebody either walked in
+     * or was turned away. That has happened; this records it. The server does
+     * not get a second opinion about whether they go in — they are already in,
+     * or already gone.
+     *
+     * So admission is applied only for scans the door accepted, and only as far
+     * as the ticket truly allows. When the door let somebody in on a ticket the
+     * server knows was already used — two phones working one queue offline, or
+     * a screenshot passed down the line — nothing is double counted and the
+     * disagreement is kept on the row for the organizer to see. A scan the door
+     * refused is recorded with the server's verdict and admits nobody, even if
+     * the ticket turns out to have been fine: that guest was turned away, and
+     * marking the ticket used would refuse them again when they come back.
+     */
+    public function recordOffline(
+        string $code,
+        string $eventId,
+        ?User $scanner,
+        ?int $party,
+        string $clientId,
+        string $offlineResult,
+        CarbonInterface $scannedAt,
+    ): ScanOutcome {
+        return $this->perform(
+            $code,
+            $eventId,
+            $scanner,
+            $party,
+            $clientId,
+            $offlineResult,
+            $this->believable($scannedAt),
+        );
+    }
+
+    private function perform(
+        string $code,
+        string $eventId,
+        ?User $scanner,
+        ?int $party,
+        ?string $clientId,
+        ?string $offlineResult = null,
+        ?CarbonInterface $scannedAt = null,
+    ): ScanOutcome {
+        return DB::transaction(function () use ($code, $eventId, $scanner, $party, $clientId, $offlineResult, $scannedAt) {
             $ticket = Ticket::query()
                 ->where('code', strtoupper(trim($code)))
                 ->lockForUpdate()
                 ->first();
 
+            // Checked after taking the ticket's lock, not before: two copies of
+            // the same scan arriving together are for the same ticket, so the
+            // second waits here and then finds the first one's row.
+            if ($clientId !== null) {
+                $earlier = TicketScan::query()->where('client_id', $clientId)->first();
+
+                if ($earlier) {
+                    return $this->replay($earlier, $ticket);
+                }
+            }
+
             $outcome = $this->decide($ticket, $eventId, $party);
 
-            if ($outcome->admittedAnyone()) {
-                $admitted = $ticket->admitted_count + $outcome->admitted;
+            $admitCount = $this->admitCount($outcome, $offlineResult);
+
+            if ($admitCount > 0) {
+                $admitted = $ticket->admitted_count + $admitCount;
 
                 $ticket->update([
                     'admitted_count' => $admitted,
                     // Only spent once the last of the party is inside. Until
                     // then it stays valid so the rest can still get in.
                     'status' => $admitted >= $ticket->admits ? 'checked_in' : 'valid',
-                    'checked_in_at' => $ticket->checked_in_at ?? now(),
+                    'checked_in_at' => $ticket->checked_in_at ?? $scannedAt ?? now(),
                     'checked_in_by' => $ticket->checked_in_by ?? $scanner?->id,
                 ]);
             }
 
-            TicketScan::create([
+            $row = [
                 'ticket_id' => $ticket?->id,
                 'event_id' => $eventId,
                 'scanned_by' => $scanner?->id,
@@ -66,12 +137,96 @@ class CheckInService
                 // unknown codes all night is worth knowing about.
                 'scanned_code' => substr(strtoupper(trim($code)), 0, 32),
                 'result' => $outcome->result,
-                'admitted' => $outcome->admitted,
-                'scanned_at' => now(),
-            ]);
+                'admitted' => $admitCount,
+                'client_id' => $clientId,
+                'offline_result' => $offlineResult,
+                'scanned_at' => $scannedAt ?? now(),
+            ];
 
-            return $outcome->withTicket($ticket);
+            if ($ticket === null && $clientId !== null) {
+                // No ticket row to lock, so two copies of an unknown code can
+                // race to the unique index. ON CONFLICT DO NOTHING rather than
+                // an exception: in Postgres a failed insert poisons the rest of
+                // the transaction.
+                TicketScan::query()->insertOrIgnore([
+                    ...$row,
+                    'id' => (string) Str::uuid7(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                TicketScan::create($row);
+            }
+
+            $final = $admitCount === $outcome->admitted && $outcome->admittedAnyone()
+                ? $outcome
+                : new ScanOutcome(
+                    $outcome->result,
+                    $outcome->message,
+                    admitted: $admitCount,
+                    remaining: $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0,
+                    applied: $admitCount > 0,
+                );
+
+            return $final->withTicket($ticket)->withOfflineResult($offlineResult);
         });
+    }
+
+    /**
+     * How many people this scan puts inside, as far as the ticket counts.
+     *
+     * Online it is the decision. Offline it is what the door did: nobody for a
+     * refusal, whatever the ticket allows for an admission. The one case that
+     * needs care is a table waved in offline after another phone had already
+     * let part of it in — say four in, with two places left. They are all
+     * inside, so counting nobody would leave two places open for somebody else
+     * later; counting four would break the ticket. Two are counted, and the
+     * scan still carries the disagreement.
+     */
+    private function admitCount(ScanOutcome $outcome, ?string $offlineResult): int
+    {
+        if ($offlineResult === null) {
+            return $outcome->admittedAnyone() ? $outcome->admitted : 0;
+        }
+
+        if ($offlineResult !== ScanOutcome::ACCEPTED) {
+            return 0;
+        }
+
+        return match ($outcome->result) {
+            ScanOutcome::ACCEPTED => $outcome->admitted,
+            ScanOutcome::OVER_CAPACITY => $outcome->remaining,
+            default => 0,
+        };
+    }
+
+    /** The answer this scan got the first time it arrived. */
+    private function replay(TicketScan $earlier, ?Ticket $ticket): ScanOutcome
+    {
+        $remaining = $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0;
+
+        return (new ScanOutcome(
+            $earlier->result,
+            $earlier->admitted > 0 ? 'Already recorded — they are in.' : 'Already recorded.',
+            admitted: $earlier->admitted,
+            remaining: $remaining,
+            applied: $earlier->offline_result === null || $earlier->admitted > 0,
+        ))->withTicket($ticket)->withOfflineResult($earlier->offline_result);
+    }
+
+    /**
+     * When the phone says the scan happened.
+     *
+     * Its clock is trusted within reason, because "10:47pm" is what somebody
+     * reconciling a door wants to see — not the moment a basement found signal
+     * again at 1am. Outside reason, which is a phone set to the wrong year or a
+     * scan claiming to come from the future, the arrival time is used instead.
+     */
+    private function believable(CarbonInterface $at): CarbonInterface
+    {
+        return $at->isAfter(now()->addMinutes(5)) || $at->isBefore(now()->subDays(3))
+            ? now()
+            : $at;
     }
 
     private function decide(?Ticket $ticket, string $eventId, ?int $party): ScanOutcome

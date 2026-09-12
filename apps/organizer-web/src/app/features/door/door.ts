@@ -1,10 +1,13 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
 import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { ScanResult } from '../../core/api.types';
+import { ScanResult, SyncResult } from '../../core/api.types';
+import { DoorOffline, scanId } from '../../core/door-offline';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
 
@@ -26,12 +29,221 @@ import { SessionStore } from '../../core/session';
   imports: [FormsModule, UiButton],
   templateUrl: './door.html',
 })
-export class Door {
+export class Door implements OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
+
+  // --- working without signal ----------------------------------------------
+
+  private readonly offline = inject(DoorOffline);
+
+  /** Whether this phone can decide offline at all (secure context, IndexedDB). */
+  readonly offlineSupported = this.offline.supported;
+
+  /** The saved list: how many tickets, and when it was last fresh. */
+  readonly listCount = signal<number | null>(null);
+  readonly listUpdatedAt = signal<Date | null>(null);
+  readonly refreshingList = signal(false);
+
+  /** Scans made offline and not yet sent. */
+  readonly pendingCount = signal(0);
+  readonly syncing = signal(false);
+
+  /** What the last sync found the door had got wrong while offline. */
+  readonly conflicts = signal<SyncResult['conflicts']>([]);
+
+  /**
+   * Whether the browser believes it has a network.
+   *
+   * Believed, not trusted: navigator.onLine is true on a venue wifi that has
+   * no route out, so every request still has its own timeout. What this is
+   * good for is noticing the moment signal comes back.
+   */
+  readonly online = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
+
+  /** Set when a request actually failed for want of a connection. */
+  readonly connectionLost = signal(false);
+
+  readonly workingOffline = computed(() => !this.online() || this.connectionLost());
+
+  /** Ticks every 30 seconds so "updated 4 min ago" stays true without a reload. */
+  private readonly now = signal(Date.now());
+
+  readonly listAge = computed(() => {
+    const at = this.listUpdatedAt();
+
+    if (!at) return null;
+
+    const minutes = Math.floor((this.now() - at.getTime()) / 60_000);
+
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+
+    return `${Math.floor(minutes / 60)} h ago`;
+  });
+
+  private timers: ReturnType<typeof setInterval>[] = [];
+
+  private readonly onOnline = () => {
+    this.online.set(true);
+    void this.syncAndRefresh();
+  };
+
+  private readonly onOffline = () => this.online.set(false);
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.onOnline);
+      window.addEventListener('offline', this.onOffline);
+    }
+
+    void this.startOffline();
+  }
+
+  /**
+   * Load what this phone already saved, then freshen it while there is signal.
+   *
+   * The saved list is loaded first so a phone that opens this screen with no
+   * connection — reopened in a basement — is ready immediately instead of
+   * waiting on a download that will never arrive.
+   */
+  private async startOffline(): Promise<void> {
+    if (!this.offlineSupported) return;
+
+    const saved = await this.offline.load(this.eventId).catch(() => null);
+
+    if (saved) {
+      this.listCount.set(saved.count);
+      this.listUpdatedAt.set(new Date(saved.generated_at));
+    }
+
+    await this.updatePending();
+
+    // Scans still waiting means this phone was offline when it last scanned.
+    // Assumed still offline until a request succeeds, rather than until one
+    // fails: navigator.onLine is true on a wifi with no route out, and the
+    // failure can take the whole timeout to arrive — long enough to tell a
+    // door "ready" while nothing is getting through.
+    if (this.pendingCount() > 0) this.connectionLost.set(true);
+
+    await this.syncAndRefresh();
+
+    // Sending waits for signal; so does the list. Both retried on a timer
+    // rather than only on the browser's "online" event, which does not fire
+    // when a wifi with no internet quietly starts working again.
+    this.timers.push(setInterval(() => void this.sync(), 15_000));
+    this.timers.push(setInterval(() => void this.refreshList(), 3 * 60_000));
+    this.timers.push(setInterval(() => this.now.set(Date.now()), 30_000));
+  }
+
+  private async syncAndRefresh(): Promise<void> {
+    const sent = await this.sync();
+
+    // Refreshed only once the queue is clear: a list fetched before the
+    // server has heard about offline admissions would not know about them.
+    if (sent) await this.refreshList();
+  }
+
+  async refreshList(): Promise<void> {
+    if (!this.offlineSupported || this.refreshingList() || this.pendingCount() > 0) return;
+
+    this.refreshingList.set(true);
+
+    try {
+      const list = await firstValueFrom(this.api.doorList(this.eventId).pipe(timeout(20_000)));
+      const saved = await this.offline.save(list);
+
+      this.listCount.set(saved.count);
+      this.listUpdatedAt.set(new Date(saved.generated_at));
+      this.connectionLost.set(false);
+    } catch (error) {
+      if (this.isConnectionFailure(error)) this.connectionLost.set(true);
+    } finally {
+      this.refreshingList.set(false);
+    }
+  }
+
+  /**
+   * Send whatever was scanned offline. Returns whether the queue is now clear.
+   *
+   * Oldest first, in batches, and removed from the phone only once the server
+   * has answered — a sync whose response is lost is simply sent again, and
+   * the scan ids make that harmless.
+   */
+  async sync(): Promise<boolean> {
+    if (!this.offlineSupported) return true;
+    if (this.syncing()) return false;
+
+    const pending = await this.offline.pending(this.eventId);
+
+    if (pending.length === 0) {
+      this.pendingCount.set(0);
+
+      return true;
+    }
+
+    this.syncing.set(true);
+
+    try {
+      for (let i = 0; i < pending.length; i += 200) {
+        const batch = pending.slice(i, i + 200);
+        const result = await firstValueFrom(
+          this.api
+            .syncScans(
+              this.eventId,
+              batch.map(({ event_id: _event, ...scan }) => scan),
+            )
+            .pipe(timeout(15_000)),
+        );
+
+        await this.offline.forget(result.data.map((row) => row.client_id));
+
+        if (result.conflicts.length > 0) {
+          this.conflicts.update((all) => [...all, ...result.conflicts]);
+        }
+      }
+
+      this.connectionLost.set(false);
+
+      return true;
+    } catch (error) {
+      if (this.isConnectionFailure(error)) this.connectionLost.set(true);
+
+      return false;
+    } finally {
+      this.syncing.set(false);
+      await this.updatePending();
+    }
+  }
+
+  dismissConflicts(): void {
+    this.conflicts.set([]);
+  }
+
+  private async updatePending(): Promise<void> {
+    this.pendingCount.set((await this.offline.pending(this.eventId).catch(() => [])).length);
+  }
+
+  /**
+   * No connection, as opposed to the server saying no.
+   *
+   * Status 0 is a request that never got an answer; a timeout is one that
+   * took too long to be useful to a queue; 502–504 are what a proxy returns
+   * when the connection behind it dropped. A 4xx is the server answering, and
+   * falling back to the phone's list would override a real refusal.
+   */
+  private isConnectionFailure(error: unknown): boolean {
+    if (error instanceof TimeoutError) return true;
+
+    if (error instanceof HttpErrorResponse) {
+      return error.status === 0 || error.status === 502 || error.status === 503 || error.status === 504;
+    }
+
+    return false;
+  }
 
   readonly code = signal('');
   readonly party = signal('');
@@ -74,34 +286,90 @@ export class Door {
 
     if (!code || this.busy()) return;
 
-    this.send(code);
+    void this.send(code);
   }
 
-  private send(code: string): void {
+  /**
+   * Scan online if the connection answers in time; otherwise decide from the
+   * phone's list and send the scan later.
+   *
+   * Six seconds, not the browser's thirty. A queue at a door will not stand
+   * still for thirty seconds per guest, and a connection that slow is, for
+   * the purposes of a door, no connection. The scan carries an id either way,
+   * so if the slow request did reach the server after all, the queued copy
+   * is recognised as the same scan rather than a second person.
+   */
+  private async send(code: string): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
 
-    const party = Number(this.party());
+    const partyNumber = Number(this.party());
+    const party = partyNumber > 0 ? partyNumber : null;
+    const clientId = scanId();
 
-    this.api.scan(this.eventId, code, party > 0 ? party : undefined).subscribe({
-      next: (outcome) => {
-        this.busy.set(false);
-        this.outcome.set(outcome);
-        this.scannedHere.update((n) => n + 1);
-        this.admittedHere.update((n) => n + outcome.admitted);
+    let outcome: ScanResult;
 
-        // Cleared so the next guest can be scanned without a delete. The party
-        // size is cleared too — it belongs to one ticket, and carrying it over
-        // would silently admit four people on the next single ticket.
-        this.code.set('');
-        this.party.set('');
-      },
-      error: (response) => {
+    try {
+      outcome = await firstValueFrom(
+        this.api.scan(this.eventId, code, party ?? undefined, clientId).pipe(timeout(6_000)),
+      );
+
+      this.connectionLost.set(false);
+
+      // Mirrored onto the saved list, so if the signal goes a minute from now
+      // this phone already knows the ticket was used.
+      if (outcome.accepted && outcome.ticket) {
+        void this.offline.admitLocally(code, party, outcome.ticket.admitted_count);
+      }
+    } catch (error) {
+      if (!this.isConnectionFailure(error)) {
         this.busy.set(false);
         this.outcome.set(null);
-        this.error.set(messageFor(response, 'That scan could not be sent.'));
-      },
-    });
+        this.error.set(messageFor(error, 'That scan could not be sent.'));
+
+        return;
+      }
+
+      this.connectionLost.set(true);
+
+      if (!this.offlineSupported || !this.offline.ready) {
+        this.busy.set(false);
+        this.outcome.set(null);
+        this.error.set(
+          this.offlineSupported
+            ? 'No connection, and this phone has no saved ticket list yet. Open the door screen once with signal so it can download one.'
+            : 'No connection, and this browser cannot check tickets offline. Use the console over https.',
+        );
+
+        return;
+      }
+
+      outcome = await this.offline.decide(code, party);
+
+      // Every offline scan is queued, refusals included: the server needs to
+      // know who was turned away as much as who went in.
+      await this.offline.enqueue({
+        client_id: clientId,
+        event_id: this.eventId,
+        code,
+        party,
+        offline_result: outcome.result,
+        scanned_at: new Date().toISOString(),
+      });
+
+      await this.updatePending();
+    }
+
+    this.busy.set(false);
+    this.outcome.set(outcome);
+    this.scannedHere.update((n) => n + 1);
+    this.admittedHere.update((n) => n + outcome.admitted);
+
+    // Cleared so the next guest can be scanned without a delete. The party
+    // size is cleared too — it belongs to one ticket, and carrying it over
+    // would silently admit four people on the next single ticket.
+    this.code.set('');
+    this.party.set('');
   }
 
   // --- the camera ---------------------------------------------------------
@@ -160,7 +428,7 @@ export class Door {
           const value = found[0].rawValue.trim().toUpperCase();
 
           this.code.set(value);
-          this.send(value);
+          void this.send(value);
 
           // A pause after a hit, so one ticket held in front of the lens is not
           // scanned six times while the door reads the result.
@@ -185,5 +453,12 @@ export class Door {
     // Leaving the camera on after navigating away keeps the phone's indicator
     // light burning and the battery draining, which reads as spyware.
     this.stopCamera();
+
+    this.timers.forEach(clearInterval);
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.onOnline);
+      window.removeEventListener('offline', this.onOffline);
+    }
   }
 }

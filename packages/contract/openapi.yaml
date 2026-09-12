@@ -367,12 +367,20 @@ paths:
                 code:
                   type: string
                   description: The value read from the QR.
-                scanned_at:
+                party:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  description: How many of the ticket's party go in now. Absent admits everyone outstanding.
+                client_id:
                   type: string
-                  format: date-time
+                  format: uuid
                   description: |
-                    When the scan happened on the device. Supplied by offline
-                    scanning, which queues locally and syncs on reconnect.
+                    The scan's own id, minted on the device. A request that
+                    times out after the server admitted the guest is retried
+                    through the sync endpoint with the same id, and is
+                    recognised as the same scan rather than refused as a
+                    second person on the ticket.
       responses:
         '200':
           description: A decision. Refusals are 200 with a result, not errors.
@@ -381,6 +389,116 @@ paths:
               schema: { $ref: '#/components/schemas/ScanResult' }
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/events/{event}/door-list:
+    get:
+      operationId: doorList
+      summary: The event's tickets, for checking in with no signal
+      description: |
+        Downloaded while the door has a connection, so it can keep deciding
+        when it loses one. Carries a PBKDF2-SHA256 hash of each code, never
+        the code: enough for a device to recognise a code it is shown, never
+        enough to produce one. A device hashes a scanned code (trimmed,
+        upper-cased) with `salt` and `iterations` and looks the result up.
+      tags: [Door]
+      security:
+        - bearerAuth: [door]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event_id, salt, iterations, generated_at, tickets]
+                properties:
+                  event_id: { type: string, format: uuid }
+                  salt: { type: string }
+                  iterations: { type: integer }
+                  generated_at: { type: string, format: date-time }
+                  tickets:
+                    type: array
+                    items:
+                      type: object
+                      required: [hash, status, admits, admitted_count]
+                      properties:
+                        hash: { type: string }
+                        status: { type: string, enum: [valid, checked_in, transferred, refunded, void] }
+                        admits: { type: integer }
+                        admitted_count: { type: integer }
+                        holder_name: { type: [string, 'null'] }
+                        type: { type: [string, 'null'] }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/events/{event}/scans/sync:
+    post:
+      operationId: syncOfflineScans
+      summary: Send scans made with no signal
+      description: |
+        Records what the door already did offline; it does not re-decide
+        admission. A scan the door accepted counts people in, as far as the
+        ticket allows. A scan the door refused admits nobody, even if the
+        ticket was valid. Where the two disagree the scan carries a
+        `conflict`. Idempotent on `client_id`: a batch whose response was lost
+        can be sent again. A batch that fails validation is refused whole.
+      tags: [Door]
+      security:
+        - bearerAuth: [door]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scans]
+              properties:
+                scans:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [client_id, code, offline_result, scanned_at]
+                    properties:
+                      client_id: { type: string, format: uuid }
+                      code: { type: string }
+                      party: { type: [integer, 'null'], minimum: 1, maximum: 50 }
+                      offline_result: { type: string, enum: [accepted, duplicate, not_found, void, over_capacity] }
+                      scanned_at:
+                        type: string
+                        format: date-time
+                        description: When it happened on the device. Ignored if more than five minutes ahead or three days behind.
+      responses:
+        '200':
+          description: Each scan's recorded result, and the disagreements separately.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, conflicts]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ScanResult' }
+                  conflicts:
+                    type: array
+                    description: The subset where the offline door and the server disagreed.
+                    items: { $ref: '#/components/schemas/ScanResult' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
 
 components:
   securitySchemes:
@@ -775,19 +893,47 @@ components:
 
     ScanResult:
       type: object
-      required: [result]
+      required: [result, accepted, admitted, remaining, message]
       properties:
+        client_id:
+          type: string
+          format: uuid
+          description: Present on sync results, to match each back to its queued scan.
         result:
           type: string
-          enum: [accepted, duplicate, not_found, wrong_event, void]
+          enum: [accepted, duplicate, not_found, wrong_event, void, over_capacity]
           description: |
-            A refusal is a normal outcome, not an error, so the scanner can show
-            it without treating it as a failure.
-        ticket:
-          oneOf:
-            - $ref: '#/components/schemas/Ticket'
-            - type: 'null'
-        already_scanned_at:
+            The server's verdict. A refusal is a normal outcome, not an error,
+            so the scanner can show it without treating it as a failure.
+        accepted:
+          type: boolean
+          description: Whether anybody went in on this scan.
+        admitted:
+          type: integer
+          description: How many this scan let in. A table can arrive in parts.
+        remaining:
+          type: integer
+          description: How many of the ticket's party are still outside afterwards.
+        message:
+          type: string
+          description: Written for the person on the door.
+        offline_result:
           type: [string, 'null']
-          format: date-time
-          description: Set on a duplicate, so the door can see when it first went through.
+          description: What the door decided with no signal; null for an online scan.
+        conflict:
+          type: [string, 'null']
+          enum: [admitted_invalid, refused_valid, null]
+          description: |
+            Where the offline door and the server disagreed. admitted_invalid:
+            let in on a ticket already used or not valid. refused_valid: turned
+            away on a ticket that was fine.
+        ticket:
+          description: Null for a ticket belonging to another event.
+          oneOf:
+            - type: object
+              properties:
+                holder_name: { type: [string, 'null'] }
+                type: { type: [string, 'null'] }
+                admits: { type: integer }
+                admitted_count: { type: integer }
+            - type: 'null'

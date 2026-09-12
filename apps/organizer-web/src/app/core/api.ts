@@ -14,7 +14,10 @@ import {
   AttendeeMessage,
   CancellationPreview,
   CancellationResult,
+  DoorList,
   EventSummary,
+  OfflineScan,
+  SyncResult,
   MessageAudience,
   GuestPage,
   IssueResult,
@@ -496,11 +499,27 @@ export class Api {
    * The party size is how many of a table are going in now; omitting it admits
    * everyone still outstanding, which is right for an ordinary ticket.
    */
-  scan(eventId: string, code: string, party?: number): Observable<ScanResult> {
+  scan(eventId: string, code: string, party?: number, clientId?: string): Observable<ScanResult> {
     return this.http.post<ScanResult>(`${this.base}/api/events/${eventId}/scan`, {
       code,
       ...(party ? { party } : {}),
+      // The scan's own id, so a retry after a lost response is recognised
+      // rather than refused as a second person on the ticket.
+      ...(clientId ? { client_id: clientId } : {}),
     });
+  }
+
+  /** The event's tickets as hashes, for deciding at the door with no signal. */
+  doorList(eventId: string): Observable<DoorList> {
+    return this.http.get<DoorList>(`${this.base}/api/events/${eventId}/door-list`);
+  }
+
+  /** Scans made offline, sent once the phone has a connection again. */
+  syncScans(
+    eventId: string,
+    scans: Omit<OfflineScan, 'event_id'>[],
+  ): Observable<SyncResult> {
+    return this.http.post<SyncResult>(`${this.base}/api/events/${eventId}/scans/sync`, { scans });
   }
 
   // --- reminders ----------------------------------------------------------

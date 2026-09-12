@@ -8,6 +8,10 @@
       <div class="ws__identity min-w-0">
         <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">{{ event.title }}</h1>
 
+        @if (fromCache() && unreachable()) {
+          <p class="mt-2 text-xs font-medium text-warning">Offline — showing what this phone saved. It refreshes when signal returns.</p>
+        }
+
         <!--
           Status, date and place on one line under the name. They wrap as a
           group rather than each taking a row: three facts stacked vertically
@@ -52,6 +56,13 @@
         </a>
       }
     </div>
+  } @else if (unreachable()) {
+    <!-- Not "not found": the server could not be asked, and the event is
+         very likely fine. Retried on a timer and when signal returns. -->
+    <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">Can’t reach the server</h1>
+    <p class="ws__meta mt-3 text-sm text-text-muted">
+      This phone has no saved copy of this event yet. It will load as soon as there is a connection — the door still works from its saved ticket list.
+    </p>
   } @else {
     <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">Event not found</h1>
     <p class="ws__meta mt-3 flex flex-wrap items-center gap-4 text-sm text-text-muted">

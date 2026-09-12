@@ -292,6 +292,46 @@ export interface ScanResult {
     admits: number;
     admitted_count: number;
   } | null;
+  /** Decided on this phone from its saved list, with no connection. */
+  offline?: boolean;
+  /** What the door did offline, echoed back when a queued scan is synced. */
+  offline_result?: string | null;
+  /** Where the offline door and the server disagreed. */
+  conflict?: 'admitted_invalid' | 'refused_valid' | null;
+}
+
+/** One ticket in the list a door phone keeps for when signal goes. */
+export interface DoorListTicket {
+  /** PBKDF2 of the code — enough to recognise one, never enough to show one. */
+  hash: string;
+  status: string;
+  admits: number;
+  admitted_count: number;
+  holder_name: string | null;
+  type: string | null;
+}
+
+export interface DoorList {
+  event_id: string;
+  salt: string;
+  iterations: number;
+  generated_at: string;
+  tickets: DoorListTicket[];
+}
+
+/** A scan the door made offline, waiting on the phone to be sent. */
+export interface OfflineScan {
+  client_id: string;
+  event_id: string;
+  code: string;
+  party: number | null;
+  offline_result: string;
+  scanned_at: string;
+}
+
+export interface SyncResult {
+  data: (ScanResult & { client_id: string })[];
+  conflicts: (ScanResult & { client_id: string })[];
 }
 
 /** One message an organizer sent to their ticket holders. */

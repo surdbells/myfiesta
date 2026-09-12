@@ -1,4 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink, RouterOutlet } from '@angular/router';
 import { UiBadge, UiBreadcrumb, UiIcon, UiTabs, type Crumb, type TabLink } from '@myfiesta/ui';
 import { CalendarDays, MapPin } from 'lucide-angular';
@@ -45,14 +46,100 @@ export class EventWorkspace {
   readonly event = signal<OrganizerEventDetail | null>(null);
   readonly loading = signal(true);
 
+  /**
+   * The server could not be reached, as distinct from the event not existing.
+   *
+   * These were one state, and the difference matters most at a door: a phone
+   * reloaded with no signal told whoever was working it that their event did
+   * not exist, while the door beneath the header carried on scanning from its
+   * saved list.
+   */
+  readonly unreachable = signal(false);
+
+  /** Showing the copy this phone saved last time, because the server is out of reach. */
+  readonly fromCache = signal(false);
+
+  private retry: ReturnType<typeof setInterval> | null = null;
+  private readonly destroyRef = inject(DestroyRef);
+
   constructor() {
+    const saved = this.readCache();
+
+    if (saved) {
+      // Shown straight away and replaced when the server answers, so the
+      // header is right even before the network has had its say.
+      this.event.set(saved);
+      this.loading.set(false);
+      this.fromCache.set(true);
+    }
+
+    this.load();
+
+    const onOnline = () => this.load();
+    window.addEventListener('online', onOnline);
+
+    this.destroyRef.onDestroy(() => {
+      window.removeEventListener('online', onOnline);
+      if (this.retry) clearInterval(this.retry);
+    });
+  }
+
+  private load(): void {
     this.api.event(this.eventId).subscribe({
       next: (event) => {
         this.event.set(event);
         this.loading.set(false);
+        this.unreachable.set(false);
+        this.fromCache.set(false);
+        this.writeCache(event);
+
+        if (this.retry) {
+          clearInterval(this.retry);
+          this.retry = null;
+        }
       },
-      error: () => this.loading.set(false),
+      error: (error: HttpErrorResponse) => {
+        this.loading.set(false);
+
+        // 404 and 403 are the server answering. Anything else is the network,
+        // and the event may well be fine.
+        if (error.status === 404 || error.status === 403) {
+          this.event.set(null);
+          this.unreachable.set(false);
+
+          return;
+        }
+
+        this.unreachable.set(true);
+        this.retry ??= setInterval(() => this.load(), 20_000);
+      },
     });
+  }
+
+  /**
+   * The event's header, kept on this phone.
+   *
+   * localStorage rather than IndexedDB: one small object, read synchronously
+   * so the header renders on the first frame instead of flashing "Loading…"
+   * in a basement. Best-effort on both sides — private browsing, a full
+   * store, or a browser blocking storage all simply mean no saved copy.
+   */
+  private readCache(): OrganizerEventDetail | null {
+    try {
+      const raw = localStorage.getItem(`myfiesta.event.${this.eventId}`);
+
+      return raw ? (JSON.parse(raw) as OrganizerEventDetail) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeCache(event: OrganizerEventDetail): void {
+    try {
+      localStorage.setItem(`myfiesta.event.${this.eventId}`, JSON.stringify(event));
+    } catch {
+      // No saved copy next time; nothing else depends on it.
+    }
   }
 
   readonly crumbs = computed<Crumb[]>(() => [

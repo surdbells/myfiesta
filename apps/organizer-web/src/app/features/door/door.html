@@ -11,6 +11,77 @@
 </header>
 
 <!--
+  Whether this phone can keep going without signal. Above everything, in plain
+  words, because the time to find out a door cannot work offline is before
+  the signal goes — not with a queue outside.
+-->
+@if (!offlineSupported) {
+  <p class="mb-4 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 py-3 text-sm text-warning" role="status">
+    This browser cannot check tickets offline. Open the console over https to keep scanning when the signal drops.
+  </p>
+} @else if (workingOffline()) {
+  <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 py-3 text-sm text-warning" role="status" aria-live="polite">
+    <strong class="font-semibold">No connection — checking from this phone’s list.</strong>
+    @if (listCount() !== null) {
+      <span>{{ listCount() }} tickets, updated {{ listAge() }}.</span>
+    } @else {
+      <span>No list saved yet: codes cannot be checked until there is signal.</span>
+    }
+    @if (pendingCount() > 0) {
+      <span class="tabular-nums">{{ pendingCount() }} {{ pendingCount() === 1 ? 'scan' : 'scans' }} waiting to send.</span>
+    }
+  </p>
+} @else {
+  <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted" role="status" aria-live="polite">
+    @if (listCount() !== null) {
+      <span class="font-medium text-success">Ready if the signal drops</span>
+      <span>· {{ listCount() }} tickets saved on this phone, updated {{ listAge() }}</span>
+    } @else if (refreshingList()) {
+      <span>Saving the ticket list to this phone…</span>
+    } @else {
+      <span>Ticket list not saved on this phone yet.</span>
+    }
+    @if (syncing()) {
+      <span class="tabular-nums">· Sending {{ pendingCount() }} offline {{ pendingCount() === 1 ? 'scan' : 'scans' }}…</span>
+    } @else if (pendingCount() > 0) {
+      <span class="tabular-nums">· {{ pendingCount() }} waiting to send</span>
+    }
+  </p>
+}
+
+<!--
+  What the door got wrong while it had no signal, found out when it synced.
+  Kept on screen until dismissed: the person who let a spent ticket in is the
+  one who needs to read this, and a toast would be gone before they looked.
+-->
+@if (conflicts().length > 0) {
+  <section class="mb-6 rounded-lg border border-danger bg-surface-raised p-4" role="alert">
+    <header class="flex flex-wrap items-baseline justify-between gap-3">
+      <h2 class="text-base font-semibold text-danger">While offline, this door got {{ conflicts().length }} wrong</h2>
+      <button
+        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+        type="button"
+        (click)="dismissConflicts()"
+      >
+        Dismiss
+      </button>
+    </header>
+    <ul class="m-0 mt-3 grid list-none gap-2 p-0 text-sm">
+      @for (item of conflicts(); track item.client_id) {
+        <li class="flex flex-wrap gap-x-2">
+          <strong class="font-medium">{{ item.ticket?.holder_name ?? 'Unknown ticket' }}</strong>
+          @if (item.conflict === 'admitted_invalid') {
+            <span class="text-danger">was let in, but the ticket was already used or not valid.</span>
+          } @else {
+            <span class="text-warning">was turned away, but the ticket was valid — they can come in.</span>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!--
   The verdict panel is first and fills the width, because at a door in the dark
   this is the only thing anybody looks at. Everything below is for the
   conversation that follows a refusal.
@@ -43,6 +114,12 @@
     </p>
 
     <p class="verdict__why text-base">{{ result.message }}</p>
+
+    @if (result.offline) {
+      <!-- Said, so nobody mistakes a decision from a saved list for the
+           server's — and knows it will be checked once signal is back. -->
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] opacity-80">Checked offline · will be confirmed when signal returns</p>
+    }
 
     @if (result.ticket; as ticket) {
       <p class="verdict__who text-sm opacity-85">

@@ -22,7 +22,16 @@ class ScanOutcome
     /** Asked for more people than the ticket has left. */
     public const OVER_CAPACITY = 'over_capacity';
 
+    /** The door let somebody in offline on a ticket the server refused. */
+    public const CONFLICT_ADMITTED_INVALID = 'admitted_invalid';
+
+    /** The door turned somebody away offline on a ticket that was valid. */
+    public const CONFLICT_REFUSED_VALID = 'refused_valid';
+
     public ?Ticket $ticket = null;
+
+    /** What the door decided with no connection, when it had none. */
+    public ?string $offlineResult = null;
 
     public function __construct(
         public readonly string $result,
@@ -31,6 +40,12 @@ class ScanOutcome
         public readonly int $admitted = 0,
         /** How many of the party are still outside afterwards. */
         public readonly int $remaining = 0,
+        /**
+         * Whether the verdict was acted on. False for an offline refusal the
+         * server would have accepted: the result says the ticket was fine,
+         * and nobody went in.
+         */
+        public readonly bool $applied = true,
     ) {}
 
     public function withTicket(?Ticket $ticket): self
@@ -40,9 +55,16 @@ class ScanOutcome
         return $this;
     }
 
+    public function withOfflineResult(?string $offlineResult): self
+    {
+        $this->offlineResult = $offlineResult;
+
+        return $this;
+    }
+
     public function admittedAnyone(): bool
     {
-        return $this->result === self::ACCEPTED;
+        return $this->result === self::ACCEPTED && $this->applied;
     }
 
     /**
@@ -55,5 +77,28 @@ class ScanOutcome
     public function partiallyAdmitted(): bool
     {
         return $this->admittedAnyone() && $this->remaining > 0;
+    }
+
+    /**
+     * Where the door, working offline, and the server disagree.
+     *
+     * Null online, and null offline when they agree. The two disagreements
+     * are not equal: somebody let in on a spent ticket is a loss to look into,
+     * somebody turned away on a good one is a guest to apologise to.
+     */
+    public function conflict(): ?string
+    {
+        if ($this->offlineResult === null) {
+            return null;
+        }
+
+        $doorAdmitted = $this->offlineResult === self::ACCEPTED;
+        $serverAdmits = $this->result === self::ACCEPTED;
+
+        return match (true) {
+            $doorAdmitted && ! $serverAdmits => self::CONFLICT_ADMITTED_INVALID,
+            ! $doorAdmitted && $serverAdmits => self::CONFLICT_REFUSED_VALID,
+            default => null,
+        };
     }
 }

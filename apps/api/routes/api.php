@@ -73,8 +73,14 @@ Route::middleware(['auth:sanctum', 'token.scope:attendee'])->group(function () {
 // is what a shareable link carries, but a door token is scoped as
 // door:{event_id} — so the id is what the scanner has and what the middleware
 // compares against.
-Route::middleware(['auth:sanctum', 'token.scope:door'])
-    ->post('/events/{event:id}/scan', [DoorController::class, 'scan']);
+Route::middleware(['auth:sanctum', 'token.scope:door'])->group(function () {
+    Route::post('/events/{event:id}/scan', [DoorController::class, 'scan']);
+
+    // Offline scanning: the list a phone decides from when the signal goes,
+    // and the scans it made meanwhile, sent back once it returns.
+    Route::get('/events/{event:id}/door-list', [DoorController::class, 'list']);
+    Route::post('/events/{event:id}/scans/sync', [DoorController::class, 'sync']);
+});
 
 /*
  * Signing in.

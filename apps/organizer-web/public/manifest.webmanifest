@@ -1,0 +1,14 @@
+{
+  "name": "myfiesta for organizers",
+  "short_name": "myfiesta",
+  "description": "Run your events and work the door, with or without signal.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f6",
+  "theme_color": "#0e753b",
+  "icons": [
+    { "src": "brand/mark-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "brand/mark-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
