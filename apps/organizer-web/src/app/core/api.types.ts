@@ -176,6 +176,10 @@ export interface PromoCode {
   promoter_name: string | null;
   redemption_count: number;
   max_redemptions: number | null;
+  max_per_customer: number | null;
+  /** The window the code works in. Enforced at checkout; null means always. */
+  starts_at: string | null;
+  ends_at: string | null;
   is_active: boolean;
   event_scoped: boolean;
   /** Whether it would actually work right now — the question being asked. */

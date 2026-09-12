@@ -48,6 +48,14 @@ export class EventCodes {
   readonly notice = signal<string | null>(null);
   readonly copied = signal<string | null>(null);
 
+  /**
+   * The code being edited, or null while the form is making a new one.
+   *
+   * Editing reuses the same form rather than a second one: the fields are the
+   * same fields, and two of them would drift.
+   */
+  readonly editing = signal<PromoCode | null>(null);
+
   readonly form = signal({
     code: '',
     label: '',
@@ -58,6 +66,8 @@ export class EventCodes {
     ref_slug: '',
     max_redemptions: '',
     max_per_customer: '',
+    starts_at: '',
+    ends_at: '',
   });
 
   readonly discounts = computed(() => this.form().kind !== 'promoter');
@@ -141,6 +151,40 @@ export class EventCodes {
     this.error.set(null);
     this.notice.set(null);
 
+    const editing = this.editing();
+
+    // The code itself is absent from an edit: it is printed on posters and
+    // typed off screenshots, so renaming it would break every place it has
+    // already been shared. The server refuses it for the same reason.
+    const body: Record<string, unknown> = {
+      label: form.label.trim() || null,
+      discount_type: this.discounts() ? form.discount_type : null,
+      discount_value: this.discounts() ? this.discountValue() : null,
+      promoter_name: this.attributes() ? form.promoter_name.trim() || null : null,
+      ref_slug: this.attributes() ? this.refSlug() : null,
+      max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
+      max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
+      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
+      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+    };
+
+    if (editing) {
+      this.api.updateCode(this.eventId, editing.id, body).subscribe({
+        next: () => {
+          this.saving.set(false);
+          this.notice.set('Code saved.');
+          this.cancelEdit();
+          this.load();
+        },
+        error: (response) => {
+          this.saving.set(false);
+          this.error.set(messageFor(response, 'That code could not be saved.'));
+        },
+      });
+
+      return;
+    }
+
     this.api
       .createCode(this.eventId, {
         code: form.code.trim().toUpperCase(),
@@ -151,6 +195,8 @@ export class EventCodes {
         ref_slug: this.attributes() ? this.refSlug() : null,
         max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
         max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
+        starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
+        ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
         event_scoped: true,
       })
       .subscribe({
@@ -166,6 +212,8 @@ export class EventCodes {
             ref_slug: '',
             max_redemptions: '',
             max_per_customer: '',
+            starts_at: '',
+            ends_at: '',
           });
           this.load();
         },
@@ -174,6 +222,96 @@ export class EventCodes {
           this.error.set(messageFor(response, 'That code could not be created.'));
         },
       });
+  }
+
+  /** Load a code into the form. */
+  edit(code: PromoCode): void {
+    this.editing.set(code);
+    this.error.set(null);
+    this.notice.set(null);
+
+    this.form.set({
+      code: code.code,
+      label: code.label ?? '',
+      kind:
+        code.discount_type && code.ref_slug
+          ? 'both'
+          : code.discount_type
+            ? 'discount'
+            : 'promoter',
+      discount_type: code.discount_type ?? 'percentage',
+      // Back to what somebody typed: basis points to a percentage, minor
+      // units to an amount.
+      discount_value:
+        code.discount_value === null
+          ? ''
+          : code.discount_type === 'percentage'
+            ? String(Number((code.discount_value / 100).toFixed(2)))
+            : String(code.discount_value / 100),
+      promoter_name: code.promoter_name ?? '',
+      ref_slug: code.ref_slug ?? '',
+      max_redemptions: code.max_redemptions === null ? '' : String(code.max_redemptions),
+      max_per_customer: code.max_per_customer === null ? '' : String(code.max_per_customer),
+      starts_at: this.toLocalInput(code.starts_at),
+      ends_at: this.toLocalInput(code.ends_at),
+    });
+
+    // The form is above the list, and on a long list the edit control that
+    // was just pressed is off the top of the screen.
+    this.document.getElementById('code')?.scrollIntoView({ block: 'center' });
+  }
+
+  cancelEdit(): void {
+    this.editing.set(null);
+    this.form.set({
+      code: '',
+      label: '',
+      kind: 'discount',
+      discount_type: 'percentage',
+      discount_value: '',
+      promoter_name: '',
+      ref_slug: '',
+      max_redemptions: '',
+      max_per_customer: '',
+      starts_at: '',
+      ends_at: '',
+    });
+  }
+
+  /**
+   * An instant as a datetime-local control wants it.
+   *
+   * Local, not UTC: the control has no zone, so handing it an ISO string
+   * shows the wrong time to everybody east or west of Greenwich.
+   */
+  private toLocalInput(iso: string | null): string {
+    if (!iso) return '';
+
+    const at = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    return (
+      `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}` +
+      `T${pad(at.getHours())}:${pad(at.getMinutes())}`
+    );
+  }
+
+  /** "Until Fri, 12 Sep" — the fact an organizer is scanning for. */
+  describeWindow(code: PromoCode): string | null {
+    const when = (iso: string) =>
+      new Intl.DateTimeFormat('en-CA', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date(iso));
+
+    if (code.starts_at && code.ends_at) return `${when(code.starts_at)} → ${when(code.ends_at)}`;
+    if (code.ends_at) return `Until ${when(code.ends_at)}`;
+    if (code.starts_at) return `From ${when(code.starts_at)}`;
+
+    return null;
   }
 
   turnOff(code: PromoCode): void {

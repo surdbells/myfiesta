@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Http\Controllers\Controller;
 use App\Models\Code;
 use App\Models\Event;
+use App\Services\Audit\Auditor;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,6 +20,8 @@ use Illuminate\Validation\Rule;
  */
 class CodeController extends Controller
 {
+    public function __construct(private readonly Auditor $auditor) {}
+
     public function index(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageCodes', $event);
@@ -114,6 +118,90 @@ class CodeController extends Controller
     }
 
     /**
+     * Change a code that is already out there.
+     *
+     * Before this the only edit was delete-and-recreate, which throws away the
+     * redemption count and the attribution attached to it — so a typo in a
+     * promoter's name cost the record of everything they had sold.
+     *
+     * Two things deliberately cannot change. The code itself is printed on
+     * posters and typed from screenshots, so renaming it would silently break
+     * every place it has already been shared; a new code is the honest way to
+     * do that. And a fixed amount's currency follows the event it was made
+     * for, because a discount in dollars cannot come off a price in naira.
+     */
+    public function update(Request $request, Event $event, Code $code): JsonResponse
+    {
+        $this->authorize('manageCodes', $event);
+
+        abort_unless($code->organization_id === $event->organization_id, 404);
+
+        $data = $request->validate([
+            'label' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'discount_type' => ['sometimes', 'nullable', 'in:percentage,fixed'],
+            'discount_value' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'promoter_name' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'ref_slug' => ['sometimes', 'nullable', 'string', 'max:64', 'alpha_dash'],
+            'max_redemptions' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'max_per_customer' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'starts_at' => ['sometimes', 'nullable', 'date'],
+            'ends_at' => ['sometimes', 'nullable', 'date'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]);
+
+        // Merged against what is stored, so the invariants below are checked
+        // on the code as it will be — not on whichever fields happened to be
+        // sent. A request changing only the end date must not be able to
+        // leave a percentage code with no percentage.
+        $next = array_merge([
+            'discount_type' => $code->discount_type,
+            'discount_value' => $code->discount_value,
+            'ref_slug' => $code->ref_slug,
+            'starts_at' => $code->starts_at,
+            'ends_at' => $code->ends_at,
+        ], $data);
+
+        if (blank($next['discount_type']) && blank($next['ref_slug'])) {
+            return response()->json([
+                'message' => 'A code needs either a discount or a tracking slug — otherwise it does nothing.',
+            ], 422);
+        }
+
+        if (filled($next['discount_type']) && blank($next['discount_value'])) {
+            return response()->json(['message' => 'Say how much comes off.'], 422);
+        }
+
+        if ($next['discount_type'] === 'percentage' && (int) $next['discount_value'] > 10000) {
+            return response()->json(['message' => 'A percentage cannot exceed 100%.'], 422);
+        }
+
+        if ($next['starts_at'] && $next['ends_at']
+            && Carbon::parse($next['ends_at'])->lessThanOrEqualTo(Carbon::parse($next['starts_at']))) {
+            return response()->json([
+                'message' => 'The end has to come after the start.',
+            ], 422);
+        }
+
+        // A code that has become a fixed amount takes the event's currency;
+        // one that has become a percentage carries none, because percentages
+        // travel between currencies and amounts do not.
+        if (array_key_exists('discount_type', $data)) {
+            $code->discount_currency = $data['discount_type'] === 'fixed' ? $event->currency : null;
+        }
+
+        $code->fill($data)->save();
+
+        $this->auditor->record(
+            'code.updated',
+            $event,
+            $request->user(),
+            metadata: ['code' => $code->code, 'changed' => array_keys($data)],
+        );
+
+        return response()->json($this->present($code->refresh(), $event));
+    }
+
+    /**
      * Turn a code off.
      *
      * Deactivated rather than deleted: orders point at it, and removing it
@@ -146,6 +234,12 @@ class CodeController extends Controller
             'promoter_name' => $code->promoter_name,
             'redemption_count' => $code->redemption_count,
             'max_redemptions' => $code->max_redemptions,
+            'max_per_customer' => $code->max_per_customer,
+            // The window is enforced at checkout and was absent from this
+            // response, so the console could neither show it nor edit it —
+            // a code could only ever be given a window it could not display.
+            'starts_at' => $code->starts_at,
+            'ends_at' => $code->ends_at,
             'is_active' => $code->is_active,
             'event_scoped' => $code->event_id !== null,
             // Whether it would actually work right now, which is the question

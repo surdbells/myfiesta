@@ -333,6 +333,19 @@ export class Api {
     );
   }
 
+  /**
+   * The order tiers are offered in, as one list.
+   *
+   * One request rather than a sort_order per tier: swapping a pair with two
+   * writes leaves both claiming the same place if the second never lands.
+   */
+  reorderTicketTypes(eventId: string, ids: string[]): Observable<{ data: TicketType[] }> {
+    return this.http.post<{ data: TicketType[] }>(
+      `${this.base}/api/organizer/events/${eventId}/ticket-types/order`,
+      { ids },
+    );
+  }
+
   deleteTicketType(eventId: string, id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
@@ -546,6 +559,23 @@ export class Api {
 
   createCode(eventId: string, body: Record<string, unknown>): Observable<PromoCode> {
     return this.http.post<PromoCode>(`${this.base}/api/organizer/events/${eventId}/codes`, body);
+  }
+
+  /**
+   * Change a code that is already out there.
+   *
+   * Partial by design — only what changed is sent, so an edit to the end date
+   * cannot accidentally clear a promoter's name it never carried.
+   */
+  updateCode(
+    eventId: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Observable<PromoCode> {
+    return this.http.patch<PromoCode>(
+      `${this.base}/api/organizer/events/${eventId}/codes/${id}`,
+      body,
+    );
   }
 
   deactivateCode(eventId: string, id: string): Observable<{ message: string }> {

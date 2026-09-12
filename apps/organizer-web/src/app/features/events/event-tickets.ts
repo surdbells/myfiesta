@@ -14,7 +14,7 @@ import {
   UiModal,
   UiSkeleton,
 } from '@myfiesta/ui';
-import { Pencil, Plus, Trash2 } from 'lucide-angular';
+import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { Money, TicketType } from '../../core/api.types';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
@@ -39,6 +39,15 @@ interface TicketDraft {
   maxPerOrder: number | string | null;
   salesStart: string;
   salesEnd: string;
+  /**
+   * Whether the tier is being offered.
+   *
+   * 'sold_out' is deliberately not settable: it is a fact the server works
+   * out from the count, not a state somebody chooses. Offering it here would
+   * let an organizer mark a tier sold out while places remain, which is a
+   * different thing — that is what closing it is for.
+   */
+  status: 'on_sale' | 'hidden' | 'closed';
 }
 
 /**
@@ -78,6 +87,8 @@ export class EventTickets {
   protected readonly addIcon = Plus;
   protected readonly editIcon = Pencil;
   protected readonly deleteIcon = Trash2;
+  protected readonly upIcon = ChevronUp;
+  protected readonly downIcon = ChevronDown;
 
   // The id lives on the parent route: this screen is a child of the workspace.
   readonly eventId = eventIdFrom(this.route);
@@ -154,6 +165,55 @@ export class EventTickets {
     };
   });
 
+  // --- the order they are offered in ---------------------------------------
+
+  /**
+   * The order here is the order a buyer sees, which is a selling decision:
+   * Early Bird above General reads as a deadline, the other way round reads
+   * as a list.
+   *
+   * Up and down rather than dragging. A tier row is a wide three-column grid
+   * carrying two buttons and a meter, and dragging one of those by anywhere
+   * that is not a control is a much worse target than two arrows — unlike the
+   * gallery, where the tile itself is the handle.
+   */
+  readonly savingOrder = signal(false);
+
+  move(type: TicketType, direction: -1 | 1): void {
+    const order = this.types().map((t) => t.id);
+    const from = order.indexOf(type.id);
+    const to = from + direction;
+
+    if (from < 0 || to < 0 || to >= order.length) return;
+
+    [order[from], order[to]] = [order[to], order[from]];
+
+    // Shown before the server agrees. A row that does not move when the
+    // arrow is pressed reads as broken; a failure reloads to the truth.
+    const by = new Map(this.types().map((t) => [t.id, t]));
+    this.types.set(order.map((id) => by.get(id)!).filter(Boolean));
+
+    this.savingOrder.set(true);
+
+    this.api.reorderTicketTypes(this.eventId, order).subscribe({
+      next: ({ data }) => {
+        this.savingOrder.set(false);
+        this.types.set(data);
+      },
+      error: () => {
+        this.savingOrder.set(false);
+        this.toasts.show('That order could not be saved.', 'danger');
+        this.load();
+      },
+    });
+  }
+
+  canMove(type: TicketType, direction: -1 | 1): boolean {
+    const at = this.types().findIndex((t) => t.id === type.id);
+
+    return at >= 0 && at + direction >= 0 && at + direction < this.types().length;
+  }
+
   // --- the form ------------------------------------------------------------
 
   private blank(): TicketDraft {
@@ -166,6 +226,7 @@ export class EventTickets {
       maxPerOrder: '',
       salesStart: '',
       salesEnd: '',
+      status: 'on_sale',
     };
   }
 
@@ -188,6 +249,9 @@ export class EventTickets {
       maxPerOrder: type.max_per_order ?? '',
       salesStart: this.toLocalInput(type.sales_start_at),
       salesEnd: this.toLocalInput(type.sales_end_at),
+      // A tier the server has worked out is sold out still edits as what it
+      // is: on sale, with nothing left. Closing it is a separate decision.
+      status: type.status === 'sold_out' ? 'on_sale' : type.status,
     });
     this.formOpen.set(true);
   }
@@ -204,6 +268,21 @@ export class EventTickets {
     return Number.isFinite(Number(price)) && Number(price) >= 0
       ? null
       : 'Enter a price like 25 or 25.50.';
+  });
+
+  /** What the chosen availability actually means, said under the control. */
+  readonly statusHint = computed(() => {
+    const status = this.draft().status;
+
+    if (status === 'hidden') {
+      return 'It stays off the event page. Existing tickets are unaffected.';
+    }
+
+    if (status === 'closed') {
+      return 'It shows on the event page as unavailable. Tickets already sold still work.';
+    }
+
+    return 'Shown on the event page and open for sale, within any dates set above.';
   });
 
   readonly canSave = computed(
@@ -227,6 +306,7 @@ export class EventTickets {
       max_per_order: this.optionalNumber(draft.maxPerOrder),
       sales_start_at: draft.salesStart ? new Date(draft.salesStart).toISOString() : null,
       sales_end_at: draft.salesEnd ? new Date(draft.salesEnd).toISOString() : null,
+      status: draft.status,
     };
 
     this.saving.set(true);

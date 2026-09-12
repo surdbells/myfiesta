@@ -177,33 +177,112 @@
     }
 
     @if (gallery().length > 0) {
-      <ul class="shots m-0 mt-4 grid list-none grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 p-0">
+      <!--
+        The order here is the order on the event page, so it is worth saying
+        that it can be changed — a grid of pictures gives no hint that it is
+        sortable, and nobody drags something they do not know will move.
+      -->
+      <p class="mt-6 flex flex-wrap items-center gap-2 text-sm text-text-muted">
+        <ui-icon class="text-text-subtle" [icon]="gripIcon" size="sm" />
+        Drag a picture to reorder, or use the arrows. The first one leads the
+        gallery on your event page.
+        @if (savingOrder()) {
+          <span class="text-xs text-text-subtle">Saving…</span>
+        }
+      </p>
+
+      <ul class="shots m-0 mt-3 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4 p-0">
         @for (image of gallery(); track image.id) {
-          <li class="shot relative aspect-square overflow-hidden rounded-md bg-surface-inset">
-            <img class="block h-full w-full object-cover" [src]="image.thumb_url" [alt]="image.caption ?? ''" loading="lazy" />
+          <li
+            class="shot grid gap-2 rounded-lg border bg-surface-raised p-2 transition-[border-color,opacity] duration-(--motion-fast)"
+            [class]="
+              dragOver() === image.id
+                ? 'border-primary'
+                : dragging() === image.id
+                  ? 'border-border opacity-50'
+                  : 'border-border'
+            "
+            draggable="true"
+            (dragstart)="onTileDragStart(image, $event)"
+            (dragover)="onTileDragOver(image, $event)"
+            (drop)="onTileDrop(image, $event)"
+            (dragend)="onTileDragEnd()"
+          >
+            <div class="relative aspect-square cursor-grab overflow-hidden rounded-md bg-surface-inset active:cursor-grabbing">
+              <img class="pointer-events-none block h-full w-full object-cover" [src]="image.thumb_url" [alt]="image.caption ?? ''" loading="lazy" />
 
-            <div class="shot__over absolute bottom-2 right-2 flex gap-1">
-              <!--
-                Promote rather than delete-and-reupload. The flyer goes into
-                the gallery by mistake constantly — it is the bigger target.
-              -->
-              <button
-                type="button"
-                class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-[rgba(8,12,9,0.9)]"
-                [attr.aria-label]="'Make this the flyer'"
-                (click)="promote(image)"
-              >
-                <ui-icon [icon]="promoteIcon" size="sm" />
-              </button>
+              <div class="shot__over absolute bottom-2 right-2 flex gap-1">
+                <!--
+                  Promote rather than delete-and-reupload. The flyer goes into
+                  the gallery by mistake constantly — it is the bigger target.
+                -->
+                <button
+                  type="button"
+                  class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-[rgba(8,12,9,0.9)]"
+                  [attr.aria-label]="'Make this the flyer'"
+                  (click)="promote(image)"
+                >
+                  <ui-icon [icon]="promoteIcon" size="sm" />
+                </button>
 
-              <button
-                type="button"
-                class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-danger"
-                [attr.aria-label]="'Remove this picture'"
-                (click)="removing.set(image)"
-              >
-                <ui-icon [icon]="deleteIcon" size="sm" />
-              </button>
+                <button
+                  type="button"
+                  class="shot__act grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-[rgba(8,12,9,0.72)] text-text-inverse backdrop-blur-[4px] hover:bg-danger"
+                  [attr.aria-label]="'Remove this picture'"
+                  (click)="removing.set(image)"
+                >
+                  <ui-icon [icon]="deleteIcon" size="sm" />
+                </button>
+              </div>
+            </div>
+
+            <!--
+              The caption is also the alt text on the event page, which is the
+              other reason it is worth asking for. Saved on leaving the field
+              and on Enter; unchanged text is never sent.
+            -->
+            <label class="sr-only" [attr.for]="'caption-' + image.id">Caption for this picture</label>
+            <input
+              class="h-9 text-xs"
+              [id]="'caption-' + image.id"
+              [name]="'caption-' + image.id"
+              placeholder="Add a caption"
+              maxlength="255"
+              [ngModel]="caption(image)"
+              (ngModelChange)="draftCaption(image, $event)"
+              (blur)="saveCaption(image)"
+              (keydown.enter)="saveCaption(image); $event.preventDefault()"
+            />
+
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-text-subtle tabular-nums">
+                @if (savingCaption() === image.id) {
+                  Saving…
+                } @else {
+                  {{ $index + 1 }} of {{ gallery().length }}
+                }
+              </span>
+
+              <span class="flex gap-1">
+                <button
+                  type="button"
+                  class="grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  [attr.aria-label]="'Move this picture earlier'"
+                  [disabled]="!canMove(image, -1)"
+                  (click)="move(image, -1)"
+                >
+                  <ui-icon [icon]="earlierIcon" size="sm" />
+                </button>
+                <button
+                  type="button"
+                  class="grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  [attr.aria-label]="'Move this picture later'"
+                  [disabled]="!canMove(image, 1)"
+                  (click)="move(image, 1)"
+                >
+                  <ui-icon [icon]="laterIcon" size="sm" />
+                </button>
+              </span>
             </div>
           </li>
         }

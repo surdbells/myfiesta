@@ -9,6 +9,7 @@ use App\Models\TicketType;
 use App\Services\Audit\Auditor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * What an event sells.
@@ -31,6 +32,62 @@ public function index(Request $request, Event $event): JsonResponse
                     // One extra query for the whole collection rather than one
                     // per type. Only tickets that exist against the door count
                     // — a refunded ticket freed its place back.
+                    ->withCount(['tickets as issued_count' => fn ($q) => $q->whereIn(
+                        'status', ['valid', 'checked_in']
+                    )])
+                    ->orderBy('sort_order')
+                    ->get()
+            ),
+        ]);
+    }
+
+    /**
+     * The order tiers appear in, to a buyer.
+     *
+     * Worth controlling rather than leaving to whenever each was created: the
+     * order on the event page is a selling decision. Early Bird above General
+     * reads as a deadline; the other way round reads as a list.
+     *
+     * One request for the whole list rather than a sort_order per tier, so
+     * two tiers can never end up claiming the same place — which is what
+     * happens when a client swaps a pair with two writes and the second
+     * fails.
+     */
+    public function reorder(Request $request, Event $event): JsonResponse
+    {
+        $this->authorize('manageTickets', $event);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['uuid'],
+        ]);
+
+        $owned = $event->ticketTypes()->pluck('id')->all();
+
+        // Refused rather than quietly skipped: silently ignoring an id from
+        // another event would let this endpoint confirm which ids exist.
+        if (array_diff($data['ids'], $owned) !== []) {
+            return response()->json([
+                'message' => 'That list includes a ticket type that is not on this event.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($data, $event) {
+            foreach ($data['ids'] as $position => $id) {
+                $event->ticketTypes()->whereKey($id)->update(['sort_order' => $position]);
+            }
+        });
+
+        $this->auditor->record(
+            'ticket_types.reordered',
+            $event,
+            $request->user(),
+            metadata: ['order' => $data['ids']],
+        );
+
+        return response()->json([
+            'data' => TicketTypeResource::collection(
+                $event->ticketTypes()
                     ->withCount(['tickets as issued_count' => fn ($q) => $q->whereIn(
                         'status', ['valid', 'checked_in']
                     )])

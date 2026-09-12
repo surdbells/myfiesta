@@ -27,10 +27,18 @@
           required
           maxlength="64"
           placeholder="EARLYBIRD"
+          [readonly]="!!editing()"
           [ngModel]="form().code"
           (ngModelChange)="form.set({ ...form(), code: $event })"
         />
-        <p class="help text-xs text-text-muted">What a buyer types. Case does not matter.</p>
+        <p class="help text-xs text-text-muted">
+          @if (editing()) {
+            A code cannot be renamed — it is already on posters and in screenshots.
+            Turn this one off and make another instead.
+          } @else {
+            What a buyer types. Case does not matter.
+          }
+        </p>
       </div>
 
       <div class="field min-w-0">
@@ -159,9 +167,59 @@
       </div>
     </div>
 
-    <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim()">
-      @if (saving()) { Creating… } @else { Create code }
-    </button>
+    <!--
+      When the code works. Enforced at checkout and previously unreachable —
+      a code could be given a window it could never be shown, which made the
+      most ordinary thing anybody wants from an early-bird code impossible to
+      set: that it stops on Friday.
+    -->
+    <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+      <div class="field min-w-0">
+        <label for="startsAt">Works from <span class="optional">optional</span></label>
+        <input
+          id="startsAt"
+          name="startsAt"
+          type="datetime-local"
+          [ngModel]="form().starts_at"
+          (ngModelChange)="form.set({ ...form(), starts_at: $event })"
+        />
+        <p class="help text-xs text-text-muted">Leave empty to start immediately.</p>
+      </div>
+
+      <div class="field min-w-0">
+        <label for="endsAt">Works until <span class="optional">optional</span></label>
+        <input
+          id="endsAt"
+          name="endsAt"
+          type="datetime-local"
+          [ngModel]="form().ends_at"
+          (ngModelChange)="form.set({ ...form(), ends_at: $event })"
+        />
+        <p class="help text-xs text-text-muted">After this it stops working. Nothing already bought changes.</p>
+      </div>
+    </div>
+
+    <div class="actions flex items-center gap-4">
+      <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim()">
+        @if (saving()) {
+          Saving…
+        } @else if (editing()) {
+          Save changes
+        } @else {
+          Create code
+        }
+      </button>
+
+      @if (editing()) {
+        <button
+          class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+          type="button"
+          (click)="cancelEdit()"
+        >
+          Cancel
+        </button>
+      }
+    </div>
   </form>
 }
 
@@ -212,6 +270,10 @@
           }
         </p>
 
+        @if (describeWindow(code); as window) {
+          <p class="text-xs text-text-subtle tabular-nums">{{ window }}</p>
+        }
+
         <p class="uses text-sm text-text-muted tabular-nums">
           {{ code.redemption_count }}
           @if (code.max_redemptions !== null) {
@@ -229,8 +291,15 @@
           </div>
         }
 
-        @if (code.is_active && session.canMessage()) {
-          <button uiButton variant="ghost" size="sm" type="button" (click)="turnOff(code)">Turn off</button>
+        @if (session.canMessage()) {
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Edited rather than recreated: recreating loses the
+                 redemption count and the promoter attribution with it. -->
+            <button uiButton variant="secondary" size="sm" type="button" (click)="edit(code)">Edit</button>
+            @if (code.is_active) {
+              <button uiButton variant="ghost" size="sm" type="button" (click)="turnOff(code)">Turn off</button>
+            }
+          </div>
         }
       </li>
     }

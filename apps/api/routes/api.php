@@ -146,6 +146,9 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/ticket-types', [TicketTypeController::class, 'store']);
         Route::patch('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'update']);
         Route::delete('/events/{event:id}/ticket-types/{ticketType:id}', [TicketTypeController::class, 'destroy']);
+        // The order tiers are offered in, as one list — see the controller for
+        // why this is not a sort_order per tier.
+        Route::post('/events/{event:id}/ticket-types/order', [TicketTypeController::class, 'reorder']);
 
         Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
         Route::post('/events/{event:id}/tickets', [IssuedTicketController::class, 'store']);
@@ -172,5 +175,8 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // binding to the parent, and a code may be organization-wide with no
         // event at all — scoping would make those unreachable. Ownership is
         // checked in the controller instead.
+        // Editable rather than delete-and-recreate: recreating a code throws
+        // away its redemption count and the promoter attribution with it.
+        Route::patch('/events/{event:id}/codes/{code}', [CodeController::class, 'update']);
         Route::delete('/events/{event:id}/codes/{code}', [CodeController::class, 'destroy']);
     });

@@ -109,7 +109,33 @@
             }
           </div>
 
-          <div class="tier__actions flex gap-2 max-[720px]:justify-end">
+          <div class="tier__actions flex items-center gap-2 max-[720px]:justify-end">
+            <!--
+              The order a buyer sees them in. Arrows rather than dragging: a
+              tier row is a wide grid carrying two buttons and a meter, and
+              anywhere safe to grab it by is a much worse target than these.
+            -->
+            <span class="mr-1 grid gap-0.5">
+              <button
+                type="button"
+                class="grid h-5 w-6 cursor-pointer place-items-center rounded border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                [attr.aria-label]="'Move ' + type.name + ' up'"
+                [disabled]="!canMove(type, -1) || savingOrder()"
+                (click)="move(type, -1)"
+              >
+                <ui-icon [icon]="upIcon" size="sm" />
+              </button>
+              <button
+                type="button"
+                class="grid h-5 w-6 cursor-pointer place-items-center rounded border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                [attr.aria-label]="'Move ' + type.name + ' down'"
+                [disabled]="!canMove(type, 1) || savingOrder()"
+                (click)="move(type, 1)"
+              >
+                <ui-icon [icon]="downIcon" size="sm" />
+              </button>
+            </span>
+
             <button
               uiButton
               variant="secondary"
@@ -239,6 +265,20 @@
         />
       </ui-field>
     </div>
+
+    <!--
+      Three states somebody actually chooses. Sold out is absent on purpose:
+      the server works that out from the count, and offering it here would let
+      a tier be marked sold out with places left — which is what closing is
+      for, said honestly.
+    -->
+    <ui-field label="Availability" [hint]="statusHint()">
+      <select name="status" [ngModel]="draft().status" (ngModelChange)="update('status', $event)">
+        <option value="on_sale">On sale — anybody can buy it</option>
+        <option value="hidden">Hidden — only reachable with a direct link</option>
+        <option value="closed">Closed — not for sale</option>
+      </select>
+    </ui-field>
   </div>
 
   <ng-container modalActions>
