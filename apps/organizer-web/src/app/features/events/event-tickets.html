@@ -115,10 +115,10 @@
               tier row is a wide grid carrying two buttons and a meter, and
               anywhere safe to grab it by is a much worse target than these.
             -->
-            <span class="mr-1 grid gap-0.5">
+            <span class="mr-1 flex gap-1">
               <button
                 type="button"
-                class="grid h-5 w-6 cursor-pointer place-items-center rounded border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                class="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
                 [attr.aria-label]="'Move ' + type.name + ' up'"
                 [disabled]="!canMove(type, -1) || savingOrder()"
                 (click)="move(type, -1)"
@@ -127,7 +127,7 @@
               </button>
               <button
                 type="button"
-                class="grid h-5 w-6 cursor-pointer place-items-center rounded border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                class="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
                 [attr.aria-label]="'Move ' + type.name + ' down'"
                 [disabled]="!canMove(type, 1) || savingOrder()"
                 (click)="move(type, 1)"
