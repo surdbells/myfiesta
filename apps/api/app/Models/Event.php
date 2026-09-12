@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\RichHtml;
 use App\Casts\UtcDateTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -21,6 +22,9 @@ class Event extends Model
     protected function casts(): array
     {
         return [
+            // Sanitized HTML, cleaned on every write whichever road it came by
+            // — the organizer API, the legacy importer, seeders, the admin.
+            'description' => RichHtml::class,
             // UtcDateTime rather than 'datetime': Eloquent stores the wall
             // clock of whatever instance it is given and drops the zone, so a
             // Carbon in the venue's zone lands in the column hours out.

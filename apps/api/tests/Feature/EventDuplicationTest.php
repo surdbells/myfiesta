@@ -101,7 +101,11 @@ class EventDuplicationTest extends TestCase
         $copy = app(EventDuplicator::class)->duplicate($this->event);
 
         $this->assertSame('Afro Fest', $copy->title);
-        $this->assertSame('Afrobeats until 3am.', $copy->description);
+        // Compared with the source rather than a literal: what matters is that
+        // the copy carries the same description, and that copying clean HTML
+        // does not wrap it a second time.
+        $this->assertNotNull($copy->description);
+        $this->assertSame($this->event->description, $copy->description);
         $this->assertSame('Toronto', $copy->city);
         $this->assertSame('ON', $copy->subdivision);
         $this->assertSame(19, $copy->min_age);

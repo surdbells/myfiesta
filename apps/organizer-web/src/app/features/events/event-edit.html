@@ -30,15 +30,13 @@
     </div>
 
     <div class="field min-w-0">
-      <label for="description">Description</label>
-      <textarea
-        id="description"
-        name="description"
-        rows="3"
-        maxlength="8000"
-        [ngModel]="form().description"
-        (ngModelChange)="form.set({ ...form(), description: $event })"
-      ></textarea>
+      <span class="text-sm font-medium">Description</span>
+      <app-rich-text-editor
+        inputId="description"
+        label="Description"
+        [value]="form().description"
+        (valueChange)="form.set({ ...form(), description: $event })"
+      />
     </div>
 
     <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">

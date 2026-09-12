@@ -101,7 +101,7 @@ class EventController extends Controller
             'organization_id' => ['required', 'uuid'],
             'title' => ['required', 'string', 'max:160'],
             'kind' => ['nullable', 'in:ticketed,invitation'],
-            'description' => ['nullable', 'string', 'max:8000'],
+            'description' => ['nullable', 'string', 'max:20000'],
             'currency' => ['required', 'in:CAD,NGN'],
             'starts_at' => ['required', 'date', 'after:now'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
@@ -249,7 +249,7 @@ class EventController extends Controller
 
         $data = $request->validate([
             'title' => ['sometimes', 'string', 'max:160'],
-            'description' => ['nullable', 'string', 'max:8000'],
+            'description' => ['nullable', 'string', 'max:20000'],
             'starts_at' => ['sometimes', 'date'],
             'ends_at' => ['nullable', 'date'],
             'timezone' => ['sometimes', 'timezone'],

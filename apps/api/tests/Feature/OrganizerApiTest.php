@@ -173,7 +173,9 @@ class OrganizerApiTest extends TestCase
         $this->getJson("/api/organizer/events/{$this->event->id}")
             ->assertOk()
             ->assertJsonPath('title', 'Afro Fest')
-            ->assertJsonPath('description', 'Afrobeats until 3am.')
+            // Plain text is stored as a paragraph, and the editor loads exactly
+            // that — see EventDescriptionTest for the conversion itself.
+            ->assertJsonPath('description', '<p>Afrobeats until 3am.</p>')
             ->assertJsonPath('city', 'Toronto')
             ->assertJsonPath('subdivision', 'ON')
             ->assertJsonPath('country', 'CA')

@@ -65,7 +65,13 @@ export interface GalleryImage {
 }
 
 export interface EventDetail extends EventSummary {
+  /**
+   * Formatted HTML, sanitized by the server to an allowlist — safe to render
+   * as markup. Never put it in a meta tag or anywhere else that shows text.
+   */
   description: string | null;
+  /** The same description as plain words, for meta tags and link previews. */
+  description_text: string | null;
   /**
    * The banner cropped to exactly 1200×630 — what the social networks read.
    * Distinct from poster_url, which is a different shape and gets cropped by

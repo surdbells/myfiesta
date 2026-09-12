@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiButton } from '@myfiesta/ui';
+import { RichTextEditor } from '../../shared/rich-text-editor';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -46,7 +47,7 @@ const PROVINCES = [
  */
 @Component({
   selector: 'app-event-edit',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, RichTextEditor],
   templateUrl: './event-edit.html',
 })
 export class EventEdit {

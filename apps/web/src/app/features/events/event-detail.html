@@ -58,7 +58,13 @@
         }
 
         @if (ev.description) {
-          <p class="description mt-4 max-w-[66ch] whitespace-pre-line text-text-muted">{{ ev.description }}</p>
+          <!--
+            Rendered as markup: the organizer's lineup, bold, lists and links.
+            The server sanitizes it to an allowlist before it is ever stored,
+            and Angular's own sanitizer runs over it again here — two locks on
+            the one thing on this page a stranger wrote.
+          -->
+          <div class="description rich mt-4 max-w-[66ch] text-text-muted" [innerHTML]="ev.description"></div>
         } @else {
           <p class="mt-4 text-text-muted">{{ ev.organizer.name }} has not written a description yet.</p>
         }

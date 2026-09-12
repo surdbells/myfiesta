@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\RichText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,7 +17,12 @@ class EventResource extends EventSummaryResource
     public function toArray(Request $request): array
     {
         return parent::toArray($request) + [
+            // Sanitized HTML, safe to render. The model cleans it on the way in,
+            // so this is a read, not a second sanitizing pass.
             'description' => $this->description,
+            // For every place that cannot render markup: meta tags, link
+            // previews, structured data. HTML there shows the tags to readers.
+            'description_text' => RichText::toText($this->description),
             'ends_at' => $this->ends_at,
             'subdivision' => $this->subdivision,
             'dress_code' => $this->dress_code,

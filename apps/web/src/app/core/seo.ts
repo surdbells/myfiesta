@@ -27,7 +27,9 @@ export class Seo {
 
     const price = event.from_price ? `From ${formatMoney(event.from_price)}. ` : '';
     const where = event.venue?.name ?? event.city;
-    const description = `${when} at ${where}. ${price}${event.description ?? ''}`.trim();
+    // description_text, never description: this lands in a WhatsApp preview
+    // and a search snippet, where HTML is shown as the tags it is made of.
+    const description = `${when} at ${where}. ${price}${event.description_text ?? ''}`.trim();
 
     this.title.setTitle(`${event.title} — ${event.city}`);
 
@@ -117,7 +119,9 @@ export class Seo {
       eventStatus: 'https://schema.org/EventScheduled',
       url,
       image: event.poster_url ?? undefined,
-      description: event.description ?? undefined,
+      // The plain-words version: Google shows this as text, and markup here
+      // would put the tags themselves in front of a searcher.
+      description: event.description_text ?? undefined,
       location: {
         '@type': 'Place',
         name: event.venue?.name ?? event.city,

@@ -497,7 +497,19 @@ components:
         - type: object
           required: [organizer, ticket_types]
           properties:
-            description: { type: [string, 'null'] }
+            description:
+              type: [string, 'null']
+              description: |
+                Formatted HTML, already sanitized to an allowlist: paragraphs,
+                breaks, bold, italic, underline, strikethrough, lists, h2, h3,
+                blockquote, and links (http, https, mailto) forced to open in a
+                new tab. Safe to render as markup. Null when there is none.
+            description_text:
+              type: [string, 'null']
+              description: |
+                The same description as plain words, for anywhere markup cannot
+                be rendered: meta descriptions, link previews, structured data,
+                push notifications. Never contains tags or entities.
             ends_at: { type: [string, 'null'], format: date-time }
             venue:
               oneOf:
