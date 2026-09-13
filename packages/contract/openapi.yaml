@@ -797,6 +797,10 @@ components:
           type: boolean
           description: Whether tax was already inside the displayed price.
         code_applied: { type: [string, 'null'] }
+        code_applies_to:
+          type: [array, 'null']
+          items: { type: string }
+          description: The ticket types the applied code discounts; null when it discounts every type.
         lines:
           type: array
           items:
@@ -808,6 +812,9 @@ components:
               unit_price: { $ref: '#/components/schemas/Money' }
               quantity: { type: integer }
               line_total: { $ref: '#/components/schemas/Money' }
+              discount:
+                $ref: '#/components/schemas/Money'
+                description: This line's share of the order's discount.
 
     CreateOrderRequest:
       allOf:

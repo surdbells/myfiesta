@@ -142,7 +142,12 @@
                     <span class="mr-2 rounded-md bg-surface-inset px-2 py-[2px] text-xs font-semibold tabular-nums">{{ line.quantity }}×</span>
                     {{ line.name }}
                   </span>
-                  <span class="font-medium tabular-nums">{{ formatMoney(line.line_total) }}</span>
+                  <span class="text-right font-medium tabular-nums">
+                    {{ formatMoney(line.line_total) }}
+                    @if (line.discount.amount > 0) {
+                      <span class="block text-xs font-normal text-success">−{{ formatMoney(line.discount) }}</span>
+                    }
+                  </span>
                 </li>
               }
             </ul>
@@ -150,7 +155,13 @@
             <div class="mt-4 border-t border-border pt-4">
               @if (q.code_applied; as applied) {
                 <p class="flex items-center justify-between gap-3 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-3 py-2 text-sm text-success">
-                  <span><strong>{{ applied }}</strong> applied</span>
+                  <span>
+                    <strong>{{ applied }}</strong> applied
+                    @if (q.code_applies_to; as names) {
+                      <!-- Said, so a code that left VIP full price does not look broken. -->
+                      <span class="block text-xs">On {{ names.join(', ') }}</span>
+                    }
+                  </span>
                   <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" type="button" (click)="clearCode()">Remove</button>
                 </p>
               } @else {
@@ -176,6 +187,9 @@
                     Apply
                   </button>
                 </div>
+                @if (codeError(); as message) {
+                  <p class="mt-2 text-sm text-danger" role="alert">{{ message }}</p>
+                }
               }
             </div>
 

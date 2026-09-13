@@ -192,6 +192,15 @@ export interface EventOption {
  * One object covering discounts and promoter attribution, because in nightlife
  * the discount code is how a promoter proves they drove the sale.
  */
+/** What one code has sold in one currency. revenue is after its discount, before tax and fees. */
+export interface CodeSales {
+  currency: Money['currency'];
+  orders: number;
+  tickets: number;
+  revenue: number;
+  discount: number;
+}
+
 export interface PromoCode {
   id: string;
   code: string;
@@ -204,6 +213,12 @@ export interface PromoCode {
   redemption_count: number;
   max_redemptions: number | null;
   max_per_customer: number | null;
+  /** The fewest tickets (of the ones it covers) an order needs for it to apply. */
+  min_quantity: number | null;
+  /** The ticket types it discounts. Empty means every one. */
+  ticket_types: { id: string; name: string }[];
+  /** Paid orders using it, per currency. */
+  sales: CodeSales[];
   /** The window the code works in. Enforced at checkout; null means always. */
   starts_at: string | null;
   ends_at: string | null;

@@ -82,7 +82,7 @@ class CheckoutService
             }
 
             if ($quote->code !== null) {
-                $this->redeem($quote->code);
+                $this->redeem($quote->code, $buyerEmail);
             }
 
             $order = Order::create([
@@ -115,6 +115,7 @@ class CheckoutService
                     'unit_price_amount' => $line->unitPrice->amount,
                     'quantity' => $line->quantity,
                     'line_total_amount' => $line->lineTotal->amount,
+                    'discount_amount' => $line->discount->amount,
                 ]);
             }
 
@@ -175,22 +176,34 @@ class CheckoutService
     }
 
     /**
-     * Claim one use of a code.
+     * Check a code still has a use for this buyer.
      *
-     * Locked and re-checked rather than trusting the count read while pricing.
-     * A code capped at fifty uses is exactly as raceable as a ticket capped at
-     * fifty, and for the same reason.
+     * Locked so two checkouts cannot both see the last use, and counted from
+     * orders — paid ones plus checkouts still inside their hold — rather than a
+     * running total. The total this replaces was incremented here and never
+     * given back, so every abandoned checkout spent a use for good.
+     *
+     * The per-buyer limit was accepted by the console and stored, and nothing
+     * read it. It is by email address: a buyer with two addresses gets two
+     * goes, which is the most a checkout without accounts can promise.
      */
-    private function redeem(Code $code): void
+    private function redeem(Code $code, string $buyerEmail): void
     {
         $locked = Code::query()->whereKey($code->id)->lockForUpdate()->first();
 
         if ($locked->max_redemptions !== null
-            && $locked->redemption_count >= $locked->max_redemptions) {
+            && $locked->usesInFlight(self::HOLD_MINUTES) >= $locked->max_redemptions) {
             throw new CheckoutException('That code has been fully redeemed.');
         }
 
-        $locked->increment('redemption_count');
+        if ($locked->max_per_customer !== null
+            && $locked->usesInFlight(self::HOLD_MINUTES, $buyerEmail) >= $locked->max_per_customer) {
+            throw new CheckoutException(
+                $locked->max_per_customer === 1
+                    ? 'That code can be used once per person, and this email address has already used it.'
+                    : "That code can be used {$locked->max_per_customer} times per person, and this email address has used it that many times."
+            );
+        }
     }
 
 }

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -19,6 +21,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Code extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+
+    /** Orders that count as a use of this code. A fully refunded one gives its use back. */
+    public const PAID_STATUSES = ['paid', 'partially_refunded'];
 
     protected $guarded = ['id'];
 
@@ -40,6 +45,57 @@ class Code extends Model
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
+    }
+
+    /**
+     * The ticket types this code discounts. None means every type.
+     *
+     * Only an event's own code can name them: an organization-wide code runs
+     * across events whose ticket types it cannot know about.
+     */
+    public function ticketTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(TicketType::class);
+    }
+
+    /**
+     * Uses that count against a limit right now: paid ones, and checkouts
+     * still inside their hold.
+     *
+     * Counted from orders rather than kept as a running total. A total that
+     * went up when checkout started and never came down spent a use on every
+     * abandoned basket; one that went up only on payment would let a hundred
+     * people start checkout on the last use of a code at once.
+     *
+     * Call with the code row locked, or two checkouts can both see room.
+     */
+    public function usesInFlight(int $holdMinutes, ?string $buyerEmail = null): int
+    {
+        return DB::table('orders')
+            ->where('code_id', $this->id)
+            ->where(fn ($q) => $q->whereIn('status', self::PAID_STATUSES)
+                ->orWhere(fn ($q) => $q->where('status', 'pending')->where('created_at', '>', now()->subMinutes($holdMinutes))))
+            ->when($buyerEmail !== null, fn ($q) => $q->where('buyer_email', strtolower(trim($buyerEmail))))
+            ->count();
+    }
+
+    /**
+     * Set redemption_count to the paid uses, which is what an organizer reads
+     * it as. Recomputed on payment and on refund rather than incremented, so it
+     * cannot drift from the orders it describes.
+     */
+    public static function recount(?string $codeId): void
+    {
+        if ($codeId === null) {
+            return;
+        }
+
+        DB::table('codes')->where('id', $codeId)->update([
+            'redemption_count' => DB::table('orders')
+                ->where('code_id', $codeId)
+                ->whereIn('status', self::PAID_STATUSES)
+                ->count(),
+        ]);
     }
 
     public function setCodeAttribute(string $value): void

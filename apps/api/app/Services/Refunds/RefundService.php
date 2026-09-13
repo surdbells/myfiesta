@@ -4,6 +4,7 @@ namespace App\Services\Refunds;
 
 use App\Contracts\Payments\PaymentGateway;
 use App\Contracts\Payments\PaymentGatewayRegistry;
+use App\Models\Code;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\Refund;
@@ -251,6 +252,9 @@ class RefundService
                 'refunded_at' => $locked->refunded_at ?? now(),
             ]);
 
+            // A fully refunded order gives its code's use back.
+            Code::recount($locked->code_id);
+
             return $refund->refresh();
         });
     }
@@ -296,12 +300,30 @@ class RefundService
         // penny to both, or to neither.
         $all = $order->tickets()->orderBy('created_at')->orderBy('id')->get();
 
-        // A ticket's weight is what its type cost, snapshotted on the order
-        // line. Comps issued against the same order weigh nothing and so
+        // A ticket's weight is what it actually cost: its type's price,
+        // snapshotted on the order line, less its share of that line's
+        // discount. Comps issued against the same order weigh nothing and so
         // refund nothing, which is correct.
-        $prices = $order->lines->keyBy('ticket_type_id');
+        //
+        // The discount has to come off per line. A code can discount General
+        // and leave VIP alone, and weighting by list price alone refunded the
+        // VIP ticket with some of General's discount taken out of it.
+        $lines = $order->lines->keyBy('ticket_type_id');
+        $perTicket = [];
+
         $weights = $all
-            ->map(fn (Ticket $t) => (int) ($prices[$t->ticket_type_id]->unit_price_amount ?? 0))
+            ->map(function (Ticket $t) use ($lines, &$perTicket) {
+                $line = $lines[$t->ticket_type_id] ?? null;
+
+                if ($line === null) {
+                    return 0;
+                }
+
+                $perTicket[$line->id] ??= Allocation::split((int) $line->discount_amount, array_fill(0, (int) $line->quantity, 1));
+                $share = array_shift($perTicket[$line->id]) ?? 0;
+
+                return max(0, (int) $line->unit_price_amount - $share);
+            })
             ->all();
 
         $wanted = $tickets->pluck('id')->all();

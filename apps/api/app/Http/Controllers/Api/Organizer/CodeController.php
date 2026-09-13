@@ -8,8 +8,10 @@ use App\Models\Event;
 use App\Services\Audit\Auditor;
 use App\Support\Paging;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -37,8 +39,13 @@ class CodeController extends Controller
             ->orderByDesc('id')
             ->paginate(Paging::perPage($request, 50));
 
+        $codes->getCollection()->load('ticketTypes:id,name');
+        $sales = $this->salesFor($codes->getCollection()->pluck('id')->all());
+
         return response()->json([
-            'data' => $codes->getCollection()->map(fn (Code $code) => $this->present($code, $event))->values(),
+            'data' => $codes->getCollection()
+                ->map(fn (Code $code) => $this->present($code, $event, $sales[$code->id] ?? []))
+                ->values(),
             'meta' => Paging::meta($codes),
         ]);
     }
@@ -52,9 +59,10 @@ class CodeController extends Controller
                 'required', 'string', 'max:64', 'alpha_dash',
                 // Unique within the organization, case-insensitively — CODE and
                 // code being different codes would be a support ticket a week.
-                Rule::unique('codes')
-                    ->where('organization_id', $event->organization_id)
-                    ->whereNull('deleted_at'),
+                // Compared in upper case: codes are stored that way, and the
+                // plain unique rule let "same" past to fail as a 500 on the
+                // database index.
+                $this->uniqueWithin($event, 'code'),
             ],
             'label' => ['nullable', 'string', 'max:120'],
             'discount_type' => ['nullable', 'in:percentage,fixed', 'required_with:discount_value'],
@@ -67,15 +75,18 @@ class CodeController extends Controller
             // returned a 500 to every buyer who typed it.
             'discount_value' => ['nullable', 'integer', 'min:1', 'required_with:discount_type'],
             'promoter_name' => ['nullable', 'string', 'max:120'],
-            'ref_slug' => ['nullable', 'string', 'max:64', 'alpha_dash'],
+            'ref_slug' => ['nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug')],
             'max_redemptions' => ['nullable', 'integer', 'min:1'],
             'max_per_customer' => ['nullable', 'integer', 'min:1'],
+            'min_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'ticket_type_ids' => ['nullable', 'array'],
+            'ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'event_scoped' => ['nullable', 'boolean'],
         ], [
             // The defaults here read as if somebody else claimed a username.
-            'code.unique' => 'You already have a code with that name.',
+            'ticket_type_ids.*.exists' => 'One of those tickets is not on this event.',
             'discount_value.required_with' => 'Say how much comes off.',
             'discount_type.required_with' => 'Say whether that is a percentage or an amount.',
         ]);
@@ -92,6 +103,15 @@ class CodeController extends Controller
             return response()->json([
                 'message' => 'A percentage cannot exceed 100%.',
             ], 422);
+        }
+
+        if ($refusal = $this->aimRefusal(
+            $data['ticket_type_ids'] ?? [],
+            (bool) ($data['event_scoped'] ?? true),
+            filled($data['discount_type'] ?? null),
+            $data['min_quantity'] ?? null,
+        )) {
+            return response()->json(['message' => $refusal], 422);
         }
 
         $code = Code::create([
@@ -111,16 +131,19 @@ class CodeController extends Controller
             'promoter_name' => $data['promoter_name'] ?? null,
             'max_redemptions' => $data['max_redemptions'] ?? null,
             'max_per_customer' => $data['max_per_customer'] ?? null,
+            'min_quantity' => $data['min_quantity'] ?? null,
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
             'is_active' => true,
         ]);
 
+        $code->ticketTypes()->sync($data['ticket_type_ids'] ?? []);
+
         // Refreshed so the response carries what the database actually holds.
         // redemption_count defaults to 0 there and is absent from the model we
         // just built, so without this a new code reports a null usage count and
         // a reload silently changes it to 0.
-        return response()->json($this->present($code->refresh(), $event), 201);
+        return response()->json($this->present($code->refresh(), $event, $this->salesFor([$code->id])[$code->id] ?? []), 201);
     }
 
     /**
@@ -147,9 +170,12 @@ class CodeController extends Controller
             'discount_type' => ['sometimes', 'nullable', 'in:percentage,fixed'],
             'discount_value' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'promoter_name' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'ref_slug' => ['sometimes', 'nullable', 'string', 'max:64', 'alpha_dash'],
+            'ref_slug' => ['sometimes', 'nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug', $code)],
             'max_redemptions' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'max_per_customer' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'min_quantity' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100'],
+            'ticket_type_ids' => ['sometimes', 'array'],
+            'ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
             'starts_at' => ['sometimes', 'nullable', 'date'],
             'ends_at' => ['sometimes', 'nullable', 'date'],
             'is_active' => ['sometimes', 'boolean'],
@@ -181,6 +207,29 @@ class CodeController extends Controller
             return response()->json(['message' => 'A percentage cannot exceed 100%.'], 422);
         }
 
+        /*
+         * Not below what it has already been used.
+         *
+         * The database used to refuse this with a constraint and the console
+         * got a 500. Lowering a limit to stop further use is reasonable; the
+         * way to stop it entirely is to turn the code off.
+         */
+        if (array_key_exists('max_redemptions', $data) && $data['max_redemptions'] !== null
+            && $data['max_redemptions'] < $code->redemption_count) {
+            return response()->json([
+                'message' => "It has already been used {$code->redemption_count} times, so the limit cannot be lower than that. Turn it off to stop it being used.",
+            ], 422);
+        }
+
+        if ($refusal = $this->aimRefusal(
+            $data['ticket_type_ids'] ?? $code->ticketTypes()->pluck('ticket_types.id')->all(),
+            $code->event_id !== null,
+            filled($next['discount_type']),
+            array_key_exists('min_quantity', $data) ? $data['min_quantity'] : $code->min_quantity,
+        )) {
+            return response()->json(['message' => $refusal], 422);
+        }
+
         if ($next['starts_at'] && $next['ends_at']
             && Carbon::parse($next['ends_at'])->lessThanOrEqualTo(Carbon::parse($next['starts_at']))) {
             return response()->json([
@@ -195,7 +244,11 @@ class CodeController extends Controller
             $code->discount_currency = $data['discount_type'] === 'fixed' ? $event->currency : null;
         }
 
-        $code->fill($data)->save();
+        $code->fill(collect($data)->except('ticket_type_ids')->all())->save();
+
+        if (array_key_exists('ticket_type_ids', $data)) {
+            $code->ticketTypes()->sync($data['ticket_type_ids']);
+        }
 
         $this->auditor->record(
             'code.updated',
@@ -204,7 +257,7 @@ class CodeController extends Controller
             metadata: ['code' => $code->code, 'changed' => array_keys($data)],
         );
 
-        return response()->json($this->present($code->refresh(), $event));
+        return response()->json($this->present($code->refresh(), $event, $this->salesFor([$code->id])[$code->id] ?? []));
     }
 
     /**
@@ -227,7 +280,94 @@ class CodeController extends Controller
         ]);
     }
 
-    private function present(Code $code, Event $event): array
+    /**
+     * A rule that a code name or tracking slug is free in this organization,
+     * compared case-insensitively.
+     */
+    private function uniqueWithin(Event $event, string $column, ?Code $except = null): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($event, $column, $except) {
+            if (blank($value)) {
+                return;
+            }
+
+            $taken = Code::query()
+                ->where('organization_id', $event->organization_id)
+                ->whereRaw("upper({$column}) = ?", [mb_strtoupper(trim((string) $value))])
+                ->when($except, fn ($q) => $q->whereKeyNot($except->id))
+                ->exists();
+
+            if ($taken) {
+                $fail($column === 'code'
+                    ? 'You already have a code with that name.'
+                    : 'Another code already tracks that link. Each link needs its own slug, or sales could be credited to the wrong promoter.');
+            }
+        };
+    }
+
+    /**
+     * Whether a code's targeting makes sense, as a sentence if it does not.
+     *
+     * @param  list<string>  $ticketTypeIds
+     */
+    private function aimRefusal(array $ticketTypeIds, bool $eventScoped, bool $discounts, ?int $minQuantity): ?string
+    {
+        if ($ticketTypeIds !== [] && ! $eventScoped) {
+            return 'A code for all your events cannot be limited to one event’s tickets. Make it for this event only, or leave every ticket included.';
+        }
+
+        if (($ticketTypeIds !== [] || $minQuantity !== null) && ! $discounts) {
+            return 'Ticket and quantity conditions only apply to a discount. A tracking-only code credits every sale.';
+        }
+
+        return null;
+    }
+
+    /**
+     * What each code has sold: paid orders, tickets, what they came to after
+     * the discount, and what the discount gave away — per currency, because an
+     * organization-wide code can sell in dollars and naira both.
+     *
+     * The count alone ("12 used") was all an organizer had, and the question a
+     * promoter's code exists to answer is how much they sold.
+     *
+     * @param  list<string>  $codeIds
+     * @return array<string, list<array{currency: string, orders: int, tickets: int, revenue: int, discount: int}>>
+     */
+    private function salesFor(array $codeIds): array
+    {
+        if ($codeIds === []) {
+            return [];
+        }
+
+        $tickets = DB::table('order_lines')
+            ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+            ->whereIn('orders.code_id', $codeIds)
+            ->whereIn('orders.status', Code::PAID_STATUSES)
+            ->groupBy('orders.code_id', 'orders.currency')
+            ->selectRaw('orders.code_id, orders.currency, sum(order_lines.quantity) as tickets')
+            ->get()
+            ->keyBy(fn ($row) => $row->code_id.'|'.$row->currency);
+
+        return DB::table('orders')
+            ->whereIn('code_id', $codeIds)
+            ->whereIn('status', Code::PAID_STATUSES)
+            ->groupBy('code_id', 'currency')
+            ->orderBy('currency')
+            ->selectRaw('code_id, currency, count(*) as orders, sum(subtotal_amount - discount_amount) as revenue, sum(discount_amount) as discount')
+            ->get()
+            ->groupBy('code_id')
+            ->map(fn ($rows) => $rows->map(fn ($row) => [
+                'currency' => $row->currency,
+                'orders' => (int) $row->orders,
+                'tickets' => (int) ($tickets[$row->code_id.'|'.$row->currency]->tickets ?? 0),
+                'revenue' => (int) $row->revenue,
+                'discount' => (int) $row->discount,
+            ])->values()->all())
+            ->all();
+    }
+
+    private function present(Code $code, Event $event, array $sales = []): array
     {
         return [
             'id' => $code->id,
@@ -241,6 +381,10 @@ class CodeController extends Controller
             'redemption_count' => $code->redemption_count,
             'max_redemptions' => $code->max_redemptions,
             'max_per_customer' => $code->max_per_customer,
+            'min_quantity' => $code->min_quantity,
+            // Empty means every ticket type.
+            'ticket_types' => $code->ticketTypes->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values(),
+            'sales' => $sales,
             // The window is enforced at checkout and was absent from this
             // response, so the console could neither show it nor edit it —
             // a code could only ever be given a window it could not display.

@@ -173,6 +173,9 @@ class CheckoutController extends Controller
                 'quantity' => $line->quantity,
                 'unit_price' => $money($line->unitPrice),
                 'line_total' => $money($line->lineTotal),
+                // Which lines the code took money off, so a code for General
+                // does not read as having discounted the VIP ticket too.
+                'discount' => $money($line->discount),
             ], $quote->lines),
             'subtotal' => $money($quote->subtotal),
             'discount' => $money($quote->discount),
@@ -191,6 +194,10 @@ class CheckoutController extends Controller
             'tax_inclusive' => (bool) $quote->taxRate?->inclusive,
             'tax_label' => $quote->taxRate?->name,
             'code_applied' => $quote->code?->code,
+            // Null for a code on every ticket.
+            'code_applies_to' => $quote->code && $quote->code->ticketTypes()->exists()
+                ? $quote->code->ticketTypes()->orderBy('sort_order')->pluck('name')->all()
+                : null,
             'requires_payment' => $quote->requiresPayment(),
         ];
     }

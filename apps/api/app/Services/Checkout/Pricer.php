@@ -7,6 +7,7 @@ use App\Models\Code;
 use App\Models\Event;
 use App\Models\TaxRate;
 use App\Models\TicketType;
+use App\Support\Allocation;
 use App\Support\Money;
 
 /**
@@ -57,7 +58,13 @@ class Pricer
         );
 
         $code = $this->resolveCode($event, $codeInput, $refSlug);
-        $discount = $this->discountFor($code, $subtotal);
+        $lines = $this->applyDiscount($code, $lines, typed: filled($codeInput));
+
+        $discount = array_reduce(
+            $lines,
+            fn (Money $carry, QuoteLine $line) => $carry->plus($line->discount),
+            Money::zero($currency),
+        );
 
         // Tax on what is actually being paid. Taxing the pre-discount price
         // overcharges the buyer on money nobody receives.
@@ -150,6 +157,7 @@ class Pricer
                 quantity: $quantity,
                 unitPrice: $unit,
                 lineTotal: $unit->times($quantity),
+                discount: Money::zero($event->currency),
             );
         }
 
@@ -166,13 +174,25 @@ class Pricer
     private function resolveCode(Event $event, ?string $codeInput, ?string $refSlug): ?Code
     {
         if (filled($codeInput)) {
+            /*
+             * Every code with that name, then the one for this event.
+             *
+             * The console keeps names unique across an organization, but the
+             * database only enforces one per event plus one organization-wide,
+             * and imported or older rows can share a name. Taking the first
+             * match then told a buyer their code was invalid whenever another
+             * event's row came back first. An event's own code wins.
+             */
             $code = Code::query()
                 ->usable()
                 ->where('organization_id', $event->organization_id)
                 ->whereRaw('upper(code) = ?', [strtoupper(trim($codeInput))])
+                ->get()
+                ->filter(fn (Code $c) => $c->appliesTo($event))
+                ->sortBy(fn (Code $c) => $c->event_id === null ? 1 : 0)
                 ->first();
 
-            if ($code === null || ! $code->appliesTo($event)) {
+            if ($code === null) {
                 throw new CheckoutException('That code is not valid for this event.');
             }
 
@@ -191,21 +211,90 @@ class Pricer
         return null;
     }
 
-    private function discountFor(?Code $code, Money $subtotal): Money
+    /**
+     * Work out the discount and give each line its share.
+     *
+     * Only the ticket types the code names are discounted, and only once the
+     * order holds enough of them. A buyer who typed the code is told why it
+     * did nothing; one who arrived on a promoter's link is not — the link
+     * still credits the promoter, and refusing a sale over a condition the
+     * buyer never saw would be absurd.
+     *
+     * @param  list<QuoteLine>  $lines
+     * @return list<QuoteLine>
+     */
+    private function applyDiscount(?Code $code, array $lines, bool $typed): array
     {
         if ($code === null || ! $code->discounts()) {
-            return Money::zero($subtotal->currency);
+            return $lines;
         }
 
-        $discount = match ($code->discount_type) {
-            'percentage' => $subtotal->percentage($code->discount_value),
-            'fixed' => new Money($code->discount_value, $code->discount_currency),
-            default => Money::zero($subtotal->currency),
+        $restricted = $code->ticketTypes()->pluck('ticket_types.id')->all();
+
+        $eligible = array_keys(array_filter(
+            $lines,
+            fn (QuoteLine $line) => $restricted === [] || in_array($line->ticketType->id, $restricted, true),
+        ));
+
+        if ($eligible === []) {
+            if (! $typed) {
+                return $lines;
+            }
+
+            $names = $code->ticketTypes()->orderBy('sort_order')->pluck('name')->all();
+
+            throw new CheckoutException(
+                "{$code->code} only applies to ".$this->listOf($names).'. Add one of those to use it.'
+            );
+        }
+
+        $count = array_sum(array_map(fn (int $i) => $lines[$i]->quantity, $eligible));
+
+        if ($code->min_quantity !== null && $count < $code->min_quantity) {
+            if (! $typed) {
+                return $lines;
+            }
+
+            throw new CheckoutException(
+                "{$code->code} needs at least {$code->min_quantity} "
+                .($restricted === [] ? 'tickets' : 'eligible tickets')
+                ." in the order — this one has {$count}."
+            );
+        }
+
+        $currency = $lines[0]->lineTotal->currency;
+
+        $eligibleTotal = array_sum(array_map(fn (int $i) => $lines[$i]->lineTotal->amount, $eligible));
+
+        $amount = match ($code->discount_type) {
+            'percentage' => (new Money($eligibleTotal, $currency))->percentage($code->discount_value)->amount,
+            'fixed' => $code->discount_value,
+            default => 0,
         };
 
-        // A fixed code larger than the order must not produce a negative total
-        // and hand money back.
-        return $discount->amount > $subtotal->amount ? $subtotal : $discount;
+        // A fixed code larger than what it applies to must not produce a
+        // negative total and hand money back.
+        $amount = min($amount, $eligibleTotal);
+
+        // Split by value across the lines it applies to, so the parts add back
+        // up to the discount exactly.
+        $parts = Allocation::split($amount, array_map(fn (int $i) => $lines[$i]->lineTotal->amount, $eligible));
+
+        foreach ($eligible as $position => $index) {
+            $lines[$index] = $lines[$index]->withDiscount(new Money($parts[$position], $currency));
+        }
+
+        return $lines;
+    }
+
+    /** @param  list<string>  $names */
+    private function listOf(array $names): string
+    {
+        if (count($names) <= 1) {
+            return $names[0] ?? 'certain tickets';
+        }
+
+        return implode(', ', array_slice($names, 0, -1)).' or '.end($names);
     }
 
     private function taxFor(?TaxRate $rate, Money $taxable): Money

@@ -3,6 +3,7 @@
 namespace App\Services\Checkout;
 
 use App\Mail\TicketsIssued;
+use App\Models\Code;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -58,6 +59,9 @@ class Fulfiller
             $this->issuer->issueFor($locked);
             $this->writeLedger($locked);
             $this->releaseHolds($locked);
+
+            // A paid use of its code, now that it is one.
+            Code::recount($locked->code_id);
 
             // Queued, and dispatched only after the transaction commits.
             // Sending inside it risks a buyer holding tickets in their inbox

@@ -99,6 +99,8 @@ export interface QuoteLine {
   quantity: number;
   unit_price: Money;
   line_total: Money;
+  /** This line's share of the discount — zero on tickets the code does not cover. */
+  discount: Money;
 }
 
 export interface Quote {
@@ -119,6 +121,8 @@ export interface Quote {
   tax_inclusive: boolean;
   tax_label: string | null;
   code_applied: string | null;
+  /** The ticket types the code discounts; null when it covers every ticket. */
+  code_applies_to: string[] | null;
   requires_payment: boolean;
 }
 

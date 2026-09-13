@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { OrganizerEventDetail, PageMeta, PromoCode } from '../../core/api.types';
+import { CodeSales, OrganizerEventDetail, PageMeta, PromoCode, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { formatMoney, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
@@ -41,6 +41,7 @@ export class EventCodes {
   readonly eventId = eventIdFrom(this.route);
 
   readonly event = signal<OrganizerEventDetail | null>(null);
+  readonly ticketTypes = signal<TicketType[]>([]);
   readonly codes = signal<PromoCode[]>([]);
   readonly meta = signal<PageMeta | null>(null);
   readonly page = signal(1);
@@ -68,6 +69,8 @@ export class EventCodes {
     ref_slug: '',
     max_redemptions: '',
     max_per_customer: '',
+    min_quantity: '',
+    ticket_type_ids: [] as string[],
     starts_at: '',
     ends_at: '',
   });
@@ -83,7 +86,60 @@ export class EventCodes {
       error: () => undefined,
     });
 
+    this.api.ticketTypes(this.eventId).subscribe({
+      next: ({ data }) => this.ticketTypes.set(data),
+      error: () => undefined,
+    });
+
     this.load();
+  }
+
+  /**
+   * Whether the code being edited can be aimed at ticket types.
+   *
+   * A code for all an organization's events cannot name one event's tickets,
+   * so the choice is not offered for one rather than refused on save.
+   */
+  readonly canTarget = computed(() => this.editing()?.event_scoped ?? true);
+
+  /** Every ticket, until one is unticked. */
+  isCovered(id: string): boolean {
+    const ids = this.form().ticket_type_ids;
+
+    return ids.length === 0 || ids.includes(id);
+  }
+
+  toggleCovered(id: string): void {
+    const all = this.ticketTypes().map((t) => t.id);
+    const current = this.form().ticket_type_ids.length === 0 ? all : this.form().ticket_type_ids;
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+
+    // All ticked is stored as "every ticket", so a tier added later is covered
+    // too — which is what somebody who never unticked anything meant.
+    this.form.set({ ...this.form(), ticket_type_ids: next.length === all.length ? [] : next });
+  }
+
+  /** "12 orders · 30 tickets · CA$1,200.00 sold · CA$240.00 off", per currency. */
+  describeSales(sales: CodeSales): string {
+    const money = (amount: number) => formatMoney({ amount, currency: sales.currency });
+
+    return [
+      `${sales.orders} ${sales.orders === 1 ? 'order' : 'orders'}`,
+      `${sales.tickets} ${sales.tickets === 1 ? 'ticket' : 'tickets'}`,
+      `${money(sales.revenue)} sold`,
+      ...(sales.discount > 0 ? [`${money(sales.discount)} off`] : []),
+    ].join(' · ');
+  }
+
+  /** The conditions on a code, as the list shows them. */
+  describeConditions(code: PromoCode): string | null {
+    const parts = [
+      code.ticket_types.length > 0 ? `On ${code.ticket_types.map((t) => t.name).join(', ')}` : null,
+      code.min_quantity ? `${code.min_quantity}+ tickets` : null,
+      code.max_per_customer ? `${code.max_per_customer} per buyer` : null,
+    ].filter((p): p is string => p !== null);
+
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   load(): void {
@@ -162,34 +218,8 @@ export class EventCodes {
 
     const editing = this.editing();
 
-    // The code itself is absent from an edit: it is printed on posters and
-    // typed off screenshots, so renaming it would break every place it has
-    // already been shared. The server refuses it for the same reason.
-    const body: Record<string, unknown> = {
-      label: form.label.trim() || null,
-      discount_type: this.discounts() ? form.discount_type : null,
-      discount_value: this.discounts() ? this.discountValue() : null,
-      promoter_name: this.attributes() ? form.promoter_name.trim() || null : null,
-      ref_slug: this.attributes() ? this.refSlug() : null,
-      max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
-      max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
-      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
-      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
-    };
-
     if (editing) {
-      this.api.updateCode(this.eventId, editing.id, body).subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.notice.set('Code saved.');
-          this.cancelEdit();
-          this.load();
-        },
-        error: (response) => {
-          this.saving.set(false);
-          this.error.set(messageFor(response, 'That code could not be saved.'));
-        },
-      });
+      this.saveEdit(editing, form);
 
       return;
     }
@@ -204,6 +234,8 @@ export class EventCodes {
         ref_slug: this.attributes() ? this.refSlug() : null,
         max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
         max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
+        min_quantity: this.discounts() && form.min_quantity ? Number(form.min_quantity) : null,
+        ticket_type_ids: this.discounts() ? form.ticket_type_ids : [],
         starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
         event_scoped: true,
@@ -221,6 +253,8 @@ export class EventCodes {
             ref_slug: '',
             max_redemptions: '',
             max_per_customer: '',
+            min_quantity: '',
+            ticket_type_ids: [],
             starts_at: '',
             ends_at: '',
           });
@@ -231,6 +265,38 @@ export class EventCodes {
           this.error.set(messageFor(response, 'That code could not be created.'));
         },
       });
+  }
+
+  private saveEdit(editing: PromoCode, form: ReturnType<EventCodes['form']>): void {
+    // The code itself is absent from an edit: it is printed on posters and
+    // typed off screenshots, so renaming it would break every place it has
+    // already been shared. The server refuses it for the same reason.
+    const body: Record<string, unknown> = {
+      label: form.label.trim() || null,
+      discount_type: this.discounts() ? form.discount_type : null,
+      discount_value: this.discounts() ? this.discountValue() : null,
+      promoter_name: this.attributes() ? form.promoter_name.trim() || null : null,
+      ref_slug: this.attributes() ? this.refSlug() : null,
+      max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
+      max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
+      min_quantity: this.discounts() && form.min_quantity ? Number(form.min_quantity) : null,
+      ...(editing.event_scoped ? { ticket_type_ids: this.discounts() ? form.ticket_type_ids : [] } : {}),
+      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
+      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+    };
+
+    this.api.updateCode(this.eventId, editing.id, body).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.notice.set('Code saved.');
+        this.cancelEdit();
+        this.load();
+      },
+      error: (response) => {
+        this.saving.set(false);
+        this.error.set(messageFor(response, 'That code could not be saved.'));
+      },
+    });
   }
 
   /** Load a code into the form. */
@@ -261,6 +327,8 @@ export class EventCodes {
       ref_slug: code.ref_slug ?? '',
       max_redemptions: code.max_redemptions === null ? '' : String(code.max_redemptions),
       max_per_customer: code.max_per_customer === null ? '' : String(code.max_per_customer),
+      min_quantity: code.min_quantity === null ? '' : String(code.min_quantity),
+      ticket_type_ids: code.ticket_types.map((t) => t.id),
       starts_at: this.toLocalInput(code.starts_at),
       ends_at: this.toLocalInput(code.ends_at),
     });
@@ -282,6 +350,8 @@ export class EventCodes {
       ref_slug: '',
       max_redemptions: '',
       max_per_customer: '',
+      min_quantity: '',
+      ticket_type_ids: [],
       starts_at: '',
       ends_at: '',
     });
@@ -321,6 +391,20 @@ export class EventCodes {
     if (code.starts_at) return `From ${when(code.starts_at)}`;
 
     return null;
+  }
+
+  /** Back on, keeping its uses and its sales. */
+  turnOn(code: PromoCode): void {
+    this.error.set(null);
+    this.notice.set(null);
+
+    this.api.updateCode(this.eventId, code.id, { is_active: true }).subscribe({
+      next: () => {
+        this.notice.set(`${code.code} is on again.`);
+        this.load();
+      },
+      error: (response) => this.error.set(messageFor(response, 'That code could not be turned on.')),
+    });
   }
 
   turnOff(code: PromoCode): void {

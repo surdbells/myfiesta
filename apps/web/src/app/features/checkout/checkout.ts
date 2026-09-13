@@ -31,6 +31,9 @@ export class Checkout {
   readonly event = signal<EventDetail | null>(null);
   readonly quote = signal<Quote | null>(null);
   readonly quoteError = signal<string | null>(null);
+
+  /** Why the code typed was not accepted, shown beside the code field. */
+  readonly codeError = signal<string | null>(null);
   readonly orderError = signal<string | null>(null);
   readonly placing = signal(false);
 
@@ -131,16 +134,45 @@ export class Checkout {
       });
   }
 
-  private refreshQuote(): void {
+  /**
+   * Price the basket.
+   *
+   * A code the server refuses is a problem with the code, not the basket. It
+   * used to replace the whole summary with the refusal — the lines, the code
+   * field and the way to remove the code all went with it, and so did the
+   * way to pay. Now the basket is priced again without it, the code stays in
+   * the field for fixing, and the reason is said beside it.
+   */
+  private refreshQuote(afterRefusedCode = false): void {
     this.quoteError.set(null);
 
+    const code = this.store.code() || undefined;
+
     this.api
-      .quote(this.slug, this.store.lines(), this.store.code() || undefined, this.store.ref() ?? undefined)
+      .quote(this.slug, this.store.lines(), code, this.store.ref() ?? undefined)
       .subscribe({
-        next: (quote) => this.quote.set(quote),
+        next: (quote) => {
+          this.quote.set(quote);
+          if (!afterRefusedCode) this.codeError.set(null);
+        },
         error: (response) => {
+          const message = response?.error?.message ?? 'We could not price that basket.';
+
+          // Only a refusal (422) is about the code; a dropped connection is not
+          // a reason to take somebody's code away.
+          if (code && response?.status === 422) {
+            this.codeError.set(message);
+            this.store.setCode(this.slug, '');
+            this.refreshQuote(true);
+
+            return;
+          }
+
+          // Still failing without the code: the basket was the problem after all.
+          if (afterRefusedCode) this.codeError.set(null);
+
           this.quote.set(null);
-          this.quoteError.set(response?.error?.message ?? 'We could not price that basket.');
+          this.quoteError.set(message);
         },
       });
   }

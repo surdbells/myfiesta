@@ -106,7 +106,48 @@
             </p>
           }
         </div>
+
+        <div class="field min-w-0">
+          <label for="minQuantity">Minimum tickets <span class="optional">optional</span></label>
+          <input
+            id="minQuantity"
+            name="minQuantity"
+            type="number"
+            min="1"
+            max="100"
+            placeholder="Any order"
+            [ngModel]="form().min_quantity"
+            (ngModelChange)="form.set({ ...form(), min_quantity: $event })"
+          />
+          <p class="help text-xs text-text-muted">For a group deal — say 4 for "four or more".</p>
+        </div>
       </div>
+
+      <!--
+        Which tickets it takes money off. Ticked is covered; all ticked means
+        every ticket, including tiers added later.
+      -->
+      @if (canTarget() && ticketTypes().length > 1) {
+        <fieldset class="m-0 grid gap-2 border-0 p-0">
+          <legend class="mb-2 text-sm font-medium">Which tickets it discounts</legend>
+          <div class="flex flex-wrap gap-x-6 gap-y-2">
+            @for (type of ticketTypes(); track type.id) {
+              <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4"
+                  [checked]="isCovered(type.id)"
+                  (change)="toggleCovered(type.id)"
+                />
+                {{ type.name }}
+              </label>
+            }
+          </div>
+          @if (form().ticket_type_ids.length > 0) {
+            <p class="help text-xs text-text-muted">Other tickets in the same order stay full price.</p>
+          }
+        </fieldset>
+      }
     }
 
     @if (attributes()) {
@@ -270,6 +311,10 @@
           }
         </p>
 
+        @if (describeConditions(code); as conditions) {
+          <p class="text-xs text-text-muted">{{ conditions }}</p>
+        }
+
         @if (describeWindow(code); as window) {
           <p class="text-xs text-text-subtle tabular-nums">{{ window }}</p>
         }
@@ -281,6 +326,11 @@
           }
           used
         </p>
+
+        <!-- What it sold, which is what a promoter's code exists to show. -->
+        @for (sales of code.sales; track sales.currency) {
+          <p class="text-sm font-medium tabular-nums">{{ describeSales(sales) }}</p>
+        }
 
         @if (linkFor(code); as link) {
           <div class="share mt-2 flex items-center gap-2">
@@ -298,6 +348,8 @@
             <button uiButton variant="secondary" size="sm" type="button" (click)="edit(code)">Edit</button>
             @if (code.is_active) {
               <button uiButton variant="ghost" size="sm" type="button" (click)="turnOff(code)">Turn off</button>
+            } @else {
+              <button uiButton variant="ghost" size="sm" type="button" (click)="turnOn(code)">Turn on</button>
             }
           </div>
         }
