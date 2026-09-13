@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { UiButton, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { CodeBatches } from './code-batches';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -28,7 +29,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-codes',
-  imports: [FormsModule, UiButton, UiPagination, UiSelect],
+  imports: [FormsModule, UiButton, UiPagination, UiSelect, CodeBatches],
   templateUrl: './event-codes.html',
 })
 export class EventCodes {

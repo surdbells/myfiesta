@@ -201,6 +201,17 @@ export interface CodeSales {
   discount: number;
 }
 
+/** A batch of single-use codes, looked after as one thing. */
+export interface CodeBatch {
+  id: string;
+  name: string;
+  prefix: string;
+  quantity: number;
+  used: number;
+  turned_off: number;
+  created_at: string;
+}
+
 export interface PromoCode {
   id: string;
   code: string;

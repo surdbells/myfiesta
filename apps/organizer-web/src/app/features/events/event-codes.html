@@ -383,3 +383,11 @@
     }
   }
 }
+
+<app-code-batches
+  [eventId]="eventId"
+  [eventSlug]="event()?.slug ?? null"
+  [currency]="currency()"
+  [ticketTypes]="ticketTypes()"
+  [canManage]="session.canMessage()"
+/>

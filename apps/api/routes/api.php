@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\EventImageController;
@@ -198,4 +199,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // away its redemption count and the promoter attribution with it.
         Route::patch('/events/{event:id}/codes/{code}', [CodeController::class, 'update']);
         Route::delete('/events/{event:id}/codes/{code}', [CodeController::class, 'destroy']);
+
+        // Batches of single-use codes, for handing out one per person.
+        Route::get('/events/{event:id}/code-batches', [CodeBatchController::class, 'index']);
+        Route::post('/events/{event:id}/code-batches', [CodeBatchController::class, 'store']);
+        Route::get('/events/{event:id}/code-batches/{batch}/export', [CodeBatchController::class, 'export']);
+        Route::post('/events/{event:id}/code-batches/{batch}/deactivate', [CodeBatchController::class, 'deactivate']);
     });

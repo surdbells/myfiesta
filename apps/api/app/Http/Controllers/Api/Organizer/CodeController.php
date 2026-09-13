@@ -35,6 +35,8 @@ class CodeController extends Controller
         $codes = Code::query()
             ->where('organization_id', $event->organization_id)
             ->where(fn ($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
+            // Single-use batch codes are listed as their batch, not one by one.
+            ->whereNull('batch_id')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(Paging::perPage($request, 50));

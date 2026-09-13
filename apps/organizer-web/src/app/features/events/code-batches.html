@@ -1,0 +1,188 @@
+<section class="mt-12" aria-labelledby="batches-heading">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 id="batches-heading" class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Single-use codes</h2>
+      <p class="mt-1 max-w-[60ch] text-sm text-text-muted">
+        One code per person, each good once — for a sponsor's winners, a giveaway or staff. Made in bulk and
+        downloaded as a spreadsheet to send out.
+      </p>
+    </div>
+
+    @if (canManage() && !formOpen()) {
+      <button uiButton variant="secondary" type="button" (click)="formOpen.set(true)">Make single-use codes</button>
+    }
+  </div>
+
+  @if (formOpen()) {
+    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="create()">
+      @if (error(); as message) {
+        <p class="rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
+      }
+
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+        <div class="field min-w-0">
+          <label for="batchName">What they are for</label>
+          <input
+            id="batchName"
+            name="batchName"
+            required
+            maxlength="120"
+            placeholder="Sponsor giveaway"
+            [ngModel]="form().name"
+            (ngModelChange)="form.set({ ...form(), name: $event })"
+          />
+        </div>
+
+        <div class="field min-w-0">
+          <label for="batchQuantity">How many</label>
+          <input
+            id="batchQuantity"
+            name="batchQuantity"
+            type="number"
+            min="1"
+            max="1000"
+            required
+            [ngModel]="form().quantity"
+            (ngModelChange)="form.set({ ...form(), quantity: $event })"
+          />
+          <p class="help text-xs text-text-muted">Up to 1,000 at a time.</p>
+        </div>
+
+        <div class="field min-w-0">
+          <label for="batchPrefix">Starts with <span class="optional">optional</span></label>
+          <input
+            id="batchPrefix"
+            name="batchPrefix"
+            class="uppercase tracking-[0.06em]"
+            maxlength="12"
+            [placeholder]="example().split('-')[0]"
+            [ngModel]="form().prefix"
+            (ngModelChange)="form.set({ ...form(), prefix: $event })"
+          />
+          <p class="help text-xs text-text-muted">Codes look like <code class="font-mono">{{ example() }}</code></p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+        <div class="field min-w-0">
+          <label for="batchPurpose">What each one does</label>
+          <ui-select controlId="batchPurpose" name="batchPurpose" ariaLabel="What each one does" [options]="purposeOptions" [ngModel]="form().purpose" (ngModelChange)="form.set({ ...form(), purpose: $event })" />
+        </div>
+
+        @if (form().purpose === 'discount') {
+          <div class="field min-w-0">
+            <label for="batchDiscountType">Discount</label>
+            <ui-select controlId="batchDiscountType" name="batchDiscountType" ariaLabel="Discount" [options]="discountTypeOptions" [ngModel]="form().discount_type" (ngModelChange)="form.set({ ...form(), discount_type: $event })" />
+          </div>
+
+          <div class="field min-w-0">
+            <label for="batchDiscountValue">
+              @if (form().discount_type === 'percentage') { How much off (%) } @else { How much off ({{ currency() }}) }
+            </label>
+            <input
+              id="batchDiscountValue"
+              name="batchDiscountValue"
+              type="number"
+              min="0"
+              step="0.01"
+              [ngModel]="form().discount_value"
+              (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+            />
+            @if (form().discount_type === 'percentage' && form().discount_value === '100') {
+              <p class="help text-xs text-text-muted">A free ticket for whoever holds one.</p>
+            }
+          </div>
+        }
+      </div>
+
+      @if (form().purpose === 'access') {
+        <fieldset class="m-0 grid gap-2 border-0 p-0">
+          <legend class="mb-2 text-sm font-medium">Unlocks</legend>
+          <div class="flex flex-wrap gap-x-6 gap-y-2">
+            @for (type of ticketTypes(); track type.id) {
+              <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+                <input type="checkbox" class="h-4 w-4" [checked]="form().unlock_ticket_type_ids.includes(type.id)" (change)="toggleUnlock(type.id)" />
+                {{ type.name }}
+              </label>
+            }
+          </div>
+        </fieldset>
+      }
+
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
+        <div class="field min-w-0">
+          <label for="batchStarts">Work from <span class="optional">optional</span></label>
+          <input id="batchStarts" name="batchStarts" type="datetime-local" [ngModel]="form().starts_at" (ngModelChange)="form.set({ ...form(), starts_at: $event })" />
+        </div>
+        <div class="field min-w-0">
+          <label for="batchEnds">Work until <span class="optional">optional</span></label>
+          <input id="batchEnds" name="batchEnds" type="datetime-local" [ngModel]="form().ends_at" (ngModelChange)="form.set({ ...form(), ends_at: $event })" />
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !canCreate()">
+          @if (saving()) { Making codes… } @else { Make {{ form().quantity || 0 }} codes }
+        </button>
+        <button
+          class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+          type="button"
+          (click)="formOpen.set(false); error.set(null)"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (!loading() && batches().length === 0 && !formOpen()) {
+    <p class="muted mt-4 text-sm">None made yet.</p>
+  }
+
+  @if (batches().length > 0) {
+    <ul class="m-0 mt-4 grid list-none gap-2 p-0">
+      @for (batch of batches(); track batch.id) {
+        <li class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium">{{ batch.name }}</p>
+            <p class="mt-0.5 text-sm text-text-muted tabular-nums">
+              <code class="font-mono">{{ batch.prefix }}-…</code> ·
+              {{ batch.used }} of {{ batch.quantity }} used
+              @if (batch.turned_off > 0) {
+                · {{ batch.turned_off }} turned off
+              }
+            </p>
+            <!-- How far through the batch it is, at a glance. -->
+            <div class="mt-2 h-1.5 max-w-64 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+              <div class="h-full rounded-full bg-primary" [style.width.%]="(batch.used / batch.quantity) * 100"></div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button uiButton variant="secondary" size="sm" type="button" [loading]="downloading() === batch.id" (click)="download(batch)">
+              <ui-icon [icon]="downloadIcon" size="sm" />
+              Download CSV
+            </button>
+            @if (canManage() && unused(batch) > 0) {
+              <button uiButton variant="ghost" size="sm" type="button" (click)="stopping.set(batch)">Turn off unused</button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (stopping(); as batch) {
+    <ui-confirm
+      [open]="true"
+      [heading]="'Turn off unused ' + batch.name + ' codes?'"
+      [consequence]="stopConsequence(batch)"
+      confirmLabel="Turn them off"
+      busyLabel="Turning off…"
+      destructive
+      [busy]="stoppingBusy()"
+      (confirmed)="confirmStop()"
+      (cancelled)="stopping.set(null)"
+    />
+  }
+</section>

@@ -35,6 +35,7 @@ import {
   SeriesOccurrence,
   SoldOrder,
   PromoCode,
+  CodeBatch,
   Session,
   TicketType,
   PayoutStatement,
@@ -631,6 +632,23 @@ export class Api {
     return this.http.get<Page<PromoCode>>(`${this.base}/api/organizer/events/${eventId}/codes`, {
       params: new HttpParams().set('page', page),
     });
+  }
+
+  codeBatches(eventId: string): Observable<{ data: CodeBatch[] }> {
+    return this.http.get<{ data: CodeBatch[] }>(`${this.base}/api/organizer/events/${eventId}/code-batches`);
+  }
+
+  createCodeBatch(eventId: string, body: Record<string, unknown>): Observable<CodeBatch> {
+    return this.http.post<CodeBatch>(`${this.base}/api/organizer/events/${eventId}/code-batches`, body);
+  }
+
+  /** Every code in a batch, as the spreadsheet to hand them out from. */
+  exportCodeBatch(eventId: string, batchId: string): Observable<Blob> {
+    return this.http.get(`${this.base}/api/organizer/events/${eventId}/code-batches/${batchId}/export`, { responseType: 'blob' });
+  }
+
+  deactivateCodeBatch(eventId: string, batchId: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/organizer/events/${eventId}/code-batches/${batchId}/deactivate`, {});
   }
 
   createCode(eventId: string, body: Record<string, unknown>): Observable<PromoCode> {
