@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -18,6 +18,7 @@ import {
 } from '@myfiesta/ui';
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-angular';
 import { Api } from '../../core/api';
+import { EventWaitlist } from './event-waitlist';
 import { Money, TicketType } from '../../core/api.types';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 
@@ -81,6 +82,7 @@ interface TicketDraft {
     UiErrorState,
     UiSkeleton,
     UiIcon,
+    EventWaitlist,
   ],
   templateUrl: './event-tickets.html',
 })
@@ -99,6 +101,8 @@ export class EventTickets {
   readonly eventId = eventIdFrom(this.route);
 
   readonly types = signal<TicketType[]>([]);
+
+  private readonly waitlist = viewChild(EventWaitlist);
   readonly loading = signal(true);
   readonly failed = signal(false);
 
@@ -346,6 +350,8 @@ export class EventTickets {
         this.formOpen.set(false);
         this.toasts.show(editing ? 'Ticket type saved.' : 'Ticket type added.');
         this.load();
+        // A tier reopened or given places may be what the waitlist is waiting for.
+        this.waitlist()?.load();
       },
       error: (error) => {
         this.saving.set(false);

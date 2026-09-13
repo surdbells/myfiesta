@@ -3,6 +3,7 @@
 use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\UnsubscribeController;
+use App\Http\Controllers\WaitlistLeaveController;
 use App\Http\Controllers\Webhooks\PaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +55,16 @@ Route::get('/orders/{order}', OrderController::class)
  * this directly when they render their own unsubscribe button, and those
  * requests carry no session and no token.
  */
+/*
+ * Leaving a waitlist from its email: a page with a button, never a GET that
+ * acts, because mail scanners follow links.
+ */
+Route::get('/waitlist/{token}/leave', [WaitlistLeaveController::class, 'show'])
+    ->name('waitlist.leave');
+
+Route::post('/waitlist/{token}/leave', [WaitlistLeaveController::class, 'store'])
+    ->name('waitlist.leave.confirm');
+
 Route::get('/unsubscribe/{token}', [UnsubscribeController::class, 'show'])
     ->name('unsubscribe');
 

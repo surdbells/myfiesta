@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { UiSelect, type SelectOption } from '@myfiesta/ui';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { EventDetail, Quote, TicketType } from '../../core/api.types';
@@ -19,7 +20,7 @@ import { CheckoutSteps } from '../../shared/checkout-steps';
 @Component({
   selector: 'mf-ticket-select',
   standalone: true,
-  imports: [RouterLink, FormsModule, CheckoutSteps],
+  imports: [RouterLink, FormsModule, UiSelect, CheckoutSteps],
   templateUrl: './ticket-select.html',
 })
 export class TicketSelect {
@@ -44,6 +45,51 @@ export class TicketSelect {
   readonly accessInput = signal('');
   readonly accessError = signal<string | null>(null);
   readonly unlocking = signal(false);
+
+  /**
+   * Nothing left to buy: every tier sold out, closed, ended, or waiting.
+   *
+   * The page used to end there. It now offers the waitlist, so a buyer who
+   * missed out leaves an address instead of leaving for a resale post.
+   */
+  readonly nothingToBuy = computed(() => this.tiers().length > 0 && this.tiers().every((t) => !this.buyable(t)));
+
+  readonly waitEmail = signal('');
+  readonly waitName = signal('');
+  readonly waitQuantity = signal('1');
+  readonly waitJoining = signal(false);
+  readonly waitDone = signal<string | null>(null);
+  readonly waitError = signal<string | null>(null);
+
+  readonly quantityOptions: SelectOption[] = Array.from({ length: 10 }, (_, i) => ({
+    value: String(i + 1),
+    label: i === 0 ? '1 ticket' : `${i + 1} tickets`,
+  }));
+
+  joinWaitlist(): void {
+    const email = this.waitEmail().trim();
+    if (!email || this.waitJoining()) return;
+
+    this.waitJoining.set(true);
+    this.waitError.set(null);
+
+    this.api
+      .joinWaitlist(this.slug, { email, name: this.waitName().trim() || undefined, quantity: Number(this.waitQuantity()) })
+      .subscribe({
+        next: ({ message }) => {
+          this.waitJoining.set(false);
+          this.waitDone.set(message);
+        },
+        error: (response) => {
+          this.waitJoining.set(false);
+          this.waitError.set(
+            response?.status === 429
+              ? 'Too many tries. Wait a minute and try again.'
+              : (response?.error?.errors?.email?.[0] ?? response?.error?.message ?? 'That did not go through. Try again.'),
+          );
+        },
+      });
+  }
 
   /**
    * The tiers, with whatever a presale code opened merged in.

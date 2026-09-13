@@ -47,6 +47,9 @@
     </section>
   }
 
+  <!-- Once anybody has joined. After a tier opens or gains places, it says so. -->
+  <app-event-waitlist [eventId]="eventId" />
+
   @if (types().length === 0) {
     <ui-empty
       title="Nothing on sale yet"

@@ -61,6 +61,48 @@
       }
     </div>
 
+    @if (nothingToBuy()) {
+      <!--
+        The waitlist, above the tiers that are gone: the thing a buyer here can
+        still do.
+      -->
+      <section class="mt-8 rounded-xl border-2 border-primary bg-surface-raised p-6" aria-labelledby="waitlist-heading">
+        @if (waitDone(); as message) {
+          <h2 id="waitlist-heading" class="text-xl font-semibold">You're on the list</h2>
+          <p class="mt-2 text-text-muted" role="status">{{ message }}</p>
+        } @else {
+          <h2 id="waitlist-heading" class="text-xl font-semibold">Sold out — join the waitlist</h2>
+          <p class="mt-2 max-w-[60ch] text-text-muted">
+            If tickets come back — a refund, a new release — we'll email you. It's first come, first served when they do.
+          </p>
+          <form class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem_auto] sm:items-end" (ngSubmit)="joinWaitlist()">
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="waitEmail">Email</label>
+              <input id="waitEmail" name="waitEmail" type="email" autocomplete="email" required [ngModel]="waitEmail()" (ngModelChange)="waitEmail.set($event)" />
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="waitName">Name <span class="font-normal text-text-subtle">optional</span></label>
+              <input id="waitName" name="waitName" autocomplete="name" [ngModel]="waitName()" (ngModelChange)="waitName.set($event)" />
+            </div>
+            <div class="grid gap-1">
+              <label class="text-sm font-medium" for="waitQuantity">How many</label>
+              <ui-select controlId="waitQuantity" name="waitQuantity" ariaLabel="How many tickets" [options]="quantityOptions" [ngModel]="waitQuantity()" (ngModelChange)="waitQuantity.set($event)" />
+            </div>
+            <button
+              class="inline-flex h-11 cursor-pointer items-center justify-center rounded-full border-0 bg-primary px-6 text-sm font-semibold text-on-primary [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+              type="submit"
+              [disabled]="!waitEmail().trim() || waitJoining()"
+            >
+              @if (waitJoining()) { Joining… } @else { Join the waitlist }
+            </button>
+            @if (waitError(); as message) {
+              <p class="text-sm text-danger sm:col-span-4" role="alert">{{ message }}</p>
+            }
+          </form>
+        }
+      </section>
+    }
+
     @if (tiers().length === 0) {
       <p class="muted mt-8">Nothing is on sale for this event right now.</p>
     } @else {
@@ -153,8 +195,10 @@
   <!--
     The running answer, pinned where the thumb is. The figure is the server's
     subtotal — fees and tax arrive itemized on the next page, before payment,
-    not sprung after it.
+    not sprung after it. Not shown when nothing can be bought: "0 tickets"
+    and a dead button pinned over the waitlist form helps nobody.
   -->
+  @if (!nothingToBuy() || store.count() > 0) {
   <div class="sticky bottom-0 z-30 border-t border-border bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] backdrop-blur-[8px]">
     <div class="mx-auto flex max-w-[1120px] flex-wrap items-center gap-6 px-6 py-4">
       <p class="grid gap-0.5">
@@ -182,6 +226,7 @@
       </button>
     </div>
   </div>
+  }
 } @else {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }

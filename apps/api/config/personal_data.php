@@ -161,6 +161,14 @@ return [
             'key' => 'email',
             'reason' => 'Cascades to their RSVP and answers. No retention duty applies.',
         ],
+
+        // Somebody asked to be told if tickets came up. Nothing is owed to
+        // anybody on the strength of it, so an erasure request removes it.
+        'waitlist_entries' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'A request to be emailed about one event. No transaction and no retention duty.',
+        ],
     ],
 
     /*

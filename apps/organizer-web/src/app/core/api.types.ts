@@ -207,6 +207,15 @@ export interface CodeSales {
   discount: number;
 }
 
+/** Who is waiting for a sold-out event. */
+export interface WaitlistPage {
+  data: { id: string; name: string | null; email: string; quantity: number; status: 'waiting' | 'notified' | 'purchased'; joined_at: string; notified_at: string | null }[];
+  meta: PageMeta;
+  summary: { waiting: number; waiting_tickets: number; notified: number; purchased: number };
+  /** Whether anything can be bought now — telling the list is refused until it can. */
+  on_sale: boolean;
+}
+
 /** A batch of single-use codes, looked after as one thing. */
 export interface CodeBatch {
   id: string;

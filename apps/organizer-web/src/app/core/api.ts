@@ -36,6 +36,7 @@ import {
   SoldOrder,
   PromoCode,
   CodeBatch,
+  WaitlistPage,
   Session,
   TicketType,
   PayoutStatement,
@@ -632,6 +633,14 @@ export class Api {
     return this.http.get<Page<PromoCode>>(`${this.base}/api/organizer/events/${eventId}/codes`, {
       params: new HttpParams().set('page', page),
     });
+  }
+
+  waitlist(eventId: string): Observable<WaitlistPage> {
+    return this.http.get<WaitlistPage>(`${this.base}/api/organizer/events/${eventId}/waitlist`);
+  }
+
+  notifyWaitlist(eventId: string, limit: number, note: string | null): Observable<{ message: string; told: number }> {
+    return this.http.post<{ message: string; told: number }>(`${this.base}/api/organizer/events/${eventId}/waitlist/notify`, { limit, note });
   }
 
   codeBatches(eventId: string): Observable<{ data: CodeBatch[] }> {

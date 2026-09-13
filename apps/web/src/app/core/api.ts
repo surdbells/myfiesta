@@ -64,6 +64,11 @@ export class Api {
     return this.http.post<Quote>(`${this.base}/api/events/${slug}/quote`, { items, code, ref, access_code });
   }
 
+  /** Join a sold-out event's waitlist. */
+  joinWaitlist(slug: string, body: { email: string; name?: string; quantity: number }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/events/${slug}/waitlist`, body);
+  }
+
   /** A presale code: what it opens on this event, or a 422 saying why not. */
   unlock(slug: string, code: string): Observable<AccessUnlock> {
     return this.http.post<AccessUnlock>(`${this.base}/api/events/${slug}/access`, { code });

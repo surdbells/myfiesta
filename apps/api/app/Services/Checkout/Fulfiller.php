@@ -4,6 +4,7 @@ namespace App\Services\Checkout;
 
 use App\Mail\TicketsIssued;
 use App\Models\Code;
+use App\Services\Waitlist\Waitlist;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -61,6 +62,9 @@ class Fulfiller
             $this->releaseHolds($locked);
 
             // A paid use of its code, now that it is one.
+            // Somebody from the waitlist who got in.
+            app(Waitlist::class)->markPurchased($locked->event_id, $locked->buyer_email);
+
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);
 

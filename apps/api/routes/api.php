@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\DiscoverController;
+use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
 use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
@@ -55,6 +57,10 @@ Route::get('/tickets/{token}', TicketAccessController::class)->middleware('throt
 
 Route::middleware('throttle:120,1')
     ->post('/events/{slug}/quote', [CheckoutController::class, 'quote']);
+
+// Joining the waitlist for a sold-out event.
+Route::middleware('throttle:10,1')
+    ->post('/events/{slug}/waitlist', WaitlistController::class);
 
 // Ten tries a minute: an answer confirms a presale code exists.
 Route::middleware('throttle:10,1')
@@ -199,6 +205,9 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // away its redemption count and the promoter attribution with it.
         Route::patch('/events/{event:id}/codes/{code}', [CodeController::class, 'update']);
         Route::delete('/events/{event:id}/codes/{code}', [CodeController::class, 'destroy']);
+
+        Route::get('/events/{event:id}/waitlist', [OrganizerWaitlistController::class, 'index']);
+        Route::post('/events/{event:id}/waitlist/notify', [OrganizerWaitlistController::class, 'notify']);
 
         // Batches of single-use codes, for handing out one per person.
         Route::get('/events/{event:id}/code-batches', [CodeBatchController::class, 'index']);
