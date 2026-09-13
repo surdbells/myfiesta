@@ -183,19 +183,10 @@
           />
         </div>
 
-        <label class="flex shrink-0 items-center gap-2 text-sm font-normal text-text-muted max-sm:hidden">
-          Sort by
-          <select
-            class="w-auto rounded-full font-medium"
-            name="sort"
-            [ngModel]="sort()"
-            (ngModelChange)="sort.set($event)"
-          >
-            <option value="soon">Soonest</option>
-            <option value="price-asc">Price: low to high</option>
-            <option value="price-desc">Price: high to low</option>
-          </select>
-        </label>
+        <div class="flex shrink-0 items-center gap-2 text-sm font-normal text-text-muted max-sm:hidden">
+          <label for="sort">Sort by</label>
+          <ui-select compact controlId="sort" name="sort" ariaLabel="Sort by" [options]="sortOptions" [ngModel]="sort()" (ngModelChange)="sort.set($event)" />
+        </div>
       </form>
 
       @if (loading()) {

@@ -89,7 +89,7 @@ let sequence = 0;
 
     /* The red outline is applied from here rather than asking every screen to
        remember a class on the control itself. */
-    .field--invalid .field__control ::ng-deep :is(input, select, textarea) {
+    .field--invalid .field__control ::ng-deep :is(input, select, textarea, .ui-select__trigger) {
       border-color: var(--danger);
     }
     .field--invalid .field__control ::ng-deep :is(input, select, textarea):focus-visible {
@@ -152,8 +152,11 @@ export class UiField implements AfterContentInit {
   }
 
   ngAfterContentInit(): void {
+    // The combobox first: a ui-select holds a search input too, and the label
+    // belongs on the control, not on a field that only exists while it is open.
+    // querySelector returns in document order, and the trigger comes first.
     this.control = this.host.nativeElement.querySelector(
-      'input, select, textarea',
+      'button[role=combobox], input, select, textarea',
     );
     this.apply();
   }

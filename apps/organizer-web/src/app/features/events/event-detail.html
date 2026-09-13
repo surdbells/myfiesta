@@ -142,16 +142,7 @@
         @if (!series()) {
           <div class="copy-form flex flex-wrap items-center gap-3">
             <label for="freq">Repeat this</label>
-            <select
-              id="freq"
-              name="freq"
-              [ngModel]="frequency()"
-              (ngModelChange)="frequency.set($event)"
-            >
-              <option value="weekly">Every week</option>
-              <option value="fortnightly">Every other week</option>
-              <option value="monthly">Every month</option>
-            </select>
+            <ui-select class="w-48" controlId="freq" name="freq" ariaLabel="How often" [options]="frequencyOptions" [ngModel]="frequency()" (ngModelChange)="frequency.set($event)" />
             <label for="times">for</label>
             <input
               id="times"
@@ -315,16 +306,7 @@
 
   @if (session.canEditEvents()) {
     <form class="add-reminder mt-4 flex gap-2" (ngSubmit)="addReminder()">
-      <select
-        name="offset"
-        aria-label="When to remind"
-        [ngModel]="newReminder()"
-        (ngModelChange)="newReminder.set($event)"
-      >
-        @for (choice of reminderChoices; track choice.minutes) {
-          <option [value]="choice.minutes">{{ choice.label }}</option>
-        }
-      </select>
+      <ui-select class="min-w-0 flex-1" name="offset" ariaLabel="When to remind" [options]="reminderOptions()" [ngModel]="newReminder()" (ngModelChange)="newReminder.set($event)" />
       <button uiButton variant="secondary" type="submit" [loading]="savingReminder()" [disabled]="savingReminder()">Add</button>
     </form>
     <p class="help mt-2 text-xs text-text-muted">

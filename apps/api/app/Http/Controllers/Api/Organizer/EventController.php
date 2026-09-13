@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * An organizer's own events.
@@ -168,7 +169,7 @@ class EventController extends Controller
             'city' => ['required', 'string', 'max:120'],
             'subdivision' => ['nullable', 'string', 'max:8'],
             'country' => ['required', 'string', 'size:2'],
-            'category' => ['nullable', 'string', 'max:60'],
+            'category' => ['nullable', Rule::in(config('events.categories'))],
             'min_age' => ['nullable', 'integer', 'min:0', 'max:99'],
         ]);
 
@@ -315,7 +316,9 @@ class EventController extends Controller
             'city' => ['sometimes', 'string', 'max:120'],
             'subdivision' => ['nullable', 'string', 'max:8'],
             'country' => ['sometimes', 'string', 'size:2'],
-            'category' => ['nullable', 'string', 'max:60'],
+            // An event already filed under something off the list keeps it until
+            // it is changed; it cannot be changed to something else off the list.
+            'category' => ['nullable', Rule::in([...config('events.categories'), $event->category])],
             'min_age' => ['nullable', 'integer', 'min:0', 'max:99'],
             'id_required' => ['sometimes', 'boolean'],
         ]);

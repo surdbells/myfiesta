@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { UiIcon } from '@myfiesta/ui';
+import { UiIcon, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { CalendarDays, MapPin, Search } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { EventSummary } from '../../core/api.types';
@@ -27,7 +27,7 @@ type SortChoice = 'soon' | 'price-asc' | 'price-desc';
 @Component({
   selector: 'mf-event-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, UiIcon],
+  imports: [CommonModule, FormsModule, RouterLink, UiIcon, UiSelect],
   templateUrl: './event-list.html',
 })
 export class EventList {
@@ -62,6 +62,12 @@ export class EventList {
   readonly pickedDate = signal('');
   readonly price = signal<PriceChoice>('all');
   readonly sort = signal<SortChoice>('soon');
+
+  readonly sortOptions: SelectOption[] = [
+    { value: 'soon', label: 'Soonest' },
+    { value: 'price-asc', label: 'Price: low to high' },
+    { value: 'price-desc', label: 'Price: high to low' },
+  ];
 
   /** Only categories with something on — a filter leading nowhere is worse than none. */
   readonly categories = signal<{ category: string; events: number }[]>([]);

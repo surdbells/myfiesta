@@ -46,32 +46,24 @@
       />
     </div>
 
-    <select
+    <ui-select
       class="flex-[0_1_14rem] max-sm:flex-[1_1_100%]"
       name="event"
-      aria-label="Event"
+      ariaLabel="Event"
+      searchPlaceholder="Search your events"
+      [options]="eventOptions()"
       [ngModel]="eventId()"
       (ngModelChange)="eventId.set($event); refine()"
-    >
-      <option value="">All events</option>
-      @for (event of events(); track event.id) {
-        <option [value]="event.id">{{ event.title }}</option>
-      }
-    </select>
+    />
 
-    <select
+    <ui-select
       class="flex-[0_1_11rem] max-sm:flex-[1_1_100%]"
       name="status"
-      aria-label="Status"
+      ariaLabel="Status"
+      [options]="statusOptions"
       [ngModel]="status()"
       (ngModelChange)="status.set($event); refine()"
-    >
-      <option value="">Any status</option>
-      <option value="paid">Paid</option>
-      <option value="partially_refunded">Part refunded</option>
-      <option value="refunded">Refunded</option>
-      <option value="pending">Confirming</option>
-    </select>
+    />
 
     @if (filtered()) {
       <button

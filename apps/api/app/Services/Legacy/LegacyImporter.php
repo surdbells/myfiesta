@@ -371,7 +371,7 @@ class LegacyImporter
                 'city' => $city,
                 'subdivision' => $row->_province ?: null,
                 'country' => LegacyRules::countryFor($currency),
-                'category' => $row->_category ?: null,
+                'category' => LegacyRules::category($row->_category),
                 'dress_code' => $row->_dress_code ?: null,
                 'id_required' => (bool) $row->_identity_req,
                 'status' => $status,

@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { UiButton, UiPagination } from '@myfiesta/ui';
+import { UiButton, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -28,7 +28,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-codes',
-  imports: [FormsModule, UiButton, UiPagination],
+  imports: [FormsModule, UiButton, UiPagination, UiSelect],
   templateUrl: './event-codes.html',
 })
 export class EventCodes {
@@ -74,6 +74,17 @@ export class EventCodes {
     starts_at: '',
     ends_at: '',
   });
+
+  readonly kindOptions: SelectOption[] = [
+    { value: 'discount', label: 'Takes money off' },
+    { value: 'promoter', label: 'Credits a promoter' },
+    { value: 'both', label: 'Both' },
+  ];
+
+  readonly discountTypeOptions: SelectOption[] = [
+    { value: 'percentage', label: 'A percentage' },
+    { value: 'fixed', label: 'A fixed amount' },
+  ];
 
   readonly discounts = computed(() => this.form().kind !== 'promoter');
   readonly attributes = computed(() => this.form().kind !== 'discount');

@@ -60,21 +60,7 @@
 
       <div class="field min-w-0">
         <label for="gtype">Ticket</label>
-        <select
-          id="gtype"
-          name="gtype"
-          [ngModel]="issue().ticket_type_id"
-          (ngModelChange)="issue.set({ ...issue(), ticket_type_id: $event })"
-        >
-          @for (type of ticketTypes(); track type.id) {
-            <option [value]="type.id">
-              {{ type.name }}
-              @if (type.admits > 1) {
-                · admits {{ type.admits }}
-              }
-            </option>
-          }
-        </select>
+        <ui-select controlId="gtype" name="gtype" ariaLabel="Ticket" [options]="ticketTypeOptions()" [ngModel]="issue().ticket_type_id" (ngModelChange)="issue.set({ ...issue(), ticket_type_id: $event })" />
       </div>
 
       <div class="field min-w-0 max-w-36">

@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -21,7 +21,7 @@ import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-detail',
-  imports: [FormsModule, RouterLink, UiButton],
+  imports: [FormsModule, RouterLink, UiButton, UiSelect],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {
@@ -99,6 +99,16 @@ export class EventDetail {
   readonly series = signal<Series | null>(null);
   readonly repeating = signal(false);
   readonly frequency = signal<'weekly' | 'fortnightly' | 'monthly'>('weekly');
+
+  readonly frequencyOptions: SelectOption[] = [
+    { value: 'weekly', label: 'Every week' },
+    { value: 'fortnightly', label: 'Every other week' },
+    { value: 'monthly', label: 'Every month' },
+  ];
+
+  readonly reminderOptions = computed<SelectOption[]>(() =>
+    this.reminderChoices.map((choice) => ({ value: choice.minutes, label: choice.label })),
+  );
   readonly repeatCount = signal('8');
 
   /** Future dates only. A residency's past nights are not a schedule. */

@@ -224,14 +224,7 @@
 
   <div class="form grid gap-4">
     <ui-field label="How you want to be paid" required>
-      <select
-        name="rail"
-        [ngModel]="draft().rail"
-        (ngModelChange)="update('rail', $event)"
-      >
-        <option value="interac">Interac e-Transfer</option>
-        <option value="bank_transfer">Bank transfer</option>
-      </select>
+      <ui-select name="rail" ariaLabel="How you want to be paid" [options]="railOptions" [ngModel]="draft().rail" (ngModelChange)="update('rail', $event)" />
     </ui-field>
 
     @if (draft().rail === 'interac') {

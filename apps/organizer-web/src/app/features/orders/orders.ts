@@ -10,7 +10,9 @@ import {
   UiIcon,
   UiPageHeader,
   UiPagination,
+  UiSelect,
   UiSkeleton,
+  type SelectOption,
 } from '@myfiesta/ui';
 import { Download, Search } from 'lucide-angular';
 import { Subject, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs';
@@ -46,6 +48,7 @@ import { saveFile, today } from '../../core/download';
     UiErrorState,
     UiIcon,
     UiPagination,
+    UiSelect,
     UiSkeleton,
   ],
   templateUrl: './orders.html',
@@ -76,6 +79,24 @@ export class Orders {
 
   /** The filter's options, so somebody can narrow to one night. */
   readonly events = signal<EventOption[]>([]);
+
+  /** Every event, most recent first, with its date to tell repeats of a night apart. */
+  readonly eventOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'All events' },
+    ...this.events().map((event) => ({
+      value: event.id,
+      label: event.title,
+      hint: new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(event.starts_at)),
+    })),
+  ]);
+
+  readonly statusOptions: SelectOption[] = [
+    { value: '', label: 'Any status' },
+    { value: 'paid', label: 'Paid' },
+    { value: 'partially_refunded', label: 'Part refunded' },
+    { value: 'refunded', label: 'Refunded' },
+    { value: 'pending', label: 'Confirming' },
+  ];
 
   readonly filtered = computed(() => !!this.query() || !!this.eventId() || !!this.status());
 

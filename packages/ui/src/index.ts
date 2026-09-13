@@ -34,6 +34,7 @@ export { UiPagination } from './pagination';
 
 // Forms
 export { UiField } from './field';
+export { UiSelect, type SelectOption } from './select';
 
 // Status and feedback
 export { UiAlert, type AlertTone } from './alert';

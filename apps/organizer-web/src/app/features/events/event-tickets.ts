@@ -12,7 +12,9 @@ import {
   UiField,
   UiIcon,
   UiModal,
+  UiSelect,
   UiSkeleton,
+  type SelectOption,
 } from '@myfiesta/ui';
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-angular';
 import { Api } from '../../core/api';
@@ -70,6 +72,7 @@ interface TicketDraft {
     UiButton,
     UiBadge,
     UiField,
+    UiSelect,
     UiModal,
     UiConfirm,
     UiEmpty,
@@ -271,6 +274,12 @@ export class EventTickets {
   });
 
   /** What the chosen availability actually means, said under the control. */
+  readonly statusOptions: SelectOption[] = [
+    { value: 'on_sale', label: 'On sale — anybody can buy it' },
+    { value: 'hidden', label: 'Hidden — only reachable with a direct link' },
+    { value: 'closed', label: 'Closed — not for sale' },
+  ];
+
   readonly statusHint = computed(() => {
     const status = this.draft().status;
 

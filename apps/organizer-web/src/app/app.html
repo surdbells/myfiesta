@@ -39,24 +39,20 @@
       </div>
 
       <!--
-        The organization switcher. A native select, because somebody who runs
-        four venues switches between them constantly and a custom dropdown
-        would have to reimplement type-ahead, keyboard selection and the whole
-        mobile picker to be no better than this.
+        The organization switcher. Searchable, because somebody who runs a
+        dozen venues switches between them constantly and typing two letters
+        beats scrolling for the right one.
       -->
       @if (session.organizations().length > 1) {
         <div class="switcher grid gap-1 px-4 pb-4">
           <label class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="org">Organization</label>
-          <select
-            id="org"
-            class="switcher__select w-full text-sm font-medium"
-            [value]="session.current()?.id"
-            (change)="switchOrganization($event)"
-          >
-            @for (org of session.organizations(); track org.id) {
-              <option [value]="org.id">{{ org.name }}</option>
-            }
-          </select>
+          <ui-select
+            controlId="org"
+            ariaLabel="Organization"
+            [options]="organizationOptions()"
+            [value]="session.current()?.id ?? null"
+            (valueChange)="switchOrganization($event)"
+          />
         </div>
       } @else if (session.current(); as org) {
         <!-- The single-organization case, which is most of them. Still labelled,

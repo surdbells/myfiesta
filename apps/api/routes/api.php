@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DiscoverController;
+use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
@@ -34,6 +35,9 @@ Route::get('/health', fn () => ['status' => 'ok']);
  * every change, while creating an order takes locks and reserves stock.
  */
 Route::get('/discover', DiscoverController::class);
+
+// The fixed list the console's category dropdown offers and the API accepts.
+Route::get('/event-categories', EventCategoryController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/orders/{reference}', OrderStatusController::class);

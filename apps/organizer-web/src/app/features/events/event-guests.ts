@@ -1,5 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
-import { ToastStore, UiButton, UiIcon, UiPagination } from '@myfiesta/ui';
+import { Component, computed, inject, signal } from '@angular/core';
+import { ToastStore, UiButton, UiIcon, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
 import { saveFile, today } from '../../core/download';
 import { FormsModule } from '@angular/forms';
@@ -19,7 +19,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, UiButton, UiIcon, UiPagination],
+  imports: [FormsModule, UiButton, UiIcon, UiPagination, UiSelect],
   templateUrl: './event-guests.html',
 })
 export class EventGuests {
@@ -67,6 +67,14 @@ export class EventGuests {
   readonly search = signal('');
 
   readonly ticketTypes = signal<TicketType[]>([]);
+
+  readonly ticketTypeOptions = computed<SelectOption[]>(() =>
+    this.ticketTypes().map((type) => ({
+      value: type.id,
+      label: type.name,
+      hint: type.admits > 1 ? `Admits ${type.admits}` : undefined,
+    })),
+  );
   readonly issuing = signal(false);
   readonly issue = signal({
     ticket_type_id: '',

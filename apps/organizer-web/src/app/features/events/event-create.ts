@@ -1,39 +1,17 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { RichTextEditor } from '../../shared/rich-text-editor';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { COUNTRIES, COUNTRY_OPTIONS, PROVINCE_OPTIONS, categoryOptions } from '../../core/places';
 import { COMMON_ZONES, describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-time';
-
-/** Currency follows the country, because in practice it always does. */
-const COUNTRIES = [
-  { code: 'CA', name: 'Canada', currency: 'CAD' as const, zone: 'America/Toronto' },
-  { code: 'NG', name: 'Nigeria', currency: 'NGN' as const, zone: 'Africa/Lagos' },
-];
-
-/** Canada charges tax by province, so the province is not optional there. */
-const PROVINCES = [
-  { code: 'AB', name: 'Alberta' },
-  { code: 'BC', name: 'British Columbia' },
-  { code: 'MB', name: 'Manitoba' },
-  { code: 'NB', name: 'New Brunswick' },
-  { code: 'NL', name: 'Newfoundland and Labrador' },
-  { code: 'NS', name: 'Nova Scotia' },
-  { code: 'NT', name: 'Northwest Territories' },
-  { code: 'NU', name: 'Nunavut' },
-  { code: 'ON', name: 'Ontario' },
-  { code: 'PE', name: 'Prince Edward Island' },
-  { code: 'QC', name: 'Quebec' },
-  { code: 'SK', name: 'Saskatchewan' },
-  { code: 'YT', name: 'Yukon' },
-];
 
 @Component({
   selector: 'app-event-create',
-  imports: [FormsModule, RouterLink, UiButton, RichTextEditor],
+  imports: [FormsModule, RouterLink, UiButton, UiSelect, RichTextEditor],
   templateUrl: './event-create.html',
 })
 export class EventCreate {
@@ -41,9 +19,17 @@ export class EventCreate {
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
 
-  readonly countries = COUNTRIES;
-  readonly provinces = PROVINCES;
+  readonly countryOptions = COUNTRY_OPTIONS;
+  readonly provinceOptions = PROVINCE_OPTIONS;
   readonly describe = describeZone;
+
+  readonly kindOptions: SelectOption[] = [
+    { value: 'ticketed', label: 'Ticketed — sold publicly' },
+    { value: 'invitation', label: 'Invitation — guests you invite' },
+  ];
+
+  readonly categories = signal<string[]>([]);
+  readonly categoryChoices = computed(() => categoryOptions(this.categories()));
 
   /** The organizer's own zone first, then the ones we sell in. */
   readonly zones = computed(() => {
@@ -53,6 +39,10 @@ export class EventCreate {
       ? [...COMMON_ZONES]
       : [mine, ...COMMON_ZONES];
   });
+
+  readonly zoneOptions = computed<SelectOption[]>(() =>
+    this.zones().map((zone) => ({ value: zone, label: describeZone(zone), hint: zone })),
+  );
 
   readonly title = signal('');
   readonly kind = signal<'ticketed' | 'invitation'>('ticketed');
@@ -65,6 +55,10 @@ export class EventCreate {
   readonly endsAt = signal('');
   readonly category = signal('');
   readonly minAge = signal('');
+
+  constructor() {
+    this.api.eventCategories().subscribe({ next: ({ data }) => this.categories.set(data), error: () => undefined });
+  }
 
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);

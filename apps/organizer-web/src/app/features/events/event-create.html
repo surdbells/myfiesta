@@ -23,10 +23,7 @@
 
   <div class="field min-w-0">
     <label for="kind">Kind</label>
-    <select id="kind" name="kind" [ngModel]="kind()" (ngModelChange)="kind.set($event)">
-      <option value="ticketed">Ticketed — sold publicly</option>
-      <option value="invitation">Invitation — guests you invite</option>
-    </select>
+    <ui-select controlId="kind" name="kind" ariaLabel="Kind" [options]="kindOptions" [ngModel]="kind()" (ngModelChange)="kind.set($event)" />
     <p class="help text-xs text-text-muted">
       @if (kind() === 'invitation') {
         Invitation events never appear in public search. Only people you invite can find them.
@@ -51,31 +48,13 @@
   <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
     <div class="field min-w-0">
       <label for="country">Country</label>
-      <select
-        id="country"
-        name="country"
-        [ngModel]="country()"
-        (ngModelChange)="onCountryChange($event)"
-      >
-        @for (option of countries; track option.code) {
-          <option [value]="option.code">{{ option.name }}</option>
-        }
-      </select>
+      <ui-select controlId="country" name="country" ariaLabel="Country" [options]="countryOptions" [ngModel]="country()" (ngModelChange)="onCountryChange($event)" />
     </div>
 
     @if (needsProvince()) {
       <div class="field min-w-0">
         <label for="subdivision">Province</label>
-        <select
-          id="subdivision"
-          name="subdivision"
-          [ngModel]="subdivision()"
-          (ngModelChange)="subdivision.set($event)"
-        >
-          @for (province of provinces; track province.code) {
-            <option [value]="province.code">{{ province.name }}</option>
-          }
-        </select>
+        <ui-select controlId="subdivision" name="subdivision" ariaLabel="Province" [options]="provinceOptions" [ngModel]="subdivision()" (ngModelChange)="subdivision.set($event)" />
         <!-- Not cosmetic: Canadian sales tax is set by province, and the rate
              is looked up from this. -->
         <p class="help text-xs text-text-muted">Sets the sales tax charged at checkout.</p>
@@ -98,16 +77,7 @@
   <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
     <div class="field min-w-0">
       <label for="timezone">Time zone</label>
-      <select
-        id="timezone"
-        name="timezone"
-        [ngModel]="timezone()"
-        (ngModelChange)="timezone.set($event)"
-      >
-        @for (zone of zones(); track zone) {
-          <option [value]="zone">{{ describe(zone) }}</option>
-        }
-      </select>
+      <ui-select controlId="timezone" name="timezone" ariaLabel="Time zone" [options]="zoneOptions()" [ngModel]="timezone()" (ngModelChange)="timezone.set($event)" />
     </div>
 
     <div class="field min-w-0">
@@ -145,13 +115,16 @@
   <div class="row grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-start gap-4">
     <div class="field min-w-0">
       <label for="category">Category <span class="optional">optional</span></label>
-      <input
-        id="category"
+      <ui-select
+        controlId="category"
         name="category"
-        placeholder="Music"
+        ariaLabel="Category"
+        placeholder="No category"
+        [options]="categoryChoices()"
         [ngModel]="category()"
         (ngModelChange)="category.set($event)"
       />
+      <p class="help text-xs text-text-muted">Where buyers find it when they filter the events page.</p>
     </div>
 
     <div class="field min-w-0">

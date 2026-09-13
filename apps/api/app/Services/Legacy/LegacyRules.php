@@ -20,6 +20,53 @@ use Carbon\CarbonImmutable;
 final class LegacyRules
 {
     /**
+     * The previous platform's event_types, by id, as this platform's categories.
+     *
+     * Its events stored the id — "2", "8" — and the importer copied that into
+     * the category, so every imported event would have been filed under a
+     * number. Shows and the arts fold together, as do its two music types.
+     * 15 was "Standard (Couple)", a ticket type that had leaked into the list,
+     * and files under nothing.
+     */
+    private const CATEGORIES = [
+        1 => 'Nightlife',
+        2 => 'Concert',
+        3 => 'Performing arts',
+        5 => 'Music',
+        7 => 'Online',
+        8 => 'Party',
+        9 => 'Comedy',
+        10 => 'Food & drink',
+        11 => 'Music',
+        12 => 'Community & culture',
+        13 => 'Classes & workshops',
+        14 => 'Performing arts',
+        16 => 'Sports',
+    ];
+
+    /** A legacy category — an event_types id, or a name — as one of ours, or null. */
+    public static function category(int|string|null $legacy): ?string
+    {
+        if ($legacy === null || trim((string) $legacy) === '') {
+            return null;
+        }
+
+        if (ctype_digit(trim((string) $legacy))) {
+            return self::CATEGORIES[(int) $legacy] ?? null;
+        }
+
+        $name = mb_strtolower(trim((string) $legacy));
+
+        foreach (config('events.categories') as $category) {
+            if (mb_strtolower($category) === $name) {
+                return $category;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * A ticket type's price, converted to minor units.
      *
      * `event_tickets.ticket_price` is in whole dollars — the rows read 5, 20,

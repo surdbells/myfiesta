@@ -238,6 +238,11 @@ export class Api {
     return this.http.get<{ data: EventOption[] }>(`${this.base}/api/organizer/events/options`);
   }
 
+  /** The fixed category list, from the server that enforces it. */
+  eventCategories(): Observable<{ data: string[] }> {
+    return this.http.get<{ data: string[] }>(`${this.base}/api/event-categories`);
+  }
+
   event(id: string): Observable<OrganizerEventDetail> {
     return this.http.get<OrganizerEventDetail>(`${this.base}/api/organizer/events/${id}`);
   }

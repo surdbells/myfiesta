@@ -11,7 +11,9 @@ import {
   UiIcon,
   UiModal,
   UiPageHeader,
+  UiSelect,
   UiSkeleton,
+  type SelectOption,
 } from '@myfiesta/ui';
 import { Banknote, Landmark, Pencil, ShieldCheck } from 'lucide-angular';
 import { Api } from '../../core/api';
@@ -52,6 +54,7 @@ interface DestinationDraft {
     UiButton,
     UiBadge,
     UiField,
+    UiSelect,
     UiModal,
     UiEmpty,
     UiErrorState,
@@ -78,6 +81,11 @@ export class Payouts {
   readonly saving = signal(false);
   readonly formError = signal<string | null>(null);
   readonly draft = signal<DestinationDraft>(this.blank());
+
+  readonly railOptions: SelectOption[] = [
+    { value: 'interac', label: 'Interac e-Transfer' },
+    { value: 'bank_transfer', label: 'Bank transfer' },
+  ];
 
   constructor() {
     this.load();

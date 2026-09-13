@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { RichTextEditor } from '../../shared/rich-text-editor';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -8,6 +8,7 @@ import { Api } from '../../core/api';
 import { OrganizerEventDetail } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { COUNTRY_OPTIONS, PROVINCE_OPTIONS, categoryOptions } from '../../core/places';
 import {
   COMMON_ZONES,
   describeZone,
@@ -15,22 +16,6 @@ import {
   localZone,
   zonedWallClockToIso,
 } from '../../core/zoned-time';
-
-const PROVINCES = [
-  { code: 'AB', name: 'Alberta' },
-  { code: 'BC', name: 'British Columbia' },
-  { code: 'MB', name: 'Manitoba' },
-  { code: 'NB', name: 'New Brunswick' },
-  { code: 'NL', name: 'Newfoundland and Labrador' },
-  { code: 'NS', name: 'Nova Scotia' },
-  { code: 'NT', name: 'Northwest Territories' },
-  { code: 'NU', name: 'Nunavut' },
-  { code: 'ON', name: 'Ontario' },
-  { code: 'PE', name: 'Prince Edward Island' },
-  { code: 'QC', name: 'Quebec' },
-  { code: 'SK', name: 'Saskatchewan' },
-  { code: 'YT', name: 'Yukon' },
-];
 
 /**
  * Editing an event after it exists.
@@ -47,7 +32,7 @@ const PROVINCES = [
  */
 @Component({
   selector: 'app-event-edit',
-  imports: [FormsModule, UiButton, RichTextEditor],
+  imports: [FormsModule, UiButton, UiSelect, RichTextEditor],
   templateUrl: './event-edit.html',
 })
 export class EventEdit {
@@ -57,7 +42,11 @@ export class EventEdit {
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
-  readonly provinces = PROVINCES;
+  readonly countryOptions = COUNTRY_OPTIONS;
+  readonly provinceOptions = PROVINCE_OPTIONS;
+
+  readonly categories = signal<string[]>([]);
+  readonly categoryChoices = computed(() => categoryOptions(this.categories(), this.event()?.category ?? null));
   readonly describe = describeZone;
 
   /**
@@ -73,6 +62,10 @@ export class EventEdit {
 
     return [...new Set([...wanted, ...COMMON_ZONES])];
   });
+
+  readonly zoneOptions = computed<SelectOption[]>(() =>
+    this.zones().map((zone) => ({ value: zone, label: describeZone(zone), hint: zone })),
+  );
 
   readonly event = signal<OrganizerEventDetail | null>(null);
   readonly loading = signal(true);
@@ -115,6 +108,8 @@ export class EventEdit {
   });
 
   constructor() {
+    this.api.eventCategories().subscribe({ next: ({ data }) => this.categories.set(data), error: () => undefined });
+
     this.api.event(this.eventId).subscribe({
       next: (event) => {
         this.event.set(event);

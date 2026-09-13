@@ -43,16 +43,7 @@
 
       <div class="field min-w-0">
         <label for="kind">What it does</label>
-        <select
-          id="kind"
-          name="kind"
-          [ngModel]="form().kind"
-          (ngModelChange)="form.set({ ...form(), kind: $event })"
-        >
-          <option value="discount">Takes money off</option>
-          <option value="promoter">Credits a promoter</option>
-          <option value="both">Both</option>
-        </select>
+        <ui-select controlId="kind" name="kind" ariaLabel="What it does" [options]="kindOptions" [ngModel]="form().kind" (ngModelChange)="form.set({ ...form(), kind: $event })" />
       </div>
 
       <div class="field min-w-0">
@@ -72,15 +63,7 @@
       <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
         <div class="field min-w-0">
           <label for="discountType">Discount</label>
-          <select
-            id="discountType"
-            name="discountType"
-            [ngModel]="form().discount_type"
-            (ngModelChange)="form.set({ ...form(), discount_type: $event })"
-          >
-            <option value="percentage">A percentage</option>
-            <option value="fixed">A fixed amount</option>
-          </select>
+          <ui-select controlId="discountType" name="discountType" ariaLabel="Discount" [options]="discountTypeOptions" [ngModel]="form().discount_type" (ngModelChange)="form.set({ ...form(), discount_type: $event })" />
         </div>
 
         <div class="field min-w-0">

@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiIcon, UiToasts, type LucideIconData } from '@myfiesta/ui';
+import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
 import { CalendarDays, LayoutDashboard, Menu, ReceiptText, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
@@ -21,7 +21,7 @@ interface NavGroup {
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -79,8 +79,12 @@ export class App {
     return groups;
   });
 
-  switchOrganization(event: Event): void {
-    const id = (event.target as HTMLSelectElement).value;
+  readonly organizationOptions = computed<SelectOption[]>(() =>
+    this.session.organizations().map((org) => ({ value: org.id, label: org.name, hint: org.role })),
+  );
+
+  switchOrganization(id: string | null): void {
+    if (!id || id === this.session.current()?.id) return;
 
     this.session.select(id);
 

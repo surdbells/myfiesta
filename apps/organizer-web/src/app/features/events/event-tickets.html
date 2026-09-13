@@ -273,11 +273,7 @@
       for, said honestly.
     -->
     <ui-field label="Availability" [hint]="statusHint()">
-      <select name="status" [ngModel]="draft().status" (ngModelChange)="update('status', $event)">
-        <option value="on_sale">On sale — anybody can buy it</option>
-        <option value="hidden">Hidden — only reachable with a direct link</option>
-        <option value="closed">Closed — not for sale</option>
-      </select>
+      <ui-select name="status" ariaLabel="Availability" [options]="statusOptions" [ngModel]="draft().status" (ngModelChange)="update('status', $event)" />
     </ui-field>
   </div>
 
