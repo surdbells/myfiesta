@@ -5,12 +5,15 @@ namespace App\Filament\Resources\Organizations\Tables;
 use App\Enums\PlatformRole;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Models\OrganizationPayoutDetail;
 use App\Services\Payouts\SettlementRecorder;
 use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -132,6 +135,7 @@ class OrganizationsTable
                         Select::make('rail')
                             ->label('Paid via')
                             ->required()
+                            ->live()
                             ->options([
                                 'interac' => 'Interac',
                                 'bank_transfer' => 'Bank transfer',
@@ -139,9 +143,33 @@ class OrganizationsTable
                                 'paystack' => 'Paystack',
                             ]),
 
+                        /*
+                         * Whether the details this would have gone to are
+                         * verified, next to the amount. Read from the clear
+                         * columns only — no decryption, nothing to log.
+                         */
+                        Placeholder::make('destination')
+                            ->label('Payout details on file')
+                            ->visible(fn (Get $get) => in_array($get('rail'), ['interac', 'bank_transfer'], true) && filled($get('currency')))
+                            ->content(function (Get $get) use ($record) {
+                                $detail = OrganizationPayoutDetail::query()
+                                    ->where('organization_id', $record->id)
+                                    ->where('currency', $get('currency'))
+                                    ->where('rail', $get('rail'))
+                                    ->first();
+
+                                if (! $detail) {
+                                    return 'None for this rail and currency. Do not send money until the organizer has added details and they are verified.';
+                                }
+
+                                return $detail->isVerified()
+                                    ? '✓ Verified — '.$detail->maskedDestination()
+                                    : '⚠ Not verified — '.$detail->maskedDestination().'. Verify under Payout details before sending; recording without it needs a reason below.';
+                            }),
+
                         Textarea::make('note')
                             ->label('Note')
-                            ->helperText('Required when paying more than is owed.')
+                            ->helperText('Required when paying more than is owed, or to details that are not verified.')
                             ->rows(3),
                     ])
                     ->action(function (Organization $record, array $data) {

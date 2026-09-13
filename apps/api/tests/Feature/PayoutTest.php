@@ -219,6 +219,7 @@ class PayoutTest extends TestCase
             'currency' => 'CAD',
             'interac_email' => 'money@lagosnights.test',
             'verified_at' => now(),
+            'verification_method' => 'interac_test_transfer',
         ]);
 
         $this->putJson('/api/organizer/payout-details', [

@@ -4,6 +4,7 @@ namespace App\Services\Payouts;
 
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Models\OrganizationPayoutDetail;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Audit\Auditor;
@@ -68,11 +69,38 @@ class SettlementRecorder
             );
         }
 
+        /*
+         * A manual payout to details nobody verified needs a reason too.
+         *
+         * Not refused: by the time this is recorded the money has moved, and
+         * refusing the record of a real transfer only leaves the ledger
+         * disagreeing with the bank. The place to stop it is before sending,
+         * where the admin screens show whether the details are verified. This
+         * makes skipping that a stated decision, flagged in the audit trail.
+         * Stripe and Paystack pay to accounts the processor verified.
+         */
+        $destination = null;
+
+        if (in_array($rail, ['interac', 'bank_transfer'], true)) {
+            $destination = OrganizationPayoutDetail::query()
+                ->where('organization_id', $organization->id)
+                ->where('currency', $amount->currency)
+                ->where('rail', $rail)
+                ->first();
+
+            if (! $destination?->isVerified() && trim((string) $note) === '') {
+                throw SettlementRefused::because(
+                    'The '.($rail === 'interac' ? 'Interac' : 'bank').' details for this organization are not verified. '
+                    .'Verify them before sending money, or say on the record why this payout went ahead.'
+                );
+            }
+        }
+
         // One transaction, because the settlement and its ledger entry are the
         // same fact. Either alone leaves the balance disagreeing with the
         // payout history, and the ledger is append-only — there is no tidying
         // it up afterwards.
-        return DB::transaction(function () use ($organization, $amount, $type, $rail, $note, $by) {
+        return DB::transaction(function () use ($organization, $amount, $type, $rail, $note, $by, $destination) {
             $settlement = Settlement::create([
                 'organization_id' => $organization->id,
                 'amount' => $amount->amount,
@@ -101,6 +129,13 @@ class SettlementRecorder
                 'currency' => $amount->currency,
                 'type' => $type,
                 'rail' => $rail,
+                // Which destination it was meant for, and whether anybody had
+                // confirmed it — the first two questions when a payout goes astray.
+                'payout_detail_id' => $destination?->id,
+                'last_four' => $destination?->account_last_four,
+                'destination_verified' => in_array($rail, ['interac', 'bank_transfer'], true)
+                    ? ($destination?->isVerified() ?? false)
+                    : null,
             ]);
 
             return $settlement;

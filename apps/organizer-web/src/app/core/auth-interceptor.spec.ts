@@ -10,7 +10,7 @@ import { SessionStore } from './session';
  * What every console request carries.
  *
  * The organization header matters more than it looks. Without it the server
- * falls back to somebody's first organization, and for two releases switching
+ * falls back to somebody's first organization, and before it was sent, switching
  * organization in the sidebar changed the name at the top and nothing else —
  * the dashboard, orders and payouts all kept showing the first one.
  */

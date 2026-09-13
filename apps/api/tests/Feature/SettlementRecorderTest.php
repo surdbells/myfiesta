@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Models\OrganizationPayoutDetail;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Payouts\SettlementRecorder;
@@ -52,6 +53,19 @@ class SettlementRecorderTest extends TestCase
             'country' => 'CA',
             'status' => 'published',
         ]);
+
+        // Verified destinations, so these tests are about classifying the
+        // amount. Paying to unverified details is PayoutVerificationTest's.
+        foreach (['CAD', 'NGN'] as $currency) {
+            OrganizationPayoutDetail::create([
+                'organization_id' => $this->org->id,
+                'rail' => 'interac',
+                'currency' => $currency,
+                'interac_email' => 'money@lagosnights.test',
+                'verified_at' => now(),
+                'verification_method' => 'interac_test_transfer',
+            ]);
+        }
     }
 
     private function owed(int $amount, string $currency = 'CAD'): void

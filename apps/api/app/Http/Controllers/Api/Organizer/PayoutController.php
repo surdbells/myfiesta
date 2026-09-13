@@ -222,9 +222,18 @@ class PayoutController extends Controller
          * A verified account that can be edited without losing that mark is a
          * verification of nothing: somebody proves one account and then points
          * the payouts at another.
+         *
+         * Every field that decides where money lands, not four of them. The
+         * institution number and the rail used to be missing, so moving the
+         * same account and transit numbers to a different bank kept the mark.
          */
-        if ($detail->isDirty(['account_number', 'interac_email', 'bank_code', 'transit_number'])) {
-            $detail->verified_at = null;
+        if ($detail->exists && $detail->isDirty(OrganizationPayoutDetail::DESTINATION_FIELDS)) {
+            $detail->forceFill([
+                'verified_at' => null,
+                'verified_by' => null,
+                'verification_method' => null,
+                'verification_note' => null,
+            ]);
         }
 
         $detail->save();

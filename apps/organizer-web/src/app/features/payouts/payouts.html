@@ -164,6 +164,8 @@
                 <ui-icon [icon]="verifiedIcon" size="sm" />
                 Verified
               </span>
+            } @else {
+              <span class="dest__pending inline-flex items-center gap-1 text-xs font-medium text-warning">Being checked</span>
             }
           </p>
 
@@ -179,6 +181,19 @@
               }
             }
           </p>
+
+          @if (!where.verified_at) {
+            <!--
+              Said, so a payout that waits on this is not a mystery. New and
+              changed details are confirmed by us before money goes to them —
+              which is also what protects this account if somebody else gets
+              into it and changes where the money goes.
+            -->
+            <p class="dest__why mt-2 max-w-[60ch] text-pretty text-sm text-text-muted">
+              We confirm new or changed details with you before sending money to them, usually with a small
+              test deposit. It protects your payouts if someone else ever gets into this account.
+            </p>
+          }
         </div>
 
         <button uiButton variant="secondary" size="sm" type="button" (click)="openForm()">
