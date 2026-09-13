@@ -156,9 +156,36 @@ export interface Guest {
   checked_in_at: string | null;
 }
 
+/**
+ * Where a page of a list sits in the whole of it.
+ *
+ * The same on every organizer list that pages. Read by ui-pagination: a list
+ * that stops at its first page with nothing to say so is how an order that
+ * needed refunding went missing.
+ */
+export interface PageMeta {
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+  next: string | null;
+}
+
+export interface Page<T> {
+  data: T[];
+  meta: PageMeta;
+}
+
 export interface GuestPage {
   data: Guest[];
-  meta: { total: number; checked_in: number; next: string | null };
+  meta: PageMeta & { checked_in: number };
+}
+
+/** An event as a filter offers it: every one, not a page of them. */
+export interface EventOption {
+  id: string;
+  title: string;
+  starts_at: string;
 }
 
 /**
@@ -273,7 +300,9 @@ export interface Series {
   timezone: string;
   generated_through: string | null;
   source_event_id: string;
+  /** Upcoming only; past_count says how many have already happened. */
   occurrences: SeriesOccurrence[];
+  past_count: number;
   skipped: { occurs_at: string; reason: string | null }[];
 }
 

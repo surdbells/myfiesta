@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
+use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,21 +29,35 @@ class EventController extends Controller
 {
     public function __construct(private readonly Auditor $auditor) {}
 
+    /**
+     * A page of events.
+     *
+     * `when=upcoming` is soonest first and `when=past` most recent first, each
+     * paged on its own, which is how the console shows them. Without it the
+     * two run together, upcoming first — kept for any caller that pages
+     * through everything.
+     */
     public function index(Request $request): JsonResponse
     {
-        $organizationIds = $request->user()->organizations->pluck('id');
+        $request->validate(['when' => ['sometimes', 'in:upcoming,past']]);
 
-        $events = Event::query()
-            ->whereIn('organization_id', $organizationIds)
+        $query = Event::query()
+            ->whereIn('organization_id', $this->organizationIds($request))
             ->withCount([
                 'tickets as tickets_issued' => fn ($q) => $q->whereIn('status', ['valid', 'checked_in']),
                 'tickets as checked_in' => fn ($q) => $q->where('status', 'checked_in'),
-            ])
-            // Upcoming first, soonest at the top — that is what needs
-            // attention. Past events fall below rather than disappearing.
-            ->orderByRaw('starts_at < now()')
-            ->orderBy('starts_at')
-            ->paginate(30);
+            ]);
+
+        match ($request->query('when')) {
+            'upcoming' => $query->where('starts_at', '>=', now())->orderBy('starts_at'),
+            // Most recent first. The old combined order ran past events
+            // oldest-first, so with enough history last week's night was the
+            // one that fell off the end of the page.
+            'past' => $query->where('starts_at', '<', now())->orderByDesc('starts_at'),
+            default => $query->orderByRaw('starts_at < now()')->orderBy('starts_at'),
+        };
+
+        $events = $query->orderBy('id')->paginate(Paging::perPage($request, 30));
 
         return response()->json([
             'data' => $events->getCollection()->map(fn (Event $e) => [
@@ -58,8 +73,52 @@ class EventController extends Controller
                 'tickets_issued' => $e->tickets_issued,
                 'checked_in' => $e->checked_in,
             ])->values(),
-            'meta' => ['next' => $events->nextPageUrl()],
+            'meta' => Paging::meta($events),
         ]);
+    }
+
+    /**
+     * Every event's id and title, for a filter.
+     *
+     * Not paged: a select that holds the first hundred events is a filter that
+     * cannot find the hundred-and-first. Three narrow columns stay small even
+     * for an organization with years of weekly nights.
+     */
+    public function options(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => Event::query()
+                ->whereIn('organization_id', $this->organizationIds($request))
+                ->orderByDesc('starts_at')
+                ->get(['id', 'title', 'starts_at'])
+                ->map(fn (Event $e) => ['id' => $e->id, 'title' => $e->title, 'starts_at' => $e->starts_at])
+                ->values(),
+        ]);
+    }
+
+    /**
+     * The organizations a list is about.
+     *
+     * The one the console has selected, when it says — checked against
+     * membership, never trusted. Without the header, every organization this
+     * person belongs to, as before; somebody in two used to see both mixed
+     * under one name in the console, because it never said which it meant.
+     *
+     * @return list<string>
+     */
+    private function organizationIds(Request $request): array
+    {
+        $memberships = $request->user()->organizations->pluck('id')->all();
+
+        $asked = $request->header('X-Organization');
+
+        if ($asked === null || $asked === '') {
+            return $memberships;
+        }
+
+        abort_unless(in_array($asked, $memberships, true), 403, 'You are not a member of that organization.');
+
+        return [$asked];
     }
 
     /**

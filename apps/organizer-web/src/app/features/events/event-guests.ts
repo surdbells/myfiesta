@@ -1,12 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
-import { ToastStore, UiButton, UiIcon } from '@myfiesta/ui';
+import { ToastStore, UiButton, UiIcon, UiPagination } from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
 import { saveFile, today } from '../../core/download';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { Guest, TicketType } from '../../core/api.types';
+import { Guest, PageMeta, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
 
@@ -19,7 +19,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, UiButton, UiIcon],
+  imports: [FormsModule, UiButton, UiIcon, UiPagination],
   templateUrl: './event-guests.html',
 })
 export class EventGuests {
@@ -56,6 +56,8 @@ export class EventGuests {
   readonly eventId = eventIdFrom(this.route);
 
   readonly guests = signal<Guest[]>([]);
+  readonly meta = signal<PageMeta | null>(null);
+  readonly page = signal(1);
   readonly total = signal(0);
   readonly arrived = signal(0);
   readonly loading = signal(true);
@@ -95,10 +97,15 @@ export class EventGuests {
   load(): void {
     this.loading.set(true);
 
-    this.api.guests(this.eventId, this.search().trim() || undefined).subscribe({
+    const search = this.search().trim() || undefined;
+
+    this.api.guests(this.eventId, search, this.page()).subscribe({
       next: (page) => {
         this.guests.set(page.data);
-        this.total.set(page.meta.total);
+        this.meta.set(page.meta);
+        // The whole list's size, for "12 of 80 arrived". A search narrows the
+        // rows, not the room — taking its count here read as 12 of 3.
+        if (!search) this.total.set(page.meta.total);
         this.arrived.set(page.meta.checked_in);
         this.loading.set(false);
       },
@@ -107,6 +114,18 @@ export class EventGuests {
         this.error.set(messageFor(response, 'Could not load the guest list.'));
       },
     });
+  }
+
+  /** Another page of the list. */
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
+  }
+
+  /** Searching starts again from the first page. */
+  runSearch(): void {
+    this.page.set(1);
+    this.load();
   }
 
   submitIssue(): void {

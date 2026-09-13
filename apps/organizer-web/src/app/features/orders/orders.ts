@@ -16,7 +16,7 @@ import { Download, Search } from 'lucide-angular';
 import { Subject, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from '../../core/api';
-import { Money, OrganizationOrder, OrganizerEvent } from '../../core/api.types';
+import { EventOption, Money, OrganizationOrder } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
 import { saveFile, today } from '../../core/download';
@@ -75,7 +75,7 @@ export class Orders {
   readonly page = signal(1);
 
   /** The filter's options, so somebody can narrow to one night. */
-  readonly events = signal<OrganizerEvent[]>([]);
+  readonly events = signal<EventOption[]>([]);
 
   readonly filtered = computed(() => !!this.query() || !!this.eventId() || !!this.status());
 
@@ -118,7 +118,7 @@ export class Orders {
         },
       });
 
-    this.api.events().subscribe({
+    this.api.eventOptions().subscribe({
       next: ({ data }) => this.events.set(data),
       error: () => undefined,
     });

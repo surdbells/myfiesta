@@ -20,7 +20,10 @@ return [
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['Accept', 'Authorization', 'Content-Type', 'X-Requested-With'],
+    // X-Organization: which of somebody's organizations the console has
+    // selected. Without it here the browser refuses the preflight and every
+    // console request fails.
+    'allowed_headers' => ['Accept', 'Authorization', 'Content-Type', 'X-Requested-With', 'X-Organization'],
 
     'exposed_headers' => [],
 

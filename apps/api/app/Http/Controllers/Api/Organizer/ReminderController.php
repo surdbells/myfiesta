@@ -17,6 +17,12 @@ use Illuminate\Http\Request;
  */
 class ReminderController extends Controller
 {
+    /**
+     * The most scheduled reminders one event may have. Each one is an email
+     * to everybody holding a ticket; past a handful they stop being reminders.
+     */
+    public const MAX_PER_EVENT = 10;
+
     public function index(Request $request, Event $event): JsonResponse
     {
         $this->authorize('view', $event);
@@ -38,6 +44,12 @@ class ReminderController extends Controller
         ], [
             'offset_minutes.max' => 'Reminders can go out up to about three months ahead.',
         ]);
+
+        if ($event->reminders()->where('status', '!=', 'cancelled')->count() >= self::MAX_PER_EVENT) {
+            return response()->json([
+                'message' => 'An event can have up to '.self::MAX_PER_EVENT.' reminders.',
+            ], 422);
+        }
 
         if ($event->reminders()->where('offset_minutes', $data['offset_minutes'])->exists()) {
             return response()->json([

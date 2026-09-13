@@ -23,6 +23,14 @@ use Illuminate\Support\Facades\DB;
  */
 class EventImageController extends Controller
 {
+    /**
+     * The most gallery pictures one event may have.
+     *
+     * The gallery is ordered by dragging the whole set, and every picture is
+     * four renditions on disk; thirty is more than any event page shows well.
+     */
+    public const MAX_GALLERY = 30;
+
     public function __construct(private readonly ImageStore $images) {}
 
     public function index(Request $request, Event $event): JsonResponse
@@ -50,6 +58,14 @@ class EventImageController extends Controller
             'file' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:12288'],
             'caption' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($data['kind'] === 'gallery' && $event->gallery()->count() >= self::MAX_GALLERY) {
+            // Checked before the upload is decoded, so a full gallery costs
+            // nothing but the request.
+            return response()->json([
+                'message' => 'The gallery holds up to '.self::MAX_GALLERY.' pictures. Remove one to add another.',
+            ], 422);
+        }
 
         try {
             $image = $this->images->store(

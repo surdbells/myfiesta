@@ -23,7 +23,9 @@ import {
   IssueResult,
   EventImage,
   EventImages,
+  EventOption,
   OrganizationOrderPage,
+  Page,
   OrganizerEvent,
   OrganizerEventDetail,
   RefundResult,
@@ -70,9 +72,30 @@ export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const session = inject(SessionStore);
   const router = inject(Router);
+  const base = inject(API_BASE_URL);
   const token = session.token;
 
-  const request = token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+  const headers: Record<string, string> = {};
+
+  // Only to the API. The trailing slash matters: without it a host named
+  // api.myfiesta.ca.example.com would pass the check and be handed the token.
+  const toApi = req.url.startsWith(`${base.replace(/\/+$/, '')}/`);
+
+  if (token && toApi) headers['Authorization'] = `Bearer ${token}`;
+
+  /*
+   * Which organization this is about, for somebody in more than one.
+   *
+   * The server has read this header all along and falls back to the first
+   * membership without it — and the console never sent it, so switching
+   * organization changed the sidebar and left the dashboard, orders and
+   * payouts showing the first one.
+   */
+  const organization = session.current()?.id;
+
+  if (token && toApi && organization) headers['X-Organization'] = organization;
+
+  const request = Object.keys(headers).length > 0 ? req.clone({ setHeaders: headers }) : req;
 
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -203,8 +226,16 @@ export class Api {
     return this.http.put<PayoutDestination>(`${this.base}/api/organizer/payout-details`, body);
   }
 
-  events(): Observable<{ data: OrganizerEvent[] }> {
-    return this.http.get<{ data: OrganizerEvent[] }>(`${this.base}/api/organizer/events`);
+  /** A page of upcoming (soonest first) or past (most recent first) events. */
+  events(when: 'upcoming' | 'past', page = 1): Observable<Page<OrganizerEvent>> {
+    const params = new HttpParams().set('when', when).set('page', page);
+
+    return this.http.get<Page<OrganizerEvent>>(`${this.base}/api/organizer/events`, { params });
+  }
+
+  /** Every event's id and title, for a filter. */
+  eventOptions(): Observable<{ data: EventOption[] }> {
+    return this.http.get<{ data: EventOption[] }>(`${this.base}/api/organizer/events/options`);
   }
 
   event(id: string): Observable<OrganizerEventDetail> {
@@ -384,8 +415,9 @@ export class Api {
     return this.http.get(`${this.base}/api/organizer/orders/export`, { params, responseType: 'blob' });
   }
 
-  guests(eventId: string, search?: string): Observable<GuestPage> {
-    const params = search ? new HttpParams().set('q', search) : undefined;
+  guests(eventId: string, search?: string, page = 1): Observable<GuestPage> {
+    let params = new HttpParams().set('page', page);
+    if (search) params = params.set('q', search);
 
     return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
       params,
@@ -493,9 +525,10 @@ export class Api {
 
   // --- messaging ----------------------------------------------------------
 
-  messages(eventId: string): Observable<{ data: AttendeeMessage[]; audience: MessageAudience }> {
-    return this.http.get<{ data: AttendeeMessage[]; audience: MessageAudience }>(
+  messages(eventId: string, page = 1): Observable<Page<AttendeeMessage> & { audience: MessageAudience }> {
+    return this.http.get<Page<AttendeeMessage> & { audience: MessageAudience }>(
       `${this.base}/api/organizer/events/${eventId}/messages`,
+      { params: new HttpParams().set('page', page) },
     );
   }
 
@@ -562,10 +595,11 @@ export class Api {
 
   // --- orders and refunds -------------------------------------------------
 
-  orders(eventId: string): Observable<{ data: SoldOrder[] }> {
-    return this.http.get<{ data: SoldOrder[] }>(
-      `${this.base}/api/organizer/events/${eventId}/orders`,
-    );
+  orders(eventId: string, page = 1, search?: string): Observable<Page<SoldOrder>> {
+    let params = new HttpParams().set('page', page);
+    if (search) params = params.set('q', search);
+
+    return this.http.get<Page<SoldOrder>>(`${this.base}/api/organizer/events/${eventId}/orders`, { params });
   }
 
   /**
@@ -588,10 +622,10 @@ export class Api {
 
   // --- codes --------------------------------------------------------------
 
-  codes(eventId: string): Observable<{ data: PromoCode[] }> {
-    return this.http.get<{ data: PromoCode[] }>(
-      `${this.base}/api/organizer/events/${eventId}/codes`,
-    );
+  codes(eventId: string, page = 1): Observable<Page<PromoCode>> {
+    return this.http.get<Page<PromoCode>>(`${this.base}/api/organizer/events/${eventId}/codes`, {
+      params: new HttpParams().set('page', page),
+    });
   }
 
   createCode(eventId: string, body: Record<string, unknown>): Observable<PromoCode> {

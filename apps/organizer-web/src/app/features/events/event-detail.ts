@@ -115,9 +115,11 @@ export class EventDetail {
   }
 
   private load(): void {
-    this.api.events().subscribe({
-      next: ({ data }) => {
-        this.event.set(data.find((e) => e.id === this.eventId) ?? null);
+    // The event itself. This used to fetch the events list and look for the
+    // id in it, so the thirty-first event's overview said it did not exist.
+    this.api.event(this.eventId).subscribe({
+      next: (event) => {
+        this.event.set(event);
         this.loading.set(false);
       },
       error: () => {

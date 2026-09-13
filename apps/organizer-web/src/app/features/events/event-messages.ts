@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiPagination } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { AttendeeMessage, MessageAudience } from '../../core/api.types';
+import { AttendeeMessage, MessageAudience, PageMeta } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
 
@@ -22,7 +22,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-messages',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, UiPagination],
   templateUrl: './event-messages.html',
 })
 export class EventMessages {
@@ -33,6 +33,8 @@ export class EventMessages {
   readonly eventId = eventIdFrom(this.route);
 
   readonly sent = signal<AttendeeMessage[]>([]);
+  readonly meta = signal<PageMeta | null>(null);
+  readonly page = signal(1);
   readonly audience = signal<MessageAudience>({ holders: 0, reachable: 0 });
   readonly loading = signal(true);
 
@@ -61,9 +63,10 @@ export class EventMessages {
   }
 
   private load(): void {
-    this.api.messages(this.eventId).subscribe({
-      next: ({ data, audience }) => {
+    this.api.messages(this.eventId, this.page()).subscribe({
+      next: ({ data, meta, audience }) => {
         this.sent.set(data);
+        this.meta.set(meta);
         this.audience.set(audience);
         this.loading.set(false);
       },
@@ -72,6 +75,12 @@ export class EventMessages {
         this.error.set(messageFor(response, 'Could not load messages for this event.'));
       },
     });
+  }
+
+  /** Another page of the list. */
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
   }
 
   submit(): void {
@@ -94,6 +103,7 @@ export class EventMessages {
           this.subject.set('');
           this.body.set('');
           this.important.set(false);
+          this.page.set(1);
           this.load();
         },
         error: (response) => {

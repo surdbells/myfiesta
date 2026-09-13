@@ -9,6 +9,7 @@ use App\Models\Refund;
 use App\Models\Ticket;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
+use App\Support\Paging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,12 +31,28 @@ class RefundController extends Controller
     {
         $this->authorize('viewSales', $event);
 
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
+
         $orders = $event->orders()
             ->whereIn('status', ['paid', 'partially_refunded', 'refunded'])
+            // Searched here rather than in the browser, which could only ever
+            // search the page it had.
+            ->when($filters['q'] ?? null, function ($q, $term) {
+                $like = '%'.addcslashes(mb_strtolower($term), '%_\\').'%';
+
+                $q->where(function ($inner) use ($like) {
+                    $inner->whereRaw('lower(reference) LIKE ?', [$like])
+                        ->orWhereRaw('lower(buyer_name) LIKE ?', [$like])
+                        ->orWhereRaw('lower(buyer_email) LIKE ?', [$like]);
+                });
+            })
             ->with(['tickets', 'lines'])
             ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
             ->orderByDesc('paid_at')
-            ->paginate(30);
+            // A tiebreak, or two orders paid in the same second can swap
+            // between pages and one of them is never shown.
+            ->orderByDesc('id')
+            ->paginate(Paging::perPage($request, 30));
 
         return response()->json([
             'data' => $orders->getCollection()->map(fn (Order $order) => [
@@ -67,7 +84,7 @@ class RefundController extends Controller
                     'refundable' => ! in_array($ticket->status, ['refunded', 'void'], true),
                 ])->values(),
             ])->values(),
-            'meta' => ['next' => $orders->nextPageUrl()],
+            'meta' => Paging::meta($orders),
         ]);
     }
 

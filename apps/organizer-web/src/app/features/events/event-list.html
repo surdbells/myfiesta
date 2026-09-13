@@ -22,7 +22,7 @@
     [detail]="message"
     (retried)="load()"
   />
-} @else if (events().length === 0) {
+} @else if (upcoming().length === 0 && past().length === 0) {
   <ui-empty
     title="Nothing here yet"
     hint="Create an event, add a ticket type, and share the link. You can keep it a draft until you are ready."
@@ -70,6 +70,18 @@
           </li>
         }
       </ul>
+      @if (upcomingMeta(); as page) {
+        @if (page.last_page > 1) {
+          <ui-pagination
+            class="mt-2 block"
+            [page]="page.current_page"
+            [perPage]="page.per_page"
+            [total]="page.total"
+            noun="upcoming events"
+            (changed)="goToPage('upcoming', $event)"
+          />
+        }
+      }
     </section>
   }
 
@@ -100,6 +112,18 @@
           </li>
         }
       </ul>
+      @if (pastMeta(); as page) {
+        @if (page.last_page > 1) {
+          <ui-pagination
+            class="mt-2 block"
+            [page]="page.current_page"
+            [perPage]="page.per_page"
+            [total]="page.total"
+            noun="past events"
+            (changed)="goToPage('past', $event)"
+          />
+        }
+      }
     </section>
   }
 }

@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiPagination } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { OrderTicket, SoldOrder } from '../../core/api.types';
+import { OrderTicket, PageMeta, SoldOrder } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
@@ -23,7 +23,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-orders',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, UiPagination],
   templateUrl: './event-orders.html',
 })
 export class EventOrders {
@@ -35,6 +35,8 @@ export class EventOrders {
   readonly money = formatMoney;
 
   readonly orders = signal<SoldOrder[]>([]);
+  readonly meta = signal<PageMeta | null>(null);
+  readonly page = signal(1);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
@@ -47,18 +49,16 @@ export class EventOrders {
 
   readonly search = signal('');
 
-  readonly visible = computed(() => {
-    const needle = this.search().trim().toLowerCase();
+  /**
+   * Searched on the server.
+   *
+   * It used to filter the orders already on screen, which were the first
+   * thirty — so the reference somebody read out over the phone was "not
+   * found" whenever the order was the thirty-first.
+   */
+  readonly visible = computed(() => this.orders());
 
-    if (!needle) return this.orders();
-
-    return this.orders().filter(
-      (order) =>
-        order.reference.toLowerCase().includes(needle) ||
-        order.buyer_name.toLowerCase().includes(needle) ||
-        order.buyer_email.toLowerCase().includes(needle),
-    );
-  });
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     this.load();
@@ -67,9 +67,10 @@ export class EventOrders {
   load(): void {
     this.loading.set(true);
 
-    this.api.orders(this.eventId).subscribe({
-      next: ({ data }) => {
+    this.api.orders(this.eventId, this.page(), this.search().trim() || undefined).subscribe({
+      next: ({ data, meta }) => {
         this.orders.set(data);
+        this.meta.set(meta);
         this.loading.set(false);
       },
       error: (response) => {
@@ -77,6 +78,22 @@ export class EventOrders {
         this.error.set(messageFor(response, 'Could not load orders for this event.'));
       },
     });
+  }
+
+  /** Another page of the list. */
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
+  }
+
+  /** A new search starts at the first page, once typing pauses. */
+  searchChanged(value: string): void {
+    this.search.set(value);
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.page.set(1);
+      this.load();
+    }, 300);
   }
 
   open(order: SoldOrder): void {

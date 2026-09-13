@@ -135,6 +135,8 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::put('/payout-details', [PayoutController::class, 'update']);
 
         Route::get('/events', [OrganizerEventController::class, 'index']);
+        // Before {event:id}, which would otherwise take 'options' for an id.
+        Route::get('/events/options', [OrganizerEventController::class, 'options']);
         Route::post('/events', [OrganizerEventController::class, 'store']);
         Route::get('/events/{event:id}', [OrganizerEventController::class, 'show']);
         Route::patch('/events/{event:id}', [OrganizerEventController::class, 'update']);

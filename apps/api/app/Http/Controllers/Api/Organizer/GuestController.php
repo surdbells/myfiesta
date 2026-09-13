@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\Ticket;
 use App\Services\Audit\Auditor;
 use App\Support\Csv;
+use App\Support\Paging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -106,6 +107,10 @@ class GuestController extends Controller
             })
             ->with('ticketType:id,name')
             ->orderBy('holder_name')
+            // Names repeat, and a comp issued without one has none at all;
+            // ordered by name alone, the same guest could appear on two pages
+            // and another on neither.
+            ->orderBy('id')
             ->paginate($filters['per_page'] ?? 50);
 
         return response()->json([
@@ -121,11 +126,10 @@ class GuestController extends Controller
                 'checked_in_at' => $ticket->checked_in_at,
             ])->values(),
             'meta' => [
-                'total' => $guests->total(),
+                ...Paging::meta($guests),
                 'checked_in' => Ticket::where('event_id', $event->id)
                     ->where('status', 'checked_in')
                     ->count(),
-                'next' => $guests->nextPageUrl(),
             ],
         ]);
     }

@@ -1,11 +1,11 @@
 import { DOCUMENT } from '@angular/common';
-import { UiButton } from '@myfiesta/ui';
+import { UiButton, UiPagination } from '@myfiesta/ui';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { OrganizerEventDetail, PromoCode } from '../../core/api.types';
+import { OrganizerEventDetail, PageMeta, PromoCode } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { formatMoney, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
@@ -28,7 +28,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-codes',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, UiPagination],
   templateUrl: './event-codes.html',
 })
 export class EventCodes {
@@ -42,6 +42,8 @@ export class EventCodes {
 
   readonly event = signal<OrganizerEventDetail | null>(null);
   readonly codes = signal<PromoCode[]>([]);
+  readonly meta = signal<PageMeta | null>(null);
+  readonly page = signal(1);
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
@@ -87,9 +89,10 @@ export class EventCodes {
   load(): void {
     this.loading.set(true);
 
-    this.api.codes(this.eventId).subscribe({
-      next: ({ data }) => {
+    this.api.codes(this.eventId, this.page()).subscribe({
+      next: ({ data, meta }) => {
         this.codes.set(data);
+        this.meta.set(meta);
         this.loading.set(false);
       },
       error: (response) => {
@@ -97,6 +100,12 @@ export class EventCodes {
         this.error.set(messageFor(response, 'Could not load the codes for this event.'));
       },
     });
+  }
+
+  /** Another page of the list. */
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
   }
 
   /** "20% off", "CA$5.00 off", or nothing when the code only attributes. */

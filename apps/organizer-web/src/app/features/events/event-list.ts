@@ -1,4 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
+import { forkJoin } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import {
   UiBadge,
@@ -6,16 +7,17 @@ import {
   UiEmpty,
   UiErrorState,
   UiPageHeader,
+  UiPagination,
   UiSkeleton,
 } from '@myfiesta/ui';
 import { eventDate, shortEventTime } from '../../core/event-time';
 import { Api } from '../../core/api';
-import { OrganizerEvent } from '../../core/api.types';
+import { OrganizerEvent, Page, PageMeta } from '../../core/api.types';
 import { SessionStore } from '../../core/session';
 
 @Component({
   selector: 'app-event-list',
-  imports: [RouterLink, UiPageHeader, UiButton, UiBadge, UiEmpty, UiErrorState, UiSkeleton],
+  imports: [RouterLink, UiPageHeader, UiButton, UiBadge, UiEmpty, UiErrorState, UiPagination, UiSkeleton],
   templateUrl: './event-list.html',
 })
 export class EventList {
@@ -25,7 +27,6 @@ export class EventList {
   readonly when = shortEventTime;
   readonly onDate = eventDate;
 
-  readonly events = signal<OrganizerEvent[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
@@ -35,12 +36,16 @@ export class EventList {
    * An organizer opens this to do something about a night that has not
    * happened yet. Past events are records, and mixing them in means scrolling
    * past history to reach the work.
+   *
+   * Asked for as two lists and paged separately. It used to be one request
+   * split here, and the server stopped at thirty — so an organization with a
+   * season of weekly nights saw thirty events and no sign of the rest.
    */
-  readonly upcoming = computed(() =>
-    this.events().filter((e) => new Date(e.starts_at) >= new Date()),
-  );
+  readonly upcoming = signal<OrganizerEvent[]>([]);
+  readonly upcomingMeta = signal<PageMeta | null>(null);
 
-  readonly past = computed(() => this.events().filter((e) => new Date(e.starts_at) < new Date()));
+  readonly past = signal<OrganizerEvent[]>([]);
+  readonly pastMeta = signal<PageMeta | null>(null);
 
   constructor() {
     this.load();
@@ -48,10 +53,12 @@ export class EventList {
 
   load(): void {
     this.loading.set(true);
+    this.error.set(null);
 
-    this.api.events().subscribe({
-      next: ({ data }) => {
-        this.events.set(data);
+    forkJoin([this.api.events('upcoming'), this.api.events('past')]).subscribe({
+      next: ([upcoming, past]) => {
+        this.show('upcoming', upcoming);
+        this.show('past', past);
         this.loading.set(false);
       },
       error: () => {
@@ -59,6 +66,19 @@ export class EventList {
         this.error.set('Could not load your events. Check your connection and try again.');
       },
     });
+  }
+
+  /** Another page of one section, leaving the other where it is. */
+  goToPage(when: 'upcoming' | 'past', page: number): void {
+    this.api.events(when, page).subscribe({
+      next: (result) => this.show(when, result),
+      error: () => this.error.set('Could not load more events. Check your connection and try again.'),
+    });
+  }
+
+  private show(when: 'upcoming' | 'past', page: Page<OrganizerEvent>): void {
+    (when === 'upcoming' ? this.upcoming : this.past).set(page.data);
+    (when === 'upcoming' ? this.upcomingMeta : this.pastMeta).set(page.meta);
   }
 
   /**

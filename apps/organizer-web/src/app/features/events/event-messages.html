@@ -120,4 +120,16 @@
       </li>
     }
   </ul>
+  @if (meta(); as page) {
+    @if (page.last_page > 1) {
+      <ui-pagination
+        class="mt-3 block"
+        [page]="page.current_page"
+        [perPage]="page.per_page"
+        [total]="page.total"
+        noun="messages"
+        (changed)="goToPage($event)"
+      />
+    }
+  }
 }

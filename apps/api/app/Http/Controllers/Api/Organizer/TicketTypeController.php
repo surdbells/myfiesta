@@ -20,6 +20,15 @@ use Illuminate\Support\Facades\DB;
  */
 class TicketTypeController extends Controller
 {
+    /**
+     * The most tiers one event may have.
+     *
+     * A limit where a limit belongs: the tier list is read, reordered and
+     * saved as one list, so it cannot be paged — and nothing sold at a door
+     * needs fifty ways to buy the same night.
+     */
+    public const MAX_PER_EVENT = 50;
+
     public function __construct(private readonly Auditor $auditor) {}
 
 public function index(Request $request, Event $event): JsonResponse
@@ -102,6 +111,12 @@ public function index(Request $request, Event $event): JsonResponse
         $this->authorize('manageTickets', $event);
 
         $data = $this->validated($request);
+
+        if ($event->ticketTypes()->count() >= self::MAX_PER_EVENT) {
+            return response()->json([
+                'message' => 'An event can have up to '.self::MAX_PER_EVENT.' ticket types. Remove one you no longer sell to add another.',
+            ], 422);
+        }
 
         $type = $event->ticketTypes()->create($data + ['status' => 'on_sale']);
 

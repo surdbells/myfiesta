@@ -56,10 +56,15 @@ class EmailPreference extends Model
     {
         $normalised = array_unique(array_map(static::normalise(...), $emails));
 
-        $optedOut = static::query()
-            ->whereIn('email', $normalised)
-            ->whereNotNull('reminders_opted_out_at')
-            ->pluck('email')
+        // Asked in batches. One whereIn with every holder is one bound
+        // parameter per address, and Postgres refuses a statement past 65,535
+        // of them — so the event big enough to matter was the one where
+        // messaging and reminders failed outright.
+        $optedOut = collect(array_chunk($normalised, 5000))
+            ->flatMap(fn (array $batch) => static::query()
+                ->whereIn('email', $batch)
+                ->whereNotNull('reminders_opted_out_at')
+                ->pluck('email'))
             ->flip();
 
         return array_values(array_filter(

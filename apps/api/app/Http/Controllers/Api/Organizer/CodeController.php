@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Code;
 use App\Models\Event;
 use App\Services\Audit\Auditor;
+use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,14 +27,19 @@ class CodeController extends Controller
     {
         $this->authorize('manageCodes', $event);
 
+        // Paged. Organization-wide codes are listed on every event, and a
+        // promoter programme mints one per promoter per season — the list
+        // grows with every year the organization runs, not with this event.
         $codes = Code::query()
             ->where('organization_id', $event->organization_id)
             ->where(fn ($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
             ->orderByDesc('created_at')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(Paging::perPage($request, 50));
 
         return response()->json([
-            'data' => $codes->map(fn (Code $code) => $this->present($code, $event))->values(),
+            'data' => $codes->getCollection()->map(fn (Code $code) => $this->present($code, $event))->values(),
+            'meta' => Paging::meta($codes),
         ]);
     }
 

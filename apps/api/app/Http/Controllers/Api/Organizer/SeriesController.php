@@ -227,7 +227,13 @@ class SeriesController extends Controller
             'timezone' => $series->timezone,
             'generated_through' => $series->generated_through,
             'source_event_id' => $series->source_event_id,
+            // Upcoming only, with a count of the rest. A weekly night that
+            // has run for years has hundreds behind it, and each of those is
+            // its own event in the list already; the series view is for
+            // what is still ahead.
+            'past_count' => $series->occurrences()->where('starts_at', '<=', now())->count(),
             'occurrences' => $series->occurrences()
+                ->where('starts_at', '>', now())
                 ->orderBy('series_occurs_at')
                 ->get()
                 ->map(fn (Event $e) => [
@@ -244,6 +250,7 @@ class SeriesController extends Controller
                     'is_source' => $e->id === $series->source_event_id,
                 ])->values(),
             'skipped' => $series->exceptions()
+                ->where('occurs_at', '>', now())
                 ->orderBy('occurs_at')
                 ->get()
                 ->map(fn ($x) => ['occurs_at' => $x->occurs_at, 'reason' => $x->reason])

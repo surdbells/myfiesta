@@ -22,7 +22,7 @@
     placeholder="Reference, name or email"
     aria-label="Search orders"
     [ngModel]="search()"
-    (ngModelChange)="search.set($event)"
+    (ngModelChange)="searchChanged($event)"
   />
 </div>
 
@@ -130,4 +130,16 @@
       </li>
     }
   </ul>
+  @if (meta(); as page) {
+    @if (page.last_page > 1) {
+      <ui-pagination
+        class="mt-3 block"
+        [page]="page.current_page"
+        [perPage]="page.per_page"
+        [total]="page.total"
+        noun="orders"
+        (changed)="goToPage($event)"
+      />
+    }
+  }
 }

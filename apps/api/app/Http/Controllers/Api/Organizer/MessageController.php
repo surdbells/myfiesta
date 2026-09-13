@@ -7,6 +7,7 @@ use App\Models\EmailPreference;
 use App\Models\Event;
 use App\Models\EventMessage;
 use App\Services\Messaging\MessageSender;
+use App\Support\Paging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,8 +27,11 @@ class MessageController extends Controller
     {
         $this->authorize('message', $event);
 
+        $messages = $event->messages()->orderByDesc('id')->paginate(Paging::perPage($request, 20));
+
         return response()->json([
-            'data' => $event->messages->map(fn (EventMessage $m) => $this->present($m))->values(),
+            'data' => $messages->getCollection()->map(fn (EventMessage $m) => $this->present($m))->values(),
+            'meta' => Paging::meta($messages),
             // What a send would reach right now, so the number is on screen
             // before the button is pressed rather than after.
             'audience' => $this->audience($event),
