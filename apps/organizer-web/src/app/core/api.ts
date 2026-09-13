@@ -366,6 +366,24 @@ export class Api {
 
   // --- guests -------------------------------------------------------------
 
+  /** The guest list as a CSV. Ticket codes are never in it. */
+  exportGuests(eventId: string): Observable<Blob> {
+    return this.http.get(`${this.base}/api/organizer/events/${eventId}/guests/export`, {
+      responseType: 'blob',
+    });
+  }
+
+  /** Every order the filter matches — not only the page on screen — as a CSV. */
+  exportOrders(query: { q?: string; event_id?: string; status?: string }): Observable<Blob> {
+    let params = new HttpParams();
+
+    for (const [key, value] of Object.entries(query)) {
+      if (value) params = params.set(key, value);
+    }
+
+    return this.http.get(`${this.base}/api/organizer/orders/export`, { params, responseType: 'blob' });
+  }
+
   guests(eventId: string, search?: string): Observable<GuestPage> {
     const params = search ? new HttpParams().set('q', search) : undefined;
 

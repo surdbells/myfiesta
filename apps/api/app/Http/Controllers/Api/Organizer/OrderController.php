@@ -6,8 +6,12 @@ use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Organization;
+use App\Services\Audit\Auditor;
+use App\Support\Csv;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Every order the organization has taken, across all of its events.
@@ -24,44 +28,15 @@ use Illuminate\Http\Request;
  */
 class OrderController extends Controller
 {
+    public function __construct(private readonly Auditor $auditor) {}
+
     public function index(Request $request): JsonResponse
     {
         $organization = $this->organization($request);
 
-        $filters = $request->validate([
-            'q' => ['nullable', 'string', 'max:120'],
-            'event_id' => ['nullable', 'uuid'],
-            'status' => ['nullable', 'in:paid,partially_refunded,refunded,pending,failed,cancelled'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $this->filters($request);
 
-        $orders = Order::query()
-            ->where('organization_id', $organization->id)
-            // Abandoned baskets are not orders anybody wants to read. Pending
-            // is present because a payment stuck confirming is exactly the
-            // thing somebody rings about.
-            ->whereIn('status', ['paid', 'partially_refunded', 'refunded', 'pending'])
-            ->when(
-                $filters['event_id'] ?? null,
-                fn ($q, $id) => $q->where('event_id', $id),
-            )
-            ->when(
-                $filters['status'] ?? null,
-                fn ($q, $status) => $q->where('status', $status),
-            )
-            ->when($filters['q'] ?? null, function ($q, $term) {
-                // Three ways in, because support is handed whichever one the
-                // caller has: the reference off the confirmation, a name, or
-                // the address the tickets went to. Case-insensitive on all
-                // three — a reference read aloud arrives in lower case.
-                $like = '%'.str_replace('%', '\%', mb_strtolower($term)).'%';
-
-                $q->where(function ($inner) use ($like) {
-                    $inner->whereRaw('lower(reference) LIKE ?', [$like])
-                        ->orWhereRaw('lower(buyer_name) LIKE ?', [$like])
-                        ->orWhereRaw('lower(buyer_email) LIKE ?', [$like]);
-                });
-            })
+        $orders = $this->filtered($organization, $filters)
             ->with('event:id,title')
             ->withCount('tickets')
             ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
@@ -97,6 +72,124 @@ class OrderController extends Controller
                 'summary' => $this->summary($orders->getCollection()),
             ],
         ]);
+    }
+
+    /**
+     * The same orders as the screen, as a spreadsheet.
+     *
+     * Every order the current filter matches, not the page on screen — an
+     * export of twenty-five rows is not what anybody asking for an export
+     * means. Streamed, so a season of orders does not have to fit in memory.
+     *
+     * Bulk personal data leaving the platform, so it is recorded: who took it,
+     * with which filter, and how many orders it held.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $organization = $this->organization($request);
+        $filters = $this->filters($request);
+
+        $query = $this->filtered($organization, $filters)
+            ->with('event:id,title,timezone')
+            ->withCount('tickets')
+            ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('created_at')
+            ->orderBy('id');
+
+        $this->auditor->record(
+            'orders.exported',
+            $organization,
+            $request->user(),
+            $organization->id,
+            // Counted on the bare filter: Postgres refuses a count over a query
+            // that still carries its ORDER BY.
+            metadata: ['filters' => array_filter($filters), 'count' => $this->filtered($organization, $filters)->count()],
+        );
+
+        $rows = (function () use ($query) {
+            foreach ($query->lazy(500) as $order) {
+                $zone = $order->event?->timezone ?? 'UTC';
+
+                yield [
+                    $order->reference,
+                    // In the event's own zone, because that is the evening the
+                    // accountant is reconciling — with the zone beside it, so
+                    // two cities in one file cannot be read as one clock.
+                    $order->paid_at?->copy()->setTimezone($zone)->format('Y-m-d H:i'),
+                    $zone,
+                    Csv::text($order->event?->title),
+                    Csv::text($order->buyer_name),
+                    Csv::text($order->buyer_email),
+                    $order->status,
+                    (int) $order->tickets_count,
+                    $order->currency,
+                    Csv::money($order->subtotal_amount),
+                    Csv::money($order->discount_amount),
+                    Csv::money($order->tax_amount),
+                    Csv::money($order->service_charge_amount),
+                    Csv::money($order->total_amount),
+                    Csv::money((int) $order->refunded_amount),
+                    // What the organizer is paid for this order: the ticket
+                    // money, before tax and before the buyer's service charge.
+                    Csv::money($order->net_revenue_amount),
+                ];
+            }
+        })();
+
+        return Csv::download(
+            'myfiesta-orders-'.now()->format('Y-m-d').'.csv',
+            ['Reference', 'Paid at', 'Time zone', 'Event', 'Buyer', 'Email', 'Status', 'Tickets', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Service charge', 'Total paid', 'Refunded', 'Owed to organizer'],
+            $rows,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function filters(Request $request): array
+    {
+        return $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'event_id' => ['nullable', 'uuid'],
+            'status' => ['nullable', 'in:paid,partially_refunded,refunded,pending,failed,cancelled'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+    }
+
+    /**
+     * The orders a filter matches, before paging or presenting.
+     *
+     * One definition for the screen and the export, so a spreadsheet can never
+     * hold a different set of orders from the list it was exported from.
+     */
+    private function filtered(Organization $organization, array $filters): Builder
+    {
+        return Order::query()
+            ->where('organization_id', $organization->id)
+            // Abandoned baskets are not orders anybody wants to read. Pending
+            // is present because a payment stuck confirming is exactly the
+            // thing somebody rings about.
+            ->whereIn('status', ['paid', 'partially_refunded', 'refunded', 'pending'])
+            ->when(
+                $filters['event_id'] ?? null,
+                fn ($q, $id) => $q->where('event_id', $id),
+            )
+            ->when(
+                $filters['status'] ?? null,
+                fn ($q, $status) => $q->where('status', $status),
+            )
+            ->when($filters['q'] ?? null, function ($q, $term) {
+                // Three ways in, because support is handed whichever one the
+                // caller has: the reference off the confirmation, a name, or
+                // the address the tickets went to. Case-insensitive on all
+                // three — a reference read aloud arrives in lower case.
+                $like = '%'.str_replace('%', '\%', mb_strtolower($term)).'%';
+
+                $q->where(function ($inner) use ($like) {
+                    $inner->whereRaw('lower(reference) LIKE ?', [$like])
+                        ->orWhereRaw('lower(buyer_name) LIKE ?', [$like])
+                        ->orWhereRaw('lower(buyer_email) LIKE ?', [$like]);
+                });
+            });
     }
 
     /**

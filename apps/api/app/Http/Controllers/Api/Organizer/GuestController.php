@@ -5,8 +5,12 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\Ticket;
+use App\Services\Audit\Auditor;
+use App\Support\Csv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Who is coming, and who has arrived.
@@ -18,6 +22,61 @@ use Illuminate\Http\Request;
  */
 class GuestController extends Controller
 {
+    public function __construct(private readonly Auditor $auditor) {}
+
+    /**
+     * The guest list as a spreadsheet — to print for a door, or to hand to a
+     * venue that wants names in advance.
+     *
+     * Everybody holding a ticket that still works, alphabetical by name.
+     * Without ticket codes, for the same reason the list on screen leaves them
+     * out: a printed or forwarded guest list must not be a set of working
+     * tickets. Recorded, because it is personal data leaving the platform in
+     * bulk.
+     */
+    public function export(Request $request, Event $event): StreamedResponse
+    {
+        $this->authorize('viewGuests', $event);
+
+        $query = Ticket::query()
+            ->where('event_id', $event->id)
+            ->whereIn('status', ['valid', 'checked_in']);
+
+        $this->auditor->record(
+            'guests.exported',
+            $event,
+            $request->user(),
+            metadata: ['count' => (clone $query)->count()],
+        );
+
+        $rows = (function () use ($query, $event) {
+            $tickets = $query
+                ->with(['ticketType:id,name', 'order:id,reference'])
+                ->orderBy('holder_name')
+                ->orderBy('id');
+
+            foreach ($tickets->lazy(500) as $ticket) {
+                yield [
+                    Csv::text($ticket->holder_name),
+                    Csv::text($ticket->owner_email),
+                    Csv::text($ticket->ticketType?->name),
+                    $ticket->admits,
+                    $ticket->admitted_count,
+                    $ticket->status === 'checked_in' ? 'Arrived' : ($ticket->admitted_count > 0 ? 'Partly arrived' : 'Expected'),
+                    // At the venue's clock, which is the night the list is for.
+                    $ticket->checked_in_at?->copy()->setTimezone($event->timezone)->format('Y-m-d H:i'),
+                    $ticket->order?->reference,
+                ];
+            }
+        })();
+
+        return Csv::download(
+            Str::slug($event->title).'-guests-'.now()->format('Y-m-d').'.csv',
+            ['Name', 'Email', 'Ticket', 'Admits', 'Arrived', 'Status', 'First arrived at', 'Order reference'],
+            $rows,
+        );
+    }
+
     public function index(Request $request, Event $event): JsonResponse
     {
         $this->authorize('viewGuests', $event);

@@ -131,6 +131,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // searchable by reference, name or address, which is how support
         // arrives rather than knowing which night it was.
         Route::get('/orders', [OrganizerOrderController::class, 'index']);
+        Route::get('/orders/export', [OrganizerOrderController::class, 'export']);
         Route::put('/payout-details', [PayoutController::class, 'update']);
 
         Route::get('/events', [OrganizerEventController::class, 'index']);
@@ -157,6 +158,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/ticket-types/order', [TicketTypeController::class, 'reorder']);
 
         Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
+        Route::get('/events/{event:id}/guests/export', [GuestController::class, 'export']);
         Route::post('/events/{event:id}/tickets', [IssuedTicketController::class, 'store']);
 
         Route::get('/events/{event:id}/images', [EventImageController::class, 'index']);

@@ -1,5 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
-import { UiButton } from '@myfiesta/ui';
+import { ToastStore, UiButton, UiIcon } from '@myfiesta/ui';
+import { Download } from 'lucide-angular';
+import { saveFile, today } from '../../core/download';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -17,10 +19,36 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, UiIcon],
   templateUrl: './event-guests.html',
 })
 export class EventGuests {
+  protected readonly downloadIcon = Download;
+  private readonly toasts = inject(ToastStore);
+  readonly exporting = signal(false);
+
+  /**
+   * The whole guest list as a spreadsheet, alphabetical — to print for a door
+   * or send to a venue. No ticket codes: a forwarded list must not be a set of
+   * working tickets.
+   */
+  exportList(): void {
+    if (this.exporting()) return;
+
+    this.exporting.set(true);
+
+    this.api.exportGuests(this.eventId).subscribe({
+      next: (file) => {
+        this.exporting.set(false);
+        saveFile(file, `guest-list-${today()}.csv`);
+      },
+      error: () => {
+        this.exporting.set(false);
+        this.toasts.show('The guest list could not be downloaded. Try again.', 'danger');
+      },
+    });
+  }
+
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);

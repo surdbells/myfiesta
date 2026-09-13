@@ -1,7 +1,15 @@
 <ui-page-header
   title="Orders"
   subtitle="Every sale across your events. Search by reference, name or email."
-/>
+>
+  @if (!refused()) {
+    <!-- Everything the filter below matches, not just this page. -->
+    <button uiButton variant="secondary" type="button" [loading]="exporting()" [disabled]="exporting()" (click)="export()">
+      <ui-icon [icon]="downloadIcon" size="sm" />
+      Export CSV
+    </button>
+  }
+</ui-page-header>
 
 @if (refused()) {
   <!--

@@ -2,7 +2,9 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
+  ToastStore,
   UiBadge,
+  UiButton,
   UiEmpty,
   UiErrorState,
   UiIcon,
@@ -10,13 +12,14 @@ import {
   UiPagination,
   UiSkeleton,
 } from '@myfiesta/ui';
-import { Search } from 'lucide-angular';
+import { Download, Search } from 'lucide-angular';
 import { Subject, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from '../../core/api';
 import { Money, OrganizationOrder, OrganizerEvent } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
+import { saveFile, today } from '../../core/download';
 
 /**
  * Every order the organization has taken.
@@ -38,6 +41,7 @@ import { SessionStore } from '../../core/session';
     RouterLink,
     UiPageHeader,
     UiBadge,
+    UiButton,
     UiEmpty,
     UiErrorState,
     UiIcon,
@@ -48,6 +52,10 @@ import { SessionStore } from '../../core/session';
 })
 export class Orders {
   protected readonly searchIcon = Search;
+  protected readonly downloadIcon = Download;
+
+  private readonly toasts = inject(ToastStore);
+  readonly exporting = signal(false);
 
   private readonly api = inject(Api);
   readonly session = inject(SessionStore);
@@ -133,6 +141,30 @@ export class Orders {
   goToPage(page: number): void {
     this.page.set(page);
     this.load();
+  }
+
+  /**
+   * Every order the current filter matches, as a spreadsheet — not the page on
+   * screen. Filtered exactly as the list is, so the file never holds a
+   * different set of orders from the one being looked at.
+   */
+  export(): void {
+    if (this.exporting()) return;
+
+    this.exporting.set(true);
+
+    this.api
+      .exportOrders({ q: this.query(), event_id: this.eventId(), status: this.status() })
+      .subscribe({
+        next: (file) => {
+          this.exporting.set(false);
+          saveFile(file, `myfiesta-orders-${today()}.csv`);
+        },
+        error: () => {
+          this.exporting.set(false);
+          this.toasts.show('The export could not be downloaded. Try again.', 'danger');
+        },
+      });
   }
 
   clear(): void {

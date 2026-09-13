@@ -1,5 +1,11 @@
 <header class="bar mb-8 flex flex-wrap items-center justify-between gap-6">
-  <h1 class="text-2xl">Guests</h1>
+  <div class="flex flex-wrap items-center gap-4">
+    <h1 class="text-2xl">Guests</h1>
+    <button uiButton variant="secondary" size="sm" type="button" [loading]="exporting()" [disabled]="exporting()" (click)="exportList()">
+      <ui-icon [icon]="downloadIcon" size="sm" />
+      Export CSV
+    </button>
+  </div>
 
   <!-- The number an organizer is actually watching on the night. -->
   <div class="arrivals grid min-w-[220px] gap-2">
