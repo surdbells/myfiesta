@@ -159,6 +159,10 @@ class Pricer
                     throw new CheckoutException('That ticket is not on sale for this event.');
                 }
 
+                if ($type->isWaiting()) {
+                    throw new CheckoutException("{$type->name} opens when {$type->opensAfter->name} sells out.");
+                }
+
                 throw new CheckoutException(
                     "{$type->name} goes on sale "
                     .$type->sales_start_at->setTimezone($event->timezone)->format('D j M, g:i a').'.'

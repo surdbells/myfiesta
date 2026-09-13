@@ -86,10 +86,13 @@
               <div class="min-w-0">
                 <h2 class="flex flex-wrap items-center gap-3 text-xl font-semibold">
                   {{ type.name }}
-                  @if (type.status === 'sold_out') {
+                  @if (soldOut(type)) {
                     <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sold out</span>
                   } @else if (type.status === 'closed' || salesEnded(type)) {
                     <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sales closed</span>
+                  } @else if (opensLater(type) && type.waiting && type.opens_after) {
+                    <!-- A price ladder: said as what the buyer is waiting for. -->
+                    <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium tracking-[0.02em] text-text-muted">Opens when {{ type.opens_after.name }} sells out</span>
                   } @else if (opensLater(type)) {
                     <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium tracking-[0.02em] text-text-muted">On sale {{ opensAt(type) }}</span>
                   } @else if (isUnlocked(type)) {

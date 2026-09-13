@@ -114,6 +114,12 @@ export interface TicketType {
 
   sales_start_at: string | null;
   sales_end_at: string | null;
+
+  sold_out: boolean;
+  /** A price ladder: this tier goes on sale when that one sells out. */
+  opens_after: { id: string; name: string } | null;
+  /** Still waiting for that tier to sell out. */
+  waiting: boolean;
 }
 
 /**

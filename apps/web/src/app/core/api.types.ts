@@ -56,6 +56,11 @@ export interface TicketType {
   /** When sales open and close. Before the start it is a presale: a code opens it early. */
   sales_start_at: string | null;
   sales_end_at: string | null;
+  /** Every place taken, counting baskets in progress. */
+  sold_out: boolean;
+  /** A price ladder: this tier waits for that one to sell out. */
+  opens_after: { id: string; name: string } | null;
+  waiting: boolean;
 }
 
 /** What a presale code opens. */

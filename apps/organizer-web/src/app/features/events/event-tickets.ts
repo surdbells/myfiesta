@@ -41,6 +41,8 @@ interface TicketDraft {
   maxPerOrder: number | string | null;
   salesStart: string;
   salesEnd: string;
+  /** The tier this one waits for; empty for on sale straight away. */
+  opensAfter: string;
   /**
    * Whether the tier is being offered.
    *
@@ -229,6 +231,7 @@ export class EventTickets {
       maxPerOrder: '',
       salesStart: '',
       salesEnd: '',
+      opensAfter: '',
       status: 'on_sale',
     };
   }
@@ -252,6 +255,7 @@ export class EventTickets {
       maxPerOrder: type.max_per_order ?? '',
       salesStart: this.toLocalInput(type.sales_start_at),
       salesEnd: this.toLocalInput(type.sales_end_at),
+      opensAfter: type.opens_after?.id ?? '',
       // A tier the server has worked out is sold out still edits as what it
       // is: on sale, with nothing left. Closing it is a separate decision.
       status: type.status === 'sold_out' ? 'on_sale' : type.status,
@@ -279,6 +283,14 @@ export class EventTickets {
     { value: 'hidden', label: 'Hidden — only with a presale code' },
     { value: 'closed', label: 'Closed — not for sale' },
   ];
+
+  /** Every other tier, as a ladder step this one can wait for. */
+  readonly ladderOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Straight away' },
+    ...this.types()
+      .filter((t) => t.id !== this.editing()?.id)
+      .map((t) => ({ value: t.id, label: `When ${t.name} sells out`, hint: this.cash(t.price) })),
+  ]);
 
   readonly statusHint = computed(() => {
     const status = this.draft().status;
@@ -317,6 +329,7 @@ export class EventTickets {
       max_per_order: this.optionalNumber(draft.maxPerOrder),
       sales_start_at: draft.salesStart ? new Date(draft.salesStart).toISOString() : null,
       sales_end_at: draft.salesEnd ? new Date(draft.salesEnd).toISOString() : null,
+      opens_after_id: draft.opensAfter || null,
       status: draft.status,
     };
 
@@ -400,6 +413,9 @@ export class EventTickets {
   }
 
   tone(type: TicketType): 'success' | 'neutral' | 'warning' | 'danger' {
+    if (type.status === 'on_sale' && type.sold_out) return 'danger';
+    if (type.status === 'on_sale' && type.waiting) return 'neutral';
+
     return type.status === 'on_sale'
       ? 'success'
       : type.status === 'sold_out'
@@ -410,6 +426,9 @@ export class EventTickets {
   }
 
   label(type: TicketType): string {
+    if (type.status === 'on_sale' && type.sold_out) return 'Sold out';
+    if (type.status === 'on_sale' && type.waiting) return 'Waiting';
+
     return { on_sale: 'On sale', sold_out: 'Sold out', hidden: 'Hidden', closed: 'Closed' }[
       type.status
     ];

@@ -10,6 +10,7 @@ use App\Services\Audit\Auditor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * What an event sells.
@@ -131,6 +132,10 @@ public function index(Request $request, Event $event): JsonResponse
 
         $data = $this->validated($request, updating: true);
 
+        if ($refusal = $this->ladderRefusal($ticketType, $data['opens_after_id'] ?? null)) {
+            return response()->json(['message' => $refusal], 422);
+        }
+
         $before = $ticketType->only(['name', 'price_amount', 'quantity_available', 'status']);
 
         // Repricing after tickets have sold is allowed — early-bird tiers close
@@ -202,6 +207,37 @@ public function index(Request $request, Event $event): JsonResponse
         return response()->json(['message' => 'Removed.']);
     }
 
+    /**
+     * A ladder has to end somewhere.
+     *
+     * Tier 2 opening after Tier 1 opening after Tier 2 would leave both
+     * waiting on the other for ever, and nothing on sale.
+     */
+    private function ladderRefusal(TicketType $type, ?string $opensAfterId): ?string
+    {
+        if ($opensAfterId === null) {
+            return null;
+        }
+
+        if ($opensAfterId === $type->id) {
+            return 'A ticket cannot wait for itself to sell out.';
+        }
+
+        $seen = [$type->id];
+        $next = TicketType::find($opensAfterId);
+
+        while ($next !== null && $next->opens_after_id !== null) {
+            if (in_array($next->opens_after_id, $seen, true)) {
+                return 'That would make these tickets wait for each other, so none would ever go on sale.';
+            }
+
+            $seen[] = $next->id;
+            $next = TicketType::find($next->opens_after_id);
+        }
+
+        return null;
+    }
+
     private function validated(Request $request, bool $updating = false): array
     {
         $required = $updating ? 'sometimes' : 'required';
@@ -219,6 +255,7 @@ public function index(Request $request, Event $event): JsonResponse
             'sales_end_at' => ['nullable', 'date', 'after:sales_start_at'],
             'status' => ['sometimes', 'in:on_sale,hidden,closed'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999'],
+            'opens_after_id' => ['nullable', 'uuid', Rule::exists('ticket_types', 'id')->where('event_id', $request->route('event')->id)->whereNull('deleted_at')],
         ]);
     }
 }

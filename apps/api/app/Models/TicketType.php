@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The authoritative price.
@@ -42,6 +43,50 @@ class TicketType extends Model
         return $this->hasMany(Ticket::class);
     }
 
+    /** The tier this one waits for: it opens when that one sells out. */
+    public function opensAfter(): BelongsTo
+    {
+        return $this->belongsTo(TicketType::class, 'opens_after_id');
+    }
+
+    /**
+     * Places left to buy right now: capacity, less tickets issued, less
+     * checkouts in progress. Null when the tier is unlimited.
+     */
+    public function remainingNow(): ?int
+    {
+        if ($this->quantity_available === null) {
+            return null;
+        }
+
+        $issued = DB::table('tickets')->where('ticket_type_id', $this->id)->whereIn('status', ['valid', 'checked_in'])->count();
+        $held = (int) DB::table('inventory_holds')->where('ticket_type_id', $this->id)->where('expires_at', '>', now())->sum('quantity');
+
+        return max(0, $this->quantity_available - $issued - $held);
+    }
+
+    /** Nothing more to be had from it: closed, ended, or every place gone. */
+    public function isExhausted(): bool
+    {
+        return in_array($this->status, ['closed', 'sold_out'], true)
+            || $this->salesEnded()
+            || $this->remainingNow() === 0;
+    }
+
+    /**
+     * Still waiting for the tier before it to sell out.
+     *
+     * Counted with checkouts in progress, so the next tier opens as the last
+     * Early Bird goes into somebody's basket rather than after they pay — and
+     * a basket abandoned puts those places back, briefly opening both.
+     */
+    public function isWaiting(): bool
+    {
+        return $this->opens_after_id !== null
+            && $this->opensAfter !== null
+            && ! $this->opensAfter->isExhausted();
+    }
+
     /** Currency comes from the event; a ticket type never carries its own. */
     protected function price(): Attribute
     {
@@ -60,7 +105,8 @@ class TicketType extends Model
     public function isLocked(): bool
     {
         return $this->status === 'hidden'
-            || ($this->status === 'on_sale' && $this->sales_start_at !== null && $this->sales_start_at->isFuture());
+            || ($this->status === 'on_sale' && $this->sales_start_at !== null && $this->sales_start_at->isFuture())
+            || $this->isWaiting();
     }
 
     public function salesEnded(): bool

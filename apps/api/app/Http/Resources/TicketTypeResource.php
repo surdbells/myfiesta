@@ -44,6 +44,22 @@ class TicketTypeResource extends JsonResource
                 ? null
                 : max(0, $this->quantity_available - (int) ($this->issued_count ?? 0)),
 
+            /*
+             * Whether anything is left to buy now, for the public page.
+             *
+             * The stored status is never set to sold_out — it is a count, not
+             * a state — so a tier that had sold every place still looked on
+             * sale to buyers until checkout refused them.
+             */
+            'sold_out' => $this->quantity_available !== null && $this->remainingNow() === 0,
+
+            // --- the price ladder -------------------------------------------
+            'opens_after' => $this->opens_after_id && $this->opensAfter
+                ? ['id' => $this->opensAfter->id, 'name' => $this->opensAfter->name]
+                : null,
+            // Waiting for that tier to sell out; not on sale until it does.
+            'waiting' => $this->isWaiting(),
+
             // --- when it is on sale -----------------------------------------
             'sales_start_at' => $this->sales_start_at,
             'sales_end_at' => $this->sales_end_at,

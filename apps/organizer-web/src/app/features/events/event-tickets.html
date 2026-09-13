@@ -82,6 +82,9 @@
               @if (window(type); as when) {
                 <span>{{ when }}</span>
               }
+              @if (type.opens_after; as after) {
+                <span>Opens when {{ after.name }} sells out</span>
+              }
             </p>
           </div>
 
@@ -272,6 +275,16 @@
       a tier be marked sold out with places left — which is what closing is
       for, said honestly.
     -->
+    <!--
+      The price ladder. Opening the next tier by hand meant watching the count
+      at exactly the moment demand peaks.
+    -->
+    @if (ladderOptions().length > 1) {
+      <ui-field label="Goes on sale" hint="Choose a tier and this one opens by itself the moment that one sells out.">
+        <ui-select name="opensAfter" ariaLabel="Goes on sale" [options]="ladderOptions()" [ngModel]="draft().opensAfter" (ngModelChange)="update('opensAfter', $event)" />
+      </ui-field>
+    }
+
     <ui-field label="Availability" [hint]="statusHint()">
       <ui-select name="status" ariaLabel="Availability" [options]="statusOptions" [ngModel]="draft().status" (ngModelChange)="update('status', $event)" />
     </ui-field>

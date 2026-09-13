@@ -92,14 +92,15 @@ export class TicketSelect {
     return this.store.access()?.ticket_types.some((t) => t.id === type.id) ?? false;
   }
 
-  /** Before its sales open and not opened by a code. */
+  /** Before its sales open, or waiting on the tier before it — and not opened by a code. */
   opensLater(type: TicketType): boolean {
-    return (
-      !this.isUnlocked(type) &&
-      type.status === 'on_sale' &&
-      !!type.sales_start_at &&
-      new Date(type.sales_start_at) > new Date()
-    );
+    if (this.isUnlocked(type) || type.status !== 'on_sale') return false;
+
+    return type.waiting || (!!type.sales_start_at && new Date(type.sales_start_at) > new Date());
+  }
+
+  soldOut(type: TicketType): boolean {
+    return type.status === 'sold_out' || type.sold_out;
   }
 
   salesEnded(type: TicketType): boolean {
@@ -108,7 +109,7 @@ export class TicketSelect {
 
   /** Whether the steppers work: the same rules the server prices by. */
   buyable(type: TicketType): boolean {
-    if (this.salesEnded(type)) return false;
+    if (this.salesEnded(type) || this.soldOut(type)) return false;
     if (this.isUnlocked(type)) return type.status === 'on_sale' || type.status === 'hidden';
 
     return type.status === 'on_sale' && !this.opensLater(type);
