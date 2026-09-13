@@ -168,6 +168,36 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/events/{slug}/access:
+    post:
+      operationId: unlockTickets
+      summary: Show the ticket types a presale code opens on this event
+      description: Throttled to ten attempts a minute, since an answer confirms a code exists.
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: The code and the tiers it opens that can still be bought.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, ticket_types]
+                properties:
+                  code: { type: string }
+                  ticket_types: { type: array, items: { type: object } }
+        '422': { description: 'Not a valid presale code for this event, or nothing left to open.' }
+        '429': { description: 'Too many attempts.' }
+
   /api/events/{slug}/orders:
     post:
       operationId: createOrder
@@ -778,6 +808,9 @@ components:
         code:
           type: [string, 'null']
           description: A discount code, typed by the buyer.
+        access_code:
+          type: [string, 'null']
+          description: A presale code, opening ticket types that are hidden or not yet on sale.
         ref:
           type: [string, 'null']
           description: Promoter attribution captured from the link.
@@ -797,6 +830,9 @@ components:
           type: boolean
           description: Whether tax was already inside the displayed price.
         code_applied: { type: [string, 'null'] }
+        access_code_applied:
+          type: [string, 'null']
+          description: The presale code that opened a locked ticket type in this basket.
         code_applies_to:
           type: [array, 'null']
           items: { type: string }

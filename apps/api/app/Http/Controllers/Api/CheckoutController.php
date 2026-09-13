@@ -44,6 +44,7 @@ class CheckoutController extends Controller
                 $request->quantities(),
                 $request->input('code'),
                 $request->input('ref'),
+                $request->input('access_code'),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
@@ -66,6 +67,7 @@ class CheckoutController extends Controller
                 refSlug: $request->input('ref'),
                 user: $request->user(),
                 buyerPhone: $request->input('buyer.phone'),
+                accessInput: $request->input('access_code'),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
@@ -194,6 +196,7 @@ class CheckoutController extends Controller
             'tax_inclusive' => (bool) $quote->taxRate?->inclusive,
             'tax_label' => $quote->taxRate?->name,
             'code_applied' => $quote->code?->code,
+            'access_code_applied' => $quote->accessCode?->code,
             // Null for a code on every ticket.
             'code_applies_to' => $quote->code && $quote->code->ticketTypes()->exists()
                 ? $quote->code->ticketTypes()->orderBy('sort_order')->pluck('name')->all()

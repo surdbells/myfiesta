@@ -26,6 +26,8 @@ class QuoteRequest extends FormRequest
             'items.*.ticket_type_id' => ['required', 'uuid'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],
             'code' => ['nullable', 'string', 'max:64'],
+            // A presale code, opening tiers that are hidden or not yet on sale.
+            'access_code' => ['nullable', 'string', 'max:64'],
             'ref' => ['nullable', 'string', 'max:64'],
         ];
     }

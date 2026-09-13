@@ -111,6 +111,7 @@ export class Checkout {
         { name, email: this.email().trim() },
         this.store.code() || undefined,
         this.store.ref() ?? undefined,
+        this.store.access()?.code,
       )
       .subscribe({
         next: (order) => {
@@ -149,7 +150,7 @@ export class Checkout {
     const code = this.store.code() || undefined;
 
     this.api
-      .quote(this.slug, this.store.lines(), code, this.store.ref() ?? undefined)
+      .quote(this.slug, this.store.lines(), code, this.store.ref() ?? undefined, this.store.access()?.code)
       .subscribe({
         next: (quote) => {
           this.quote.set(quote);

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\DiscoverController;
 use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
@@ -53,6 +54,10 @@ Route::get('/tickets/{token}', TicketAccessController::class)->middleware('throt
 
 Route::middleware('throttle:120,1')
     ->post('/events/{slug}/quote', [CheckoutController::class, 'quote']);
+
+// Ten tries a minute: an answer confirms a presale code exists.
+Route::middleware('throttle:10,1')
+    ->post('/events/{slug}/access', AccessCodeController::class);
 
 Route::middleware('throttle:20,1')
     ->post('/events/{slug}/orders', [CheckoutController::class, 'store']);

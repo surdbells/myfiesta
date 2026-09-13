@@ -254,6 +254,7 @@ class RefundService
 
             // A fully refunded order gives its code's use back.
             Code::recount($locked->code_id);
+            Code::recount($locked->access_code_id);
 
             return $refund->refresh();
         });

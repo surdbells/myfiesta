@@ -46,9 +46,9 @@ class CheckoutService
      *
      * @param  array<string, int>  $quantities
      */
-    public function quote(Event $event, array $quantities, ?string $code = null, ?string $ref = null): Quote
+    public function quote(Event $event, array $quantities, ?string $code = null, ?string $ref = null, ?string $access = null): Quote
     {
-        return $this->pricer->quote($event, $quantities, $code, $ref);
+        return $this->pricer->quote($event, $quantities, $code, $ref, $access);
     }
 
     /**
@@ -65,17 +65,18 @@ class CheckoutService
         ?string $refSlug = null,
         ?User $user = null,
         ?string $buyerPhone = null,
+        ?string $accessInput = null,
     ): Order {
         if ($event->status !== 'published') {
             throw new CheckoutException('Tickets for this event are not on sale.');
         }
 
         return DB::transaction(function () use (
-            $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone
+            $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone, $accessInput
         ) {
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
-            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug);
+            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput);
 
             foreach ($quote->lines as $line) {
                 $this->takeHold($line->ticketType, $line->quantity);
@@ -83,6 +84,12 @@ class CheckoutService
 
             if ($quote->code !== null) {
                 $this->redeem($quote->code, $buyerEmail);
+            }
+
+            // A presale code has limits too — "the first 200 on the list" — and
+            // is checked the same way. Once, when it is also the discount code.
+            if ($quote->accessCode !== null && $quote->accessCode->id !== $quote->code?->id) {
+                $this->redeem($quote->accessCode, $buyerEmail);
             }
 
             $order = Order::create([
@@ -102,6 +109,7 @@ class CheckoutService
                 'total_amount' => $quote->total->amount,
                 'tax_rate_id' => $quote->taxRate?->id,
                 'code_id' => $quote->code?->id,
+                'access_code_id' => $quote->accessCode?->id,
                 'ref_slug' => $quote->refSlug,
                 'idempotency_key' => (string) Str::uuid(),
                 'status' => 'pending',

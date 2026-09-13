@@ -50,6 +50,24 @@ class TicketType extends Model
         );
     }
 
+    /**
+     * Locked: bought only with a code that unlocks it.
+     *
+     * Hidden tiers, and tiers whose sales have not opened yet — the two shapes
+     * a presale takes. A code opens either early; nothing opens a tier whose
+     * sales have ended, or one that is closed or sold out.
+     */
+    public function isLocked(): bool
+    {
+        return $this->status === 'hidden'
+            || ($this->status === 'on_sale' && $this->sales_start_at !== null && $this->sales_start_at->isFuture());
+    }
+
+    public function salesEnded(): bool
+    {
+        return $this->sales_end_at !== null && $this->sales_end_at->isPast();
+    }
+
     public function isFree(): bool
     {
         return $this->price_amount === 0;

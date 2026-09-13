@@ -276,7 +276,7 @@ export class EventTickets {
   /** What the chosen availability actually means, said under the control. */
   readonly statusOptions: SelectOption[] = [
     { value: 'on_sale', label: 'On sale — anybody can buy it' },
-    { value: 'hidden', label: 'Hidden — only reachable with a direct link' },
+    { value: 'hidden', label: 'Hidden — only with a presale code' },
     { value: 'closed', label: 'Closed — not for sale' },
   ];
 
@@ -284,7 +284,9 @@ export class EventTickets {
     const status = this.draft().status;
 
     if (status === 'hidden') {
-      return 'It stays off the event page. Existing tickets are unaffected.';
+      // It used to promise "a direct link", which did not exist: nobody could
+      // buy a hidden tier at all. A code that unlocks it is now the way in.
+      return 'Off the event page. Only buyers with a code that unlocks it can see and buy it — make one under Codes.';
     }
 
     if (status === 'closed') {

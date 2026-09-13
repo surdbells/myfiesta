@@ -62,6 +62,7 @@ class Fulfiller
 
             // A paid use of its code, now that it is one.
             Code::recount($locked->code_id);
+            Code::recount($locked->access_code_id);
 
             // Queued, and dispatched only after the transaction commits.
             // Sending inside it risks a buyer holding tickets in their inbox

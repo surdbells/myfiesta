@@ -58,6 +58,12 @@ class Code extends Model
         return $this->belongsToMany(TicketType::class);
     }
 
+    /** The tiers this code opens to whoever holds it. */
+    public function unlocks(): BelongsToMany
+    {
+        return $this->belongsToMany(TicketType::class, 'code_unlocks');
+    }
+
     /**
      * Uses that count against a limit right now: paid ones, and checkouts
      * still inside their hold.
@@ -72,7 +78,9 @@ class Code extends Model
     public function usesInFlight(int $holdMinutes, ?string $buyerEmail = null): int
     {
         return DB::table('orders')
-            ->where('code_id', $this->id)
+            // As a discount or as the key to a locked tier; an order that
+            // used it as both is still one use.
+            ->where(fn ($q) => $q->where('code_id', $this->id)->orWhere('access_code_id', $this->id))
             ->where(fn ($q) => $q->whereIn('status', self::PAID_STATUSES)
                 ->orWhere(fn ($q) => $q->where('status', 'pending')->where('created_at', '>', now()->subMinutes($holdMinutes))))
             ->when($buyerEmail !== null, fn ($q) => $q->where('buyer_email', strtolower(trim($buyerEmail))))
@@ -92,7 +100,7 @@ class Code extends Model
 
         DB::table('codes')->where('id', $codeId)->update([
             'redemption_count' => DB::table('orders')
-                ->where('code_id', $codeId)
+                ->where(fn ($q) => $q->where('code_id', $codeId)->orWhere('access_code_id', $codeId))
                 ->whereIn('status', self::PAID_STATUSES)
                 ->count(),
         ]);

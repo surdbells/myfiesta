@@ -53,6 +53,15 @@ export interface TicketType {
   admits: number;
   max_per_order: number | null;
   status: 'on_sale' | 'sold_out' | 'hidden' | 'closed';
+  /** When sales open and close. Before the start it is a presale: a code opens it early. */
+  sales_start_at: string | null;
+  sales_end_at: string | null;
+}
+
+/** What a presale code opens. */
+export interface AccessUnlock {
+  code: string;
+  ticket_types: TicketType[];
 }
 
 /** A photograph from the night. The caption doubles as alt text. */
@@ -121,6 +130,8 @@ export interface Quote {
   tax_inclusive: boolean;
   tax_label: string | null;
   code_applied: string | null;
+  /** The presale code that opened a locked ticket in this basket. */
+  access_code_applied: string | null;
   /** The ticket types the code discounts; null when it covers every ticket. */
   code_applies_to: string[] | null;
   requires_payment: boolean;

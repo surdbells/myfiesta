@@ -1,4 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
+import type { AccessUnlock } from './api.types';
 
 /**
  * The basket, between pages.
@@ -15,6 +16,15 @@ export class CheckoutStore {
   readonly slug = signal<string | null>(null);
   readonly items = signal<Record<string, number>>({});
   readonly code = signal('');
+
+  /**
+   * A presale code and the tiers it opened.
+   *
+   * The tiers are kept, not just the code: a hidden tier is not on the event
+   * page's list, so without them the next page could not name what is in the
+   * basket.
+   */
+  readonly access = signal<AccessUnlock | null>(null);
 
   /** A promoter's ref, captured on the event page and carried to the order. */
   readonly ref = signal<string | null>(null);
@@ -35,6 +45,24 @@ export class CheckoutStore {
     this.slug.set(slug);
     this.items.set(this.read(slug)?.items ?? {});
     this.code.set(this.read(slug)?.code ?? '');
+    this.access.set(this.read(slug)?.access ?? null);
+  }
+
+  setAccess(slug: string, access: AccessUnlock | null): void {
+    this.loadFor(slug);
+    this.access.set(access);
+
+    // Taking the code away takes away what only it could buy.
+    if (access === null) {
+      const locked = new Set(this.lockedIds());
+      this.items.set(Object.fromEntries(Object.entries(this.items()).filter(([id]) => !locked.has(id))));
+    }
+
+    this.persist(slug);
+  }
+
+  private lockedIds(): string[] {
+    return this.read(this.slug() ?? '')?.access?.ticket_types.map((t) => t.id) ?? [];
   }
 
   setQuantity(slug: string, ticketTypeId: string, quantity: number): void {
@@ -53,6 +81,7 @@ export class CheckoutStore {
     this.slug.set(null);
     this.items.set({});
     this.code.set('');
+    this.access.set(null);
     try {
       sessionStorage.removeItem(this.key(slug));
     } catch {
@@ -64,7 +93,7 @@ export class CheckoutStore {
     return `myfiesta.basket.${slug}`;
   }
 
-  private read(slug: string): { items: Record<string, number>; code: string } | null {
+  private read(slug: string): { items: Record<string, number>; code: string; access?: AccessUnlock | null } | null {
     try {
       const raw = sessionStorage.getItem(this.key(slug));
       return raw ? JSON.parse(raw) : null;
@@ -77,7 +106,7 @@ export class CheckoutStore {
     try {
       sessionStorage.setItem(
         this.key(slug),
-        JSON.stringify({ items: this.items(), code: this.code() }),
+        JSON.stringify({ items: this.items(), code: this.code(), access: this.access() }),
       );
     } catch {
       // The basket still works for this page; it just will not survive one.

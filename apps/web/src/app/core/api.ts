@@ -11,6 +11,7 @@ import {
   Page,
   Quote,
   TicketAccess,
+  AccessUnlock,
 } from './api.types';
 
 export interface EventQuery {
@@ -58,8 +59,14 @@ export class Api {
     items: { ticket_type_id: string; quantity: number }[],
     code?: string,
     ref?: string,
+    access_code?: string,
   ): Observable<Quote> {
-    return this.http.post<Quote>(`${this.base}/api/events/${slug}/quote`, { items, code, ref });
+    return this.http.post<Quote>(`${this.base}/api/events/${slug}/quote`, { items, code, ref, access_code });
+  }
+
+  /** A presale code: what it opens on this event, or a 422 saying why not. */
+  unlock(slug: string, code: string): Observable<AccessUnlock> {
+    return this.http.post<AccessUnlock>(`${this.base}/api/events/${slug}/access`, { code });
   }
 
   order(
@@ -68,12 +75,14 @@ export class Api {
     buyer: { name: string; email: string; phone?: string },
     code?: string,
     ref?: string,
+    access_code?: string,
   ): Observable<OrderCreated> {
     return this.http.post<OrderCreated>(`${this.base}/api/events/${slug}/orders`, {
       items,
       buyer,
       code,
       ref,
+      access_code,
     });
   }
 

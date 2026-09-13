@@ -217,6 +217,8 @@ export interface PromoCode {
   min_quantity: number | null;
   /** The ticket types it discounts. Empty means every one. */
   ticket_types: { id: string; name: string }[];
+  /** Presale: the tiers it opens to whoever holds it. */
+  unlocks: { id: string; name: string }[];
   /** Paid orders using it, per currency. */
   sales: CodeSales[];
   /** The window the code works in. Enforced at checkout; null means always. */

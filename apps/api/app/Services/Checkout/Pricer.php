@@ -42,8 +42,16 @@ class Pricer
         array $quantities,
         ?string $codeInput = null,
         ?string $refSlug = null,
+        ?string $accessInput = null,
     ): Quote {
-        $lines = $this->priceLines($event, $quantities);
+        // Codes first: whether a locked tier may be priced at all depends on
+        // what they unlock.
+        $code = $this->resolveCode($event, $codeInput, $refSlug);
+        $accessCode = $this->resolveAccess($event, $accessInput, $code);
+
+        $unlocked = $accessCode?->unlocks()->pluck('ticket_types.id')->all() ?? [];
+
+        $lines = $this->priceLines($event, $quantities, $unlocked);
 
         if ($lines === []) {
             throw new CheckoutException('Select at least one ticket.');
@@ -57,7 +65,6 @@ class Pricer
             Money::zero($currency),
         );
 
-        $code = $this->resolveCode($event, $codeInput, $refSlug);
         $lines = $this->applyDiscount($code, $lines, typed: filled($codeInput));
 
         $discount = array_reduce(
@@ -112,14 +119,20 @@ class Pricer
             code: $code,
             taxRate: $taxRate,
             refSlug: $code?->ref_slug ?? $refSlug,
+            // Recorded only when it opened something in this order. A presale
+            // code typed by a buyer who then bought a public ticket used nothing.
+            accessCode: $accessCode !== null && array_filter($lines, fn (QuoteLine $l) => $l->ticketType->isLocked()) !== []
+                ? $accessCode
+                : null,
         );
     }
 
     /**
      * @param  array<string, int>  $quantities
+     * @param  list<string>  $unlocked  ticket type ids an access code has opened
      * @return list<QuoteLine>
      */
-    private function priceLines(Event $event, array $quantities): array
+    private function priceLines(Event $event, array $quantities, array $unlocked = []): array
     {
         $lines = [];
 
@@ -140,8 +153,26 @@ class Pricer
                 throw new CheckoutException('That ticket is not on sale for this event.');
             }
 
-            if ($type->status !== 'on_sale') {
+            if ($type->isLocked() && ! in_array($type->id, $unlocked, true)) {
+                // A hidden tier is not admitted to exist without its code.
+                if ($type->status === 'hidden') {
+                    throw new CheckoutException('That ticket is not on sale for this event.');
+                }
+
+                throw new CheckoutException(
+                    "{$type->name} goes on sale "
+                    .$type->sales_start_at->setTimezone($event->timezone)->format('D j M, g:i a').'.'
+                );
+            }
+
+            if (! in_array($type->status, ['on_sale', 'hidden'], true)) {
                 throw new CheckoutException("{$type->name} is not currently on sale.");
+            }
+
+            // Enforced now. The dates were stored and shown in the console and
+            // checkout ignored them, so a tier kept selling after its end.
+            if ($type->salesEnded()) {
+                throw new CheckoutException("Sales for {$type->name} have ended.");
             }
 
             if ($type->max_per_order !== null && $quantity > $type->max_per_order) {
@@ -209,6 +240,37 @@ class Pricer
         }
 
         return null;
+    }
+
+    /**
+     * The code opening locked tiers for this basket, if any.
+     *
+     * One typed as an access code, or the discount code when it also unlocks
+     * — a promoter's presale code is often both, and asking for it twice would
+     * be silly. A typed access code that does not work is an error the buyer
+     * can act on.
+     */
+    public function resolveAccess(Event $event, ?string $accessInput, ?Code $code = null): ?Code
+    {
+        if (filled($accessInput)) {
+            $access = Code::query()
+                ->usable()
+                ->where('organization_id', $event->organization_id)
+                ->where('unlocks_tickets', true)
+                ->whereRaw('upper(code) = ?', [strtoupper(trim($accessInput))])
+                ->get()
+                ->filter(fn (Code $c) => $c->appliesTo($event))
+                ->sortBy(fn (Code $c) => $c->event_id === null ? 1 : 0)
+                ->first();
+
+            if ($access === null) {
+                throw new CheckoutException('That access code is not valid for this event.');
+            }
+
+            return $access;
+        }
+
+        return $code?->unlocks_tickets ? $code : null;
     }
 
     /**

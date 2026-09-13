@@ -163,6 +163,37 @@
       </div>
     }
 
+    <!--
+      Presale. Any code can also open tiers that are hidden or not on sale yet;
+      a presale-only code must. Tiers that need no unlocking are listed too —
+      an organizer may be about to hide one — but each says why it would.
+    -->
+    @if (canTarget() && ticketTypes().length > 0) {
+      <fieldset class="m-0 grid gap-2 border-0 p-0">
+        <legend class="mb-2 text-sm font-medium">
+          Unlocks for presale
+          @if (form().kind !== 'access') {
+            <span class="optional">optional</span>
+          }
+        </legend>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+          @for (type of ticketTypes(); track type.id) {
+            <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+              <input type="checkbox" class="h-4 w-4" [checked]="isUnlocked(type.id)" (change)="toggleUnlock(type.id)" />
+              {{ type.name }}
+              @if (lockState(type); as state) {
+                <span class="text-xs text-text-subtle">({{ state }})</span>
+              }
+            </label>
+          }
+        </div>
+        <p class="help text-xs text-text-muted">
+          Anyone with this code can see and buy these before everyone else — or at all, if hidden.
+          Its link opens the ticket page with the code already in.
+        </p>
+      </fieldset>
+    }
+
     <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
       <div class="field min-w-0">
         <label for="maxRedemptions">Total uses <span class="optional">optional</span></label>
@@ -224,7 +255,7 @@
     </div>
 
     <div class="actions flex items-center gap-4">
-      <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim()">
+      <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim() || needsUnlock()">
         @if (saving()) {
           Saving…
         } @else if (editing()) {

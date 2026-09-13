@@ -39,7 +39,7 @@ class CodeController extends Controller
             ->orderByDesc('id')
             ->paginate(Paging::perPage($request, 50));
 
-        $codes->getCollection()->load('ticketTypes:id,name');
+        $codes->getCollection()->load(['ticketTypes:id,name', 'unlocks:id,name']);
         $sales = $this->salesFor($codes->getCollection()->pluck('id')->all());
 
         return response()->json([
@@ -81,21 +81,31 @@ class CodeController extends Controller
             'min_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
             'ticket_type_ids' => ['nullable', 'array'],
             'ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
+            // Presale: the tiers this code opens.
+            'unlock_ticket_type_ids' => ['nullable', 'array'],
+            'unlock_ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'event_scoped' => ['nullable', 'boolean'],
         ], [
             // The defaults here read as if somebody else claimed a username.
             'ticket_type_ids.*.exists' => 'One of those tickets is not on this event.',
+            'unlock_ticket_type_ids.*.exists' => 'One of those tickets is not on this event.',
             'discount_value.required_with' => 'Say how much comes off.',
             'discount_type.required_with' => 'Say whether that is a percentage or an amount.',
         ]);
 
         // A code has to do something. The database enforces this too, but a
         // constraint violation is not a sentence anyone wants to read.
-        if (blank($data['discount_type'] ?? null) && blank($data['ref_slug'] ?? null)) {
+        if (blank($data['discount_type'] ?? null) && blank($data['ref_slug'] ?? null) && empty($data['unlock_ticket_type_ids'])) {
             return response()->json([
-                'message' => 'A code needs either a discount or a tracking slug — otherwise it does nothing.',
+                'message' => 'A code needs to take money off, credit a promoter or unlock tickets — otherwise it does nothing.',
+            ], 422);
+        }
+
+        if (! empty($data['unlock_ticket_type_ids']) && ! ($data['event_scoped'] ?? true)) {
+            return response()->json([
+                'message' => 'A code for all your events cannot unlock one event’s tickets. Make it for this event only.',
             ], 422);
         }
 
@@ -135,9 +145,11 @@ class CodeController extends Controller
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
             'is_active' => true,
+            'unlocks_tickets' => ! empty($data['unlock_ticket_type_ids']),
         ]);
 
         $code->ticketTypes()->sync($data['ticket_type_ids'] ?? []);
+        $code->unlocks()->sync($data['unlock_ticket_type_ids'] ?? []);
 
         // Refreshed so the response carries what the database actually holds.
         // redemption_count defaults to 0 there and is absent from the model we
@@ -176,6 +188,8 @@ class CodeController extends Controller
             'min_quantity' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100'],
             'ticket_type_ids' => ['sometimes', 'array'],
             'ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
+            'unlock_ticket_type_ids' => ['sometimes', 'array'],
+            'unlock_ticket_type_ids.*' => ['uuid', Rule::exists('ticket_types', 'id')->where('event_id', $event->id)],
             'starts_at' => ['sometimes', 'nullable', 'date'],
             'ends_at' => ['sometimes', 'nullable', 'date'],
             'is_active' => ['sometimes', 'boolean'],
@@ -193,9 +207,19 @@ class CodeController extends Controller
             'ends_at' => $code->ends_at,
         ], $data);
 
-        if (blank($next['discount_type']) && blank($next['ref_slug'])) {
+        $unlocksNext = array_key_exists('unlock_ticket_type_ids', $data)
+            ? ! empty($data['unlock_ticket_type_ids'])
+            : $code->unlocks_tickets;
+
+        if (blank($next['discount_type']) && blank($next['ref_slug']) && ! $unlocksNext) {
             return response()->json([
-                'message' => 'A code needs either a discount or a tracking slug — otherwise it does nothing.',
+                'message' => 'A code needs to take money off, credit a promoter or unlock tickets — otherwise it does nothing.',
+            ], 422);
+        }
+
+        if (! empty($data['unlock_ticket_type_ids']) && $code->event_id === null) {
+            return response()->json([
+                'message' => 'A code for all your events cannot unlock one event’s tickets.',
             ], 422);
         }
 
@@ -244,10 +268,16 @@ class CodeController extends Controller
             $code->discount_currency = $data['discount_type'] === 'fixed' ? $event->currency : null;
         }
 
-        $code->fill(collect($data)->except('ticket_type_ids')->all())->save();
+        $code->fill(collect($data)->except(['ticket_type_ids', 'unlock_ticket_type_ids'])->all());
+        $code->unlocks_tickets = $unlocksNext;
+        $code->save();
 
         if (array_key_exists('ticket_type_ids', $data)) {
             $code->ticketTypes()->sync($data['ticket_type_ids']);
+        }
+
+        if (array_key_exists('unlock_ticket_type_ids', $data)) {
+            $code->unlocks()->sync($data['unlock_ticket_type_ids']);
         }
 
         $this->auditor->record(
@@ -384,6 +414,8 @@ class CodeController extends Controller
             'min_quantity' => $code->min_quantity,
             // Empty means every ticket type.
             'ticket_types' => $code->ticketTypes->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values(),
+            // Presale: the tiers it opens. Empty for a code that unlocks nothing.
+            'unlocks' => $code->unlocks->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values(),
             'sales' => $sales,
             // The window is enforced at checkout and was absent from this
             // response, so the console could neither show it nor edit it —

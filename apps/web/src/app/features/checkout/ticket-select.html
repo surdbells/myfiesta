@@ -18,6 +18,49 @@
       <app-checkout-steps [current]="1" />
     </div>
 
+    <!--
+      The presale code. Above the tiers, because what it opens appears among
+      them — and closed to a link by default, since most buyers have none and a
+      field they cannot fill reads as a door they are shut out of.
+    -->
+    <div class="mt-6">
+      @if (store.access(); as access) {
+        <p class="inline-flex flex-wrap items-center gap-3 rounded-md bg-primary-soft px-4 py-2 text-sm text-primary-soft-text">
+          <span><strong class="font-semibold">{{ access.code }}</strong> unlocked {{ access.ticket_types.length === 1 ? 'a ticket' : access.ticket_types.length + ' tickets' }}</span>
+          <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" type="button" (click)="removeAccess()">Remove</button>
+        </p>
+      } @else if (!accessOpen()) {
+        <button class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-primary-text underline underline-offset-2 [font-family:inherit]" type="button" (click)="accessOpen.set(true)">
+          Have a presale code?
+        </button>
+      } @else {
+        <form class="flex max-w-md flex-wrap items-start gap-2" (ngSubmit)="unlock()">
+          <label class="sr-only" for="access">Presale code</label>
+          <input
+            id="access"
+            class="min-w-0 flex-1 uppercase tracking-[0.04em]"
+            name="access"
+            autocapitalize="characters"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Presale code"
+            [ngModel]="accessInput()"
+            (ngModelChange)="accessInput.set($event)"
+          />
+          <button
+            class="h-11 shrink-0 cursor-pointer rounded-md border-0 bg-primary-soft px-4 text-sm font-semibold text-primary-soft-text [font-family:inherit] disabled:cursor-not-allowed disabled:opacity-50"
+            type="submit"
+            [disabled]="!accessInput().trim() || unlocking()"
+          >
+            @if (unlocking()) { Checking… } @else { Unlock }
+          </button>
+          @if (accessError(); as message) {
+            <p class="basis-full text-sm text-danger" role="alert">{{ message }}</p>
+          }
+        </form>
+      }
+    </div>
+
     @if (tiers().length === 0) {
       <p class="muted mt-8">Nothing is on sale for this event right now.</p>
     } @else {
@@ -32,7 +75,7 @@
           <div
             class="tier relative rounded-xl border-2 bg-surface-raised p-6"
             [class]="
-              type.status !== 'on_sale'
+              !buyable(type)
                 ? 'border-border opacity-55'
                 : quantity(type.id) > 0
                   ? 'border-primary shadow-(--shadow-raised)'
@@ -45,8 +88,12 @@
                   {{ type.name }}
                   @if (type.status === 'sold_out') {
                     <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sold out</span>
-                  } @else if (type.status === 'closed') {
+                  } @else if (type.status === 'closed' || salesEnded(type)) {
                     <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sales closed</span>
+                  } @else if (opensLater(type)) {
+                    <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium tracking-[0.02em] text-text-muted">On sale {{ opensAt(type) }}</span>
+                  } @else if (isUnlocked(type)) {
+                    <span class="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.04em] text-primary-soft-text">Presale</span>
                   }
                 </h2>
 
@@ -76,7 +123,7 @@
                     class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     type="button"
                     (click)="adjust(type, -1)"
-                    [disabled]="type.status !== 'on_sale' || quantity(type.id) === 0"
+                    [disabled]="quantity(type.id) === 0"
                     [attr.aria-label]="stepLabel(type, 'fewer')"
                   >
                     −
@@ -86,7 +133,7 @@
                     class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     type="button"
                     (click)="adjust(type, 1)"
-                    [disabled]="type.status !== 'on_sale'"
+                    [disabled]="!buyable(type)"
                     [attr.aria-label]="stepLabel(type, 'more')"
                   >
                     +

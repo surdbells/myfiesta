@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { EventDetail, Quote, TicketType } from '../../core/api.types';
@@ -18,7 +19,7 @@ import { CheckoutSteps } from '../../shared/checkout-steps';
 @Component({
   selector: 'mf-ticket-select',
   standalone: true,
-  imports: [RouterLink, CheckoutSteps],
+  imports: [RouterLink, FormsModule, CheckoutSteps],
   templateUrl: './ticket-select.html',
 })
 export class TicketSelect {
@@ -38,18 +39,39 @@ export class TicketSelect {
 
   readonly hasSelection = computed(() => this.store.count() > 0);
 
-  /** On-sale first, then sold out — visible but plainly done. Hidden stays hidden. */
-  readonly tiers = computed(() => {
-    const types = this.event()?.ticket_types ?? [];
-    const shown = types.filter((t) => t.status !== 'hidden');
+  /** The presale code field: closed until asked for, since most buyers have none. */
+  readonly accessOpen = signal(false);
+  readonly accessInput = signal('');
+  readonly accessError = signal<string | null>(null);
+  readonly unlocking = signal(false);
 
-    return [...shown].sort(
-      (a, b) => Number(a.status !== 'on_sale') - Number(b.status !== 'on_sale'),
-    );
+  /**
+   * The tiers, with whatever a presale code opened merged in.
+   *
+   * Buyable first, then the ones waiting to open, then the done ones — a
+   * sold-out tier stays on the page, dimmed, because "gone" is information.
+   * Hidden stays hidden unless a code opened it.
+   */
+  readonly tiers = computed(() => {
+    const unlocked = this.store.access()?.ticket_types ?? [];
+    const unlockedIds = new Set(unlocked.map((t) => t.id));
+    const publicTiers = (this.event()?.ticket_types ?? []).filter((t) => t.status !== 'hidden' && !unlockedIds.has(t.id));
+
+    const rank = (t: TicketType) => (this.buyable(t) ? 0 : this.opensLater(t) ? 1 : 2);
+
+    return [...unlocked, ...publicTiers].sort((a, b) => rank(a) - rank(b));
   });
 
   constructor() {
     this.store.loadFor(this.slug);
+
+    // A presale link: /{slug}/tickets?access=CODE opens the tiers straight away.
+    const shared = this.route.snapshot.queryParamMap.get('access');
+    if (shared && shared.toUpperCase() !== this.store.access()?.code) {
+      this.accessInput.set(shared);
+      this.accessOpen.set(true);
+      this.unlock();
+    }
 
     this.api.event(this.slug).subscribe({
       next: ({ data }) => {
@@ -65,8 +87,80 @@ export class TicketSelect {
     return this.store.items()[id] ?? 0;
   }
 
+  /** Opened by the presale code this buyer holds. */
+  isUnlocked(type: TicketType): boolean {
+    return this.store.access()?.ticket_types.some((t) => t.id === type.id) ?? false;
+  }
+
+  /** Before its sales open and not opened by a code. */
+  opensLater(type: TicketType): boolean {
+    return (
+      !this.isUnlocked(type) &&
+      type.status === 'on_sale' &&
+      !!type.sales_start_at &&
+      new Date(type.sales_start_at) > new Date()
+    );
+  }
+
+  salesEnded(type: TicketType): boolean {
+    return !!type.sales_end_at && new Date(type.sales_end_at) <= new Date();
+  }
+
+  /** Whether the steppers work: the same rules the server prices by. */
+  buyable(type: TicketType): boolean {
+    if (this.salesEnded(type)) return false;
+    if (this.isUnlocked(type)) return type.status === 'on_sale' || type.status === 'hidden';
+
+    return type.status === 'on_sale' && !this.opensLater(type);
+  }
+
+  /** "Fri 19 Sep, 10:00 a.m." in the event's own zone. */
+  opensAt(type: TicketType): string {
+    const zone = this.event()?.timezone;
+
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(zone ? { timeZone: zone } : {}),
+    }).format(new Date(type.sales_start_at!));
+  }
+
+  unlock(): void {
+    const code = this.accessInput().trim();
+    if (!code || this.unlocking()) return;
+
+    this.unlocking.set(true);
+    this.accessError.set(null);
+
+    this.api.unlock(this.slug, code).subscribe({
+      next: (access) => {
+        this.unlocking.set(false);
+        this.store.setAccess(this.slug, access);
+        this.accessOpen.set(false);
+        this.accessInput.set('');
+        this.refreshQuote();
+      },
+      error: (response) => {
+        this.unlocking.set(false);
+        this.accessError.set(
+          response?.status === 429
+            ? 'Too many tries. Wait a minute and try again.'
+            : (response?.error?.message ?? 'That code could not be checked. Try again.'),
+        );
+      },
+    });
+  }
+
+  removeAccess(): void {
+    this.store.setAccess(this.slug, null);
+    this.refreshQuote();
+  }
+
   adjust(type: TicketType, delta: number): void {
-    if (type.status !== 'on_sale') return;
+    if (!this.buyable(type) && delta > 0) return;
 
     const ceiling = type.max_per_order ?? 20;
     const next = Math.min(Math.max(this.quantity(type.id) + delta, 0), ceiling);
@@ -92,7 +186,7 @@ export class TicketSelect {
       return;
     }
 
-    this.api.quote(this.slug, lines).subscribe({
+    this.api.quote(this.slug, lines, undefined, this.store.ref() ?? undefined, this.store.access()?.code).subscribe({
       next: (quote) => this.quote.set(quote),
       error: () => this.quote.set(null),
     });

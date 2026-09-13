@@ -62,7 +62,7 @@ export class EventCodes {
   readonly form = signal({
     code: '',
     label: '',
-    kind: 'discount' as 'discount' | 'promoter' | 'both',
+    kind: 'discount' as 'discount' | 'promoter' | 'both' | 'access',
     discount_type: 'percentage' as 'percentage' | 'fixed',
     discount_value: '',
     promoter_name: '',
@@ -71,6 +71,7 @@ export class EventCodes {
     max_per_customer: '',
     min_quantity: '',
     ticket_type_ids: [] as string[],
+    unlock_ticket_type_ids: [] as string[],
     starts_at: '',
     ends_at: '',
   });
@@ -79,6 +80,7 @@ export class EventCodes {
     { value: 'discount', label: 'Takes money off' },
     { value: 'promoter', label: 'Credits a promoter' },
     { value: 'both', label: 'Both' },
+    { value: 'access', label: 'Only unlocks tickets (presale)' },
   ];
 
   readonly discountTypeOptions: SelectOption[] = [
@@ -86,8 +88,32 @@ export class EventCodes {
     { value: 'fixed', label: 'A fixed amount' },
   ];
 
-  readonly discounts = computed(() => this.form().kind !== 'promoter');
-  readonly attributes = computed(() => this.form().kind !== 'discount');
+  readonly discounts = computed(() => this.form().kind === 'discount' || this.form().kind === 'both');
+  readonly attributes = computed(() => this.form().kind === 'promoter' || this.form().kind === 'both');
+
+  /** A presale-only code has to open something, or it does nothing at all. */
+  readonly needsUnlock = computed(() => this.form().kind === 'access' && this.form().unlock_ticket_type_ids.length === 0);
+
+  isUnlocked(id: string): boolean {
+    return this.form().unlock_ticket_type_ids.includes(id);
+  }
+
+  toggleUnlock(id: string): void {
+    const ids = this.form().unlock_ticket_type_ids;
+
+    this.form.set({
+      ...this.form(),
+      unlock_ticket_type_ids: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    });
+  }
+
+  /** Why a tier would need unlocking, said beside it, so the choice makes sense. */
+  lockState(type: TicketType): string | null {
+    if (type.status === 'hidden') return 'hidden';
+    if (type.sales_start_at && new Date(type.sales_start_at) > new Date()) return 'not on sale yet';
+
+    return null;
+  }
 
   readonly currency = computed(() => this.event()?.currency ?? 'CAD');
 
@@ -145,6 +171,7 @@ export class EventCodes {
   /** The conditions on a code, as the list shows them. */
   describeConditions(code: PromoCode): string | null {
     const parts = [
+      code.unlocks.length > 0 ? `Unlocks ${code.unlocks.map((t) => t.name).join(', ')}` : null,
       code.ticket_types.length > 0 ? `On ${code.ticket_types.map((t) => t.name).join(', ')}` : null,
       code.min_quantity ? `${code.min_quantity}+ tickets` : null,
       code.max_per_customer ? `${code.max_per_customer} per buyer` : null,
@@ -190,14 +217,26 @@ export class EventCodes {
       })} off`;
     }
 
-    return 'Tracking only';
+    return code.ref_slug ? 'Tracking only' : 'Presale access';
   }
 
-  /** What a promoter is actually given: the event link carrying their slug. */
+  /**
+   * What gets shared: for a presale code, the ticket page with the code
+   * already in it — the tiers open on arrival — and otherwise the event link
+   * carrying a promoter's slug.
+   */
   linkFor(code: PromoCode): string | null {
     const slug = this.event()?.slug;
 
-    if (!code.ref_slug || !slug) return null;
+    if (!slug) return null;
+
+    if (code.unlocks.length > 0) {
+      const ref = code.ref_slug ? `&ref=${encodeURIComponent(code.ref_slug)}` : '';
+
+      return `${this.publicOrigin()}/${slug}/tickets?access=${encodeURIComponent(code.code)}${ref}`;
+    }
+
+    if (!code.ref_slug) return null;
 
     // An event lives at the root — myfiesta.ca/{slug} — not under /events.
     // Getting this wrong hands every promoter a link that 404s, and they find
@@ -247,6 +286,7 @@ export class EventCodes {
         max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
         min_quantity: this.discounts() && form.min_quantity ? Number(form.min_quantity) : null,
         ticket_type_ids: this.discounts() ? form.ticket_type_ids : [],
+        unlock_ticket_type_ids: form.unlock_ticket_type_ids,
         starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
         event_scoped: true,
@@ -266,6 +306,7 @@ export class EventCodes {
             max_per_customer: '',
             min_quantity: '',
             ticket_type_ids: [],
+            unlock_ticket_type_ids: [],
             starts_at: '',
             ends_at: '',
           });
@@ -291,7 +332,9 @@ export class EventCodes {
       max_redemptions: form.max_redemptions ? Number(form.max_redemptions) : null,
       max_per_customer: form.max_per_customer ? Number(form.max_per_customer) : null,
       min_quantity: this.discounts() && form.min_quantity ? Number(form.min_quantity) : null,
-      ...(editing.event_scoped ? { ticket_type_ids: this.discounts() ? form.ticket_type_ids : [] } : {}),
+      ...(editing.event_scoped
+        ? { ticket_type_ids: this.discounts() ? form.ticket_type_ids : [], unlock_ticket_type_ids: form.unlock_ticket_type_ids }
+        : {}),
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
     };
@@ -324,7 +367,9 @@ export class EventCodes {
           ? 'both'
           : code.discount_type
             ? 'discount'
-            : 'promoter',
+            : code.ref_slug
+              ? 'promoter'
+              : 'access',
       discount_type: code.discount_type ?? 'percentage',
       // Back to what somebody typed: basis points to a percentage, minor
       // units to an amount.
@@ -340,6 +385,7 @@ export class EventCodes {
       max_per_customer: code.max_per_customer === null ? '' : String(code.max_per_customer),
       min_quantity: code.min_quantity === null ? '' : String(code.min_quantity),
       ticket_type_ids: code.ticket_types.map((t) => t.id),
+      unlock_ticket_type_ids: code.unlocks.map((t) => t.id),
       starts_at: this.toLocalInput(code.starts_at),
       ends_at: this.toLocalInput(code.ends_at),
     });
@@ -363,6 +409,7 @@ export class EventCodes {
       max_per_customer: '',
       min_quantity: '',
       ticket_type_ids: [],
+      unlock_ticket_type_ids: [],
       starts_at: '',
       ends_at: '',
     });

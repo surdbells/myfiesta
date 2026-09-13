@@ -43,6 +43,8 @@ final readonly class Quote
         public ?Code $code = null,
         public ?TaxRate $taxRate = null,
         public ?string $refSlug = null,
+        // The code that opened a locked tier on this order, when one did.
+        public ?Code $accessCode = null,
     ) {}
 
     public function currency(): string
