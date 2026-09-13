@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
+import { routes } from './app.routes';
 import { SessionStore } from './core/session';
 import { Membership, Permission, Session } from './core/api.types';
 
@@ -93,7 +94,13 @@ describe('App shell', () => {
     // Every wildcard in this router redirects to the events list, so a nav
     // item pointing at a route nobody wrote does not 404 — it silently
     // lands somewhere else, which reads as the console ignoring the click.
-    const known = ['/', '/events', '/orders', '/payouts'];
+    // Read from the routing table itself, so adding a screen and its link
+    // together needs no second list here — only a link with no route fails.
+    const known = routes
+      .filter((route) => route.path !== undefined && route.path !== '**' && !route.path.includes(':'))
+      .map((route) => '/' + route.path);
+
+    expect(links.length).toBeGreaterThan(0);
 
     for (const href of links) {
       expect(known).toContain(href);
