@@ -171,6 +171,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::get('/orders/export', [OrganizerOrderController::class, 'export']);
         Route::put('/payout-details', [PayoutController::class, 'update']);
 
+        // Asking to be paid. Staff pay it, or say why not, in the admin panel.
+        Route::post('/payouts/requests', [PayoutController::class, 'requestPayout']);
+        Route::delete('/payouts/requests/{payoutRequest}', [PayoutController::class, 'cancelRequest']);
+
         // The team: who is on it, in what role, and invitations to it.
         Route::get('/team', [TeamController::class, 'index']);
         Route::post('/team/invitations', [TeamController::class, 'invite']);

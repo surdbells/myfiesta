@@ -674,6 +674,24 @@ export interface PayoutStatement {
   events: PayoutEventRow[];
   settlements: SettlementRow[];
   destination: PayoutDestination | null;
+  /** Payout requests, newest first. */
+  requests: PayoutRequestRow[];
+  /** Whether this member may ask to be paid: owners and finance. */
+  can_request: boolean;
+}
+
+/** An organizer asking to be paid, and what became of it. */
+export interface PayoutRequestRow {
+  id: string;
+  amount: Money;
+  paid_amount: Money | null;
+  status: 'pending' | 'paid' | 'rejected' | 'cancelled';
+  note: string | null;
+  /** Written by platform staff for the organizer: why it was not paid, or a note on what was. */
+  decision_note: string | null;
+  requested_by: string | null;
+  requested_at: string;
+  decided_at: string | null;
 }
 
 /**

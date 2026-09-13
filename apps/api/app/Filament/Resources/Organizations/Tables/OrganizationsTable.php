@@ -96,9 +96,9 @@ class OrganizationsTable
                  *
                  * The amount is classified against the live balance rather than
                  * chosen from a list: full, partial, or overdraft is a fact
-                 * about the numbers, not an opinion. Overdraft demands a note,
-                 * matching the database constraint rather than duplicating a
-                 * rule that could drift from it.
+                 * about the numbers, not an opinion. Paying more than is owed
+                 * is refused here: an overdraft is only given by an
+                 * administrator paying an organizer's payout request.
                  */
                 Action::make('settle')
                     ->label('Record settlement')
@@ -130,7 +130,7 @@ class OrganizationsTable
                             ->numeric()
                             ->minValue(0.01)
                             ->step('0.01')
-                            ->helperText('What actually left the account, in major units.'),
+                            ->helperText('What actually left the account, in major units. Up to what is owed — to pay more, pay the organizer’s payout request.'),
 
                         Select::make('rail')
                             ->label('Paid via')
@@ -169,7 +169,7 @@ class OrganizationsTable
 
                         Textarea::make('note')
                             ->label('Note')
-                            ->helperText('Required when paying more than is owed, or to details that are not verified.')
+                            ->helperText('Required when paying to details that are not verified.')
                             ->rows(3),
                     ])
                     ->action(function (Organization $record, array $data) {

@@ -29,7 +29,7 @@
     <div class="lead__figure">
       <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Owed to you</p>
       <p class="lead__amount text-3xl font-bold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(statement.balance) }}</p>
-      <p class="lead__note mt-1 text-xs text-text-subtle">Paid out after each event</p>
+      <p class="lead__note mt-1 text-xs text-text-subtle">Ask to be paid whenever you like</p>
     </div>
 
     <div class="lead__figure lead__figure--quiet">
@@ -48,13 +48,64 @@
       <div>
         <p class="warn__title font-semibold">We have nowhere to send this</p>
         <p class="warn__detail mt-1 max-w-[52ch] text-pretty text-sm text-text-muted">
-          Add an Interac address or a bank account and your balance goes out
-          after the next event.
+          Add an Interac address or a bank account, then ask to be paid.
         </p>
       </div>
 
       <button uiButton type="button" (click)="openForm()">Add payout details</button>
     </div>
+  }
+
+  <!-- ------------------------------------------------------ asking to be paid -->
+  @if (pendingRequest(); as waiting) {
+    <!-- Said where the balance is, so nobody asks twice or wonders if it went through. -->
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4" role="status">
+      <div class="grid gap-1">
+        <p class="flex flex-wrap items-center gap-2 font-semibold">
+          Payout of {{ cash(waiting.amount) }} requested
+          <ui-badge tone="warning">Waiting</ui-badge>
+        </p>
+        <p class="text-sm text-text-muted">
+          Asked {{ day(waiting.requested_at) }}@if (waiting.requested_by) { by {{ waiting.requested_by }}}. We will email when it is sent.
+        </p>
+      </div>
+      @if (statement.can_request) {
+        <button uiButton variant="secondary" size="sm" type="button" [loading]="withdrawing()" (click)="withdraw(waiting)">Withdraw request</button>
+      }
+    </div>
+  } @else if (canAsk()) {
+    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="ask()">
+      <div class="grid gap-1">
+        <h2 class="text-base font-semibold">Ask to be paid</h2>
+        <p class="text-sm text-text-muted">Up to {{ cash(statement.balance) }}, sent to {{ destinationSummary() }}. We will email you when it goes out.</p>
+      </div>
+
+      <div class="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] items-start gap-4 max-[720px]:grid-cols-1">
+        <ui-field label="Amount" [error]="askTooMuch() ? 'That is more than you are owed.' : null" required>
+          <input
+            id="askAmount"
+            name="askAmount"
+            type="number"
+            inputmode="decimal"
+            min="0.01"
+            step="0.01"
+            class="tabular-nums"
+            [ngModel]="askAmount()"
+            (ngModelChange)="setAskAmount($event)"
+          />
+        </ui-field>
+
+        <ui-field label="Note for us" [optionalMark]="true">
+          <input id="askNote" name="askNote" maxlength="500" placeholder="Before the weekend, if possible" [ngModel]="askNote()" (ngModelChange)="askNote.set($event)" />
+        </ui-field>
+
+        <button uiButton class="mt-[1.6rem] max-[720px]:mt-0" type="submit" [loading]="asking()" [disabled]="asking() || askTooMuch() || !askAmount()">Request payout</button>
+      </div>
+
+      @if (askError(); as message) {
+        <p class="text-sm text-danger" role="alert">{{ message }}</p>
+      }
+    </form>
   }
 
   <!-- --------------------------------------------------------- by the night -->
@@ -145,6 +196,29 @@
   </section>
 
   <!-- ---------------------------------------------------------- destination -->
+  @if (pastRequests().length > 0) {
+    <section class="block mt-12">
+      <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Payout requests</h2>
+      <ul class="m-0 grid list-none gap-2 p-0">
+        @for (request of pastRequests(); track request.id) {
+          <li class="grid gap-1 rounded-lg border border-border bg-surface-raised px-6 py-3">
+            <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span class="font-medium tabular-nums">{{ cash(request.amount) }}</span>
+              <ui-badge [tone]="requestTone(request.status)">{{ requestLabel(request.status) }}</ui-badge>
+              <span class="text-sm text-text-muted">asked {{ day(request.requested_at) }}</span>
+              @if (request.status === 'paid' && request.paid_amount && request.paid_amount.amount !== request.amount.amount) {
+                <span class="text-sm text-text-muted tabular-nums">· {{ cash(request.paid_amount) }} sent</span>
+              }
+            </p>
+            @if (request.decision_note && request.status !== 'cancelled') {
+              <p class="text-sm" [class.text-danger]="request.status === 'rejected'" [class.text-text-muted]="request.status !== 'rejected'">{{ request.decision_note }}</p>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
   <section class="block mt-12">
     <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Where it goes</h2>
 

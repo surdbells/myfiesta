@@ -75,6 +75,23 @@ final readonly class Money
         return $this->amount < 0;
     }
 
+    /**
+     * For a sentence a person reads: "CA$1,250.00", "₦45,000.00".
+     *
+     * Both currencies this platform sells in have two minor-unit digits. Not
+     * for anything a machine reads back.
+     */
+    public function format(): string
+    {
+        $symbol = match ($this->currency) {
+            'CAD' => 'CA$',
+            'NGN' => '₦',
+            default => $this->currency.' ',
+        };
+
+        return ($this->amount < 0 ? '-' : '').$symbol.number_format(abs($this->amount) / 100, 2);
+    }
+
     private function assertSameCurrency(self $other): void
     {
         if ($this->currency !== $other->currency) {

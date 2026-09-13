@@ -33,6 +33,10 @@ class SettlementRecorder
     public function __construct(private readonly Auditor $auditor) {}
 
     /**
+     * @param  bool  $overdraftApproved  Set only by PayoutRequests, when an administrator
+     *                                   pays a request for more than is owed. Nothing else
+     *                                   may record an overdraft.
+     *
      * @throws SettlementRefused when the payout cannot be recorded as asked
      */
     public function record(
@@ -41,6 +45,7 @@ class SettlementRecorder
         string $rail,
         ?string $note = null,
         ?User $by = null,
+        bool $overdraftApproved = false,
     ): Settlement {
         if ($amount->amount <= 0) {
             // Returning money is a refund against an order, not a negative
@@ -53,6 +58,22 @@ class SettlementRecorder
             ?? Money::zero($amount->currency);
 
         $type = Settlement::classify($amount, $balance);
+
+        /*
+         * Paying more than is owed is a decision about one organizer's request.
+         *
+         * An overdraft is money the platform advances before it has been
+         * earned. It used to be possible from any settlement, by anybody who
+         * could settle. It is now given only in answer to an organizer asking
+         * to be paid, by an administrator, where the request, the balance and
+         * the reason sit side by side.
+         */
+        if ($type === 'overdraft' && ! $overdraftApproved) {
+            throw SettlementRefused::because(
+                'That is more than this organization is owed ('.$balance->format().'). '
+                .'Paying more than is owed is only possible when an administrator pays an organizer’s payout request.'
+            );
+        }
 
         /*
          * Paying more than is owed needs a reason on the record.

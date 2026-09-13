@@ -17,8 +17,9 @@ import {
 } from '@myfiesta/ui';
 import { Banknote, Landmark, Pencil, ShieldCheck } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { Money, PayoutStatement, PayoutDestination } from '../../core/api.types';
-import { formatMoney } from '../../core/money';
+import { Money, PayoutRequestRow, PayoutStatement, PayoutDestination } from '../../core/api.types';
+import { formatMoney, toMinorUnits } from '../../core/money';
+import { messageFor } from '../../core/errors';
 
 /** The destination form, as somebody types it. */
 interface DestinationDraft {
@@ -87,8 +88,99 @@ export class Payouts {
     { value: 'bank_transfer', label: 'Bank transfer' },
   ];
 
+  // --- asking to be paid ----------------------------------------------------
+
+  /** The amount being asked for, as typed, in major units. */
+  readonly askAmount = signal('');
+  readonly askNote = signal('');
+  readonly asking = signal(false);
+  readonly askError = signal<string | null>(null);
+  readonly withdrawing = signal(false);
+
+  readonly requests = computed<PayoutRequestRow[]>(() => this.statement()?.requests ?? []);
+  readonly pendingRequest = computed(() => this.requests().find((r) => r.status === 'pending') ?? null);
+  readonly pastRequests = computed(() => this.requests().filter((r) => r.status !== 'pending'));
+
+  /** Asking is offered when there is something owed, somewhere to send it, and nothing already waiting. */
+  readonly canAsk = computed(() => {
+    const statement = this.statement();
+
+    return !!statement && statement.can_request && !!statement.destination && statement.balance.amount > 0 && !this.pendingRequest();
+  });
+
+  readonly askTooMuch = computed(() => {
+    const balance = this.statement()?.balance.amount ?? 0;
+
+    return this.askAmount() !== '' && toMinorUnits(this.askAmount()) > balance;
+  });
+
   constructor() {
     this.load();
+  }
+
+  ask(): void {
+    const amount = toMinorUnits(this.askAmount());
+    if (amount <= 0 || this.askTooMuch() || this.asking()) return;
+
+    this.asking.set(true);
+    this.askError.set(null);
+
+    this.api.requestPayout(amount, this.askNote().trim() || null).subscribe({
+      next: ({ message }) => {
+        this.asking.set(false);
+        this.askNote.set('');
+        this.toasts.show(message, 'success');
+        this.load();
+      },
+      error: (response) => {
+        this.asking.set(false);
+        this.askError.set(messageFor(response, 'That request could not be sent.'));
+      },
+    });
+  }
+
+  withdraw(request: PayoutRequestRow): void {
+    if (this.withdrawing()) return;
+
+    this.withdrawing.set(true);
+
+    this.api.withdrawPayoutRequest(request.id).subscribe({
+      next: ({ message }) => {
+        this.withdrawing.set(false);
+        this.toasts.show(message, 'success');
+        this.load();
+      },
+      error: (response) => {
+        this.withdrawing.set(false);
+        this.toasts.show(messageFor(response, 'That request could not be withdrawn.'), 'danger');
+      },
+    });
+  }
+
+  setAskAmount(value: string | number | null): void {
+    this.askAmount.set(value === null || value === undefined ? '' : String(value));
+  }
+
+  /** "your Interac address a•••@example.com", "the bank account ending 5678". */
+  destinationSummary(): string {
+    const destination = this.statement()?.destination;
+    if (!destination) return '';
+
+    if (destination.rail === 'interac') return `Interac at ${destination.interac_email ?? 'your address on file'}`;
+
+    return destination.account_last_four ? `the bank account ending ${destination.account_last_four}` : 'your bank account';
+  }
+
+  requestLabel(status: PayoutRequestRow['status']): string {
+    return { pending: 'Waiting', paid: 'Paid', rejected: 'Not paid', cancelled: 'Withdrawn' }[status];
+  }
+
+  requestTone(status: PayoutRequestRow['status']): 'success' | 'warning' | 'danger' | 'neutral' {
+    return status === 'paid' ? 'success' : status === 'pending' ? 'warning' : status === 'rejected' ? 'danger' : 'neutral';
+  }
+
+  day(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
   }
 
   load(): void {
@@ -100,6 +192,8 @@ export class Payouts {
       next: (statement) => {
         this.statement.set(statement);
         this.loading.set(false);
+        // Offered as the whole balance: that is what most people are asking for.
+        this.askAmount.set(statement.balance.amount > 0 ? (statement.balance.amount / 100).toFixed(2) : '');
       },
       error: (error) => {
         this.loading.set(false);

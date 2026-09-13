@@ -44,6 +44,10 @@ enum Permission: string
     case MoneyView = 'money.view';
     case RefundsProcess = 'refunds.process';
 
+    // Asking the platform to send what is owed. Owners and finance: the
+    // people whose job is where the money goes, not everybody who can see it.
+    case PayoutsRequest = 'payouts.request';
+
     // Reaching the audience
     case MessagesSend = 'messages.send';
 
@@ -84,7 +88,7 @@ enum Permission: string
             // Money in and money out, and nothing that changes what is on sale.
             Role::Finance => [
                 self::EventsView,
-                self::MoneyView, self::RefundsProcess,
+                self::MoneyView, self::RefundsProcess, self::PayoutsRequest,
             ],
 
             // Fills the room: the guest list, promoter codes and the audience.

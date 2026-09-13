@@ -7,9 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
+use App\Models\PayoutRequest;
 use App\Models\SensitiveDataAccess;
 use App\Models\Settlement;
 use App\Services\Audit\Auditor;
+use App\Services\Payouts\PayoutRequestRefused;
+use App\Services\Payouts\PayoutRequests;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,11 +30,15 @@ use Illuminate\Support\Facades\DB;
  * Settlements are read-only here on purpose. Paying somebody out is a manual
  * act performed by this business against a real bank, and an endpoint that let
  * an organizer record one would be an endpoint that lets an organizer mark
- * themselves as paid.
+ * themselves as paid. What an organizer can do is ask — a payout request —
+ * which moves nothing until staff pay it.
  */
 class PayoutController extends Controller
 {
-    public function __construct(private readonly Auditor $auditor) {}
+    public function __construct(
+        private readonly Auditor $auditor,
+        private readonly PayoutRequests $requests,
+    ) {}
 
     /**
      * The statement.
@@ -57,7 +65,101 @@ class PayoutController extends Controller
             'events' => $this->byEvent($organization, $currency),
             'settlements' => $this->settlements($organization),
             'destination' => $this->destination($organization),
+            'requests' => $this->requestHistory($organization),
+            // Whether this member may ask to be paid — owners and finance.
+            'can_request' => $request->user()->hasPermissionIn($organization->id, Permission::PayoutsRequest),
         ]);
+    }
+
+    /**
+     * Ask to be paid what is owed.
+     *
+     * An amount up to the balance, to the payout details on file. Paying it,
+     * and anything beyond the balance, is decided by platform staff.
+     */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        abort_unless(
+            $request->user()->hasPermissionIn($organization->id, Permission::PayoutsRequest),
+            403,
+            'Only owners and finance can ask for a payout.',
+        );
+
+        $data = $request->validate([
+            // Minor units, like every amount the console sends.
+            'amount' => ['required', 'integer', 'min:1'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $payout = $this->requests->request(
+                $organization,
+                $request->user(),
+                new Money((int) $data['amount'], $this->currency($organization)),
+                $data['note'] ?? null,
+            );
+        } catch (PayoutRequestRefused $refused) {
+            return response()->json(['message' => $refused->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => $this->presentRequest($payout),
+            'message' => 'Payout requested. We will let you know when it is sent.',
+        ], 201);
+    }
+
+    /** Withdraw a request that has not been decided. */
+    public function cancelRequest(Request $request, PayoutRequest $payoutRequest): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        abort_unless($payoutRequest->organization_id === $organization->id, 404);
+        abort_unless($request->user()->hasPermissionIn($organization->id, Permission::PayoutsRequest), 403);
+
+        try {
+            $this->requests->cancel($payoutRequest, $request->user());
+        } catch (PayoutRequestRefused $refused) {
+            return response()->json(['message' => $refused->getMessage()], 422);
+        }
+
+        return response()->json(['message' => 'Payout request withdrawn.']);
+    }
+
+    /**
+     * Requests, newest first: what was asked, and what happened to it.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function requestHistory(Organization $organization): array
+    {
+        return PayoutRequest::query()
+            ->where('organization_id', $organization->id)
+            ->with('requester:id,name')
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(fn (PayoutRequest $payout) => $this->presentRequest($payout))
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function presentRequest(PayoutRequest $payout): array
+    {
+        return [
+            'id' => $payout->id,
+            'amount' => ['amount' => $payout->amount, 'currency' => $payout->currency],
+            'paid_amount' => $payout->paid_amount !== null ? ['amount' => $payout->paid_amount, 'currency' => $payout->currency] : null,
+            'status' => $payout->status,
+            'note' => $payout->note,
+            // The reason a request was not paid, or a note on one that was.
+            // Staff write it for the organizer to read.
+            'decision_note' => $payout->decision_note,
+            'requested_by' => $payout->requester?->name,
+            'requested_at' => $payout->created_at,
+            'decided_at' => $payout->decided_at,
+        ];
     }
 
     /**

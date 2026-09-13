@@ -111,7 +111,7 @@ class PermissionAuthorityTest extends TestCase
                 'events.cancel', 'events.delete',
                 'tickets.manage', 'codes.manage',
                 'attendees.view', 'door.scan',
-                'money.view', 'refunds.process',
+                'money.view', 'refunds.process', 'payouts.request',
                 'messages.send',
                 // Owners alone decide who is on the team.
                 'team.manage',
@@ -123,7 +123,7 @@ class PermissionAuthorityTest extends TestCase
                 'money.view', 'refunds.process',
                 'messages.send',
             ],
-            'finance' => ['events.view', 'money.view', 'refunds.process'],
+            'finance' => ['events.view', 'money.view', 'refunds.process', 'payouts.request'],
             'marketing' => ['events.view', 'attendees.view', 'codes.manage', 'messages.send'],
             // Scanning, and nothing else. Being able to check somebody in does
             // not carry the right to read everybody's name and address.
@@ -249,7 +249,7 @@ class PermissionAuthorityTest extends TestCase
         $this->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('organizations.0.permissions', [
-                'events.view', 'money.view', 'refunds.process',
+                'events.view', 'money.view', 'refunds.process', 'payouts.request',
             ]);
     }
 }

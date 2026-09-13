@@ -309,6 +309,15 @@ export class Api {
     return this.http.get<PayoutStatement>(`${this.base}/api/organizer/payouts`);
   }
 
+  /** Ask to be paid. Amount in minor units, up to what is owed. */
+  requestPayout(amount: number, note: string | null): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/organizer/payouts/requests`, { amount, note });
+  }
+
+  withdrawPayoutRequest(id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.base}/api/organizer/payouts/requests/${id}`);
+  }
+
   /**
    * Set where the money goes.
    *
