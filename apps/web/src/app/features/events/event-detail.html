@@ -120,6 +120,7 @@
             <ui-icon class="mt-[2px] shrink-0 text-primary-text" [icon]="timeIcon" size="sm" />
             <span class="font-medium">{{ timeRange() }}</span>
           </p>
+          <app-add-to-calendar class="-mt-1 pl-7" [links]="ev.calendar" [until]="ev.ends_at ?? ev.starts_at" [stacked]="true" />
           <p class="flex items-start gap-3">
             <ui-icon class="mt-[2px] shrink-0 text-primary-text" [icon]="whereIcon" size="sm" />
             <span>

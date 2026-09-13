@@ -105,6 +105,7 @@ export interface EventDetail extends EventSummary {
     logo_url: string | null;
   };
   ticket_types: TicketType[];
+  calendar: CalendarLinks;
 }
 
 export interface QuoteLine {
@@ -160,12 +161,18 @@ export interface Page<T> {
 }
 
 /** What /api/orders/{reference} returns while a buyer waits for the webhook. */
+/** "Add to calendar": a file for Apple and Outlook, a link for Google. */
+export interface CalendarLinks {
+  ics_url: string;
+  google_url: string;
+}
+
 export interface OrderStatus {
   reference: string;
   status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'partially_refunded';
   total: Money;
   ticket_count: number;
-  event: { slug: string; title: string; starts_at: string; timezone: string };
+  event: { slug: string; title: string; starts_at: string; timezone: string; calendar: CalendarLinks };
 }
 
 /** One ticket as its holder sees it, with the symbol a door reads. */
@@ -196,6 +203,7 @@ export interface TicketAccess {
     address: string | null;
     city: string;
     min_age: number | null;
+    calendar: CalendarLinks;
     id_required: boolean;
     organizer: string;
   };

@@ -38,6 +38,7 @@
       @case ('paid') {
         <h1 class="text-balance text-3xl text-primary">You're going to {{ o.event.title }}</h1>
         <p class="lead text-lg font-medium">{{ when() }}</p>
+        <app-add-to-calendar [links]="o.event.calendar" [until]="o.event.starts_at" [centered]="true" />
 
         <p class="max-w-[56ch] leading-[1.6]">
           {{ o.ticket_count }}

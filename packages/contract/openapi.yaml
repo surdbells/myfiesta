@@ -130,6 +130,24 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/events/{slug}/calendar.ics:
+    get:
+      operationId: getEventCalendar
+      summary: The event as an iCalendar file
+      description: |
+        Published and cancelled ticketed events. Times are UTC; a cancelled
+        event carries STATUS:CANCELLED so a re-download updates the entry.
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: One VEVENT.
+          content:
+            text/calendar:
+              schema: { type: string }
+        '404': { description: 'No such public event.' }
+
   /api/events/{slug}/quote:
     post:
       operationId: quoteOrder

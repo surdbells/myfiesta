@@ -17,8 +17,8 @@
 View your tickets
 </x-mail::button>
 
-Show the QR code at the door. This link works for 90 days and is unique to you —
-treat it like the tickets themselves.
+Show the QR code at the door. This link is unique to you — treat it like the
+tickets themselves. The date is attached as a calendar file.
 
 Order **{{ $order->reference }}**
 

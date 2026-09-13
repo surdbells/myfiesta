@@ -3,6 +3,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { TicketAccess } from '../../core/api.types';
+import { AddToCalendar } from '../../shared/add-to-calendar';
 
 /**
  * The tickets somebody bought, and the QR a door reads.
@@ -17,7 +18,7 @@ import { TicketAccess } from '../../core/api.types';
  */
 @Component({
   selector: 'app-tickets',
-  imports: [RouterLink],
+  imports: [RouterLink, AddToCalendar],
   templateUrl: './tickets.html',
 })
 export class Tickets {

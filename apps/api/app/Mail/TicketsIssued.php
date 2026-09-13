@@ -6,6 +6,8 @@ use App\Models\Order;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use App\Services\Events\CalendarFile;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -58,5 +60,25 @@ class TicketsIssued extends Mailable implements ShouldQueue
                     .'/tickets/'.$this->order->access_token,
             ],
         );
+    }
+
+    /**
+     * The night, as a calendar file.
+     *
+     * Attached rather than linked: Gmail and Outlook both offer "add to
+     * calendar" on an .ics that arrives with the message, which is one tap
+     * at the moment somebody has just bought and is thinking about the date.
+     *
+     * @return array<int, Attachment>
+     */
+    public function attachments(): array
+    {
+        $calendar = app(CalendarFile::class);
+        $event = $this->order->event;
+
+        return [
+            Attachment::fromData(fn () => $calendar->for($event), $calendar->filename($event))
+                ->withMime('text/calendar'),
+        ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Events\CalendarFile;
 use App\Models\Order;
 use App\Models\Ticket;
 use App\Services\Tickets\QrEncoder;
@@ -53,6 +54,7 @@ class TicketAccessController extends Controller
                 'min_age' => $event->min_age,
                 'id_required' => $event->id_required,
                 'organizer' => $event->organization->name,
+                'calendar' => app(CalendarFile::class)->links($event),
             ],
             'tickets' => $order->tickets
                 // Refunded tickets are not shown. A QR that will be turned away

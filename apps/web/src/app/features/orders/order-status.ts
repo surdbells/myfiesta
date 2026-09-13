@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Api } from '../../core/api';
 import { OrderStatus as OrderStatusModel } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
+import { AddToCalendar } from '../../shared/add-to-calendar';
 
 /**
  * Where a buyer lands after paying.
@@ -19,7 +20,7 @@ import { formatMoney } from '../../core/money';
 @Component({
   selector: 'mf-order-status',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AddToCalendar],
   templateUrl: './order-status.html',
 })
 export class OrderStatus implements OnDestroy {

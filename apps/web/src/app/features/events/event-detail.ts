@@ -9,6 +9,7 @@ import { CheckoutStore } from '../../core/checkout-store';
 import { Saves } from '../../core/saves';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
+import { AddToCalendar } from '../../shared/add-to-calendar';
 
 /**
  * The page a shared link lands on. It sells the night; the buying moved to
@@ -18,7 +19,7 @@ import { Seo } from '../../core/seo';
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiIcon],
+  imports: [CommonModule, RouterLink, UiIcon, AddToCalendar],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {

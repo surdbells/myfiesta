@@ -48,6 +48,7 @@ Route::get('/discover', DiscoverController::class);
 Route::get('/event-categories', EventCategoryController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
+Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
 Route::get('/orders/{reference}', OrderStatusController::class);
 
 /*

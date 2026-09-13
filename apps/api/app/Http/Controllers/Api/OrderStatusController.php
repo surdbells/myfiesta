@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Events\CalendarFile;
 use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -46,6 +47,7 @@ class OrderStatusController extends Controller
                 'title' => $order->event->title,
                 'starts_at' => $order->event->starts_at,
                 'timezone' => $order->event->timezone,
+                'calendar' => app(CalendarFile::class)->links($order->event),
             ],
         ]);
     }

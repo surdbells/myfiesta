@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Events\CalendarFile;
 use App\Support\RichText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -60,6 +61,9 @@ class EventResource extends EventSummaryResource
                 'width' => $image->width,
                 'height' => $image->height,
             ])->values(),
+
+            // "Add to calendar": a file for Apple and Outlook, a link for Google.
+            'calendar' => app(CalendarFile::class)->links($this->resource),
 
             'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
         ];
