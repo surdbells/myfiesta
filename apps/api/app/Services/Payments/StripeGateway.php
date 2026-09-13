@@ -52,6 +52,10 @@ class StripeGateway implements PaymentGateway
                 'success_url' => $options->successUrl,
                 'cancel_url' => $options->cancelUrl,
                 'client_reference_id' => $order->id,
+                // Thirty minutes, Stripe's minimum, instead of its default day. The
+                // stock hold lasts twenty; a payment page left open overnight
+                // could otherwise take money for tickets released hours ago.
+                'expires_at' => now()->addMinutes(30)->getTimestamp(),
                 'line_items' => [[
                     'quantity' => 1,
                     'price_data' => [

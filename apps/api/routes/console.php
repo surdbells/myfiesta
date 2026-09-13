@@ -32,3 +32,15 @@ Schedule::command('series:extend')
     ->dailyAt('03:30')
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Abandoned checkouts.
+ *
+ * Every fifteen minutes, so an organizer's order list stops showing a basket
+ * as "Confirming" soon after it is plainly not coming — see
+ * AbandonedCheckouts for why nothing else ever closed them.
+ */
+Schedule::command('checkouts:expire')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
