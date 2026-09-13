@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PlatformRole;
 use App\Enums\Role;
 use App\Enums\TokenAbility;
+use App\Filament\Resources\Organizations\Pages\ListOrganizations;
 use App\Filament\Resources\PayoutDetails\Pages\ListPayoutDetails;
 use App\Filament\Resources\PayoutDetails\PayoutDetailResource;
 use App\Models\AuditLog;
@@ -21,7 +22,6 @@ use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -317,5 +317,24 @@ class PayoutVerificationTest extends TestCase
 
         $this->assertSame($finance->id, $this->detail->fresh()->verified_by);
         $this->assertSame(1, SensitiveDataAccess::where('user_id', $finance->id)->count());
+    }
+
+    public function test_the_settle_form_says_whether_the_details_are_verified_before_sending(): void
+    {
+        LedgerEntry::create(['organization_id' => $this->org->id, 'type' => 'sale', 'amount' => 50_000, 'currency' => 'CAD', 'occurred_at' => now()]);
+
+        $this->actingAs($this->staff(PlatformRole::Finance));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(ListOrganizations::class)
+            ->mountTableAction('settle', $this->org)
+            ->setTableActionData(['currency' => 'CAD', 'rail' => 'bank_transfer'])
+            // The modal body is not in the rendered test HTML, so the line is
+            // read from the component itself, evaluated against the form state.
+            ->assertSchemaComponentExists('destination', checkComponentUsing: fn ($component) => $component->isVisible()
+                && str_contains((string) $component->getContent(), 'Not verified — Bank account ending 5678'));
+
+        // Nothing decrypted to say so, so nothing logged.
+        $this->assertSame(0, SensitiveDataAccess::count());
     }
 }
