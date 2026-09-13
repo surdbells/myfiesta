@@ -16,6 +16,7 @@ import {
   CancellationResult,
   DoorList,
   EventSummary,
+  SalesReport,
   OfflineScan,
   SyncResult,
   MessageAudience,
@@ -433,6 +434,10 @@ export class Api {
     return this.http.post<{ status: string }>(`${this.base}/api/organizer/events/${id}/publish`, {
       status,
     });
+  }
+
+  sales(id: string): Observable<SalesReport> {
+    return this.http.get<SalesReport>(`${this.base}/api/organizer/events/${id}/sales`);
   }
 
   summary(id: string): Observable<EventSummary> {

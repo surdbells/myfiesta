@@ -1,0 +1,180 @@
+@if (report(); as r) {
+  <section class="mt-8 grid gap-4" aria-labelledby="sales-heading">
+    <header class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <h2 id="sales-heading" class="text-lg">Sales breakdown</h2>
+      <p class="text-xs text-text-muted">Sold-for figures are after discounts and before refunds — refunds are in the totals above.</p>
+    </header>
+
+    <!-- ------------------------------------------------------------ by day -->
+    <div class="rounded-xl border border-border bg-surface-raised p-6">
+      <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h3 class="text-base font-semibold">Tickets sold per day</h3>
+        @if (pace(); as p) {
+          <p class="text-sm text-text-muted tabular-nums">
+            {{ p.lastWeek }} in the last 7 days
+            @if (p.weekBefore !== null) {
+              · {{ p.weekBefore }} the week before
+            }
+          </p>
+        }
+        @if (hasMoreDays()) {
+          <button
+            class="ml-auto cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+            type="button"
+            (click)="showAll.set(!showAll())"
+          >
+            {{ showAll() ? 'Last 30 days' : 'All ' + r.days.length + ' days' }}
+          </button>
+        }
+      </header>
+
+      @if (r.days.length === 0) {
+        <p class="mt-3 text-sm text-text-muted">Nothing sold yet. Days will appear here from the first sale.</p>
+      } @else {
+        <svg
+          class="mt-4 block h-32 w-full"
+          [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+          preserveAspectRatio="none"
+          role="img"
+          [attr.aria-label]="'Tickets sold per day' + (best() ? ', most on ' + best()!.date + ' with ' + best()!.tickets : '')"
+        >
+          @for (bar of bars(); track bar.x) {
+            <rect [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height" rx="1.5" [attr.fill]="bar.quiet ? 'var(--surface-inset)' : 'var(--primary)'">
+              <title>{{ bar.label }}</title>
+            </rect>
+          }
+        </svg>
+        @if (range(); as span) {
+          <div class="mt-2 flex justify-between text-xs text-text-subtle">
+            <span>{{ span.from }}</span>
+            @if (best(); as top) {
+              <span>Best day: {{ top.date }}, {{ top.tickets }}</span>
+            }
+            <span>{{ span.to }}</span>
+          </div>
+        }
+      }
+    </div>
+
+    <!-- ------------------------------------------------------ by ticket type -->
+    <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
+        <h3 class="text-base font-semibold">By ticket</h3>
+        <p class="text-sm text-text-muted tabular-nums">
+          {{ totals().sold }} sold
+          @if (totals().comps > 0) {
+            · {{ totals().comps }} complimentary
+          }
+        </p>
+      </header>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[40rem] border-collapse text-sm">
+          <thead>
+            <tr>
+              <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Ticket</th>
+              <th class="bg-surface-inset px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</th>
+              <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Comps</th>
+              <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Arrived</th>
+              <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (type of r.ticket_types; track type.id) {
+              <tr class="border-t border-border">
+                <td class="px-6 py-3">
+                  <span class="block font-medium">{{ type.name }}</span>
+                  <span class="text-xs text-text-muted tabular-nums">{{ type.price.amount === 0 ? 'Free' : money(type.price) }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  @let percent = taken(type);
+                  <span class="grid gap-1.5">
+                    <span class="tabular-nums">
+                      {{ type.sold }}
+                      @if (type.capacity !== null) {
+                        @if (type.comps === 0) {
+                          <span class="text-text-muted">of {{ type.capacity }}</span>
+                        } @else {
+                          <!-- Places, not sales: a comp takes one too. -->
+                          <span class="text-xs text-text-muted">· {{ type.sold + type.comps }} of {{ type.capacity }} places taken</span>
+                        }
+                      }
+                    </span>
+                    @if (percent !== null) {
+                      <span
+                        class="block h-1.5 w-28 overflow-hidden rounded-full bg-surface-inset"
+                        role="progressbar"
+                        [attr.aria-valuenow]="percent"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        [attr.aria-label]="type.name + ' places taken'"
+                      >
+                        <span class="block h-full rounded-full" [class]="percent >= 90 ? 'bg-warning' : 'bg-primary'" [style.width.%]="percent"></span>
+                      </span>
+                    }
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums" [class.text-text-subtle]="type.comps === 0">{{ type.comps }}</td>
+                <td class="px-4 py-3 text-right tabular-nums">
+                  <!-- People, not tickets: a Table of 5 is five people through the door. -->
+                  @if (type.people === 0) {
+                    <span class="text-text-subtle">—</span>
+                  } @else {
+                    {{ type.arrived }} <span class="text-text-muted">of {{ type.people }}</span>
+                  }
+                </td>
+                <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(type.revenue) }}</td>
+              </tr>
+            } @empty {
+              <tr><td class="px-6 py-4 text-text-muted" colspan="5">No tickets on this event yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------------ by code -->
+    @if (r.codes.length > 0) {
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <header class="px-6 pb-3 pt-5">
+          <h3 class="text-base font-semibold">By code and promoter link</h3>
+        </header>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[40rem] border-collapse text-sm">
+            <thead>
+              <tr>
+                <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Code</th>
+                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Orders</th>
+                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</th>
+                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Discount given</th>
+                <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (code of r.codes; track code.code_id ?? code.ref_slug) {
+                <tr class="border-t border-border">
+                  <td class="px-6 py-3">
+                    <span class="flex flex-wrap items-center gap-2">
+                      <span class="font-mono font-medium">{{ codeName(code) }}</span>
+                      @if (code.deleted) {
+                        <span class="rounded-full bg-surface-inset px-2 py-px text-xs text-text-muted">Deleted</span>
+                      }
+                    </span>
+                    @if (code.promoter || code.label) {
+                      <span class="text-xs text-text-muted">{{ code.promoter ?? code.label }}</span>
+                    }
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums">{{ code.orders }}</td>
+                  <td class="px-4 py-3 text-right tabular-nums">{{ code.tickets }}</td>
+                  <td class="px-4 py-3 text-right tabular-nums" [class.text-text-subtle]="code.discount.amount === 0">{{ money(code.discount) }}</td>
+                  <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(code.revenue) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  </section>
+} @else if (failed()) {
+  <p class="mt-8 text-sm text-text-muted">The sales breakdown could not be loaded. Reload the page to try again.</p>
+}

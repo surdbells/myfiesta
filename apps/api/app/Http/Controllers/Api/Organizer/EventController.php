@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
+use App\Services\Events\SalesReport;
 use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -448,6 +449,14 @@ class EventController extends Controller
             'tickets_issued' => $event->tickets()->whereIn('status', ['valid', 'checked_in'])->count(),
             'checked_in' => $event->tickets()->where('status', 'checked_in')->count(),
         ]);
+    }
+
+    /** Sales by day, by ticket type and by code. See SalesReport for what each counts. */
+    public function sales(Event $event, SalesReport $report): JsonResponse
+    {
+        $this->authorize('viewSales', $event);
+
+        return response()->json($report->for($event));
     }
 
     /**

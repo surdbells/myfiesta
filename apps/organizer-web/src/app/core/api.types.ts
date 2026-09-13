@@ -129,6 +129,39 @@ export interface TicketType {
  * Every figure arrives as an amount with a currency so the console never has
  * to decide what a number means.
  */
+/** Where an event's sales came from. See SalesReport on the API for what each part counts. */
+export interface SalesReport {
+  currency: string;
+  timezone: string;
+  ticket_types: {
+    id: string;
+    name: string;
+    status: string;
+    price: Money;
+    /** Null for a tier with no limit. */
+    capacity: number | null;
+    sold: number;
+    comps: number;
+    people: number;
+    arrived: number;
+    revenue: Money;
+  }[];
+  /** Every day from the first sale, quiet days included; revenue in minor units. */
+  days: { date: string; orders: number; tickets: number; revenue: number }[];
+  codes: {
+    code_id: string | null;
+    code: string | null;
+    label: string | null;
+    promoter: string | null;
+    ref_slug: string | null;
+    deleted: boolean;
+    orders: number;
+    tickets: number;
+    discount: Money;
+    revenue: Money;
+  }[];
+}
+
 export interface EventSummary {
   currency: 'CAD' | 'NGN';
   gross: Money;

@@ -190,6 +190,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/cancel', [OrganizerEventController::class, 'cancel']);
         Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
+        Route::get('/events/{event:id}/sales', [OrganizerEventController::class, 'sales']);
 
         Route::get('/events/{event:id}/ticket-types', [TicketTypeController::class, 'index']);
         Route::post('/events/{event:id}/ticket-types', [TicketTypeController::class, 'store']);
