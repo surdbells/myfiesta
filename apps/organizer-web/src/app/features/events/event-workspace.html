@@ -1,10 +1,10 @@
 <ui-breadcrumb [crumbs]="crumbs()" />
 
-<header class="ws mt-4 mb-6">
+<header class="ws mt-4 mb-6 max-sm:mt-3 max-sm:mb-4">
   @if (loading()) {
     <h1 class="ws__title text-balance text-3xl font-normal leading-[1.15] tracking-[-0.02em] text-text-subtle max-sm:text-2xl">Loading…</h1>
   } @else if (event(); as event) {
-    <div class="ws__head flex items-start justify-between gap-6 max-sm:flex-col">
+    <div class="ws__head flex items-start justify-between gap-6 max-sm:flex-col max-sm:gap-2">
       <div class="ws__identity min-w-0">
         <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">{{ event.title }}</h1>
 
@@ -18,7 +18,7 @@
           read as three separate things to consider, and they are one answer
           to "which event am I looking at".
         -->
-        <p class="ws__meta mt-3 flex flex-wrap items-center gap-4 text-sm text-text-muted">
+        <p class="ws__meta mt-3 flex flex-wrap items-center gap-4 text-sm text-text-muted max-sm:mt-2 max-sm:gap-x-3 max-sm:gap-y-1">
           <!--
             Status first. Everything else on this page means something
             different depending on whether the event is live, and an organizer
@@ -44,10 +44,12 @@
         constantly: check what a buyer sees, and copy the link into a post.
         Absent while the event is a draft, because the link 404s until it is
         published and a dead link in the console reads as a broken console.
+        A plain link on a phone, where a button-sized box pushed the tabs —
+        and at the door, the scanner — another screenful down.
       -->
       @if (event.status === 'published') {
         <a
-          class="ws__view shrink-0 whitespace-nowrap rounded-md border border-field-border bg-surface-raised px-4 py-2 text-sm font-medium text-text no-underline hover:border-border-strong hover:bg-surface-hover"
+          class="ws__view shrink-0 whitespace-nowrap rounded-md border border-field-border bg-surface-raised px-4 py-2 text-sm font-medium text-text no-underline hover:border-border-strong hover:bg-surface-hover max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:text-primary-text max-sm:underline max-sm:underline-offset-2"
           [href]="publicUrl(event)"
           target="_blank"
           rel="noopener"
@@ -80,6 +82,6 @@
   so a tab that forgets it does not sit flush against the tab strip — which
   was happening on four of the eight before they had a common frame.
 -->
-<div class="ws__panel pt-8">
+<div class="ws__panel pt-8 max-sm:pt-5">
   <router-outlet />
 </div>

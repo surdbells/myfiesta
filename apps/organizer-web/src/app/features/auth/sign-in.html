@@ -34,7 +34,7 @@
       />
     </ui-field>
 
-    <button uiButton type="submit" size="lg" [loading]="busy()" [disabled]="busy()">
+    <button uiButton type="submit" size="lg" [block]="true" [loading]="busy()" [disabled]="busy()">
       @if (busy()) { Signing in… } @else { Sign in }
     </button>
 

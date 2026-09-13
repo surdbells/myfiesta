@@ -1,7 +1,7 @@
-<header class="bar mb-6 flex flex-wrap items-end justify-between gap-6">
+<header class="bar mb-6 flex flex-wrap items-end justify-between gap-6 max-sm:mb-4 max-sm:items-baseline max-sm:gap-3">
   <div>
     <h1 class="text-2xl">Door</h1>
-    <p class="sub mt-1 text-sm text-text-muted">Scan a ticket, or type the code from it.</p>
+    <p class="sub mt-1 text-sm text-text-muted max-sm:hidden">Scan a ticket, or type the code from it.</p>
   </div>
 
   <p class="tally flex items-baseline gap-2">
@@ -35,16 +35,16 @@
   <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted" role="status" aria-live="polite">
     @if (listCount() !== null) {
       <span class="font-medium text-success">Ready if the signal drops</span>
-      <span>· {{ listCount() }} tickets saved on this phone, updated {{ listAge() }}</span>
+      <span>{{ listCount() }} tickets saved on this phone, updated {{ listAge() }}</span>
     } @else if (refreshingList()) {
       <span>Saving the ticket list to this phone…</span>
     } @else {
       <span>Ticket list not saved on this phone yet.</span>
     }
     @if (syncing()) {
-      <span class="tabular-nums">· Sending {{ pendingCount() }} offline {{ pendingCount() === 1 ? 'scan' : 'scans' }}…</span>
+      <span class="tabular-nums">Sending {{ pendingCount() }} offline {{ pendingCount() === 1 ? 'scan' : 'scans' }}…</span>
     } @else if (pendingCount() > 0) {
-      <span class="tabular-nums">· {{ pendingCount() }} waiting to send</span>
+      <span class="tabular-nums">{{ pendingCount() }} waiting to send</span>
     }
   </p>
 }
@@ -135,6 +135,12 @@
   </section>
 }
 
+<!--
+  On a phone the camera comes first where it can read a code. That is the device the door runs on, and
+  a scan is one tap where a typed code is thirteen characters — with the typed
+  form still directly under it for everything the lens cannot read.
+-->
+<div class="door-inputs flex flex-col">
 @if (error(); as message) {
   <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
 }
@@ -144,7 +150,7 @@
   lens, a flat battery or a guest whose screen will not brighten all end here,
   and at that moment nobody is hunting for a disclosure triangle.
 -->
-<form class="entry flex flex-wrap items-end gap-3" (ngSubmit)="submit()">
+<form class="entry mt-3 flex flex-wrap items-end gap-3 first:mt-0" (ngSubmit)="submit()">
   <div class="field min-w-0 flex-[1_1_14rem]">
     <label for="code">Ticket code</label>
     <input
@@ -176,7 +182,7 @@
     />
   </div>
 
-  <button uiButton type="submit" [loading]="busy()" [disabled]="busy() || !code().trim()">
+  <button uiButton class="max-sm:flex-1" type="submit" [loading]="busy()" [disabled]="busy() || !code().trim()">
     @if (busy()) {
       Checking…
     } @else {
@@ -190,15 +196,16 @@
   groups, put in how many are going in now — the rest stay outstanding.
 </p>
 
-<h2 class="section mt-12 mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Camera</h2>
+<section class="camera-block mt-12 max-sm:data-[works=true]:order-first max-sm:data-[works=true]:mt-0 max-sm:data-[works=true]:mb-6" aria-labelledby="camera-heading" [attr.data-works]="cameraSupported">
+<h2 id="camera-heading" class="section mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Camera</h2>
 
 @if (!cameraSupported) {
-  <p class="muted">
+  <p class="muted text-sm text-text-muted">
     This browser cannot read a QR code. Chrome on Android can; on an iPhone,
     type the code above instead.
   </p>
 } @else if (!scanning()) {
-  <button uiButton variant="secondary" type="button" (click)="startCamera()">Use the camera</button>
+  <button uiButton class="max-sm:w-full" variant="secondary" type="button" (click)="startCamera()">Use the camera</button>
   @if (cameraError(); as message) {
     <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">{{ message }}</p>
   }
@@ -209,5 +216,7 @@
     <video id="door-camera" class="block aspect-[4/3] w-full object-cover" muted playsinline></video>
     <div class="reticle absolute inset-[22%_26%] rounded-md border-[3px] border-[rgba(255,255,255,0.85)] shadow-[0_0_0_100vmax_rgba(0,0,0,0.35)]" aria-hidden="true"></div>
   </div>
-  <button uiButton variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
+  <button uiButton class="max-sm:w-full" variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
 }
+</section>
+</div>

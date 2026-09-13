@@ -47,7 +47,7 @@
     </div>
 
     <select
-      class="flex-[0_1_14rem]"
+      class="flex-[0_1_14rem] max-sm:flex-[1_1_100%]"
       name="event"
       aria-label="Event"
       [ngModel]="eventId()"
@@ -60,7 +60,7 @@
     </select>
 
     <select
-      class="flex-[0_1_11rem]"
+      class="flex-[0_1_11rem] max-sm:flex-[1_1_100%]"
       name="status"
       aria-label="Status"
       [ngModel]="status()"
@@ -132,10 +132,16 @@
       </div>
     }
 
+    <!--
+      A table on a wide screen; on a phone each row regroups into a card —
+      buyer and total on top, event and status, then the reference and time.
+      Six columns in 343px crushed the names to "Bisi …" and pushed the total
+      off the side, and the total is what somebody opened the screen to see.
+    -->
     <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-sm">
-          <thead>
+        <table class="w-full border-collapse text-sm max-sm:block">
+          <thead class="max-sm:hidden">
             <tr>
               <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Buyer</th>
               <th class="whitespace-nowrap bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Event</th>
@@ -146,17 +152,17 @@
             </tr>
           </thead>
 
-          <tbody>
+          <tbody class="max-sm:block">
             @for (order of orders(); track order.id) {
-              <tr class="border-t border-border hover:bg-surface-hover">
-                <td class="px-4 py-3">
+              <tr class="border-t border-border hover:bg-surface-hover max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-4 max-sm:gap-y-2 max-sm:px-4 max-sm:py-4 max-sm:first:border-t-0">
+                <td class="px-4 py-3 max-sm:col-start-1 max-sm:row-start-1 max-sm:min-w-0 max-sm:p-0">
                   <span class="grid min-w-0 gap-0.5">
                     <span class="truncate font-medium">{{ order.buyer_name }}</span>
                     <span class="truncate text-xs text-text-muted">{{ order.buyer_email }}</span>
                   </span>
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 max-sm:col-start-1 max-sm:row-start-2 max-sm:min-w-0 max-sm:p-0">
                   @if (order.event; as event) {
                     <!--
                       Through to the event's own orders screen, which is where
@@ -175,15 +181,15 @@
                   </span>
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 max-sm:col-start-1 max-sm:row-start-3 max-sm:p-0">
                   <!-- Selectable in one tap: this is the string somebody is
                        about to read back down a phone. -->
                   <code class="select-all text-xs tracking-[0.04em]">{{ order.reference }}</code>
                 </td>
 
-                <td class="whitespace-nowrap px-4 py-3 text-text-muted tabular-nums">{{ when(order.paid_at) }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-text-muted tabular-nums max-sm:col-start-2 max-sm:row-start-3 max-sm:p-0 max-sm:text-right max-sm:text-xs">{{ when(order.paid_at) }}</td>
 
-                <td class="whitespace-nowrap px-4 py-3 text-right">
+                <td class="whitespace-nowrap px-4 py-3 text-right max-sm:col-start-2 max-sm:row-start-1 max-sm:p-0">
                   <span class="font-semibold tabular-nums">{{ cash(order.total) }}</span>
                   @if (order.refunded.amount > 0) {
                     <span class="mt-0.5 block text-xs text-warning tabular-nums">
@@ -192,7 +198,7 @@
                   }
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 max-sm:col-start-2 max-sm:row-start-2 max-sm:p-0 max-sm:text-right">
                   <ui-badge [tone]="tone(order)">{{ label(order) }}</ui-badge>
                 </td>
               </tr>

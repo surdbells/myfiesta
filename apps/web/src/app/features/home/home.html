@@ -136,11 +136,11 @@
   -->
   <div class="px-6 pb-10">
   <form
-    class="finder mx-auto flex w-full max-w-[52rem] items-center overflow-hidden rounded-lg border border-border bg-surface-raised shadow-(--shadow-card)"
+    class="finder mx-auto flex w-full max-w-[52rem] items-center overflow-hidden rounded-lg border border-border bg-surface-raised shadow-(--shadow-card) max-sm:flex-wrap"
     (ngSubmit)="search()"
     role="search"
   >
-    <div class="flex h-12 min-w-0 flex-1 items-center gap-2 pl-4">
+    <div class="flex h-12 min-w-0 flex-1 items-center gap-2 pl-4 max-sm:basis-full max-sm:border-b max-sm:border-border max-sm:pr-4">
       <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
       <input
         id="q"
@@ -154,9 +154,9 @@
       />
     </div>
 
-    <div class="mx-2 h-6 w-px shrink-0 bg-border" aria-hidden="true"></div>
+    <div class="mx-2 h-6 w-px shrink-0 bg-border max-sm:hidden" aria-hidden="true"></div>
 
-    <div class="flex h-12 min-w-0 flex-1 items-center gap-2">
+    <div class="flex h-12 min-w-0 flex-1 items-center gap-2 max-sm:pl-4">
       <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
       <input
         id="where"
@@ -327,6 +327,34 @@
             </li>
           }
         </ul>
+      </section>
+    }
+
+    @if (rails().length === 0) {
+      <!--
+        Nothing upcoming. Before this the page went from the search straight to
+        a lone "see everything" link across an empty band, which reads as a
+        page that failed to load — and at launch, with few events, it would be
+        the front page most people saw.
+      -->
+      <section class="mt-16 rounded-xl border border-dashed border-border-strong bg-surface-raised px-6 py-12 text-center max-sm:py-10">
+        <h2 class="text-balance text-xl font-semibold">Nothing on sale this week — yet</h2>
+        <p class="mx-auto mt-2 max-w-[46ch] text-pretty text-text-muted">
+          New nights are added all the time. Search above, see everything coming up,
+          or put your own event on here in a few minutes.
+        </p>
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <a
+            class="inline-flex h-11 items-center rounded-full bg-primary px-6 text-sm font-semibold text-on-primary no-underline hover:bg-primary-hover"
+            routerLink="/events"
+            >Browse events</a
+          >
+          <a
+            class="inline-flex h-11 items-center rounded-full border border-field-border bg-surface px-6 text-sm font-semibold text-text no-underline hover:bg-surface-hover"
+            [href]="consoleUrl + '/register'"
+            >List your event</a
+          >
+        </div>
       </section>
     }
 

@@ -5,7 +5,7 @@
   </section>
 } @else if (event(); as ev) {
   <article
-    class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12"
+    class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8 max-[899px]:pb-32 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12"
   >
     @if (ev.poster_url) {
       <!--
@@ -16,13 +16,13 @@
       -->
       <div class="hero relative mb-8 overflow-hidden rounded-xl min-[900px]:col-span-full">
         <img
-          class="aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-video"
+          class="aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-[4/5]"
           [src]="ev.poster_url"
           alt=""
           fetchpriority="high"
         />
         <div
-          class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.82)_0%,rgba(5,10,7,0.25)_45%,transparent_70%)]"
+          class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.82)_0%,rgba(5,10,7,0.25)_45%,transparent_70%)] max-[700px]:bg-[linear-gradient(to_top,rgba(5,10,7,0.92)_0%,rgba(5,10,7,0.6)_40%,rgba(5,10,7,0.1)_75%,transparent_100%)]"
           aria-hidden="true"
         ></div>
         <div class="absolute inset-x-0 bottom-0 grid justify-items-start gap-1 p-8 text-neutral-0 max-sm:p-5">
@@ -213,6 +213,34 @@
       </section>
     </div>
   </article>
+
+  <!--
+    The way to buy, pinned to the bottom of a phone.
+
+    On a phone the price card is the fourth thing down the page, under the
+    poster, the description and the details — so somebody who has decided has
+    to scroll to act on it. The bar keeps the price and the button under the
+    thumb the whole way down. Only below 900px: on a wide screen the price
+    card already sits beside the words.
+  -->
+  @if (anythingOnSale()) {
+    <div
+      class="buy-bar fixed inset-x-0 bottom-0 z-40 hidden border-t border-border bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-[12px] max-[899px]:block"
+    >
+      <div class="mx-auto flex max-w-[640px] items-center gap-4">
+        <div class="min-w-0">
+          <p class="text-xs text-text-subtle">From</p>
+          <p class="text-lg font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
+        </div>
+        <a
+          class="ml-auto flex h-12 flex-1 items-center justify-center rounded-md bg-primary px-5 text-base font-semibold text-on-primary no-underline hover:bg-primary-hover"
+          [routerLink]="['/', ev.slug, 'tickets']"
+        >
+          Get tickets
+        </a>
+      </div>
+    </div>
+  }
 } @else {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }

@@ -12,11 +12,26 @@
   <div class="mt-8 grid grid-cols-[16.5rem_minmax(0,1fr)] items-start gap-8 max-[860px]:grid-cols-1">
     <!-- ------------------------------------------------------------ filters -->
     <aside
-      class="filters grid gap-6 rounded-xl border border-border bg-surface-raised p-6"
+      class="filters grid gap-6 rounded-xl border border-border bg-surface-raised p-6 max-[860px]:gap-0 max-[860px]:p-4"
       aria-label="Filters"
     >
-      <div class="flex items-baseline justify-between gap-3">
-        <h2 class="text-lg">Filters</h2>
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg max-[860px]:hidden">Filters</h2>
+
+        <!-- On a phone the heading becomes the switch for the panel. -->
+        <button
+          class="hidden h-10 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-base font-semibold text-text [font-family:inherit] max-[860px]:inline-flex"
+          type="button"
+          aria-controls="event-filters"
+          [attr.aria-expanded]="filtersOpen()"
+          (click)="filtersOpen.set(!filtersOpen())"
+        >
+          Filters
+          @if (anyFilter()) {
+            <span class="h-2 w-2 rounded-full bg-primary" aria-label="(some applied)"></span>
+          }
+          <span class="text-sm font-normal text-text-muted">{{ filtersOpen() ? 'Hide' : 'Show' }}</span>
+        </button>
         @if (anyFilter()) {
           <button
             class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-primary-text [font-family:inherit] hover:underline"
@@ -28,6 +43,11 @@
         }
       </div>
 
+      <div
+        id="event-filters"
+        class="filters__body grid gap-6 max-[860px]:pt-4 max-[860px]:data-[open=false]:hidden"
+        [attr.data-open]="filtersOpen()"
+      >
       @if (categories().length > 0) {
         <fieldset class="grid gap-2">
           <legend class="mb-2 p-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">
@@ -137,6 +157,7 @@
           (change)="search()"
         />
       </fieldset>
+      </div>
     </aside>
 
     <!-- ----------------------------------------------------------- results -->

@@ -32,7 +32,8 @@
         and a header mark from two different drawings drift.
       -->
       <img class="brand__mark block h-7 w-7" src="/brand/mark-64.png" alt="" width="28" height="28" />
-      <span class="brand__word text-lg font-bold tracking-[-0.02em] text-text max-[700px]:hidden"
+      <!-- Kept on a phone: the mark alone reads as a stray glyph, not a brand. -->
+      <span class="brand__word text-lg font-bold tracking-[-0.02em] text-text"
         >myfiesta</span
       >
     </a>
@@ -89,8 +90,57 @@
         [href]="consoleUrl"
         >Organizer sign in</a
       >
+
+      <!-- Only on a phone, where the navigation has no room in the bar. -->
+      <button
+        type="button"
+        class="site-header__menu hidden h-11 w-11 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-text [font-family:inherit] hover:bg-surface-hover max-[700px]:grid"
+        [attr.aria-label]="menuOpen() ? 'Close menu' : 'Open menu'"
+        [attr.aria-expanded]="menuOpen()"
+        aria-controls="site-menu"
+        (click)="menuOpen.set(!menuOpen())"
+      >
+        <ui-icon [icon]="menuOpen() ? closeIcon : menuIcon" />
+      </button>
     </div>
   </div>
+
+  @if (menuOpen()) {
+    <!--
+      The phone menu, dropped under the bar rather than slid in from a side:
+      it keeps the bar and its close button exactly where the thumb left
+      them, and needs nothing to dismiss but the same button or a choice.
+    -->
+    <nav
+      id="site-menu"
+      class="site-menu hidden border-t border-border bg-surface px-6 pb-5 pt-2 max-[700px]:block"
+      aria-label="Menu"
+    >
+      <ul class="m-0 grid list-none p-0">
+        @for (item of [
+          { label: 'Home', link: '/', exact: true },
+          { label: 'Events', link: '/events', exact: false },
+          { label: 'My tickets', link: '/tickets', exact: false },
+          { label: 'Help', link: '/help', exact: false },
+        ]; track item.link) {
+          <li>
+            <a
+              class="flex h-12 items-center border-b border-border-subtle text-base font-medium text-text no-underline"
+              [routerLink]="item.link"
+              routerLinkActive="text-primary-text"
+              [routerLinkActiveOptions]="{ exact: item.exact }"
+              >{{ item.label }}</a
+            >
+          </li>
+        }
+        <li>
+          <a class="flex h-12 items-center text-base font-medium text-text-muted no-underline" [href]="consoleUrl"
+            >Organizer sign in</a
+          >
+        </li>
+      </ul>
+    </nav>
+  }
 </header>
 
 <main id="main">

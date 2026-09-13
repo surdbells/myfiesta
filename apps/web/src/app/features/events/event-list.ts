@@ -42,6 +42,16 @@ export class EventList {
 
   readonly events = signal<EventSummary[]>([]);
   readonly loading = signal(true);
+
+  /**
+   * Whether the filters are open, on a phone.
+   *
+   * Open, they filled the whole first screen before a single event — somebody
+   * who came to browse had to scroll past a form to see anything. Closed by
+   * default below 860px; always open beside the results on a wide screen,
+   * where the CSS ignores this.
+   */
+  readonly filtersOpen = signal(false);
   readonly loadingMore = signal(false);
   readonly nextCursor = signal<string | null>(null);
 
