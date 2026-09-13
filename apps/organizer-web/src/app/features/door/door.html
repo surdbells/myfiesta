@@ -11,6 +11,16 @@
 </header>
 
 <!--
+  The age and ID rule, above everything: it applies to every person, and the
+  verdict below only ever says whether the ticket is good.
+-->
+@if (admissionRule(); as rule) {
+  <p class="admission mb-4 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 py-3 text-sm font-semibold text-warning" role="note">
+    {{ rule }}
+  </p>
+}
+
+<!--
   Whether this phone can keep going without signal. Above everything, in plain
   words, because the time to find out a door cannot work offline is before
   the signal goes — not with a queue outside.
@@ -114,6 +124,11 @@
     </p>
 
     <p class="verdict__why text-base">{{ result.message }}</p>
+
+    <!-- A good ticket is not a good guest: the ID check still stands. -->
+    @if (result.accepted && admissionCheck(); as check) {
+      <p class="verdict__check mx-auto rounded-full border-2 border-current px-4 py-1 text-sm font-bold uppercase tracking-[0.06em]">{{ check }}</p>
+    }
 
     @if (result.offline) {
       <!-- Said, so nobody mistakes a decision from a saved list for the

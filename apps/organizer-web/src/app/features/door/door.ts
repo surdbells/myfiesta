@@ -10,6 +10,7 @@ import { ScanResult, SyncResult } from '../../core/api.types';
 import { DoorOffline, scanId } from '../../core/door-offline';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { EventWorkspace } from '../events/event-workspace';
 
 /**
  * The door.
@@ -35,6 +36,39 @@ export class Door implements OnDestroy {
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
+
+  /** The event, from the workspace frame around this screen — saved on the phone, so it holds offline. */
+  private readonly workspace = inject(EventWorkspace, { optional: true });
+
+  /**
+   * The age and ID rule, said where the checking happens.
+   *
+   * The event has carried a minimum age and an ID requirement since it was
+   * created, shown to buyers and on their tickets — and not to the one person
+   * who has to enforce them. Whoever is on the door was left to remember.
+   */
+  readonly admissionRule = computed(() => {
+    const event = this.workspace?.event();
+
+    if (!event || (!event.min_age && !event.id_required)) return null;
+
+    if (event.min_age && event.id_required) return `${event.min_age}+ — check photo ID for everyone`;
+    if (event.min_age) return `${event.min_age}+ — ask for ID if in doubt`;
+
+    return 'Photo ID required for everyone';
+  });
+
+  /** Short, for the verdict panel, where there is no room for a sentence. */
+  readonly admissionCheck = computed(() => {
+    const event = this.workspace?.event();
+
+    if (!event) return null;
+    if (event.min_age && event.id_required) return `Check ID · ${event.min_age}+`;
+    if (event.id_required) return 'Check ID';
+    if (event.min_age) return `${event.min_age}+`;
+
+    return null;
+  });
 
   // --- working without signal ----------------------------------------------
 
