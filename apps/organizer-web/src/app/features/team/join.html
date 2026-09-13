@@ -1,0 +1,55 @@
+<main class="shell grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
+  <div class="card grid w-full max-w-[28rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+    @if (notFound()) {
+      <h1 class="text-2xl font-semibold tracking-[-0.02em]">This link does not work</h1>
+      <p class="text-sm text-text-muted">It may have been copied incompletely. Ask whoever invited you to send a new invitation.</p>
+    } @else if (invitation(); as invite) {
+      <header class="grid gap-1">
+        <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Invitation</p>
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">Join {{ invite.organization }}</h1>
+        <p class="text-pretty text-sm text-text-muted">
+          @if (invite.invited_by) { {{ invite.invited_by }} invited you as } @else { You were invited as }
+          <strong class="font-semibold text-text">{{ invite.role_label }}</strong> — you'll be able to {{ invite.role_description }}.
+        </p>
+      </header>
+
+      @if (error(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+
+      @switch (invite.state) {
+        @case ('open') {
+          @if (signedInAsInvitee()) {
+            <button uiButton type="button" size="lg" [block]="true" [loading]="accepting()" [disabled]="accepting()" (click)="accept()">
+              Join {{ invite.organization }}
+            </button>
+          } @else if (session.signedIn()) {
+            <!-- Signed in as somebody else: the invitation is for one address. -->
+            <ui-alert tone="warning">
+              You're signed in as {{ session.user()?.email }}. This invitation is for {{ invite.email }}.
+            </ui-alert>
+            <button uiButton type="button" variant="secondary" [block]="true" (click)="signOutAndSwitch()">Sign in as {{ invite.email }}</button>
+          } @else if (invite.has_account) {
+            <p class="text-sm text-text-muted">Sign in as <strong class="font-medium text-text">{{ invite.email }}</strong> to accept.</p>
+            <a uiButton size="lg" [block]="true" routerLink="/sign-in" [queryParams]="{ next: returnHere(), email: invite.email }">Sign in to accept</a>
+          } @else {
+            <p class="text-sm text-text-muted">Create your account for <strong class="font-medium text-text">{{ invite.email }}</strong> — it joins you to {{ invite.organization }} in the same step.</p>
+            <a uiButton size="lg" [block]="true" routerLink="/register" [queryParams]="{ invitation: token, email: invite.email }">Create account</a>
+          }
+        }
+        @case ('accepted') {
+          <ui-alert tone="info">This invitation has already been used.</ui-alert>
+          <a uiButton variant="secondary" routerLink="/">Go to the console</a>
+        }
+        @case ('revoked') {
+          <ui-alert tone="warning">This invitation was withdrawn. Ask {{ invite.invited_by || 'the organization' }} for a new one.</ui-alert>
+        }
+        @default {
+          <ui-alert tone="warning">This invitation has expired. Ask {{ invite.invited_by || 'the organization' }} to invite you again.</ui-alert>
+        }
+      }
+    } @else {
+      <p class="text-sm text-text-muted" role="status">Loading your invitation…</p>
+    }
+  </div>
+</main>

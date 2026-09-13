@@ -162,6 +162,14 @@ return [
             'reason' => 'Cascades to their RSVP and answers. No retention duty applies.',
         ],
 
+        // An address an owner typed in to invite. Nothing depends on it once
+        // it is accepted or lapses; the audit log records that it happened.
+        'organization_invitations' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'An offer to join a team. No transaction and no retention duty.',
+        ],
+
         // Somebody asked to be told if tickets came up. Nothing is owed to
         // anybody on the strength of it, so an erasure request removes it.
         'waitlist_entries' => [

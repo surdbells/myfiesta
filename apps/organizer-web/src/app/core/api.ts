@@ -37,6 +37,8 @@ import {
   PromoCode,
   CodeBatch,
   WaitlistPage,
+  TeamPage,
+  InvitationDetails,
   Session,
   TicketType,
   PayoutStatement,
@@ -143,7 +145,9 @@ export class Api {
     email: string;
     password: string;
     password_confirmation: string;
-    organization: string;
+    organization?: string;
+    /** Joining somebody's organization instead of creating one. */
+    invitation?: string;
   }): Observable<Session & { pending?: boolean }> {
     return this.http.post<Session & { pending?: boolean }>(
       `${this.base}/api/auth/register`,
@@ -183,6 +187,37 @@ export class Api {
     password_confirmation: string;
   }): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.base}/api/auth/password`, body);
+  }
+
+  // --- the team -------------------------------------------------------------
+
+  team(): Observable<TeamPage> {
+    return this.http.get<TeamPage>(`${this.base}/api/organizer/team`);
+  }
+
+  inviteMember(email: string, role: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/organizer/team/invitations`, { email, role });
+  }
+
+  updateMemberRole(userId: string, role: string): Observable<{ message: string }> {
+    return this.http.patch<{ message: string }>(`${this.base}/api/organizer/team/members/${userId}`, { role });
+  }
+
+  removeMember(userId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.base}/api/organizer/team/members/${userId}`);
+  }
+
+  revokeInvitation(invitationId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.base}/api/organizer/team/invitations/${invitationId}`);
+  }
+
+  invitation(token: string): Observable<InvitationDetails> {
+    return this.http.get<InvitationDetails>(`${this.base}/api/invitations/${encodeURIComponent(token)}`);
+  }
+
+  /** Accept as the signed-in user; the answer is a fresh session including the new membership. */
+  acceptInvitation(token: string): Observable<Session & { joined: string }> {
+    return this.http.post<Session & { joined: string }>(`${this.base}/api/invitations/${encodeURIComponent(token)}/accept`, {});
   }
 
   /** Everything the dashboard shows, in one request. */

@@ -36,7 +36,8 @@ export type Permission =
   | "door.scan"
   | "money.view"
   | "refunds.process"
-  | "messages.send";
+  | "messages.send"
+  | "team.manage";
 
 export interface Membership {
   id: string;
@@ -205,6 +206,35 @@ export interface CodeSales {
   tickets: number;
   revenue: number;
   discount: number;
+}
+
+/** One person on the team. */
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  joined_at: string | null;
+  is_you: boolean;
+}
+
+export interface TeamPage {
+  members: TeamMember[];
+  invitations: { id: string; email: string; role: string; invited_by: string | null; expires_at: string; expired: boolean }[];
+  /** Every role, with what it can do — said where the choice is made. */
+  roles: { value: string; label: string; description: string }[];
+}
+
+/** What an invitation link offers, for the join page. */
+export interface InvitationDetails {
+  organization: string;
+  role: string;
+  role_label: string;
+  role_description: string;
+  email: string;
+  invited_by: string | null;
+  state: 'open' | 'accepted' | 'revoked' | 'expired';
+  has_account: boolean;
 }
 
 /** Who is waiting for a sold-out event. */

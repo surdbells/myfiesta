@@ -16,6 +16,17 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/reset-password').then((m) => m.ResetPassword),
   },
   {
+    // Where an invitation email lands. Open to anyone holding the link; the
+    // page itself works out whether to sign in, sign up or just accept.
+    path: 'join/:token',
+    loadComponent: () => import('./features/team/join').then((m) => m.Join),
+  },
+  {
+    path: 'team',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/team/team').then((m) => m.Team),
+  },
+  {
     path: 'sign-in',
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },

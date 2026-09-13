@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { UiAlert, UiButton, UiField } from '@myfiesta/ui';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
@@ -22,10 +22,20 @@ export class Register {
   private readonly api = inject(Api);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  /**
+   * An invitation being accepted by signing up.
+   *
+   * The organization question disappears — they are joining one, not making
+   * one — and the email is the address the invitation was sent to, since the
+   * server will accept no other.
+   */
+  readonly invitation = this.route.snapshot.queryParamMap.get('invitation');
 
   readonly form = signal({
     name: '',
-    email: '',
+    email: this.route.snapshot.queryParamMap.get('email') ?? '',
     organization: '',
     password: '',
     confirm: '',
@@ -69,7 +79,7 @@ export class Register {
       .register({
         name: form.name.trim(),
         email: form.email.trim(),
-        organization: form.organization.trim(),
+        ...(this.invitation ? { invitation: this.invitation } : { organization: form.organization.trim() }),
         password: form.password,
         password_confirmation: form.confirm,
       })

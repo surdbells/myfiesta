@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\DiscoverController;
+use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\WaitlistController;
 use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
 use App\Http\Controllers\Api\EventCategoryController;
@@ -114,6 +116,11 @@ Route::post('/auth/login', [AuthController::class, 'login'])->middleware('thrott
  * that actually identifies the attempt, not just on the route.
  */
 Route::post('/auth/register', [AccountController::class, 'register'])->middleware('throttle:10,1');
+
+// An invitation to join an organization: what it offers, and accepting it as
+// the signed-in user. Throttled — a token lookup is a guess otherwise.
+Route::get('/invitations/{token}', [InvitationController::class, 'show'])->middleware('throttle:20,1');
+Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept'])->middleware(['auth:sanctum', 'throttle:20,1']);
 Route::post('/auth/forgot-password', [AccountController::class, 'forgotPassword'])->middleware('throttle:10,1');
 Route::post('/auth/reset-password', [AccountController::class, 'resetPassword'])->middleware('throttle:10,1');
 
@@ -149,6 +156,13 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::get('/orders', [OrganizerOrderController::class, 'index']);
         Route::get('/orders/export', [OrganizerOrderController::class, 'export']);
         Route::put('/payout-details', [PayoutController::class, 'update']);
+
+        // The team: who is on it, in what role, and invitations to it.
+        Route::get('/team', [TeamController::class, 'index']);
+        Route::post('/team/invitations', [TeamController::class, 'invite']);
+        Route::delete('/team/invitations/{invitation}', [TeamController::class, 'revoke']);
+        Route::patch('/team/members/{member}', [TeamController::class, 'updateRole']);
+        Route::delete('/team/members/{member}', [TeamController::class, 'remove']);
 
         Route::get('/events', [OrganizerEventController::class, 'index']);
         // Before {event:id}, which would otherwise take 'options' for an id.

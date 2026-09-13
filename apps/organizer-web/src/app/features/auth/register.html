@@ -14,7 +14,9 @@
     <form class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none" (ngSubmit)="submit()">
       <header class="card__head mb-1 grid gap-1">
         <h1 class="text-2xl font-semibold tracking-[-0.02em]">Create an account</h1>
-        <p class="sub text-pretty text-sm text-text-muted">Start selling tickets on myFiesta.</p>
+        <p class="sub text-pretty text-sm text-text-muted">
+          @if (invitation) { Then you're straight in to the team that invited you. } @else { Start selling tickets on myFiesta. }
+        </p>
       </header>
 
       @if (error(); as message) {
@@ -32,6 +34,7 @@
         />
       </ui-field>
 
+      @if (!invitation) {
       <ui-field
         label="Venue or promoter name"
         hint="This is the name buyers see on your events."
@@ -47,6 +50,7 @@
           (ngModelChange)="form.set({ ...form(), organization: $event })"
         />
       </ui-field>
+      }
 
       <ui-field label="Email" required>
         <input
@@ -56,6 +60,7 @@
           autocomplete="username"
           inputmode="email"
           required
+          [readonly]="!!invitation"
           [ngModel]="form().email"
           (ngModelChange)="form.set({ ...form(), email: $event })"
         />

@@ -1,0 +1,128 @@
+<ui-page-header title="Team" subtitle="Who works on your events, and what each person can do." />
+
+@if (loading()) {
+  <div class="grid gap-2">
+    @for (n of [0, 1, 2]; track n) {
+      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="2.5rem" /></div>
+    }
+  </div>
+} @else if (refused()) {
+  <ui-empty title="Only owners manage the team" hint="Ask an owner of this organization to invite people or change roles." />
+} @else if (failed()) {
+  <ui-error-state title="Could not load the team" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
+} @else if (page(); as team) {
+  <!-- Invite: the thing this screen is mostly for. -->
+  <form class="mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="invite()">
+    <h2 class="text-base font-semibold">Invite somebody</h2>
+
+    <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] items-end gap-4 max-[720px]:grid-cols-1">
+      <div class="field min-w-0">
+        <label for="inviteEmail">Their email</label>
+        <input
+          id="inviteEmail"
+          name="inviteEmail"
+          type="email"
+          autocomplete="off"
+          required
+          placeholder="name@example.com"
+          [ngModel]="inviteEmail()"
+          (ngModelChange)="inviteEmail.set($event)"
+        />
+      </div>
+
+      <div class="field min-w-0">
+        <label for="inviteRole">Role</label>
+        <ui-select controlId="inviteRole" name="inviteRole" ariaLabel="Role" [options]="roleOptions()" [ngModel]="inviteRole()" (ngModelChange)="inviteRole.set($event)" />
+      </div>
+
+      <button uiButton type="submit" [loading]="inviting()" [disabled]="inviting() || !inviteEmail().trim()">Send invitation</button>
+    </div>
+
+    @if (chosenRole(); as role) {
+      <p class="text-sm text-text-muted">As {{ role.label }} they can {{ role.description }}.</p>
+    }
+    @if (inviteError(); as message) {
+      <p class="text-sm text-danger" role="alert">{{ message }}</p>
+    }
+  </form>
+
+  <h2 class="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Members</h2>
+  <ul class="m-0 grid list-none gap-2 p-0">
+    @for (member of team.members; track member.id) {
+      <li class="grid grid-cols-[minmax(0,1fr)_14rem_auto] items-center gap-4 rounded-lg border border-border bg-surface-raised px-5 py-3 max-[720px]:grid-cols-1 max-[720px]:gap-3">
+        <div class="min-w-0">
+          <p class="flex flex-wrap items-center gap-2 font-medium">
+            <span class="truncate">{{ member.name }}</span>
+            @if (member.is_you) {
+              <ui-badge tone="neutral">You</ui-badge>
+            }
+          </p>
+          <p class="truncate text-sm text-text-muted">{{ member.email }}</p>
+        </div>
+
+        <ui-select
+          [name]="'role-' + member.id"
+          [ariaLabel]="'Role for ' + member.name"
+          [options]="roleOptions()"
+          [value]="displayRole(member)"
+          (valueChange)="changeRole(member, $event)"
+        />
+
+        <button
+          class="cursor-pointer justify-self-end border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger max-[720px]:justify-self-start"
+          type="button"
+          (click)="removing.set(member)"
+        >
+          @if (member.is_you) { Leave } @else { Remove }
+        </button>
+      </li>
+    }
+  </ul>
+
+  @if (team.invitations.length > 0) {
+    <h2 class="mb-3 mt-8 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Invited</h2>
+    <ul class="m-0 grid list-none gap-2 p-0">
+      @for (invitation of team.invitations; track invitation.id) {
+        <li class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-dashed border-border px-5 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-medium">{{ invitation.email }}</p>
+            <p class="text-sm text-text-muted">
+              {{ roleLabel(invitation.role) }}
+              @if (invitation.invited_by) {
+                · invited by {{ invitation.invited_by }}
+              }
+              @if (invitation.expired) {
+                · <span class="text-warning">expired — invite again to send a new link</span>
+              } @else {
+                · link works until {{ expires(invitation.expires_at) }}
+              }
+            </p>
+          </div>
+          <button
+            class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+            type="button"
+            (click)="revoke(invitation.id)"
+          >
+            Withdraw
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (removing(); as member) {
+    <ui-confirm
+      [open]="true"
+      [heading]="member.is_you ? 'Leave this organization?' : 'Remove ' + member.name + '?'"
+      [consequence]="member.is_you
+        ? 'You will lose access to its events, orders and payouts straight away. An owner can invite you back.'
+        : member.name + ' will lose access straight away. Anything they did stays on record. You can invite them again.'"
+      [confirmLabel]="member.is_you ? 'Leave' : 'Remove'"
+      busyLabel="Removing…"
+      destructive
+      [busy]="removingBusy()"
+      (confirmed)="confirmRemove()"
+      (cancelled)="removing.set(null)"
+    />
+  }
+}

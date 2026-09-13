@@ -7,6 +7,8 @@ use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\User;
+use App\Models\OrganizationInvitation;
+use App\Services\Team\TeamService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +62,9 @@ class AccountController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:190'],
             'password' => ['required', 'confirmed', $this->passwordRule()],
-            'organization' => ['required', 'string', 'max:120'],
+            // Not needed when joining somebody else's organization by invitation.
+            'organization' => ['required_without:invitation', 'nullable', 'string', 'max:120'],
+            'invitation' => ['nullable', 'string', 'max:64'],
             'device' => ['nullable', 'string', 'max:64'],
         ], [
             'password.confirmed' => 'The two passwords do not match.',
@@ -68,6 +72,23 @@ class AccountController extends Controller
         ]);
 
         $email = Str::lower(trim($data['email']));
+
+        /*
+         * Joining by invitation: the account is made for the address the
+         * invitation went to, and nothing else. Checked before anything is
+         * created, so a wrong address leaves no half-made account behind.
+         */
+        $invitation = filled($data['invitation'] ?? null) ? OrganizationInvitation::findByToken($data['invitation']) : null;
+
+        if (filled($data['invitation'] ?? null)) {
+            if ($invitation === null || $invitation->state() !== 'open') {
+                throw ValidationException::withMessages(['invitation' => 'This invitation is no longer valid. Ask for a new one.']);
+            }
+
+            if (Str::lower($invitation->email) !== $email) {
+                throw ValidationException::withMessages(['email' => "This invitation was sent to {$invitation->email}. Use that address."]);
+            }
+        }
 
         /*
          * An address already in use is not reported as such.
@@ -89,7 +110,7 @@ class AccountController extends Controller
 
         RateLimiter::hit($key, 3600);
 
-        $user = DB::transaction(function () use ($data, $email) {
+        $user = DB::transaction(function () use ($data, $email, $invitation) {
             $user = User::create([
                 'name' => trim($data['name']),
                 'email' => $email,
@@ -98,6 +119,12 @@ class AccountController extends Controller
                 // match — a failure that only shows up at the next sign-in.
                 'password' => $data['password'],
             ]);
+
+            if ($invitation !== null) {
+                app(TeamService::class)->accept($invitation, $user->load('organizations'));
+
+                return $user;
+            }
 
             $organization = Organization::create([
                 'name' => trim($data['organization']),

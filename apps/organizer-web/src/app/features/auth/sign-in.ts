@@ -17,7 +17,8 @@ export class SignIn {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  readonly email = signal('');
+  // Filled in when arriving from an invitation, which is for one address.
+  readonly email = signal(this.route.snapshot.queryParamMap.get('email') ?? '');
   readonly password = signal('');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);

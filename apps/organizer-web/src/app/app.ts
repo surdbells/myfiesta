@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, Menu, ReceiptText, Wallet, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, Menu, ReceiptText, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -73,6 +73,14 @@ export class App {
           { label: 'Orders', link: '/orders', glyph: ReceiptText },
           { label: 'Payouts', link: '/payouts', glyph: Wallet },
         ],
+      });
+    }
+
+    // Owners only, for the same reason as money: a link that only 403s.
+    if (this.session.canManageTeam()) {
+      groups.push({
+        title: 'Organization',
+        items: [{ label: 'Team', link: '/team', glyph: Users }],
       });
     }
 

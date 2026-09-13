@@ -47,6 +47,10 @@ enum Permission: string
     // Reaching the audience
     case MessagesSend = 'messages.send';
 
+    // Who is on the team, and in what role. Owners only: handing somebody the
+    // payouts screen is an owner's decision.
+    case TeamManage = 'team.manage';
+
     /**
      * Every permission a role carries.
      *
