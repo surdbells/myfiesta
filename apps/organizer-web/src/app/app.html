@@ -90,12 +90,20 @@
 
       <div class="side__foot grid gap-2 border-t border-border-subtle p-4">
         @if (session.user(); as user) {
-          <p class="who m-0 grid min-w-0 gap-0.5">
+          <!-- The person, as a way into their own account: name and password. -->
+          <a
+            class="who m-0 -mx-2 grid min-w-0 gap-0.5 rounded-md px-2 py-1 no-underline hover:bg-surface-hover"
+            routerLink="/account"
+            routerLinkActive="bg-surface-hover"
+          >
             <span class="who__name truncate text-sm font-medium text-text">{{ user.name }}</span>
-            @if (session.current(); as org) {
-              <span class="who__role text-xs capitalize text-text-subtle">{{ org.role }}</span>
-            }
-          </p>
+            <span class="who__role text-xs text-text-subtle">
+              @if (session.current(); as org) {
+                <span class="capitalize">{{ org.role }}</span> ·
+              }
+              Account settings
+            </span>
+          </a>
         }
         <button
           type="button"

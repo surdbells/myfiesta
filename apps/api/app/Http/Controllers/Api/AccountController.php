@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\User;
 use App\Models\OrganizationInvitation;
+use App\Services\Door\DoorPasses;
 use App\Services\Team\TeamService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -225,6 +226,10 @@ class AccountController extends Controller
                  * protecting them from.
                  */
                 $user->tokens()->delete();
+
+                // Including door links this account made that nobody has
+                // opened yet, which deleting tokens alone would leave working.
+                app(DoorPasses::class)->endIssuedBy($user);
             }
         );
 
@@ -262,7 +267,7 @@ class AccountController extends Controller
         ]);
     }
 
-    public function changePassword(Request $request): JsonResponse
+    public function changePassword(Request $request, DoorPasses $doorPasses): JsonResponse
     {
         $user = $request->user();
 
@@ -287,7 +292,16 @@ class AccountController extends Controller
         $current = $request->user()->currentAccessToken();
         $user->tokens()->where('id', '!=', $current->id)->delete();
 
-        return response()->json(['message' => 'Password changed. Other devices have been signed out.']);
+        // Door passes are other devices too, and a link made but not yet
+        // opened is one that has not signed in yet.
+        $passes = $doorPasses->endIssuedBy($user);
+
+        return response()->json([
+            'message' => $passes > 0
+                ? 'Password changed. Other devices have been signed out, and door passes you made have stopped working.'
+                : 'Password changed. Other devices have been signed out.',
+            'door_passes_ended' => $passes,
+        ]);
     }
 
     private function slugFor(string $name): string

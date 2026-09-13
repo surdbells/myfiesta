@@ -89,6 +89,14 @@ export class SessionStore {
     this.persist(session);
   }
 
+  /** The person's own details changed; the token and memberships did not. */
+  updateUser(user: Session['user']): void {
+    const session = this.state();
+    if (!session) return;
+
+    this.start({ ...session, user });
+  }
+
   select(organizationId: string): void {
     this.selectedId.set(organizationId);
     this.storage?.setItem(`${STORAGE_KEY}.org`, organizationId);

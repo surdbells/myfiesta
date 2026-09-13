@@ -161,17 +161,21 @@ class DoorPasses
     }
 
     /**
-     * Everything a member handed out for this organization's doors.
+     * Everything a member handed out, for one organization's doors or all.
      *
-     * Called when they leave the team. Their phones at the door stop at the
-     * next scan; the passes stay listed, ended, so the organizer can see why.
+     * Called when they leave a team, and when their password changes — which
+     * is what somebody does when they think their account is in the wrong
+     * hands, and a link that account made but nobody has opened yet is still
+     * a way in. Phones at the door stop at their next scan; the passes stay
+     * listed, ended, so the organizer can see why.
      */
-    public function endIssuedBy(Organization $organization, User $member): int
+    public function endIssuedBy(User $member, ?Organization $organization = null): int
     {
         $passes = DoorPass::query()
             ->where('issued_by', $member->id)
             ->whereNull('revoked_at')
-            ->whereHas('event', fn ($query) => $query->where('organization_id', $organization->id))
+            ->where('expires_at', '>', now())
+            ->when($organization, fn ($query) => $query->whereHas('event', fn ($events) => $events->where('organization_id', $organization->id)))
             ->get();
 
         foreach ($passes as $pass) {

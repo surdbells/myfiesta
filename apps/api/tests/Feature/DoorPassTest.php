@@ -352,6 +352,32 @@ class DoorPassTest extends TestCase
         $this->assertSame('ended', DoorPass::sole()->state());
     }
 
+    public function test_changing_password_ends_every_pass_the_account_made(): void
+    {
+        $this->manager->forceFill(['password' => 'old password 42'])->save();
+
+        $token = $this->claim($this->issue('Front gate'));
+        $unopened = $this->issue('Side door');
+
+        $this->actAs($this->manager);
+        $this->postJson('/api/auth/password', [
+            'current_password' => 'old password 42',
+            'password' => 'new password 42',
+            'password_confirmation' => 'new password 42',
+        ])
+            ->assertOk()
+            ->assertJsonPath('door_passes_ended', 2)
+            ->assertJsonPath('message', 'Password changed. Other devices have been signed out, and door passes you made have stopped working.');
+
+        $this->asPhone($token)
+            ->postJson("/api/events/{$this->event->id}/scan", ['code' => $this->ticket->code])
+            ->assertUnauthorized();
+
+        // The one nobody had opened yet is the one deleting tokens would miss.
+        $this->forgetAuth();
+        $this->postJson("/api/door-passes/{$unopened}/claim")->assertStatus(410);
+    }
+
     public function test_the_secret_is_never_stored(): void
     {
         $secret = $this->issue();

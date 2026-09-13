@@ -154,7 +154,7 @@ class TeamService
 
         // Phones they put on a door stop with them. Left running, a removed
         // manager would still have scanners out in the world on their say-so.
-        $ended = $this->doorPasses->endIssuedBy($organization, $member);
+        $ended = $this->doorPasses->endIssuedBy($member, $organization);
 
         $this->auditor->record('team.removed', $organization, $by, $organization->id, [
             'member' => $member->email,

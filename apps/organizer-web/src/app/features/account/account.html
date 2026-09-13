@@ -1,0 +1,70 @@
+<ui-page-header title="Your account" subtitle="How you appear to your team, and how you sign in." />
+
+<div class="grid max-w-[40rem] gap-8">
+  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="saveName()">
+    <h2 class="text-base font-semibold">Profile</h2>
+
+    <ui-field label="Your name" hint="Shown to your team, and next to the invitations and door passes you make." [error]="nameError()" required>
+      <input id="name" name="name" autocomplete="name" maxlength="120" required [ngModel]="name()" (ngModelChange)="name.set($event)" />
+    </ui-field>
+
+    <ui-field label="Email" hint="The address you sign in with, and where invitations and password resets go. It can’t be changed here.">
+      <input
+        id="email"
+        name="email"
+        type="email"
+        class="bg-surface-sunken text-text-muted"
+        autocomplete="username"
+        readonly
+        [value]="session.user()?.email ?? ''"
+      />
+    </ui-field>
+
+    <div>
+      <button uiButton type="submit" [loading]="savingName()" [disabled]="savingName() || !nameChanged()">Save name</button>
+    </div>
+  </form>
+
+  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="changePassword()">
+    <header class="grid gap-1">
+      <h2 class="text-base font-semibold">Password</h2>
+      <p class="text-pretty text-sm text-text-muted">
+        Changing it signs you out on every other device, and stops any door passes you’ve made. You stay signed in here.
+      </p>
+    </header>
+
+    @if (changed(); as message) {
+      <ui-alert tone="success">{{ message }}</ui-alert>
+    }
+    @if (passwordError(); as message) {
+      <ui-alert tone="danger">{{ message }}</ui-alert>
+    }
+
+    <!-- For password managers: which account the new password belongs to. -->
+    <input type="hidden" name="username" autocomplete="username" [value]="session.user()?.email ?? ''" />
+
+    <ui-field label="Current password" [error]="currentError()" required>
+      <input
+        id="current"
+        name="current"
+        type="password"
+        autocomplete="current-password"
+        required
+        [ngModel]="current()"
+        (ngModelChange)="current.set($event); currentError.set(null)"
+      />
+    </ui-field>
+
+    <ui-field label="New password" hint="At least 10 characters, with a letter and a number." [error]="passwordHint()" required>
+      <input id="password" name="password" type="password" autocomplete="new-password" required [ngModel]="password()" (ngModelChange)="password.set($event)" />
+    </ui-field>
+
+    <ui-field label="New password again" [error]="mismatch() ? 'The two passwords do not match.' : null" required>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password" required [ngModel]="confirm()" (ngModelChange)="confirm.set($event)" />
+    </ui-field>
+
+    <div>
+      <button uiButton type="submit" [loading]="changing()" [disabled]="changing() || !canChange()">Change password</button>
+    </div>
+  </form>
+</div>

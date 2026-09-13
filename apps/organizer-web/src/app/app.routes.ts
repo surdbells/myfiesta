@@ -38,6 +38,11 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'account',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/account/account').then((m) => m.Account),
+  },
+  {
     path: 'team',
     canActivate: [requireSession],
     loadComponent: () => import('./features/team/team').then((m) => m.Team),
