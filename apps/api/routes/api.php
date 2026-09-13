@@ -224,6 +224,9 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::get('/events/{event:id}/messages', [MessageController::class, 'index']);
         Route::post('/events/{event:id}/messages', [MessageController::class, 'store']);
 
+        // Every code across the organization's events, for the Discount codes screen.
+        Route::get('/codes', [CodeController::class, 'all']);
+
         Route::get('/events/{event:id}/codes', [CodeController::class, 'index']);
         Route::post('/events/{event:id}/codes', [CodeController::class, 'store']);
         // {code} rather than {code:id}: naming the key makes Laravel scope the

@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ReceiptText, Users, Wallet, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ReceiptText, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -106,6 +106,10 @@ export class App {
       { label: 'Dashboard', link: '/', glyph: LayoutDashboard, exact: true },
       { label: 'Events', link: '/events', glyph: CalendarDays },
     ];
+
+    if (this.session.canManageCodes()) {
+      items.push({ label: 'Discount codes', link: '/codes', glyph: TicketPercent });
+    }
 
     if (this.session.canSeeMoney()) {
       items.push({ label: 'Orders', link: '/orders', glyph: ReceiptText }, { label: 'Payouts', link: '/payouts', glyph: Wallet });

@@ -1,0 +1,166 @@
+<ui-page-header title="Discount codes" subtitle="Every discount, promoter and presale code across your events.">
+  @if (!creating()) {
+    <button uiButton type="button" (click)="startCreating()">
+      <ui-icon [icon]="plusIcon" size="sm" />
+      New code
+    </button>
+  }
+</ui-page-header>
+
+<!--
+  Making a code: the event first, because a code's price, tickets and links
+  all belong to one. Then the same form the event's own Codes tab uses.
+-->
+@if (creating()) {
+  <section class="mb-8 grid gap-4 rounded-xl border border-border bg-surface-raised p-6" aria-labelledby="new-code-heading">
+    <header class="flex flex-wrap items-start justify-between gap-3">
+      <div class="grid gap-1">
+        <h2 id="new-code-heading" class="text-lg">New code</h2>
+        <p class="text-sm text-text-muted">Choose the event it is for. Fixed amounts come off in that event's currency.</p>
+      </div>
+      <button
+        class="grid h-9 w-9 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-text-muted [font-family:inherit] hover:bg-surface-hover hover:text-text"
+        type="button"
+        aria-label="Cancel new code"
+        (click)="stopCreating()"
+      >
+        <ui-icon [icon]="closeIcon" size="sm" />
+      </button>
+    </header>
+
+    <div class="field max-w-[28rem]">
+      <label for="createFor">Event</label>
+      <ui-select
+        controlId="createFor"
+        name="createFor"
+        ariaLabel="Event"
+        placeholder="Choose an event"
+        searchPlaceholder="Search your events"
+        [options]="eventChoices()"
+        [value]="createFor()"
+        (valueChange)="createFor.set($event)"
+      />
+    </div>
+
+    @if (createFor(); as eventId) {
+      <!-- Keyed on the event, so switching events starts a fresh form. -->
+      @for (id of [eventId]; track id) {
+        <app-event-codes [forEvent]="id" [formOnly]="true" (created)="onCreated()" />
+      }
+    }
+  </section>
+}
+
+<form class="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-raised p-4" (ngSubmit)="load()">
+  <div class="flex h-11 min-w-0 flex-[1_1_18rem] items-center gap-2 rounded-md border border-field-border bg-surface px-3">
+    <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
+    <input
+      class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
+      name="q"
+      type="search"
+      placeholder="Code, label or promoter"
+      aria-label="Search codes"
+      [ngModel]="query()"
+      (ngModelChange)="search($event)"
+    />
+  </div>
+
+  <ui-select
+    class="flex-[0_1_16rem] max-sm:flex-[1_1_100%]"
+    name="event"
+    ariaLabel="Event"
+    searchPlaceholder="Search your events"
+    [options]="filterOptions()"
+    [ngModel]="eventFilter() ?? ''"
+    (ngModelChange)="filterByEvent($event)"
+  />
+
+  @if (filtered()) {
+    <button
+      class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+      type="button"
+      (click)="clear()"
+    >
+      Clear
+    </button>
+  }
+</form>
+
+@if (loading() && codes().length === 0) {
+  <div class="grid gap-2">
+    @for (n of [0, 1, 2]; track n) {
+      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="2.5rem" /></div>
+    }
+  </div>
+} @else if (failed()) {
+  <ui-error-state title="Could not load your codes" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
+} @else if (codes().length === 0) {
+  @if (filtered()) {
+    <ui-empty title="No codes match" hint="Try another search, or clear the filters." />
+  } @else {
+    <ui-empty title="No codes yet" hint="Make one for an event: money off, a promoter's link, or early access to tickets." />
+  }
+} @else {
+  <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[48rem] border-collapse text-sm">
+        <thead>
+          <tr>
+            <th class="bg-surface-inset px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Code</th>
+            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Event</th>
+            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Does</th>
+            <th class="bg-surface-inset px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Uses</th>
+            <th class="bg-surface-inset px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets sold</th>
+            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Status</th>
+            <th class="bg-surface-inset px-5 py-3"><span class="sr-only">Manage</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (code of codes(); track code.id) {
+            <tr class="border-t border-border hover:bg-surface-hover">
+              <td class="px-5 py-3">
+                <span class="block font-mono font-semibold tracking-[0.04em]">{{ code.code }}</span>
+                @if (code.promoter_name || code.label) {
+                  <span class="block text-xs text-text-muted">{{ code.promoter_name ?? code.label }}</span>
+                }
+              </td>
+              <td class="px-4 py-3">
+                @if (code.event; as event) {
+                  <span class="block font-medium">{{ event.title }}</span>
+                  <span class="block text-xs text-text-muted">{{ eventDate(code) }}</span>
+                } @else {
+                  <span class="text-text-muted">Every event</span>
+                }
+              </td>
+              <td class="px-4 py-3">
+                {{ describeDiscount(code) }}
+                @if (code.unlocks.length > 0 && code.discount_type) {
+                  <span class="block text-xs text-text-muted">+ presale access</span>
+                }
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums">{{ uses(code) }}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{{ ticketsSold(code) }}</td>
+              <td class="px-4 py-3">
+                @let state = status(code);
+                <ui-badge [tone]="state.tone">{{ state.label }}</ui-badge>
+              </td>
+              <td class="px-5 py-3 text-right">
+                @if (code.event; as event) {
+                  <a class="whitespace-nowrap text-sm font-medium text-primary-text no-underline hover:underline" [routerLink]="['/events', event.id, 'codes']">Manage</a>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (meta(); as page) {
+      @if (page.last_page > 1) {
+        <div class="border-t border-border px-5 py-3">
+          <ui-pagination [page]="page.current_page" [perPage]="page.per_page" [total]="page.total" noun="codes" (changed)="goToPage($event)" />
+        </div>
+      }
+    }
+  </div>
+}

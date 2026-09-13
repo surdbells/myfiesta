@@ -36,6 +36,7 @@ import {
   SeriesOccurrence,
   SoldOrder,
   PromoCode,
+  OrganizationCode,
   CodeBatch,
   WaitlistPage,
   TeamPage,
@@ -722,6 +723,15 @@ export class Api {
   }
 
   // --- codes --------------------------------------------------------------
+
+  /** Every code in the organization. event_id is an event, or 'all-events' for the ones made for every event. */
+  organizationCodes(filters: { page?: number; eventId?: string | null; q?: string }): Observable<Page<OrganizationCode>> {
+    let params = new HttpParams().set('page', filters.page ?? 1);
+    if (filters.eventId) params = params.set('event_id', filters.eventId);
+    if (filters.q?.trim()) params = params.set('q', filters.q.trim());
+
+    return this.http.get<Page<OrganizationCode>>(`${this.base}/api/organizer/codes`, { params });
+  }
 
   codes(eventId: string, page = 1): Observable<Page<PromoCode>> {
     return this.http.get<Page<PromoCode>>(`${this.base}/api/organizer/events/${eventId}/codes`, {

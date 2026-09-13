@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { UiButton, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { CodeBatches } from './code-batches';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -32,14 +32,30 @@ import { SessionStore } from '../../core/session';
   imports: [FormsModule, UiButton, UiPagination, UiSelect, CodeBatches],
   templateUrl: './event-codes.html',
 })
-export class EventCodes {
+export class EventCodes implements OnInit {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
 
   private readonly document = inject(DOCUMENT);
 
-  readonly eventId = eventIdFrom(this.route);
+  /**
+   * The event, when this is placed somewhere without one in the address —
+   * the organization-wide Discount codes screen, which asks which event first.
+   */
+  readonly forEvent = input<string | null>(null);
+
+  /** Just the form: no heading, no list, no batches. For the Discount codes screen. */
+  readonly formOnly = input(false);
+
+  /** A code was made (form-only use). */
+  readonly created = output<void>();
+
+  private routeEventId: string | null = null;
+
+  get eventId(): string {
+    return this.forEvent() ?? this.routeEventId ?? '';
+  }
 
   readonly event = signal<OrganizerEventDetail | null>(null);
   readonly ticketTypes = signal<TicketType[]>([]);
@@ -119,6 +135,15 @@ export class EventCodes {
   readonly currency = computed(() => this.event()?.currency ?? 'CAD');
 
   constructor() {
+    // Absent on the Discount codes screen, which passes the event in instead.
+    try {
+      this.routeEventId = eventIdFrom(this.route);
+    } catch {
+      this.routeEventId = null;
+    }
+  }
+
+  ngOnInit(): void {
     this.api.event(this.eventId).subscribe({
       next: (event) => this.event.set(event),
       error: () => undefined,
@@ -129,7 +154,7 @@ export class EventCodes {
       error: () => undefined,
     });
 
-    this.load();
+    if (!this.formOnly()) this.load();
   }
 
   /**
@@ -311,7 +336,11 @@ export class EventCodes {
             starts_at: '',
             ends_at: '',
           });
-          this.load();
+          if (this.formOnly()) {
+            this.created.emit();
+          } else {
+            this.load();
+          }
         },
         error: (response) => {
           this.saving.set(false);

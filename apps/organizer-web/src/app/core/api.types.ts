@@ -365,6 +365,12 @@ export interface PromoCode {
   usable: boolean;
 }
 
+/** A code on the organization-wide Discount codes screen, with the event it is for. */
+export interface OrganizationCode extends PromoCode {
+  /** Null for a code that works on every event. */
+  event: { id: string; title: string; starts_at: string; timezone: string; status: string } | null;
+}
+
 /**
  * An order as the refunds screen needs it.
  *

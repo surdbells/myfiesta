@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Organizer;
 
+use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Models\Code;
 use App\Models\Event;
+use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Support\Paging;
 use Carbon\Carbon;
@@ -24,6 +26,65 @@ use Illuminate\Validation\Rule;
 class CodeController extends Controller
 {
     public function __construct(private readonly Auditor $auditor) {}
+
+    /**
+     * Every code in the organization, across its events.
+     *
+     * Codes lived only inside each event, so "which codes do we have out
+     * there" meant opening every event in turn — and a promoter programme
+     * spanning a season had no single place to be looked at.
+     *
+     * Filter by one event, by codes for all events, or by a search over the
+     * code, its label and the promoter's name. Batch codes are left out, as
+     * on the event screen: a thousand one-off codes are one batch.
+     */
+    public function all(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        $filters = $request->validate([
+            'event_id' => ['nullable', 'string', 'max:64'],
+            'q' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $codes = Code::query()
+            ->where('organization_id', $organization->id)
+            ->whereNull('batch_id')
+            ->when(($filters['event_id'] ?? null) === 'all-events', fn ($query) => $query->whereNull('event_id'))
+            ->when(
+                filled($filters['event_id'] ?? null) && $filters['event_id'] !== 'all-events',
+                fn ($query) => $query->where('event_id', $filters['event_id']),
+            )
+            ->when(filled($filters['q'] ?? null), function ($query) use ($filters) {
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($filters['q'])).'%';
+
+                $query->where(fn ($inner) => $inner
+                    ->where('code', 'ilike', $like)
+                    ->orWhere('label', 'ilike', $like)
+                    ->orWhere('promoter_name', 'ilike', $like));
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(Paging::perPage($request, 50));
+
+        $codes->getCollection()->load(['event:id,title,starts_at,timezone,currency,status', 'ticketTypes:id,name', 'unlocks:id,name']);
+        $sales = $this->salesFor($codes->getCollection()->pluck('id')->all());
+
+        return response()->json([
+            'data' => $codes->getCollection()
+                ->map(fn (Code $code) => $this->present($code, $code->event, $sales[$code->id] ?? []) + [
+                    'event' => $code->event ? [
+                        'id' => $code->event->id,
+                        'title' => $code->event->title,
+                        'starts_at' => $code->event->starts_at,
+                        'timezone' => $code->event->timezone,
+                        'status' => $code->event->status,
+                    ] : null,
+                ])
+                ->values(),
+            'meta' => Paging::meta($codes),
+        ]);
+    }
 
     public function index(Request $request, Event $event): JsonResponse
     {
@@ -399,7 +460,11 @@ class CodeController extends Controller
             ->all();
     }
 
-    private function present(Code $code, Event $event, array $sales = []): array
+    /**
+     * @param  Event|null  $event  The event the code is being looked at from. Null on the
+     *                             organization-wide list, for a code made for every event.
+     */
+    private function present(Code $code, ?Event $event, array $sales = []): array
     {
         return [
             'id' => $code->id,
@@ -432,7 +497,28 @@ class CodeController extends Controller
                 && ($code->max_redemptions === null || $code->redemption_count < $code->max_redemptions)
                 && ($code->starts_at === null || $code->starts_at->isPast())
                 && ($code->ends_at === null || $code->ends_at->isFuture())
-                && $code->appliesTo($event),
+                && ($event === null || $code->appliesTo($event)),
         ];
+    }
+
+    private function organization(Request $request): Organization
+    {
+        $memberships = $request->user()->organizations()->get();
+
+        $asked = $request->header('X-Organization');
+
+        $organization = $asked
+            ? $memberships->firstWhere('id', $asked)
+            : $memberships->first();
+
+        abort_unless($organization !== null, 403, 'No organization.');
+
+        abort_unless(
+            $request->user()->hasPermissionIn($organization->id, Permission::CodesManage),
+            403,
+            'You cannot manage codes for this organization.',
+        );
+
+        return $organization;
     }
 }

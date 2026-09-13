@@ -38,6 +38,12 @@ export const routes: Routes = [
     ],
   },
   {
+    // Every code across the organization, and making one for any event.
+    path: 'codes',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/codes/codes').then((m) => m.Codes),
+  },
+  {
     path: 'account',
     canActivate: [requireSession],
     loadComponent: () => import('./features/account/account').then((m) => m.Account),

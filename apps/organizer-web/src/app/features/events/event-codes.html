@@ -1,3 +1,4 @@
+@if (!formOnly()) {
 <header class="bar mb-8 flex flex-wrap items-end justify-between gap-6">
   <div>
     <h1 class="text-2xl">Codes</h1>
@@ -7,6 +8,7 @@
     </p>
   </div>
 </header>
+}
 
 @if (notice(); as message) {
   <p class="notice mb-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
@@ -278,6 +280,7 @@
   </form>
 }
 
+@if (!formOnly()) {
 <h2 class="section mt-8 mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">In use</h2>
 
 @if (loading()) {
@@ -391,3 +394,4 @@
   [ticketTypes]="ticketTypes()"
   [canManage]="session.canMessage()"
 />
+}
