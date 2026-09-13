@@ -45,8 +45,9 @@ class CheckInService
         ?User $scanner = null,
         ?int $party = null,
         ?string $clientId = null,
+        ?string $doorPassId = null,
     ): ScanOutcome {
-        return $this->perform($code, $eventId, $scanner, $party, $clientId);
+        return $this->perform($code, $eventId, $scanner, $party, $clientId, doorPassId: $doorPassId);
     }
 
     /**
@@ -74,6 +75,7 @@ class CheckInService
         string $clientId,
         string $offlineResult,
         CarbonInterface $scannedAt,
+        ?string $doorPassId = null,
     ): ScanOutcome {
         return $this->perform(
             $code,
@@ -83,6 +85,7 @@ class CheckInService
             $clientId,
             $offlineResult,
             $this->believable($scannedAt),
+            $doorPassId,
         );
     }
 
@@ -94,8 +97,9 @@ class CheckInService
         ?string $clientId,
         ?string $offlineResult = null,
         ?CarbonInterface $scannedAt = null,
+        ?string $doorPassId = null,
     ): ScanOutcome {
-        return DB::transaction(function () use ($code, $eventId, $scanner, $party, $clientId, $offlineResult, $scannedAt) {
+        return DB::transaction(function () use ($code, $eventId, $scanner, $party, $clientId, $offlineResult, $scannedAt, $doorPassId) {
             $ticket = Ticket::query()
                 ->where('code', strtoupper(trim($code)))
                 ->lockForUpdate()
@@ -133,6 +137,9 @@ class CheckInService
                 'ticket_id' => $ticket?->id,
                 'event_id' => $eventId,
                 'scanned_by' => $scanner?->id,
+                // Which phone, when it was a door pass: the member above
+                // vouched for it, the pass says which door it was.
+                'door_pass_id' => $doorPassId,
                 // Recorded even when it matches nothing. A door reporting
                 // unknown codes all night is worth knowing about.
                 'scanned_code' => substr(strtoupper(trim($code)), 0, 32),

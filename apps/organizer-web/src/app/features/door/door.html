@@ -235,3 +235,7 @@
 }
 </section>
 </div>
+
+@if (canIssuePasses()) {
+  <app-door-passes [eventId]="eventId" [timezone]="eventTimezone()" />
+}

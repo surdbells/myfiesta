@@ -10,7 +10,9 @@ import { ScanResult, SyncResult } from '../../core/api.types';
 import { DoorOffline, scanId } from '../../core/door-offline';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { DoorPassStore } from '../../core/door-pass';
 import { EventWorkspace } from '../events/event-workspace';
+import { DoorPasses } from './door-passes';
 
 /**
  * The door.
@@ -27,7 +29,7 @@ import { EventWorkspace } from '../events/event-workspace';
  */
 @Component({
   selector: 'app-door',
-  imports: [FormsModule, UiButton],
+  imports: [FormsModule, UiButton, DoorPasses],
   templateUrl: './door.html',
 })
 export class Door implements OnDestroy {
@@ -40,6 +42,20 @@ export class Door implements OnDestroy {
   /** The event, from the workspace frame around this screen — saved on the phone, so it holds offline. */
   private readonly workspace = inject(EventWorkspace, { optional: true });
 
+  /** Or, on a phone working the door with a pass, from the pass — which carries the same rule. */
+  private readonly doorPass = inject(DoorPassStore);
+
+  private readonly rules = computed(() => this.workspace?.event() ?? this.doorPass.for(this.eventId)?.event ?? null);
+
+  /**
+   * Whether to offer door passes here: inside the console, to somebody who
+   * both works the door and runs the event. Never on a phone scanning with a
+   * pass, which could not make one anyway.
+   */
+  readonly canIssuePasses = computed(() => !!this.workspace && this.session.canScan() && this.session.canEditEvents());
+
+  readonly eventTimezone = computed(() => this.workspace?.event()?.timezone ?? 'UTC');
+
   /**
    * The age and ID rule, said where the checking happens.
    *
@@ -48,7 +64,7 @@ export class Door implements OnDestroy {
    * who has to enforce them. Whoever is on the door was left to remember.
    */
   readonly admissionRule = computed(() => {
-    const event = this.workspace?.event();
+    const event = this.rules();
 
     if (!event || (!event.min_age && !event.id_required)) return null;
 
@@ -60,7 +76,7 @@ export class Door implements OnDestroy {
 
   /** Short, for the verdict panel, where there is no room for a sentence. */
   readonly admissionCheck = computed(() => {
-    const event = this.workspace?.event();
+    const event = this.rules();
 
     if (!event) return null;
     if (event.min_age && event.id_required) return `Check ID · ${event.min_age}+`;

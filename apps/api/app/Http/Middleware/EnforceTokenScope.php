@@ -34,6 +34,22 @@ class EnforceTokenScope
         }
 
         /*
+         * Somebody's own account: who they are, their name, their password.
+         *
+         * Any token that speaks for a person reaches it; a door token does not.
+         * A door pass belongs, as Sanctum sees it, to the member who issued it
+         * — so without this the phone handed to the door for the night could
+         * read that member's profile and rename them.
+         */
+        if ($required === 'account') {
+            if ($this->isDoorToken($token->abilities ?? [])) {
+                return $this->deny('A door token is limited to check-in for its own event.');
+            }
+
+            return $next($request);
+        }
+
+        /*
          * The door takes two kinds of token.
          *
          * A `door:{event_id}` token, which carries the event it was minted for

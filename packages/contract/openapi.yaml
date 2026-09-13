@@ -530,6 +530,60 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/door-passes/{secret}:
+    get:
+      operationId: previewDoorPass
+      summary: What a door link opens, before opening it
+      description: |
+        No token. Opening is a separate call so that a chat app fetching the
+        link for a preview cannot use up its one claim.
+      security: []
+      parameters:
+        - { name: secret, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The pass and its event.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [label, state, expires_at, event]
+                properties:
+                  label: { type: string }
+                  state: { type: string, enum: [waiting, active, expired, revoked, ended] }
+                  expires_at: { type: string, format: date-time }
+                  event: { type: object }
+        '404': { description: 'Not a door link.' }
+
+  /api/door-passes/{secret}/claim:
+    post:
+      operationId: claimDoorPass
+      summary: Open a door link on this device
+      description: |
+        Works once. Returns a token whose only ability is `door:{event_id}`,
+        expiring with the pass; use it for the scan, door-list and sync
+        endpoints of that event. Every other endpoint refuses it. Signing out
+        with it deletes it.
+      security: []
+      parameters:
+        - { name: secret, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The door token and the event it opens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, label, expires_at, event]
+                properties:
+                  token: { type: string }
+                  label: { type: string }
+                  expires_at: { type: string, format: date-time }
+                  event: { type: object }
+        '404': { description: 'Not a door link.' }
+        '410': { description: 'Already opened on another device, taken back, or expired.' }
+        '429': { description: 'Too many attempts.' }
+
 components:
   securitySchemes:
     bearerAuth:

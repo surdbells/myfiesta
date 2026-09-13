@@ -107,6 +107,19 @@ class EventPolicy
         return $user->hasPermissionIn($event->organization_id, Permission::DoorScan);
     }
 
+    /**
+     * Hand a phone the door for one night.
+     *
+     * Both halves: somebody who cannot work the door cannot hand it out, and
+     * door staff — who can — do not get to mint more of themselves. In
+     * practice, owners and managers.
+     */
+    public function issueDoorPasses(User $user, Event $event): bool
+    {
+        return $user->hasPermissionIn($event->organization_id, Permission::DoorScan)
+            && $user->hasPermissionIn($event->organization_id, Permission::EventsEdit);
+    }
+
     public function message(User $user, Event $event): bool
     {
         return $user->hasPermissionIn($event->organization_id, Permission::MessagesSend);

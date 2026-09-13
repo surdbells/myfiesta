@@ -1,4 +1,4 @@
-@if (session.signedIn()) {
+@if (session.signedIn() && !bare()) {
   <!--
     The shell, styled in place: the first class on each element is its name,
     kept for tests and for reading the DOM; the utilities after it are the

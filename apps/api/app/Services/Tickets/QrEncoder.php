@@ -34,7 +34,7 @@ class QrEncoder
     /** Drawn at one unit per module; the browser scales it. */
     private const QUIET_ZONE = 4;
 
-    public function svg(string $code, int $size = 240): string
+    public function svg(string $code, int $size = 240, ?string $label = null): string
     {
         $matrix = Encoder::encode($code, \BaconQrCode\Common\ErrorCorrectionLevel::valueOf(self::ECC))
             ->getMatrix();
@@ -64,21 +64,21 @@ class QrEncoder
             // scales the viewBox up; without it a scaled QR blurs at the module
             // boundaries and readers start failing.
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %1$d %1$d" width="%2$d" '
-            .'height="%2$d" shape-rendering="crispEdges" role="img" aria-label="Ticket %3$s">'
+            .'height="%2$d" shape-rendering="crispEdges" role="img" aria-label="%3$s">'
             // The white ground is part of the symbol, not decoration: a QR
             // drawn transparently over a dark page inverts and will not scan.
             .'<rect width="%1$d" height="%1$d" fill="#ffffff"/>'
             .'<g fill="#000000">%4$s</g></svg>',
             $span,
             $size,
-            e($code),
+            e($label ?? 'Ticket '.$code),
             implode('', $paths),
         );
     }
 
     /** The same symbol as a data URI, for an <img> or an email. */
-    public function dataUri(string $code, int $size = 240): string
+    public function dataUri(string $code, int $size = 240, ?string $label = null): string
     {
-        return 'data:image/svg+xml;base64,'.base64_encode($this->svg($code, $size));
+        return 'data:image/svg+xml;base64,'.base64_encode($this->svg($code, $size, $label));
     }
 }

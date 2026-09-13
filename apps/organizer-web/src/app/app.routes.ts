@@ -22,6 +22,22 @@ export const routes: Routes = [
     loadComponent: () => import('./features/team/join').then((m) => m.Join),
   },
   {
+    // A door link. Open to anyone holding it; the link is the credential.
+    path: 'door-pass/:secret',
+    loadComponent: () => import('./features/door/door-pass-open').then((m) => m.DoorPassOpen),
+  },
+  {
+    // The door on a phone holding a pass: no session, no sidebar, one screen.
+    path: 'scan/:id',
+    loadComponent: () => import('./features/door/door-pass-scanner').then((m) => m.DoorPassScanner),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/door/door').then((m) => m.Door),
+      },
+    ],
+  },
+  {
     path: 'team',
     canActivate: [requireSession],
     loadComponent: () => import('./features/team/team').then((m) => m.Team),

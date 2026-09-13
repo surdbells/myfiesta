@@ -1,0 +1,49 @@
+<main class="shell grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
+  <div class="card grid w-full max-w-[28rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+    @if (notFound()) {
+      <h1 class="text-2xl font-semibold tracking-[-0.02em]">This door link does not work</h1>
+      <p class="text-sm text-text-muted">It may have been copied incompletely. Ask whoever runs the event to send a new one.</p>
+    } @else if (preview(); as pass) {
+      <header class="grid gap-1">
+        <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Door pass · {{ pass.label }}</p>
+        <h1 class="text-balance text-2xl font-semibold tracking-[-0.02em]">{{ pass.event.title }}</h1>
+        <p class="text-sm text-text-muted">
+          {{ when() }}
+          @if (pass.event.venue) {
+            · {{ pass.event.venue }}
+          }
+        </p>
+      </header>
+
+      @if (error(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+
+      @switch (pass.state) {
+        @case ('waiting') {
+          <p class="text-pretty text-sm text-text-muted">
+            This turns this phone into the scanner for this event's door. No account needed.
+          </p>
+          <p class="text-sm text-text-muted">Works until <strong class="font-medium text-text">{{ until() }}</strong></p>
+          <p class="text-pretty text-sm text-text-muted">
+            The link works once. Open it on the phone you'll scan with — anybody else on the door needs their own link.
+          </p>
+          <button uiButton type="button" size="lg" [block]="true" [loading]="opening()" [disabled]="opening()" (click)="open()">
+            Start scanning on this phone
+          </button>
+        }
+        @case ('active') {
+          <ui-alert tone="warning">This link is already open on another phone. Each phone needs its own — ask for a new link.</ui-alert>
+        }
+        @case ('expired') {
+          <ui-alert tone="warning">This door pass has expired. Ask whoever runs the event for a new link.</ui-alert>
+        }
+        @default {
+          <ui-alert tone="warning">This door pass was taken back. Ask whoever runs the event for a new link.</ui-alert>
+        }
+      }
+    } @else {
+      <p class="text-sm text-text-muted" role="status">Checking the link…</p>
+    }
+  </div>
+</main>

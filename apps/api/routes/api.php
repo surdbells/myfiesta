@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\WaitlistController;
 use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
 use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
+use App\Http\Controllers\Api\DoorPassController;
+use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
@@ -120,12 +122,19 @@ Route::post('/auth/register', [AccountController::class, 'register'])->middlewar
 // An invitation to join an organization: what it offers, and accepting it as
 // the signed-in user. Throttled — a token lookup is a guess otherwise.
 Route::get('/invitations/{token}', [InvitationController::class, 'show'])->middleware('throttle:20,1');
-Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept'])->middleware(['auth:sanctum', 'throttle:20,1']);
+Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept'])->middleware(['auth:sanctum', 'token.scope:account', 'throttle:20,1']);
+
+// A door link, opened on the phone that will scan with it.
+Route::get('/door-passes/{secret}', [DoorPassController::class, 'show'])->middleware('throttle:20,1');
+Route::post('/door-passes/{secret}/claim', [DoorPassController::class, 'claim'])->middleware('throttle:10,1');
 Route::post('/auth/forgot-password', [AccountController::class, 'forgotPassword'])->middleware('throttle:10,1');
 Route::post('/auth/reset-password', [AccountController::class, 'resetPassword'])->middleware('throttle:10,1');
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
+// Signing out is open to every token, a door pass included: ending a shift
+// should throw the pass away rather than leave it live on the phone.
+Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
+Route::middleware(['auth:sanctum', 'token.scope:account'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::patch('/auth/profile', [AccountController::class, 'updateProfile']);
     Route::post('/auth/password', [AccountController::class, 'changePassword']);
@@ -219,6 +228,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // away its redemption count and the promoter attribution with it.
         Route::patch('/events/{event:id}/codes/{code}', [CodeController::class, 'update']);
         Route::delete('/events/{event:id}/codes/{code}', [CodeController::class, 'destroy']);
+
+        Route::get('/events/{event:id}/door-passes', [OrganizerDoorPassController::class, 'index']);
+        Route::post('/events/{event:id}/door-passes', [OrganizerDoorPassController::class, 'store']);
+        Route::delete('/events/{event:id}/door-passes/{pass}', [OrganizerDoorPassController::class, 'destroy']);
 
         Route::get('/events/{event:id}/waitlist', [OrganizerWaitlistController::class, 'index']);
         Route::post('/events/{event:id}/waitlist/notify', [OrganizerWaitlistController::class, 'notify']);

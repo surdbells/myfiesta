@@ -1,0 +1,47 @@
+@if (pass(); as current) {
+  <div class="min-h-dvh bg-surface-sunken">
+    <header class="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-3">
+      <div class="flex min-w-0 items-center gap-3">
+        <img class="block h-[1.625rem] w-[1.625rem] shrink-0" src="/brand/mark-64.png" alt="" width="26" height="26" />
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold">{{ current.event.title }}</p>
+          <p class="truncate text-xs text-text-muted">{{ current.label }} · works until {{ until() }}</p>
+        </div>
+      </div>
+      <button uiButton type="button" variant="secondary" size="sm" (click)="askToEnd()">End shift</button>
+    </header>
+
+    <main class="mx-auto w-full max-w-[48rem] p-6 max-[900px]:px-4 max-[900px]:py-5">
+      <router-outlet />
+    </main>
+  </div>
+
+  @if (confirmingEnd()) {
+    <ui-confirm
+      [open]="true"
+      heading="End your shift?"
+      [consequence]="unsent() > 0
+        ? unsent() + (unsent() === 1 ? ' scan made without signal has' : ' scans made without signal have') + ' not been sent yet and will be lost. Wait for signal until the door screen says nothing is waiting, then end the shift.'
+        : 'This phone stops scanning for ' + current.event.title + '. The link cannot be opened again — you would need a new one.'"
+      [confirmLabel]="unsent() > 0 ? 'End anyway' : 'End shift'"
+      busyLabel="Ending…"
+      destructive
+      [busy]="ending()"
+      (confirmed)="endShift()"
+      (cancelled)="confirmingEnd.set(false)"
+    />
+  }
+} @else {
+  <main class="grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
+    <div class="grid w-full max-w-[28rem] gap-3 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Door pass</p>
+      @if (passes.ended(); as reason) {
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">This phone is no longer scanning</h1>
+        <p class="text-pretty text-sm text-text-muted">{{ reason }}</p>
+      } @else {
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">No door pass on this phone</h1>
+        <p class="text-pretty text-sm text-text-muted">Open the door link you were sent, on this phone, to start scanning. If it has expired, ask whoever runs the event for a new one.</p>
+      }
+    </div>
+  </main>
+}

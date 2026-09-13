@@ -1,0 +1,117 @@
+<section class="mt-12 border-t border-border pt-8" aria-labelledby="passes-heading">
+  <header class="mb-4 grid gap-1">
+    <h2 id="passes-heading" class="text-base font-semibold">Door passes</h2>
+    <p class="max-w-[62ch] text-pretty text-sm text-text-muted">
+      Put somebody on the door without adding them to your team. Each pass is a link for one phone: it scans tickets for this event
+      and nothing else — no guest list, no orders.
+    </p>
+    @if (until(); as time) {
+      <!-- On its own line: the time ends in "a.m." and a sentence around it ends in a stray full stop. -->
+      <p class="text-sm text-text-muted">A pass made now works until <strong class="font-medium text-text">{{ time }}</strong></p>
+    }
+  </header>
+
+  <form class="flex flex-wrap items-end gap-3" (ngSubmit)="make()">
+    <div class="field min-w-0 flex-[1_1_16rem]">
+      <label for="passLabel">Who or which door</label>
+      <input
+        id="passLabel"
+        name="passLabel"
+        maxlength="60"
+        autocomplete="off"
+        placeholder="Front gate — Tunde"
+        [ngModel]="label()"
+        (ngModelChange)="label.set($event)"
+      />
+    </div>
+    <button uiButton class="max-sm:w-full" type="submit" [loading]="making()" [disabled]="making() || !label().trim()">Make a door pass</button>
+  </form>
+
+  @if (makeError(); as message) {
+    <p class="mt-3 text-sm text-danger" role="alert">{{ message }}</p>
+  }
+
+  <!--
+    The link, once. Only its hash is kept, so this is the one chance to send
+    it: scanned straight off this screen, shared to a chat, or copied.
+  -->
+  @if (fresh(); as pass) {
+    <div class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-6 rounded-lg border border-border bg-surface-raised p-5 max-sm:grid-cols-1 max-sm:gap-4" role="status">
+      <img class="block h-40 w-40 rounded-md max-sm:mx-auto" [src]="pass.qr" [alt]="'QR code for the ' + pass.label + ' door pass'" width="160" height="160" />
+      <div class="grid min-w-0 gap-3">
+        <div>
+          <p class="font-semibold">{{ pass.label }} is ready</p>
+          <p class="text-pretty text-sm text-text-muted">
+            Scan the code with the phone that will work the door, or send it the link. It opens once — this is the only time it is shown.
+          </p>
+        </div>
+        <p class="select-all break-all rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs">{{ pass.link }}</p>
+        <div class="flex flex-wrap gap-2">
+          <button uiButton type="button" variant="secondary" size="sm" (click)="copy(pass.link)">{{ copied() ? 'Copied' : 'Copy link' }}</button>
+          @if (canShare) {
+            <button uiButton type="button" variant="secondary" size="sm" (click)="share(pass)">Share…</button>
+          }
+          <button uiButton type="button" variant="ghost" size="sm" (click)="fresh.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (failed()) {
+    <p class="mt-4 text-sm text-text-muted">Could not load the passes already made. <button class="cursor-pointer border-0 bg-transparent p-0 text-sm underline underline-offset-2 [font-family:inherit]" type="button" (click)="load()">Try again</button></p>
+  } @else if (loaded() && passes().length > 0) {
+    <ul class="m-0 mt-6 grid list-none gap-2 p-0">
+      @for (pass of live(); track pass.id) {
+        <li class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised px-5 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="flex flex-wrap items-center gap-2 font-medium">
+              <span class="truncate">{{ pass.label }}</span>
+              <ui-badge [tone]="stateTone(pass.state)">{{ stateLabel(pass.state) }}</ui-badge>
+            </p>
+            <p class="text-sm text-text-muted tabular-nums">
+              {{ pass.admitted_scans }} admitted · {{ pass.scans }} scanned
+              @if (pass.last_used_at) {
+                · last scan {{ time(pass.last_used_at) }}
+              }
+              @if (pass.issued_by) {
+                · made by {{ pass.issued_by }}
+              }
+            </p>
+          </div>
+          <button
+            class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger"
+            type="button"
+            (click)="revoking.set(pass)"
+          >
+            Take back
+          </button>
+        </li>
+      }
+      @for (pass of past(); track pass.id) {
+        <li class="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-dashed border-border px-5 py-3 text-text-muted">
+          <p class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <span class="truncate">{{ pass.label }}</span>
+            <ui-badge tone="neutral">{{ stateLabel(pass.state) }}</ui-badge>
+          </p>
+          <p class="text-sm tabular-nums">{{ pass.admitted_scans }} admitted · {{ pass.scans }} scanned</p>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (revoking(); as pass) {
+    <ui-confirm
+      [open]="true"
+      [heading]="'Take back ' + pass.label + '?'"
+      [consequence]="pass.state === 'active'
+        ? 'The phone using it stops scanning at its next scan. Scans it already made stay on record.'
+        : 'The link stops working before anybody opens it.'"
+      confirmLabel="Take back"
+      busyLabel="Taking back…"
+      destructive
+      [busy]="revokingBusy()"
+      (confirmed)="confirmRevoke()"
+      (cancelled)="revoking.set(null)"
+    />
+  }
+</section>

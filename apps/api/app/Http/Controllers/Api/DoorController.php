@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Services\Door\CheckInService;
 use App\Services\Door\DoorList;
+use App\Services\Door\DoorPasses;
 use App\Services\Door\ScanOutcome;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class DoorController extends Controller
     public function __construct(
         private readonly CheckInService $door,
         private readonly DoorList $list,
+        private readonly DoorPasses $passes,
     ) {}
 
     public function scan(Request $request, Event $event): JsonResponse
@@ -49,6 +51,7 @@ class DoorController extends Controller
             $request->user(),
             $validated['party'] ?? null,
             $validated['client_id'] ?? null,
+            $this->passes->forToken($request->user()->currentAccessToken())?->id,
         );
 
         return response()->json($this->present($outcome, $event));
@@ -96,6 +99,7 @@ class DoorController extends Controller
         ]);
 
         $results = [];
+        $passId = $this->passes->forToken($request->user()->currentAccessToken())?->id;
 
         foreach ($validated['scans'] as $scan) {
             $outcome = $this->door->recordOffline(
@@ -106,6 +110,7 @@ class DoorController extends Controller
                 $scan['client_id'],
                 $scan['offline_result'],
                 Carbon::parse($scan['scanned_at']),
+                $passId,
             );
 
             $results[] = ['client_id' => $scan['client_id']] + $this->present($outcome, $event);
@@ -139,6 +144,15 @@ class DoorController extends Controller
         $token = $request->user()->currentAccessToken();
 
         if (! $token->can(TokenAbility::doorFor($event->id))) {
+            $this->authorize('scan', $event);
+
+            return;
+        }
+
+        // A door pass is only as good as the member who made it. Somebody
+        // moved from manager to marketing can no longer work the door, and
+        // neither can the phones they handed out.
+        if ($this->passes->forToken($token) !== null) {
             $this->authorize('scan', $event);
         }
     }

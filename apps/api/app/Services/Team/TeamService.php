@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Door\DoorPasses;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -23,7 +24,10 @@ class TeamService
 {
     public const INVITATION_DAYS = 7;
 
-    public function __construct(private readonly Auditor $auditor) {}
+    public function __construct(
+        private readonly Auditor $auditor,
+        private readonly DoorPasses $doorPasses,
+    ) {}
 
     /**
      * @return array{invitation: OrganizationInvitation, token: string}
@@ -148,9 +152,14 @@ class TeamService
 
         $organization->members()->detach($member->id);
 
+        // Phones they put on a door stop with them. Left running, a removed
+        // manager would still have scanners out in the world on their say-so.
+        $ended = $this->doorPasses->endIssuedBy($organization, $member);
+
         $this->auditor->record('team.removed', $organization, $by, $organization->id, [
             'member' => $member->email,
             'role' => $current->value,
+            'door_passes_ended' => $ended,
         ]);
     }
 

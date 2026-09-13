@@ -237,6 +237,52 @@ export interface InvitationDetails {
   has_account: boolean;
 }
 
+/** The night a door pass opens, and the rule the door enforces. */
+export interface DoorPassEvent {
+  id: string;
+  title: string;
+  starts_at: string;
+  ends_at: string | null;
+  timezone: string;
+  venue: string | null;
+  city: string | null;
+  min_age: number | null;
+  id_required: boolean;
+}
+
+/** What a door link offers, before it is opened. */
+export interface DoorPassPreview {
+  label: string;
+  state: DoorPassState;
+  expires_at: string;
+  event: DoorPassEvent;
+}
+
+/** A door pass opened on this phone. */
+export interface DoorPassSession {
+  token: string;
+  label: string;
+  expires_at: string;
+  event: DoorPassEvent;
+}
+
+export type DoorPassState = 'waiting' | 'active' | 'expired' | 'revoked' | 'ended';
+
+/** A door pass, as the organizer sees it. The link itself is only ever returned once. */
+export interface DoorPass {
+  id: string;
+  label: string;
+  state: DoorPassState;
+  issued_by: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  last_used_at: string | null;
+  expires_at: string;
+  revoked_at: string | null;
+  scans: number;
+  admitted_scans: number;
+}
+
 /** Who is waiting for a sold-out event. */
 export interface WaitlistPage {
   data: { id: string; name: string | null; email: string; quantity: number; status: 'waiting' | 'notified' | 'purchased'; joined_at: string; notified_at: string | null }[];

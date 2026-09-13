@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL, authInterceptor } from './api';
 import { SessionStore } from './session';
+import { DoorPassStore } from './door-pass';
 
 /**
  * What every console request carries.
@@ -85,5 +86,51 @@ describe('authInterceptor', () => {
     const request = backend.expectOne('http://api.test/api/auth/login').request;
     expect(request.headers.has('X-Organization')).toBe(false);
     expect(request.headers.has('Authorization')).toBe(false);
+  });
+
+  describe('with a door pass on this phone', () => {
+    let cleared: boolean;
+
+    beforeEach(() => {
+      cleared = false;
+      localStorage.clear();
+      TestBed.inject(SessionStore).clear = () => {
+        cleared = true;
+      };
+      TestBed.inject(DoorPassStore).start({
+        token: 'door-token',
+        label: 'Front gate',
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        event: { id: 'evt-1', title: 'Afro Fest', starts_at: '', ends_at: null, timezone: 'UTC', venue: null, city: null, min_age: null, id_required: false },
+      });
+    });
+
+    afterEach(() => localStorage.clear());
+
+    it('sends the pass, and no organization, to its own door', () => {
+      for (const path of ['scan', 'door-list', 'scans/sync']) {
+        http.get(`http://api.test/api/events/evt-1/${path}`).subscribe();
+        const request = backend.expectOne(`http://api.test/api/events/evt-1/${path}`).request;
+        expect(request.headers.get('Authorization')).toBe('Bearer door-token');
+        expect(request.headers.has('X-Organization')).toBe(false);
+      }
+    });
+
+    it('keeps the pass away from everything else, including another event', () => {
+      http.get('http://api.test/api/events/evt-2/scan').subscribe();
+      expect(backend.expectOne('http://api.test/api/events/evt-2/scan').request.headers.get('Authorization')).toBe('Bearer secret-token');
+
+      http.get('http://api.test/api/organizer/events/evt-1/guests').subscribe();
+      expect(backend.expectOne('http://api.test/api/organizer/events/evt-1/guests').request.headers.get('Authorization')).toBe('Bearer secret-token');
+    });
+
+    it('ends the pass when it is refused, and leaves the organizer signed in', () => {
+      http.post('http://api.test/api/events/evt-1/scan', {}).subscribe({ error: () => undefined });
+      backend.expectOne('http://api.test/api/events/evt-1/scan').flush({}, { status: 401, statusText: 'Unauthorized' });
+
+      expect(TestBed.inject(DoorPassStore).pass()).toBeNull();
+      expect(TestBed.inject(DoorPassStore).ended()).toContain('stopped working');
+      expect(cleared).toBe(false);
+    });
   });
 });

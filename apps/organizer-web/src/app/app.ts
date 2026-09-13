@@ -36,9 +36,27 @@ export class App {
   /** The drawer, on a small screen. Closed on every navigation. */
   readonly navOpen = signal(false);
 
+  /**
+   * Screens that stand alone even for somebody signed in.
+   *
+   * A door pass works on anybody's phone, including one signed in to the
+   * console — and the scanner it opens must look the same either way, with no
+   * sidebar suggesting the pass reaches anything else.
+   */
+  // Read from the address at start too, so a reload does not draw the shell
+  // for a moment and then rebuild the scanner without it.
+  readonly bare = signal(App.isBare(typeof location === 'undefined' ? '/' : location.pathname));
+
+  private static isBare(url: string): boolean {
+    return /^\/(scan|door-pass)\//.test(url);
+  }
+
   constructor() {
     this.router.events.subscribe((event) => {
-      if (event instanceof NavigationEnd) this.navOpen.set(false);
+      if (event instanceof NavigationEnd) {
+        this.navOpen.set(false);
+        this.bare.set(App.isBare(event.urlAfterRedirects));
+      }
     });
   }
 

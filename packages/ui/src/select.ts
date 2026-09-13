@@ -467,7 +467,10 @@ export class UiSelect implements ControlValueAccessor {
     const id = this.activeId();
     if (!id) return;
 
-    const element = this.panel().nativeElement.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null;
+    // Matched by property rather than a `#id` selector: no escaping to get
+    // wrong, and no reliance on CSS.escape, which jsdom does not have.
+    const options = this.panel().nativeElement.querySelectorAll('[id]') as NodeListOf<HTMLElement>;
+    const element = Array.from(options).find((option) => option.id === id) ?? null;
     element?.scrollIntoView?.({ block: 'nearest' });
   }
 

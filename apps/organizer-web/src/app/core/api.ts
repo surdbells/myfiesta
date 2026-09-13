@@ -39,6 +39,9 @@ import {
   WaitlistPage,
   TeamPage,
   InvitationDetails,
+  DoorPass,
+  DoorPassPreview,
+  DoorPassSession,
   Session,
   TicketType,
   PayoutStatement,
@@ -47,6 +50,7 @@ import {
   Overview,
 } from './api.types';
 import { SessionStore } from './session';
+import { DoorPassStore } from './door-pass';
 
 /**
  * Where the API lives, supplied at runtime rather than compiled in.
@@ -77,6 +81,27 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const session = inject(SessionStore);
   const router = inject(Router);
   const base = inject(API_BASE_URL);
+  const doorPass = inject(DoorPassStore);
+
+  // A door pass on this phone, for its own door. Sent instead of any organizer
+  // session, and never with the organization header: it acts for one event's
+  // door, not for an organization.
+  const passToken = doorPass.tokenFor(req.url, base);
+
+  if (passToken) {
+    return next(req.clone({ setHeaders: { Authorization: `Bearer ${passToken}` } })).pipe(
+      catchError((error: HttpErrorResponse) => {
+        // The pass was taken back or ran out. An organizer session on the same
+        // phone is a different credential and stays exactly as it was.
+        if (error.status === 401) {
+          doorPass.end('This door pass has stopped working. It was taken back, or the night is over.');
+        }
+
+        return throwError(() => error);
+      }),
+    );
+  }
+
   const token = session.token;
 
   const headers: Record<string, string> = {};
@@ -85,7 +110,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   // api.myfiesta.ca.example.com would pass the check and be handed the token.
   const toApi = req.url.startsWith(`${base.replace(/\/+$/, '')}/`);
 
-  if (token && toApi) headers['Authorization'] = `Bearer ${token}`;
+  if (token && toApi && !req.headers.has('Authorization')) headers['Authorization'] = `Bearer ${token}`;
 
   /*
    * Which organization this is about, for somebody in more than one.
@@ -103,7 +128,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401 && session.signedIn()) {
+      // Only when it was this session's token that was refused. A request
+      // that brought its own (throwing a door pass away) says nothing about it.
+      if (error.status === 401 && session.signedIn() && !req.headers.has('Authorization')) {
         session.clear();
         void router.navigate(['/sign-in']);
       }
@@ -218,6 +245,33 @@ export class Api {
   /** Accept as the signed-in user; the answer is a fresh session including the new membership. */
   acceptInvitation(token: string): Observable<Session & { joined: string }> {
     return this.http.post<Session & { joined: string }>(`${this.base}/api/invitations/${encodeURIComponent(token)}/accept`, {});
+  }
+
+  /** What a door link opens, before opening it. */
+  doorPassPreview(secret: string): Observable<DoorPassPreview> {
+    return this.http.get<DoorPassPreview>(`${this.base}/api/door-passes/${encodeURIComponent(secret)}`);
+  }
+
+  /** Open a door link on this phone. Works once. */
+  claimDoorPass(secret: string): Observable<DoorPassSession> {
+    return this.http.post<DoorPassSession>(`${this.base}/api/door-passes/${encodeURIComponent(secret)}/claim`, {});
+  }
+
+  /** Throw a door pass away: the token is deleted, so the link cannot be revived on this phone. */
+  endDoorPass(token: string): Observable<unknown> {
+    return this.http.post(`${this.base}/api/auth/logout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+  }
+
+  doorPasses(eventId: string): Observable<{ data: DoorPass[]; expires_at: string }> {
+    return this.http.get<{ data: DoorPass[]; expires_at: string }>(`${this.base}/api/organizer/events/${eventId}/door-passes`);
+  }
+
+  issueDoorPass(eventId: string, label: string): Observable<{ data: DoorPass; link: string; qr: string; message: string }> {
+    return this.http.post<{ data: DoorPass; link: string; qr: string; message: string }>(`${this.base}/api/organizer/events/${eventId}/door-passes`, { label });
+  }
+
+  revokeDoorPass(eventId: string, passId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.base}/api/organizer/events/${eventId}/door-passes/${passId}`);
   }
 
   /** Everything the dashboard shows, in one request. */
