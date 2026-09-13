@@ -6,26 +6,42 @@
     thing left in app.scss is the current-section marker, which depends on a
     router-applied class.
   -->
-  <div class="shell grid min-h-dvh grid-cols-[15rem_1fr] bg-surface-sunken max-[900px]:grid-cols-1">
+  <div
+    class="shell grid min-h-dvh grid-cols-[15rem_1fr] bg-surface-sunken transition-[grid-template-columns] duration-(--motion-base) ease-(--motion-ease) motion-reduce:transition-none max-[900px]:grid-cols-1 min-[901px]:data-[collapsed=true]:grid-cols-[4.5rem_1fr]"
+    [attr.data-collapsed]="collapsed()"
+  >
     <!--
       One sidebar, rendered once, rather than a header each screen re-states.
       Everything below the outlet is a page inside it, which is what makes the
       console feel like an application rather than a set of pages that happen
       to share a stylesheet.
 
-      On a small screen it goes off-canvas rather than collapsing to icons: an
-      icon rail needs every section to have a glyph somebody recognises
-      without its label, and "payouts" does not.
+      On a wide screen it folds down to its icons, each labelled by a tooltip
+      and still named for screen readers. On a small screen it goes off-canvas
+      instead, whatever the fold was set to.
     -->
     <aside
-      class="side sticky top-0 grid h-dvh grid-rows-[auto_auto_1fr_auto] border-r border-border bg-surface max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-40 max-[900px]:w-[min(17rem,82vw)] max-[900px]:-translate-x-full max-[900px]:data-[open=true]:shadow-(--shadow-overlay) max-[900px]:transition-transform max-[900px]:duration-(--motion-base) max-[900px]:ease-(--motion-ease) max-[900px]:data-[open=true]:translate-x-0 motion-reduce:transition-none"
+      class="side group/side sticky top-0 flex h-dvh flex-col overflow-hidden border-r border-border bg-surface max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-40 max-[900px]:w-[min(17rem,82vw)] max-[900px]:-translate-x-full max-[900px]:data-[open=true]:shadow-(--shadow-overlay) max-[900px]:transition-transform max-[900px]:duration-(--motion-base) max-[900px]:ease-(--motion-ease) max-[900px]:data-[open=true]:translate-x-0 motion-reduce:transition-none"
       [attr.data-open]="navOpen()"
+      [attr.data-collapsed]="collapsed()"
     >
-      <div class="side__top flex items-center justify-between px-4 pb-3 pt-4">
-        <a class="side__brand flex items-center gap-2 no-underline" routerLink="/">
+      <div class="side__top flex items-center justify-between gap-2 px-4 pb-3 pt-4 min-[901px]:group-data-[collapsed=true]/side:flex-col min-[901px]:group-data-[collapsed=true]/side:px-2">
+        <a class="side__brand flex items-center gap-2 no-underline" routerLink="/" aria-label="myfiesta dashboard">
           <img class="side__mark block h-[1.625rem] w-[1.625rem]" src="/brand/mark-64.png" alt="" width="26" height="26" />
-          <span class="side__word text-base font-bold tracking-[-0.02em] text-text">myfiesta</span>
+          <span class="side__word text-base font-bold tracking-[-0.02em] text-text min-[901px]:group-data-[collapsed=true]/side:hidden">myfiesta</span>
         </a>
+
+        <!-- Folding: a wide screen only. -->
+        <button
+          type="button"
+          class="side__fold grid h-8 w-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-text-subtle [font-family:inherit] hover:bg-surface-hover hover:text-text max-[900px]:hidden"
+          [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+          [attr.aria-expanded]="!collapsed()"
+          [title]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+          (click)="toggleCollapsed()"
+        >
+          <ui-icon [icon]="collapsed() ? expandIcon : collapseIcon" size="sm" />
+        </button>
 
         <!-- Only exists in the drawer. -->
         <button
@@ -41,76 +57,77 @@
       <!--
         The organization switcher. Searchable, because somebody who runs a
         dozen venues switches between them constantly and typing two letters
-        beats scrolling for the right one.
+        beats scrolling for the right one. Folded away with the labels:
+        switching is a moment to open the sidebar for.
       -->
-      @if (session.organizations().length > 1) {
-        <div class="switcher grid gap-1 px-4 pb-4">
-          <label class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="org">Organization</label>
-          <ui-select
-            controlId="org"
-            ariaLabel="Organization"
-            [options]="organizationOptions()"
-            [value]="session.current()?.id ?? null"
-            (valueChange)="switchOrganization($event)"
-          />
-        </div>
-      } @else if (session.current(); as org) {
-        <!-- The single-organization case, which is most of them. Still labelled,
-             so the sidebar does not change shape the day somebody is added to a
-             second one. -->
-        <div class="switcher grid gap-1 px-4 pb-4">
-          <span class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Organization</span>
-          <p class="switcher__only truncate py-2 text-sm font-medium text-text">{{ org.name }}</p>
-        </div>
-      }
-
-      <nav class="nav grid content-start gap-6 overflow-y-auto px-3" aria-label="Sections">
-        @for (group of navigation(); track group.title) {
-          <div class="nav__group grid gap-0.5">
-            <h2 class="nav__heading mb-1 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">{{ group.title }}</h2>
-
-            @for (item of group.items; track item.link) {
-              <a
-                class="nav__link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text-muted no-underline hover:bg-surface-hover hover:text-text"
-                [routerLink]="item.link"
-                routerLinkActive="is-current"
-                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
-                (click)="navOpen.set(false)"
-              >
-                <!-- Dimmed against the label, which is the thing being read. The
-                     hovered and current states bring it back to full strength
-                     (app.scss, with the rest of the is-current marker). -->
-                <ui-icon class="nav__glyph text-text-subtle" [icon]="item.glyph" size="sm" />
-                <span>{{ item.label }}</span>
-              </a>
-            }
+      <div class="min-[901px]:group-data-[collapsed=true]/side:hidden">
+        @if (session.organizations().length > 1) {
+          <div class="switcher grid gap-1 px-4 pb-4">
+            <label class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="org">Organization</label>
+            <ui-select
+              controlId="org"
+              ariaLabel="Organization"
+              [options]="organizationOptions()"
+              [value]="session.current()?.id ?? null"
+              (valueChange)="switchOrganization($event)"
+            />
           </div>
+        } @else if (session.current(); as org) {
+          <div class="switcher grid gap-1 px-4 pb-4">
+            <span class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Organization</span>
+            <p class="switcher__only truncate py-2 text-sm font-medium text-text">{{ org.name }}</p>
+          </div>
+        }
+      </div>
+
+      <nav class="nav grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto px-3 min-[901px]:group-data-[collapsed=true]/side:px-2" aria-label="Sections">
+        @for (item of navigation(); track item.link) {
+          <a
+            class="nav__link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text-muted no-underline hover:bg-surface-hover hover:text-text min-[901px]:group-data-[collapsed=true]/side:justify-center min-[901px]:group-data-[collapsed=true]/side:px-0"
+            [routerLink]="item.link"
+            routerLinkActive="is-current"
+            [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+            [attr.title]="collapsed() ? item.label : null"
+            (click)="navOpen.set(false)"
+          >
+            <!-- Dimmed against the label, which is the thing being read. The
+                 hovered and current states bring it back to full strength
+                 (app.scss, with the rest of the is-current marker). -->
+            <ui-icon class="nav__glyph text-text-subtle" [icon]="item.glyph" size="sm" />
+            <span class="min-[901px]:group-data-[collapsed=true]/side:sr-only">{{ item.label }}</span>
+          </a>
         }
       </nav>
 
-      <div class="side__foot grid gap-2 border-t border-border-subtle p-4">
+      <div class="side__foot grid gap-2 border-t border-border-subtle p-4 min-[901px]:group-data-[collapsed=true]/side:justify-items-center min-[901px]:group-data-[collapsed=true]/side:px-2">
         @if (session.user(); as user) {
           <!-- The person, as a way into their own account: name and password. -->
           <a
-            class="who m-0 -mx-2 grid min-w-0 gap-0.5 rounded-md px-2 py-1 no-underline hover:bg-surface-hover"
+            class="who m-0 -mx-2 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1 no-underline hover:bg-surface-hover min-[901px]:group-data-[collapsed=true]/side:mx-0 min-[901px]:group-data-[collapsed=true]/side:px-1"
             routerLink="/account"
             routerLinkActive="bg-surface-hover"
+            [attr.title]="collapsed() ? user.name + ', account settings' : null"
           >
-            <span class="who__name truncate text-sm font-medium text-text">{{ user.name }}</span>
-            <span class="who__role text-xs text-text-subtle">
-              @if (session.current(); as org) {
-                <span class="capitalize">{{ org.role }}</span> ·
-              }
-              Account settings
+            <span class="who__initials grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary-text" aria-hidden="true">{{ initials(user.name) }}</span>
+            <span class="grid min-w-0 gap-0.5 min-[901px]:group-data-[collapsed=true]/side:sr-only">
+              <span class="who__name truncate text-sm font-medium text-text">{{ user.name }}</span>
+              <span class="who__role truncate text-xs text-text-subtle">
+                @if (session.current(); as org) {
+                  <span class="capitalize">{{ org.role }}</span> ·
+                }
+                Account settings
+              </span>
             </span>
           </a>
         }
         <button
           type="button"
-          class="side__out cursor-pointer rounded-md border border-field-border bg-surface-raised px-3 py-2 text-sm text-text-muted [font-family:inherit] hover:bg-surface-hover hover:text-text"
+          class="side__out flex cursor-pointer items-center justify-center gap-2 rounded-md border border-field-border bg-surface-raised px-3 py-2 text-sm text-text-muted [font-family:inherit] hover:bg-surface-hover hover:text-text min-[901px]:group-data-[collapsed=true]/side:h-9 min-[901px]:group-data-[collapsed=true]/side:w-9 min-[901px]:group-data-[collapsed=true]/side:border-0 min-[901px]:group-data-[collapsed=true]/side:bg-transparent min-[901px]:group-data-[collapsed=true]/side:p-0"
+          [attr.title]="collapsed() ? 'Sign out' : null"
           (click)="signOut()"
         >
-          Sign out
+          <ui-icon [icon]="signOutIcon" size="sm" />
+          <span class="min-[901px]:group-data-[collapsed=true]/side:sr-only">Sign out</span>
         </button>
       </div>
     </aside>

@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, Menu, ReceiptText, Users, Wallet, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ReceiptText, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -14,10 +14,7 @@ interface NavItem {
   readonly exact?: boolean;
 }
 
-interface NavGroup {
-  readonly title: string;
-  readonly items: NavItem[];
-}
+const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 
 @Component({
   selector: 'app-root',
@@ -33,8 +30,41 @@ export class App {
   protected readonly menuIcon = Menu;
   protected readonly closeIcon = X;
 
+  protected readonly collapseIcon = PanelLeftClose;
+  protected readonly expandIcon = PanelLeftOpen;
+  protected readonly signOutIcon = LogOut;
+
   /** The drawer, on a small screen. Closed on every navigation. */
   readonly navOpen = signal(false);
+
+  /**
+   * The sidebar folded down to its icons, on a wide screen.
+   *
+   * For the screens that want the width — the orders table, the door, a long
+   * attendee list. Remembered on this browser, because somebody who folds it
+   * away wants it to stay folded. Labels stay in the page for screen readers
+   * and appear as tooltips; a small screen keeps its drawer either way.
+   */
+  readonly collapsed = signal(App.restoreCollapsed());
+
+  toggleCollapsed(): void {
+    const next = !this.collapsed();
+    this.collapsed.set(next);
+
+    try {
+      localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+    } catch {
+      // Private browsing: it folds for this visit and forgets.
+    }
+  }
+
+  private static restoreCollapsed(): boolean {
+    try {
+      return typeof localStorage !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
 
   /**
    * Screens that stand alone even for somebody signed in.
@@ -63,46 +93,30 @@ export class App {
   /**
    * The sidebar, filtered by what this person may actually do.
    *
+   * One list, no section headings: with six entries at most, "Overview",
+   * "Programme" and "Money" were more words than there were things to find.
+   *
    * Hidden rather than disabled. A disabled link tells door staff there is a
    * money screen they cannot reach, which is information they did not need and
    * an invitation to ask why — and the server refuses those requests anyway,
    * so the link would only ever produce a 403.
    */
-  readonly navigation = computed<NavGroup[]>(() => {
-    const groups: NavGroup[] = [
-      {
-        title: 'Overview',
-        items: [{ label: 'Dashboard', link: '/', glyph: LayoutDashboard, exact: true }],
-      },
-      {
-        title: 'Programme',
-        items: [{ label: 'Events', link: '/events', glyph: CalendarDays }],
-      },
+  readonly navigation = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+      { label: 'Dashboard', link: '/', glyph: LayoutDashboard, exact: true },
+      { label: 'Events', link: '/events', glyph: CalendarDays },
     ];
 
-    // Money is a permission, and this is the one section where lacking it
-    // means the screen is refused outright rather than served quieter — so
-    // showing the link to somebody who cannot open it would be an invitation
-    // to a 403.
     if (this.session.canSeeMoney()) {
-      groups.push({
-        title: 'Money',
-        items: [
-          { label: 'Orders', link: '/orders', glyph: ReceiptText },
-          { label: 'Payouts', link: '/payouts', glyph: Wallet },
-        ],
-      });
+      items.push({ label: 'Orders', link: '/orders', glyph: ReceiptText }, { label: 'Payouts', link: '/payouts', glyph: Wallet });
     }
 
-    // Owners only, for the same reason as money: a link that only 403s.
+    // Owners only: a link that could only 403 is not shown.
     if (this.session.canManageTeam()) {
-      groups.push({
-        title: 'Organization',
-        items: [{ label: 'Team', link: '/team', glyph: Users }],
-      });
+      items.push({ label: 'Team', link: '/team', glyph: Users });
     }
 
-    return groups;
+    return items;
   });
 
   readonly organizationOptions = computed<SelectOption[]>(() =>
@@ -118,6 +132,14 @@ export class App {
     // and staying on one event's attendee list while switching to a different
     // organization asks for a 404 at best.
     void this.router.navigate(['/']);
+  }
+
+  /** Two letters for the account button, which is all a folded sidebar has room for. */
+  initials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    const letters = (parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
+
+    return letters.toUpperCase() || '?';
   }
 
   signOut(): void {
