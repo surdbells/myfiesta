@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
+import { Seo } from '../../core/seo';
 import { TicketAccess } from '../../core/api.types';
 import { AddToCalendar } from '../../shared/add-to-calendar';
 
@@ -25,12 +26,14 @@ export class Tickets {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly seo = inject(Seo);
 
   readonly order = signal<TicketAccess | null>(null);
   readonly loading = signal(true);
   readonly notFound = signal(false);
 
   constructor() {
+    this.seo.forPrivatePage('Your tickets');
     const token = this.route.snapshot.paramMap.get('token') ?? '';
 
     this.api.ticketsByToken(token).subscribe({

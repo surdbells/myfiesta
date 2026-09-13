@@ -82,4 +82,13 @@ describe('Seo', () => {
 
     expect((meta.getTag('property="og:description"')?.content ?? '').length).toBeLessThanOrEqual(200);
   });
+
+  it('keeps private pages out of search results, and lets the next public page back in', () => {
+    seo.forPrivatePage('Your tickets');
+    expect(meta.getTag('name="robots"')?.content).toBe('noindex, nofollow');
+
+    // Moving on inside the app must not leave the event page unindexable.
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+    expect(meta.getTag('name="robots"')).toBeNull();
+  });
 });

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Api } from '../../core/api';
+import { Seo } from '../../core/seo';
 import { OrderStatus as OrderStatusModel } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 import { AddToCalendar } from '../../shared/add-to-calendar';
@@ -26,6 +27,7 @@ import { AddToCalendar } from '../../shared/add-to-calendar';
 export class OrderStatus implements OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly seo = inject(Seo);
 
   readonly order = signal<OrderStatusModel | null>(null);
   readonly notFound = signal(false);
@@ -46,6 +48,7 @@ export class OrderStatus implements OnDestroy {
   private static readonly MAX_ATTEMPTS = 20;
 
   constructor() {
+    this.seo.forPrivatePage('Your order');
     this.poll(this.route.snapshot.paramMap.get('reference')!);
   }
 

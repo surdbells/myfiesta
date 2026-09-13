@@ -55,6 +55,87 @@ app.use(
  */
 const apiBaseUrl = process.env['API_BASE_URL'] ?? 'http://127.0.0.1:8000';
 
+/**
+ * What crawlers may read.
+ *
+ * Event pages and the listing, yes — they are the storefront. A buyer's
+ * tickets and order pages, no: the address is the credential and the page
+ * carries names and scannable codes. They are also marked noindex, since a
+ * disallow alone still lets a search engine list a URL it saw linked
+ * somewhere without reading it.
+ */
+const PRIVATE_PATHS = ['/tickets/', '/order/', '/sign-in', '/register', '/login'];
+
+app.get('/robots.txt', (req, res) => {
+  const origin = siteOrigin(req);
+
+  res
+    .type('text/plain')
+    .set('Cache-Control', 'public, max-age=86400')
+    .send(
+      [
+        'User-agent: *',
+        ...PRIVATE_PATHS.map((path) => `Disallow: ${path}`),
+        // Checkout steps: every event has them, and none is worth a result.
+        'Disallow: /*/checkout',
+        '',
+        `Sitemap: ${origin}/sitemap.xml`,
+        '',
+      ].join('\n'),
+    );
+});
+
+/**
+ * The sitemap, from the API, on this origin.
+ *
+ * Crawlers look for it here, and a sitemap may only list URLs on its own
+ * host — so the API builds it and the site serves it.
+ */
+app.get('/sitemap.xml', async (_req, res) => {
+  try {
+    const upstream = await fetch(`${apiBaseUrl}/api/sitemap.xml`, { signal: AbortSignal.timeout(10_000) });
+
+    if (!upstream.ok) {
+      res.status(502).type('text/plain').send('Sitemap unavailable.');
+      return;
+    }
+
+    res
+      .status(200)
+      .type('application/xml')
+      .set('Cache-Control', 'public, max-age=3600')
+      .send(await upstream.text());
+  } catch {
+    res.status(502).type('text/plain').send('Sitemap unavailable.');
+  }
+});
+
+/** Private pages carry the header as well as the robots.txt rule. */
+app.use((req, res, next) => {
+  if (PRIVATE_PATHS.some((path) => req.path.startsWith(path)) || /^\/[^/]+\/checkout/.test(req.path)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  }
+
+  next();
+});
+
+/**
+ * This site's own origin, for the robots.txt sitemap line.
+ *
+ * PUBLIC_URL when set. Otherwise the request's host — but only one on the
+ * allowlist, so a forged Host header cannot point crawlers at another site's
+ * sitemap from ours.
+ */
+function siteOrigin(req: express.Request): string {
+  const configured = process.env['PUBLIC_URL'];
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const host = req.get('host') ?? '';
+  const hostname = host.replace(/:\d+$/, '');
+
+  return allowedHosts.includes(hostname) ? `${req.protocol}://${host}` : 'https://myfiesta.ca';
+}
+
 app.use((req, res, next) => {
   angularApp
     .handle(req)

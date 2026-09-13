@@ -58,11 +58,31 @@ export class Seo {
       { name: 'twitter:card', content: this.cardImage(event) ? 'summary_large_image' : 'summary' },
     ]);
 
+    this.indexable();
     this.canonical(url);
     this.structuredData(event, url);
   }
 
+  /**
+   * A page that is somebody's own: their tickets, their order.
+   *
+   * The address is the credential and the page carries names and codes, so it
+   * is kept out of search results even if the link turns up somewhere a
+   * crawler can see it. The server sends the same as a header; this covers
+   * arriving here by navigating inside the app.
+   */
+  forPrivatePage(title: string): void {
+    this.title.setTitle(`${title} — myFiesta`);
+    this.meta.updateTag({ name: 'robots', content: 'noindex, nofollow' }, 'name="robots"');
+  }
+
+  /** Undo forPrivatePage when the app moves on to a public page. */
+  private indexable(): void {
+    this.meta.removeTag('name="robots"');
+  }
+
   forListing(heading: string, description: string, url: string): void {
+    this.indexable();
     this.title.setTitle(`${heading} — myFiesta`);
     this.set([
       { name: 'description', content: description },

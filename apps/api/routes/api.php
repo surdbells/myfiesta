@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
+use App\Http\Controllers\Api\SitemapController;
 use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,9 @@ Route::get('/health', fn () => ['status' => 'ok']);
  * every change, while creating an order takes locks and reserves stock.
  */
 Route::get('/discover', DiscoverController::class);
+
+// Proxied by the public site as its own /sitemap.xml.
+Route::get('/sitemap.xml', SitemapController::class)->middleware('throttle:30,1');
 
 // The fixed list the console's category dropdown offers and the API accepts.
 Route::get('/event-categories', EventCategoryController::class);
