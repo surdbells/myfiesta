@@ -12,19 +12,19 @@ This repository is the rebuild. It shares no code with the platform it replaces.
 apps/api             Laravel + Filament — the API and the admin console
 apps/web             Angular, server-rendered — public site and guest checkout
 apps/organizer-web   Angular — organizer console (the desk work)
-apps/mobile          Flutter — one app, three modes: attendee, organizer, door
-packages/contract    OpenAPI spec — the source of truth for both client languages
-packages/tokens      Design tokens — emitted as CSS custom properties and Dart
+apps/mobile          Angular + Ionic in a Capacitor shell — one app, three modes
+packages/contract    OpenAPI spec — the source of truth for every client
+packages/tokens      Design tokens — emitted as CSS custom properties
 tools/               Repository-wide checks
 docs/                Decisions and reference
 ```
 
 Two structural notes, because neither is obvious from the tree:
 
-**`packages/contract` is load-bearing.** Flutter cannot consume a TypeScript
-package, so there is no shared client library. The OpenAPI document is the only
-thing keeping the Dart and TypeScript clients honest, and both are generated
-from it. Endpoints that are not in the contract cannot be called.
+**`packages/contract` is load-bearing.** The OpenAPI document is what keeps
+the clients honest about what the API actually promises, and it is where a new
+endpoint is described before anything calls it. Endpoints that are not in the
+contract cannot be called.
 
 **The mobile app is one bundle with three modes.** Which mode a person gets is
 decided by their token scope, not by the build — so a door-staff phone has the
@@ -39,7 +39,6 @@ three feature directories from importing each other.
 | PHP      | 8.3+      |
 | Composer | 2.10+     |
 | Node     | 24+       |
-| Flutter  | 3.47+     |
 | Postgres | 17        |
 | Redis    | 7         |
 
@@ -56,8 +55,8 @@ cd apps/web && npm install && npm start
 # Organizer console
 cd apps/organizer-web && npm install && npm start
 
-# Mobile
-cd apps/mobile && flutter pub get && flutter run
+# Phone app (browser; see apps/mobile/README.md for devices)
+npm install && npm start --workspace mobile
 
 # Design tokens — after editing packages/tokens/tokens.json
 node packages/tokens/build.mjs
@@ -84,9 +83,8 @@ before the application scales horizontally — that must stay a config change.
 
 **Store paths, not URLs.** A full URL in a column hardcodes the storage driver.
 
-**Generated files are committed and verified.** `packages/tokens/dist` and
-`apps/mobile/lib/design/tokens.dart` are outputs; edit `tokens.json` and rerun
-the build. CI fails if they drift.
+**Generated files are committed and verified.** `packages/tokens/dist` is
+output; edit `tokens.json` and rerun the build. CI fails if it drifts.
 
 ## Documentation
 

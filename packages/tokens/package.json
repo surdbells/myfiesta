@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Design tokens emitted as CSS custom properties and Dart constants.",
+  "description": "Design tokens emitted as CSS custom properties for every client.",
   "scripts": {
     "build": "node build.mjs",
     "contrast": "node contrast.mjs",
-    "check": "node build.mjs && git diff --exit-code dist/ ../../apps/mobile/lib/design/ && node contrast.mjs && node usage.mjs"
+    "check": "node build.mjs && git diff --exit-code dist/ && node contrast.mjs && node usage.mjs"
   }
 }

@@ -1,0 +1,142 @@
+/*
+ * The app's one stylesheet: tokens, the type scale, and the handful of base
+ * rules every screen relies on. Components carry their own styles.
+ *
+ * Ionic supplies structure here and nothing else. Its core.css is imported for
+ * the layout primitives (the router outlet's page stacking, scroll handling,
+ * safe areas); its theming stylesheets are not, because the point of this app
+ * is that it does not look like a default Ionic app. Every control on screen —
+ * buttons, fields, sheets, selects — is ours, drawn from the same tokens the
+ * web apps use, so a phone screenshot and a browser screenshot are the same
+ * product.
+ */
+@import '@ionic/angular/css/core.css';
+
+@import '../../../packages/tokens/fonts/fonts.css';
+@import '../../../packages/tokens/dist/tokens.css';
+
+:root {
+  /*
+   * Ionic's own variables, pointed at ours. ion-content and ion-app are the
+   * only Ionic elements the app renders, and left alone they paint Ionic's
+   * greys straight through a dark theme.
+   */
+  --ion-background-color: var(--surface-sunken);
+  --ion-text-color: var(--text);
+  --ion-font-family: var(--font-family-sans);
+
+  /* What the phone gives back after the notch and the home indicator. */
+  --mf-safe-top: env(safe-area-inset-top, 0px);
+  --mf-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* One height for every tappable thing: 48px is the smallest comfortable target. */
+  --mf-tap: 48px;
+
+  --mf-shadow-sheet: 0 -8px 40px rgb(0 0 0 / 0.28);
+  --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme='dark'] {
+  --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+* {
+  box-sizing: border-box;
+  /* A blue-grey flash on every tap is the fastest way to look like a web page. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--font-leading-normal);
+  /* The keyboard and the sheets do the moving; the page underneath does not. */
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Text is for reading, not for dragging. Inputs keep selection. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--font-tracking-tight);
+  line-height: var(--font-leading-tight);
+}
+
+h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--font-leading-snug);
+}
+
+h3 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Money, counts, codes: digits that do not jump as they change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.subtle {
+  color: var(--text-subtle);
+}
+
+/*
+ * Focus is drawn for the keyboard, not for the finger.
+ *
+ * A ring that appears on every tap reads as a stuck button on a touchscreen;
+ * one that never appears locks out anybody on a Bluetooth keyboard, which on
+ * this platform includes the door staff using a handheld scanner.
+ */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

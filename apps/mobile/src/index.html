@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>myFiesta</title>
+    <base href="/" />
+
+    <!--
+      viewport-fit=cover hands the app the whole screen, notch included; the
+      safe areas are then paid back in CSS where the layout can decide. Without
+      it the door screen loses its bottom to the home indicator.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Read by the app at runtime, so one build serves staging and production. -->
+    <meta name="api-base" content="" />
+
+    <link rel="icon" href="favicon.ico" />
+  </head>
+
+  <body>
+    <mf-root></mf-root>
+  </body>
+</html>

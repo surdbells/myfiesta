@@ -35,7 +35,7 @@ ledger is backfilled.
 | Mail     | ZeptoMail via its HTTP API, through a custom transport |
 | Errors   | Sentry                                              |
 | Web      | Angular 21 — public site (SSR) and organizer console |
-| Mobile   | Flutter 3.47 — one app, three modes                 |
+| Mobile   | Angular 21 + Ionic 9 in a Capacitor 8 shell — one app, three modes |
 | Hosting  | Laravel Forge on a VPS                              |
 
 The plan was written against Laravel 11 and Angular 20; the current releases at
@@ -124,9 +124,30 @@ nothing to push them onto.
 
 **Attendee mode launches thin** — browse, tickets, notifications, with Buy
 handing off to the web checkout. Event tickets are physical goods, so in-app
-purchase rules do not apply. This keeps two payment gateways, two mobile SDKs,
-and a first Flutter project out of the same sprint; native payment sheets are a
-follow-up.
+purchase rules do not apply. This keeps two payment gateways and two mobile
+SDKs out of the same sprint; native payment sheets are a follow-up.
+
+**The phone app is Angular in a Capacitor shell, not Flutter.** The spike was
+Flutter and it worked; what it cost was a second language, a second set of
+idioms, and a second copy of every rule — the money formatting, the event-time
+zone handling, the token scopes, the design tokens, each written once in
+TypeScript and again in Dart, kept in step by a generator and by hand. For a
+team this size that is the largest recurring tax in the repository, and it buys
+nothing a WebView cannot do at a door: scanning, a ticket QR, a guest list.
+
+So the phone app is the same Angular the web apps are, sharing their
+helpers, their tokens and their release discipline, wrapped by Capacitor for
+the native pieces that actually matter — storage, haptics, the status bar, the
+back button, and the store listing.
+
+**Ionic supplies structure, not looks.** Its router outlet, page transitions
+and platform handling are worth having; its components are not, because an app
+built from them looks like every other Ionic app. Every control a person
+touches — buttons, fields, bottom sheets, the searchable select — is this
+product's own, drawn from the same tokens the web reads, so a phone screenshot
+and a browser screenshot are recognisably one product. The rule is worth
+stating because the cheap path is always to reach for the framework's
+component and override it until it nearly matches.
 
 ## Still open
 

@@ -1,10 +1,11 @@
 {
   "name": "myfiesta",
   "private": true,
-  "description": "Ticketing platform. Laravel API, two Angular apps, a Flutter app, and the design tokens all three read from.",
+  "description": "Ticketing platform. Laravel API, two Angular web apps, an Ionic/Capacitor phone app, and the design tokens they all read from.",
   "workspaces": [
     "apps/organizer-web",
     "apps/web",
+    "apps/mobile",
     "packages/tokens",
     "packages/ui"
   ],
