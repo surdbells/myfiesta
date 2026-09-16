@@ -68,7 +68,10 @@ interface Outcome {
             @if (outcome.result.ticket?.holder_name) {
               <p class="who">{{ outcome.result.ticket?.holder_name }}</p>
             }
-            @if (outcome.result.remaining > 0) {
+            <!-- Only for a table that was let in part-way: how many are
+                 still to come. On a refusal it reads as a reason to let
+                 somebody in. -->
+            @if (outcome.result.accepted && outcome.result.remaining > 0) {
               <p class="who">{{ outcome.result.remaining }} of the party still outside</p>
             }
           </section>
