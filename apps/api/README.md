@@ -6,6 +6,7 @@ write, plus the admin panel platform staff work in.
 ## Running it
 
 ```bash
+docker compose up -d                    # from the repository root: Postgres on 15432
 composer install
 cp .env.example .env && php artisan key:generate
 php artisan migrate
@@ -55,7 +56,7 @@ Everything comes from the environment; nothing is compiled in.
 
 | Key | What it decides |
 | --- | --------------- |
-| `DB_*` | PostgreSQL. Development here runs it on port 15432 in Docker |
+| `DB_*` | PostgreSQL. `compose.yaml` puts it on 15432 as `myfiesta_dev`, and `.env.example` matches |
 | `CORS_ALLOWED_ORIGINS` | which clients may call it — every dev port, and `https://localhost` / `capacitor://localhost` for the phone app |
 | `PUBLIC_URL`, `CONSOLE_URL` | where links in emails point |
 | `MAIL_*` | `log` in development: mail lands in `storage/logs` rather than anywhere real |

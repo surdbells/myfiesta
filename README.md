@@ -50,8 +50,13 @@ three feature directories from importing each other.
 ## Running it
 
 ```bash
+# Postgres and Redis. Nothing else here works without them, and the schema
+# uses generated columns and partial indexes that only Postgres has.
+docker compose up -d
+
 # API — http://127.0.0.1:8000
 cd apps/api && composer install && cp .env.example .env && php artisan key:generate
+php artisan migrate && php artisan storage:link
 php artisan serve
 
 # …and two more processes beside it. Neither says anything when it is missing:
