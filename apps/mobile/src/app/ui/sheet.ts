@@ -12,6 +12,22 @@ import {
 import { DOCUMENT } from '@angular/common';
 import { SheetStack } from './sheet-stack';
 
+/**
+ * Whether a control is really there to be tabbed to.
+ *
+ * `checkVisibility` where the engine has it; otherwise everything counts.
+ * Not `offsetParent`: it is null for anything positioned fixed, and null for
+ * everything at all in a test runner with no layout — which turns a filter
+ * meant to skip a hidden option into one that skips every control in the
+ * sheet.
+ */
+function visible(element: HTMLElement): boolean {
+  return typeof element.checkVisibility === 'function' ? element.checkVisibility() : true;
+}
+
+/** What Tab would land on, in the order it would land on them. */
+const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 /** Why a sheet closed. */
 export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
 
@@ -70,6 +86,8 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
   `,
   host: {
     '(document:keydown.escape)': 'dismiss("escape")',
+    '(document:keydown.tab)': 'keepFocusIn($any($event))',
+    '(document:keydown.shift.tab)': 'keepFocusIn($any($event))',
   },
   styles: `
     :host {
@@ -157,6 +175,9 @@ export class MfSheet {
   private readonly stack = inject(SheetStack);
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
 
+  /** What had focus when this opened. */
+  private opener: HTMLElement | null = null;
+
   /** In the DOM. Stays true for the length of the closing animation. */
   protected readonly mounted = signal(false);
 
@@ -175,6 +196,12 @@ export class MfSheet {
 
   private show(): void {
     if (this.mounted()) return;
+
+    // Where focus was, so it can be given back. A sheet that closes and leaves
+    // focus on the page behind puts a keyboard or switch user back at the top
+    // of a screen they had already worked their way down.
+    const active = this.document.activeElement;
+    this.opener = active instanceof HTMLElement ? active : null;
 
     this.mounted.set(true);
     this.dragged.set(0);
@@ -198,9 +225,54 @@ export class MfSheet {
     this.stack.remove(this.closer);
     this.document.body.style.overflow = '';
 
+    // Back where it came from, if that is still on the page.
+    if (this.opener?.isConnected) this.opener.focus();
+
+    this.opener = null;
+
     // Kept mounted until it has slid away; unmounting first is a sheet that
     // vanishes rather than closes.
     setTimeout(() => this.mounted.set(false), 260);
+  }
+
+  /**
+   * Keep Tab inside the sheet.
+   *
+   * `aria-modal` tells a screen reader the rest of the page is not there. It
+   * tells a keyboard nothing at all — without this, two presses of Tab walked
+   * out of the sheet and into the page behind it, which is a claim of
+   * modality the sheet was not keeping.
+   */
+  protected keepFocusIn(event: KeyboardEvent): void {
+    const panel = this.panel()?.nativeElement;
+
+    if (!this.mounted() || !panel) return;
+
+    const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (element) => !element.hasAttribute('disabled') && visible(element),
+    );
+
+    // Nothing to land on: hold the panel itself rather than letting Tab out.
+    if (focusable.length === 0) {
+      event.preventDefault();
+      panel.focus();
+
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this.document.activeElement;
+
+    // Wrapping is the whole job — including from the panel itself, which is
+    // where focus starts.
+    if (!event.shiftKey && (active === last || !panel.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && (active === first || active === panel || !panel.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    }
   }
 
   /**

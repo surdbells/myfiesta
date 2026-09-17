@@ -17,6 +17,22 @@ class Host {
   readonly closed = signal<string | null>(null);
 }
 
+@Component({
+  imports: [MfSheet],
+  template: `
+    <button id="opener" (click)="open.set(true)">Open</button>
+    <button id="behind">Something else on the page</button>
+
+    <mf-sheet [open]="open()" heading="Pick one" (closed)="open.set(false)">
+      <button id="first">First</button>
+      <button id="last">Last</button>
+    </mf-sheet>
+  `,
+})
+class HostWithPage {
+  readonly open = signal(false);
+}
+
 async function mount() {
   const fixture = TestBed.createComponent(Host);
   fixture.autoDetectChanges();
@@ -85,5 +101,76 @@ describe('MfSheet', () => {
 
     // The one opened last is the one back means.
     expect(closed).toEqual(['second', 'first']);
+  });
+});
+
+/**
+ * Modality the sheet actually keeps.
+ *
+ * `aria-modal` tells a screen reader the rest of the page is not there; it
+ * tells a keyboard nothing. Before this, two presses of Tab walked out of an
+ * open sheet and into the page behind it, and closing left focus wherever
+ * that had wandered to.
+ */
+describe('MfSheet and the keyboard', () => {
+  async function open() {
+    const fixture = TestBed.createComponent(HostWithPage);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    const root: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(root);
+
+    root.querySelector<HTMLElement>('#opener')!.focus();
+    root.querySelector<HTMLElement>('#opener')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+    const tab = (shiftKey = false) =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
+
+    return { fixture, root, tab };
+  }
+
+  it('sends Tab from the last thing back to the first', async () => {
+    const ui = await open();
+
+    ui.root.querySelector<HTMLElement>('#last')!.focus();
+    ui.tab();
+
+    expect(document.activeElement?.id).toBe('first');
+  });
+
+  it('sends Shift+Tab from the first thing to the last', async () => {
+    const ui = await open();
+
+    ui.root.querySelector<HTMLElement>('#first')!.focus();
+    ui.tab(true);
+
+    expect(document.activeElement?.id).toBe('last');
+  });
+
+  it('pulls focus back in when it is somewhere on the page behind', async () => {
+    const ui = await open();
+
+    // However focus got out there — a click, a browser quirk — Tab brings it
+    // back rather than walking further away.
+    ui.root.querySelector<HTMLElement>('#behind')!.focus();
+    ui.tab();
+
+    expect(document.activeElement?.id).toBe('first');
+  });
+
+  it('gives focus back to whatever opened it', async () => {
+    const ui = await open();
+
+    ui.root.querySelector<HTMLElement>('#first')!.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    ui.fixture.detectChanges();
+    await ui.fixture.whenStable();
+
+    // Not the top of the screen: back where the person was.
+    expect(document.activeElement?.id).toBe('opener');
   });
 });
