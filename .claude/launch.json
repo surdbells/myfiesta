@@ -4,14 +4,23 @@
     {
       "name": "organizer-console",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start", "--prefix", "apps/organizer-web", "--", "--port", "4310"],
-      "port": 4310
+      "runtimeArgs": ["run", "start", "--prefix", "apps/organizer-web"],
+      "port": 4310,
+      "autoPort": false
     },
     {
       "name": "public-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start", "--prefix", "apps/web", "--", "--port", "4320"],
-      "port": 4320
+      "runtimeArgs": ["run", "start", "--prefix", "apps/web"],
+      "port": 4320,
+      "autoPort": false
+    },
+    {
+      "name": "mobile-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "apps/mobile"],
+      "port": 4330,
+      "autoPort": false
     }
   ]
 }
