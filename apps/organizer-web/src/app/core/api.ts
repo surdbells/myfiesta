@@ -26,6 +26,7 @@ import {
   EventImage,
   EventImages,
   EventOption,
+  AddOn,
   EventQuestion,
   OrganizationOrderPage,
   Page,
@@ -497,6 +498,29 @@ export class Api {
     return this.http.delete<{ message: string }>(
       `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
     );
+  }
+
+  // --- what is sold beside a ticket ---------------------------------------
+
+  addOns(eventId: string): Observable<{ data: AddOn[] }> {
+    return this.http.get<{ data: AddOn[] }>(`${this.base}/api/organizer/events/${eventId}/add-ons`);
+  }
+
+  createAddOn(eventId: string, body: Record<string, unknown>): Observable<{ data: AddOn }> {
+    return this.http.post<{ data: AddOn }>(`${this.base}/api/organizer/events/${eventId}/add-ons`, body);
+  }
+
+  updateAddOn(eventId: string, id: string, body: Record<string, unknown>): Observable<{ data: AddOn }> {
+    return this.http.patch<{ data: AddOn }>(`${this.base}/api/organizer/events/${eventId}/add-ons/${id}`, body);
+  }
+
+  deleteAddOn(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.base}/api/organizer/events/${eventId}/add-ons/${id}`);
+  }
+
+  /** The order they are offered in, as one list — two writes can disagree. */
+  reorderAddOns(eventId: string, ids: string[]): Observable<{ data: AddOn[] }> {
+    return this.http.post<{ data: AddOn[] }>(`${this.base}/api/organizer/events/${eventId}/add-ons/order`, { ids });
   }
 
   // --- what the checkout asks ---------------------------------------------

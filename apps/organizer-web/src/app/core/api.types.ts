@@ -117,6 +117,29 @@ export interface OrganizerEventDetail extends OrganizerEvent {
 }
 
 /**
+ * Something sold with a ticket that is not one.
+ *
+ * A table, a bottle, a shirt. It has a price and a stock and it goes on the
+ * same order — and it admits nobody, which is the whole distinction between
+ * this and a ticket type.
+ */
+export interface AddOn {
+  id: string;
+  name: string;
+  description: string | null;
+  price: Money;
+  /** Null is unlimited, and is not the same as zero. */
+  quantity_available: number | null;
+  max_per_order: number | null;
+  status: 'on_sale' | 'closed';
+  sort_order: number;
+  /** How many have been paid for. */
+  sold: number;
+  /** What is left once baskets in progress are counted. Null where unlimited. */
+  remaining: number | null;
+}
+
+/**
  * Something the checkout asks the people coming.
  *
  * The same row a wedding asks its guests with — one question model for both
@@ -190,6 +213,22 @@ export interface SalesReport {
     comps: number;
     people: number;
     arrived: number;
+    revenue: Money;
+  }[];
+  /**
+   * What was sold beside the tickets.
+   *
+   * Apart from the tiers on purpose: an extra sells no places and fills no
+   * room. A removed one still appears when it sold something, because an
+   * organizer taking a bottle off the list does not unsell the ones bought.
+   */
+  add_ons: {
+    id: string;
+    name: string;
+    status: string;
+    price: Money;
+    capacity: number | null;
+    sold: number;
     revenue: Money;
   }[];
   /** Every day from the first sale, quiet days included; revenue in minor units. */

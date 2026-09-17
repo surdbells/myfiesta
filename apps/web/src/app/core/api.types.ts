@@ -291,6 +291,13 @@ export interface TicketAccess {
     organizer: string;
   };
   tickets: HeldTicket[];
+  /**
+   * What else was on the order: a table, a bottle, a shirt.
+   *
+   * An add-on has no code and nothing to scan, so this screen is the only
+   * evidence its buyer holds of it.
+   */
+  extras: { name: string; quantity: number }[];
 }
 
 /** Everything the front page needs, in one response. */

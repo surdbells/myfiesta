@@ -79,6 +79,26 @@
       </p>
     }
 
+    <!--
+      What else was bought. No code and nothing to scan: it is claimed at a
+      bar or a cloakroom by somebody looking at this screen, so it has to be
+      on this screen.
+    -->
+    @if (o.extras.length > 0) {
+      <section class="mt-8 rounded-xl border border-border bg-surface-sunken p-5">
+        <h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Also on this order</h2>
+        <ul class="m-0 mt-3 grid list-none gap-2 p-0 text-sm">
+          @for (extra of o.extras; track extra.name) {
+            <li class="flex items-center gap-3">
+              <span class="rounded-md bg-surface-inset px-2 py-[2px] text-xs font-semibold tabular-nums">{{ extra.quantity }}×</span>
+              {{ extra.name }}
+            </li>
+          }
+        </ul>
+        <p class="mt-3 text-xs text-text-muted">Show this to whoever is handing it over.</p>
+      </section>
+    }
+
     <dl class="summary m-0 mt-8 flex justify-center gap-3 text-sm text-text-muted">
       <dt class="m-0">Order</dt>
       <dd class="m-0"><code class="select-all tracking-[0.06em]">{{ o.reference }}</code></dd>

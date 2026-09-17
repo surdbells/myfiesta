@@ -132,6 +132,56 @@
       </div>
     </div>
 
+    <!-- ---------------------------------------------------------- by extra -->
+    <!--
+      Its own table rather than rows among the tickets: an extra sells no
+      places and fills no room, so putting a bottle in the list capacity is
+      read from would make both numbers wrong.
+    -->
+    @if (r.add_ons.length > 0) {
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
+          <h3 class="text-base font-semibold">Sold with a ticket</h3>
+          <p class="text-sm text-text-muted">Extras admit nobody, so they are counted apart from the room.</p>
+        </header>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[34rem] border-collapse text-sm">
+            <thead>
+              <tr>
+                <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Extra</th>
+                <th class="bg-surface-inset px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</th>
+                <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (extra of r.add_ons; track extra.id) {
+                <tr class="border-t border-border">
+                  <td class="px-6 py-3">
+                    <span class="block font-medium">
+                      {{ extra.name }}
+                      @if (extra.status !== 'on_sale') {
+                        <span class="ml-1 text-xs font-normal text-text-subtle">
+                          {{ extra.status === 'removed' ? '· removed' : '· not offered' }}
+                        </span>
+                      }
+                    </span>
+                    <span class="text-xs text-text-muted tabular-nums">{{ extra.price.amount === 0 ? 'Free' : money(extra.price) }}</span>
+                  </td>
+                  <td class="px-4 py-3 tabular-nums">
+                    {{ extra.sold }}
+                    @if (extra.capacity !== null) {
+                      <span class="text-text-muted">of {{ extra.capacity }}</span>
+                    }
+                  </td>
+                  <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(extra.revenue) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
     <!-- ------------------------------------------------------------ by code -->
     @if (r.codes.length > 0) {
       <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">

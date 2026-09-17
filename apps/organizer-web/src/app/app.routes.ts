@@ -99,6 +99,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/events/event-tickets').then((m) => m.EventTickets),
       },
       {
+        // What is sold beside a ticket: a table, a bottle, a shirt.
+        path: 'extras',
+        loadComponent: () => import('./features/events/event-add-ons').then((m) => m.EventAddOns),
+      },
+      {
         // What the checkout asks, and the order it asks in.
         path: 'questions',
         loadComponent: () => import('./features/events/event-questions').then((m) => m.EventQuestions),

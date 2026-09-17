@@ -165,6 +165,7 @@ export class EventWorkspace {
     if (this.session.canManageTickets()) {
       // Beside Tickets, because what is asked at checkout is part of what
       // is being sold.
+      tabs.push({ label: 'Extras', route: [...base, 'extras'] });
       tabs.push({ label: 'Questions', route: [...base, 'questions'] });
     }
 
