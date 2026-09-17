@@ -24,7 +24,17 @@ npm start --workspace mobile     # http://localhost:4330 in a browser
 ```
 
 The API it talks to is read at runtime from `<meta name="api-base">` in
-`src/index.html`, so one build serves staging and production. Empty in
+`src/index.html`, so one build serves staging and production. Nothing but the
+packaging step can write it — there is no server here to stamp it while
+rendering — so `npm run sync` fills it in from `API_BASE_URL`:
+
+```bash
+API_BASE_URL=https://api.myfiesta.ca npm run sync --workspace mobile
+```
+
+Without it the tag ships empty and the app falls back to the address that means
+"the machine this emulator is running on", which is right for development and
+is an app in a store talking to a laptop. Empty in
 development, where it falls back to `http://127.0.0.1:8000` in a browser and
 `http://10.0.2.2:8000` on the Android emulator — the address an emulator uses
 for the machine it runs on.

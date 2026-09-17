@@ -85,6 +85,23 @@ for (const variable of ['API_BASE_URL', 'CONSOLE_URL']) {
   }
 }
 
+/*
+ * The phone app is told the same thing, by a different route.
+ *
+ * It has no server to stamp the page while rendering, so the address is
+ * written into the built file before it is packaged. Without that step the tag
+ * ships empty, the client falls back to the address that means "the machine
+ * this emulator runs on", and an app in a store talks to a laptop.
+ */
+const mobileTemplate = readFileSync(join(ROOT, 'apps/mobile/src/index.html'), 'utf8');
+const mobileScripts = JSON.parse(readFileSync(join(ROOT, 'apps/mobile/package.json'), 'utf8')).scripts;
+
+if (!/<meta name="api-base"/.test(mobileTemplate)) {
+  problems.push('mobile api-base: the phone app has no such meta tag, so it cannot be told where the API is');
+} else if (!/stamp-mobile-api-base/.test(mobileScripts.sync ?? '')) {
+  problems.push('mobile api-base: nothing stamps it before cap sync, so a packaged app would ship pointing at localhost');
+}
+
 if (problems.length > 0) {
   console.error('\nruntime config: the page and the server disagree\n');
 
