@@ -56,7 +56,13 @@ export interface MfOption {
       <span class="chevron" aria-hidden="true"></span>
     </button>
 
-    <mf-sheet [open]="open()" [heading]="heading()" [subheading]="subheading()" (closed)="hide()">
+    <mf-sheet
+      [open]="open()"
+      [heading]="heading()"
+      [subheading]="subheading()"
+      (keydown)="walk($any($event))"
+      (closed)="hide()"
+    >
       @if (searchable()) {
         <div class="search">
           <input
@@ -300,6 +306,43 @@ export class MfSelect implements ControlValueAccessor {
   hide(): void {
     this.open.set(false);
     this.onTouched();
+  }
+
+  /**
+   * Arrows through the list, the way any list answers.
+   *
+   * Tab already reaches every option — the sheet keeps focus inside itself, so
+   * it walks them one by one — but a list of twenty cities is a lot of tabbing
+   * to reach Vancouver. Home and End for the same reason.
+   *
+   * Listened for on the sheet rather than the list: focus starts on the
+   * sheet's own panel, which sits above the list, and a keydown there never
+   * reaches a handler below it.
+   *
+   * Typing stays with the search box above; this only moves.
+   */
+  protected walk(event: KeyboardEvent): void {
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+
+    if (!keys.includes(event.key)) return;
+
+    const sheet = event.currentTarget as HTMLElement;
+    const options = [...sheet.querySelectorAll<HTMLButtonElement>('.option:not([disabled])')];
+
+    if (options.length === 0) return;
+
+    event.preventDefault();
+
+    const at = options.indexOf(sheet.ownerDocument.activeElement as HTMLButtonElement);
+
+    const next = {
+      ArrowDown: at < 0 ? 0 : (at + 1) % options.length,
+      ArrowUp: at < 0 ? options.length - 1 : (at - 1 + options.length) % options.length,
+      Home: 0,
+      End: options.length - 1,
+    }[event.key]!;
+
+    options[next].focus();
   }
 
   protected choose(option: MfOption): void {

@@ -89,7 +89,7 @@ areas) and nothing a person looks at. Everything else is in `src/app/ui`:
 | `mfButton`     | finger-sized, answers a press by scaling, keeps its width while loading |
 | `mf-field`     | solid rather than outlined — a hairline border disappears in a dark venue |
 | `mf-sheet`     | bottom sheet: drag to dismiss, back closes it before it leaves a screen, and it keeps the focus it claims |
-| `mf-select`    | a sheet that can be searched; the native select cannot be typed into    |
+| `mf-select`    | a sheet that can be searched, and arrowed through; the native select cannot be typed into |
 | `mf-screen`    | the header/scroll frame, without platform chrome                        |
 | `mf-qr`        | the ticket code, drawn on the phone so it works with no signal          |
 | `mf-switch`    | on or off, drawn the same on both platforms — the native switch is the control iOS and Android differ on most |

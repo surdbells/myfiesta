@@ -150,3 +150,81 @@ describe('MfSelect', () => {
     expect(ui.options()).toHaveLength(3);
   });
 });
+
+/**
+ * Driven without a thumb.
+ *
+ * Tab reaches every option on its own — the sheet keeps focus inside itself —
+ * but a list of twenty cities is a lot of tabbing to reach Vancouver, and a
+ * list that ignores an arrow key is a list that feels broken to anybody who
+ * tried one.
+ */
+describe('MfSelect from the keyboard', () => {
+  async function opened() {
+    const ui = await mount();
+    await ui.open();
+
+    const sheet = (ui.fixture.nativeElement as HTMLElement).querySelector('mf-sheet')!;
+    const press = async (key: string) => {
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await ui.settle();
+    };
+
+    return { ...ui, press, focused: () => document.activeElement?.textContent?.trim() ?? '' };
+  }
+
+  it('steps into the list on the first arrow', async () => {
+    const ui = await opened();
+
+    await ui.press('ArrowDown');
+
+    expect(ui.focused()).toContain('Toronto');
+  });
+
+  it('walks down and back up', async () => {
+    const ui = await opened();
+
+    await ui.press('ArrowDown');
+    await ui.press('ArrowDown');
+    expect(ui.focused()).toContain('Montréal');
+
+    await ui.press('ArrowUp');
+    expect(ui.focused()).toContain('Toronto');
+  });
+
+  it('wraps at both ends rather than stopping dead', async () => {
+    const ui = await opened();
+
+    await ui.press('End');
+    expect(ui.focused()).toContain('Abuja');
+
+    // Kano is disabled, so End lands on the last option somebody can take.
+    await ui.press('ArrowDown');
+    expect(ui.focused()).toContain('Toronto');
+
+    await ui.press('ArrowUp');
+    expect(ui.focused()).toContain('Abuja');
+  });
+
+  it('goes to either end in one press', async () => {
+    const ui = await opened();
+
+    await ui.press('ArrowDown');
+    await ui.press('End');
+    expect(ui.focused()).toContain('Abuja');
+
+    await ui.press('Home');
+    expect(ui.focused()).toContain('Toronto');
+  });
+
+  it('leaves every other key alone, so the search box still works', async () => {
+    const ui = await opened();
+    const search = ui.search()!;
+
+    search.focus();
+    await ui.press('a');
+
+    // Typing belongs to the box above the list; only movement is taken.
+    expect(document.activeElement).toBe(search);
+  });
+});
