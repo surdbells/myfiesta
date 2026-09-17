@@ -60,6 +60,25 @@ export interface EventPage extends EventCard {
   calendar: { ics_url: string; google_url: string };
 }
 
+/**
+ * An organizer's own page: who they are, what is on, what has been.
+ *
+ * The screen following somebody finally leads to. Until it existed, the list
+ * of who you follow was a list of names with nowhere to go.
+ */
+export interface OrganizerPage {
+  slug: string;
+  name: string;
+  description: string | null;
+  is_verified: boolean;
+  logo_url: string | null;
+  /** Whether this reader follows them. False for a guest. */
+  following: boolean;
+  upcoming: EventCard[];
+  /** The most recent nights that have already happened, newest first. */
+  past: EventCard[];
+}
+
 export interface Discovery {
   featured: EventCard[];
   upcoming: EventCard[];
@@ -157,6 +176,23 @@ export class Discover {
   event(slug: string): Promise<EventPage> {
     return this.api
       .asReader<{ data: EventPage }>(`/api/events/${encodeURIComponent(slug)}`, undefined, this.readerToken())
+      .then((body) => body.data);
+  }
+
+  /**
+   * One organizer, read as whoever is holding the phone.
+   *
+   * The token goes for the same reason it goes to an event page: it is what
+   * decides whether the button says Follow or Following. A guest gets the
+   * page all the same.
+   */
+  organizer(slug: string): Promise<OrganizerPage> {
+    return this.api
+      .asReader<{ data: OrganizerPage }>(
+        `/api/organizers/${encodeURIComponent(slug)}`,
+        undefined,
+        this.readerToken(),
+      )
       .then((body) => body.data);
   }
 

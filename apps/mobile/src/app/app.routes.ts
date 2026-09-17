@@ -49,6 +49,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/browse/event').then((m) => m.Event),
   },
   {
+    // One organizer: who they are, what is on, what has been. `/o/` matches
+    // the public site, so a link shared out of the app and a link opened in
+    // it are the same address.
+    path: 'o/:slug',
+    loadComponent: () => import('./features/browse/organizer').then((m) => m.Organizer),
+  },
+  {
     // A private list, so it needs an account — but the sign-in it bounces to
     // comes back here rather than dropping somebody on the tickets screen.
     path: 'saved',

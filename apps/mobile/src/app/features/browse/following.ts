@@ -38,7 +38,10 @@ interface Followed {
         <ul class="stack">
           @for (organizer of organizers(); track organizer.slug) {
             <li>
-              <mf-card quiet>
+              <!-- A name in this list used to be a name and nothing else.
+                   Tapping it opens their page; the button is still the way
+                   out. -->
+              <mf-card quiet tappable (click)="open(organizer)">
                 <div class="row">
                   <span class="who">
                     {{ organizer.name }}
@@ -52,7 +55,7 @@ interface Followed {
                     size="sm"
                     variant="secondary"
                     [disabled]="leaving() === organizer.slug"
-                    (click)="stop(organizer)"
+                    (click)="$event.stopPropagation(); stop(organizer)"
                   >
                     Following
                   </button>
@@ -146,6 +149,10 @@ export class Following {
     } finally {
       this.leaving.set(null);
     }
+  }
+
+  open(organizer: Followed): void {
+    void this.router.navigate(['/o', organizer.slug]);
   }
 
   back(): void {

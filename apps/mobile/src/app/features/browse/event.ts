@@ -189,7 +189,10 @@ import { SessionStore } from '../../core/session';
 
           <section>
             <h2 class="section">Organizer</h2>
-            <mf-card quiet>
+            <!-- Tapping the card opens their page — everything they have on,
+                 and everything they have run. The follow button inside it is
+                 the one thing that is not a way through. -->
+            <mf-card quiet [tappable]="!!night.organizer.slug" (click)="openOrganizer()">
               <div class="host">
                 @if (night.organizer.logo_url) {
                   <img class="mark" [src]="night.organizer.logo_url" alt="" width="44" height="44" />
@@ -216,7 +219,7 @@ import { SessionStore } from '../../core/session';
                   [variant]="following() ? 'secondary' : 'primary'"
                   [loading]="followBusy()"
                   [attr.aria-pressed]="following()"
-                  (click)="toggleFollow()"
+                  (click)="$event.stopPropagation(); toggleFollow()"
                 >
                   {{ following() ? 'Following' : 'Follow' }}
                 </button>
@@ -670,6 +673,13 @@ export class Event {
       this.saved.set(!next);
       this.toasts.show('Could not save that. Try again.', 'danger');
     }
+  }
+
+  /** Their page: what else that name is putting on. */
+  openOrganizer(): void {
+    const slug = this.event()?.organizer.slug;
+
+    if (slug) void this.router.navigate(['/o', slug]);
   }
 
   async toggleFollow(): Promise<void> {
