@@ -193,6 +193,72 @@
   </section>
 
   <!--
+    What is sold beside a ticket: a table, a bottle, a shirt.
+
+    Below the tiers and never above them, because it is bought with a ticket
+    rather than instead of one — and the steppers stay dead until a ticket is
+    chosen, so nobody fills a basket with bottles and learns at the bottom of
+    the page that they cannot buy them.
+  -->
+  @if (addOns().length > 0) {
+    <section class="wrap mx-auto max-w-[1120px] px-6 pb-4">
+      <h2 class="text-xl">Add to your order</h2>
+      @if (!hasSelection()) {
+        <p class="mt-2 text-sm text-text-muted">Choose a ticket first — these are bought with one.</p>
+      }
+
+      <div class="mt-5 grid gap-3">
+        @for (addOn of addOns(); track addOn.id) {
+          <div
+            class="flex flex-wrap items-center gap-6 rounded-xl border border-border bg-surface-raised p-5"
+            [class.opacity-60]="addOn.sold_out"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold">
+                {{ addOn.name }}
+                @if (addOn.sold_out) {
+                  <span class="ml-2 rounded-full bg-surface-inset px-2 py-[2px] text-xs font-semibold uppercase tracking-[0.04em] text-text-subtle">Gone</span>
+                } @else if (addOn.remaining !== null && addOn.remaining <= 5) {
+                  <!-- Only when it is nearly true. A counter on forty tables is
+                       noise; one on two is the reason somebody decides now. -->
+                  <span class="ml-2 text-xs font-semibold uppercase tracking-[0.04em] text-primary-text">{{ addOn.remaining }} left</span>
+                }
+              </p>
+              @if (addOn.description) {
+                <p class="mt-1 max-w-[60ch] text-sm leading-snug text-text-muted">{{ addOn.description }}</p>
+              }
+            </div>
+
+            <p class="text-lg font-bold text-primary-text tabular-nums">{{ formatMoney(addOn.price) }}</p>
+
+            <div class="stepper flex items-center gap-1 rounded-md bg-surface-inset p-[3px]">
+              <button
+                class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                type="button"
+                (click)="adjustAddOn(addOn, -1)"
+                [disabled]="addOnQuantity(addOn.id) === 0"
+                [attr.aria-label]="addOnStepLabel(addOn, 'fewer')"
+              >
+                −
+              </button>
+              <span class="min-w-9 text-center font-semibold tabular-nums" aria-live="polite">{{ addOnQuantity(addOn.id) }}</span>
+              <button
+                class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                type="button"
+                (click)="adjustAddOn(addOn, 1)"
+                [disabled]="addOn.sold_out || !hasSelection()"
+                [attr.aria-label]="addOnStepLabel(addOn, 'more')"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!--
     The running answer, pinned where the thumb is. The figure is the server's
     subtotal — fees and tax arrive itemized on the next page, before payment,
     not sprung after it. Not shown when nothing can be bought: "0 tickets"

@@ -18,17 +18,24 @@ import {
 } from './api.types';
 
 /**
- * Everything the server needs to open an order.
+ * What is being bought.
  *
  * Nothing with a currency sign in it: the client says which tickets and how
- * many, and every figure is computed from rows in the database.
+ * many, and every figure is computed from rows in the database. The same shape
+ * prices a basket and places an order, so the two cannot describe different
+ * baskets.
  */
-export interface NewOrder {
+export interface Basket {
   items: { ticket_type_id: string; quantity: number }[];
-  buyer: { name: string; email: string; phone?: string };
+  /** Sold beside a ticket and admitting nobody. */
+  add_ons?: { add_on_id: string; quantity: number }[];
   code?: string;
   ref?: string;
   access_code?: string;
+}
+
+export interface NewOrder extends Basket {
+  buyer: { name: string; email: string; phone?: string };
   /** What the buyer answered for the order, keyed by question id. */
   answers?: Record<string, AnswerValue>;
   /** One entry per ticket, in the order they were filled in. */
@@ -80,14 +87,9 @@ export class Api {
     return this.http.get<{ data: OrganizerPage }>(`${this.base}/api/organizers/${slug}`);
   }
 
-  quote(
-    slug: string,
-    items: { ticket_type_id: string; quantity: number }[],
-    code?: string,
-    ref?: string,
-    access_code?: string,
-  ): Observable<Quote> {
-    return this.http.post<Quote>(`${this.base}/api/events/${slug}/quote`, { items, code, ref, access_code });
+  /** Price a basket. Free to call on every change: it reserves nothing. */
+  quote(slug: string, basket: Basket): Observable<Quote> {
+    return this.http.post<Quote>(`${this.base}/api/events/${slug}/quote`, basket);
   }
 
   /** Join a sold-out event's waitlist. */

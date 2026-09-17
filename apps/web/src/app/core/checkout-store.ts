@@ -15,6 +15,16 @@ import type { AccessUnlock } from './api.types';
 export class CheckoutStore {
   readonly slug = signal<string | null>(null);
   readonly items = signal<Record<string, number>>({});
+
+  /**
+   * The things that are not tickets: a table, a bottle, a shirt.
+   *
+   * Kept apart from the tickets rather than in one map, because the two are
+   * different ids in different tables and the server takes them as two
+   * lists. One map keyed by id would work right up until an add-on and a
+   * ticket type shared one.
+   */
+  readonly addOns = signal<Record<string, number>>({});
   readonly code = signal('');
 
   /**
@@ -35,6 +45,13 @@ export class CheckoutStore {
       .map(([ticket_type_id, quantity]) => ({ ticket_type_id, quantity })),
   );
 
+  readonly addOnLines = computed(() =>
+    Object.entries(this.addOns())
+      .filter(([, quantity]) => quantity > 0)
+      .map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
+  );
+
+  /** Tickets, and only tickets: this is what gates the way to checkout. */
   readonly count = computed(() =>
     Object.values(this.items()).reduce((sum, quantity) => sum + quantity, 0),
   );
@@ -44,6 +61,7 @@ export class CheckoutStore {
 
     this.slug.set(slug);
     this.items.set(this.read(slug)?.items ?? {});
+    this.addOns.set(this.read(slug)?.addOns ?? {});
     this.code.set(this.read(slug)?.code ?? '');
     this.access.set(this.read(slug)?.access ?? null);
   }
@@ -71,6 +89,12 @@ export class CheckoutStore {
     this.persist(slug);
   }
 
+  setAddOnQuantity(slug: string, addOnId: string, quantity: number): void {
+    this.loadFor(slug);
+    this.addOns.set({ ...this.addOns(), [addOnId]: quantity });
+    this.persist(slug);
+  }
+
   setCode(slug: string, code: string): void {
     this.loadFor(slug);
     this.code.set(code);
@@ -80,6 +104,7 @@ export class CheckoutStore {
   clear(slug: string): void {
     this.slug.set(null);
     this.items.set({});
+    this.addOns.set({});
     this.code.set('');
     this.access.set(null);
     try {
@@ -93,7 +118,12 @@ export class CheckoutStore {
     return `myfiesta.basket.${slug}`;
   }
 
-  private read(slug: string): { items: Record<string, number>; code: string; access?: AccessUnlock | null } | null {
+  private read(slug: string): {
+    items: Record<string, number>;
+    addOns?: Record<string, number>;
+    code: string;
+    access?: AccessUnlock | null;
+  } | null {
     try {
       const raw = sessionStorage.getItem(this.key(slug));
       return raw ? JSON.parse(raw) : null;
@@ -106,7 +136,12 @@ export class CheckoutStore {
     try {
       sessionStorage.setItem(
         this.key(slug),
-        JSON.stringify({ items: this.items(), code: this.code(), access: this.access() }),
+        JSON.stringify({
+          items: this.items(),
+          addOns: this.addOns(),
+          code: this.code(),
+          access: this.access(),
+        }),
       );
     } catch {
       // The basket still works for this page; it just will not survive one.

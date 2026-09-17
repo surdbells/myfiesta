@@ -106,6 +106,24 @@ export interface GalleryImage {
 }
 
 /**
+ * Something sold with a ticket that is not one.
+ *
+ * A table, a bottle, a shirt. It has a price and a stock and it goes on the
+ * same order — and it admits nobody, which is why buying one mints no ticket
+ * and the door never hears about it.
+ */
+export interface AddOn {
+  id: string;
+  name: string;
+  description: string | null;
+  price: Money;
+  max_per_order: number | null;
+  /** What is genuinely left, baskets in progress counted. Null is unlimited. */
+  remaining: number | null;
+  sold_out: boolean;
+}
+
+/**
  * Something the organizer asks at checkout.
  *
  * The shape of the question only. Whether an answer is acceptable is decided
@@ -160,11 +178,21 @@ export interface EventDetail extends EventSummary {
   ticket_types: TicketType[];
   /** What the organizer asks at checkout. Empty when they ask nothing. */
   questions: Question[];
+  /** Sold beside a ticket and admitting nobody. Empty when there is nothing extra. */
+  add_ons: AddOn[];
   calendar: CalendarLinks;
 }
 
 export interface QuoteLine {
-  ticket_type_id: string;
+  /**
+   * Which of the two this line is.
+   *
+   * Said by the server rather than inferred from a null: a client counting
+   * people to ask questions of must not count bottles.
+   */
+  kind: 'ticket' | 'add_on';
+  ticket_type_id: string | null;
+  add_on_id: string | null;
   name: string;
   quantity: number;
   unit_price: Money;

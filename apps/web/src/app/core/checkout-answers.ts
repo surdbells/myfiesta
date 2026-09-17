@@ -27,13 +27,17 @@ export interface Slot {
  * that person actually holds.
  */
 export function slotsFor(lines: readonly QuoteLine[]): Slot[] {
-  return lines.flatMap((line) =>
-    Array.from({ length: line.quantity }, (_, index) => ({
-      key: `${line.ticket_type_id}:${index}`,
-      ticketTypeId: line.ticket_type_id,
-      name: line.name,
-    })),
-  );
+  return lines
+    // Tickets only. An add-on admits nobody, so there is nobody on it to ask
+    // a question of — two bottles are not two more people.
+    .filter((line) => line.kind !== 'add_on')
+    .flatMap((line) =>
+      Array.from({ length: line.quantity }, (_, index) => ({
+        key: `${line.ticket_type_id}:${index}`,
+        ticketTypeId: line.ticket_type_id!,
+        name: line.name,
+      })),
+    );
 }
 
 /**

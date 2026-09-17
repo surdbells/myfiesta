@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { UiSelect, type SelectOption } from '@myfiesta/ui';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { EventDetail, Quote, TicketType } from '../../core/api.types';
+import { AddOn, EventDetail, Quote, TicketType } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
@@ -133,6 +133,31 @@ export class TicketSelect {
     return this.store.items()[id] ?? 0;
   }
 
+  // --- the things that are not tickets -------------------------------------
+
+  /** Only what is on sale reaches this page; a closed one is not offered. */
+  readonly addOns = computed(() => this.event()?.add_ons ?? []);
+
+  addOnQuantity(id: string): number {
+    return this.store.addOns()[id] ?? 0;
+  }
+
+  adjustAddOn(addOn: AddOn, delta: number): void {
+    if (addOn.sold_out && delta > 0) return;
+
+    // Three ceilings, lowest wins: what the organizer allows per order, what
+    // is left, and a sane bound for a page with steppers on it.
+    const ceiling = Math.min(addOn.max_per_order ?? 20, addOn.remaining ?? 20, 20);
+    const next = Math.min(Math.max(this.addOnQuantity(addOn.id) + delta, 0), ceiling);
+
+    this.store.setAddOnQuantity(this.slug, addOn.id, next);
+    this.refreshQuote();
+  }
+
+  addOnStepLabel(addOn: AddOn, direction: 'more' | 'fewer'): string {
+    return `One ${direction} ${addOn.name}`;
+  }
+
   /** Opened by the presale code this buyer holds. */
   isUnlocked(type: TicketType): boolean {
     return this.store.access()?.ticket_types.some((t) => t.id === type.id) ?? false;
@@ -233,9 +258,16 @@ export class TicketSelect {
       return;
     }
 
-    this.api.quote(this.slug, lines, undefined, this.store.ref() ?? undefined, this.store.access()?.code).subscribe({
-      next: (quote) => this.quote.set(quote),
-      error: () => this.quote.set(null),
-    });
+    this.api
+      .quote(this.slug, {
+        items: lines,
+        add_ons: this.store.addOnLines(),
+        ref: this.store.ref() ?? undefined,
+        access_code: this.store.access()?.code,
+      })
+      .subscribe({
+        next: (quote) => this.quote.set(quote),
+        error: () => this.quote.set(null),
+      });
   }
 }

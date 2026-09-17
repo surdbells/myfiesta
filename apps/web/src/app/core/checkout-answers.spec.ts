@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { answered, attendeesFor, missing, slotsFor, withAnswer } from './checkout-answers';
 import type { Question, QuoteLine } from './api.types';
 
-const line = (id: string, name: string, quantity: number): QuoteLine =>
+const line = (id: string, name: string, quantity: number, kind: 'ticket' | 'add_on' = 'ticket'): QuoteLine =>
   ({
+    kind,
     ticket_type_id: id,
+    add_on_id: null,
     name,
     quantity,
     unit_price: { amount: 1000, currency: 'CAD' },
@@ -41,6 +43,14 @@ describe('checkout answers', () => {
 
     it('has nothing to fill in for an empty basket', () => {
       expect(slotsFor([])).toEqual([]);
+    });
+
+    it('does not count the bottles', () => {
+      // An add-on admits nobody, so there is nobody on it to ask a question
+      // of — two bottles are not two more people.
+      const slots = slotsFor([line('a', 'General', 1), line('b', 'Bottle', 2, 'add_on')]);
+
+      expect(slots.map((slot) => slot.key)).toEqual(['a:0']);
     });
   });
 

@@ -164,6 +164,7 @@ export class Checkout {
     this.api
       .order(this.slug, {
         items: this.store.lines(),
+        add_ons: this.store.addOnLines(),
         buyer: { name, email: this.email().trim() },
         code: this.store.code() || undefined,
         ref: this.store.ref() ?? undefined,
@@ -211,7 +212,13 @@ export class Checkout {
     const code = this.store.code() || undefined;
 
     this.api
-      .quote(this.slug, this.store.lines(), code, this.store.ref() ?? undefined, this.store.access()?.code)
+      .quote(this.slug, {
+        items: this.store.lines(),
+        add_ons: this.store.addOnLines(),
+        code,
+        ref: this.store.ref() ?? undefined,
+        access_code: this.store.access()?.code,
+      })
       .subscribe({
         next: (quote) => {
           this.quote.set(quote);
