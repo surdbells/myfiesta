@@ -109,7 +109,10 @@ import { Component, computed, input, booleanAttribute } from '@angular/core';
 
     :host(.danger) {
       background: var(--danger);
-      color: #fff;
+      /* The token, not white. In dark the danger colour is a light coral and
+         white on it is 2.9:1 — under the 4.5 this project's own contrast check
+         holds every other pairing to. */
+      color: var(--text-inverse);
     }
 
     .label.hidden {

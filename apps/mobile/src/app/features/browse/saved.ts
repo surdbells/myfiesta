@@ -87,7 +87,7 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
 
     .lines h3 {
       margin: 0;
-      font-size: var(--font-size-md);
+      font-size: var(--font-size-lg);
       font-weight: var(--font-weight-semibold);
       color: var(--text);
     }

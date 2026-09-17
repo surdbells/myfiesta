@@ -521,7 +521,7 @@ import { SessionStore } from '../../core/session';
     .joined {
       margin: 0;
       color: var(--text);
-      font-size: var(--font-size-md);
+      font-size: var(--font-size-base);
     }
 
     .mt {

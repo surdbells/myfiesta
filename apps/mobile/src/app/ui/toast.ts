@@ -72,7 +72,7 @@ export class ToastStore {
 
     .danger {
       background: var(--danger);
-      color: #fff;
+      color: var(--text-inverse);
     }
 
     @keyframes mf-toast-in {

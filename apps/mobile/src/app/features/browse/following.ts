@@ -89,7 +89,7 @@ interface Followed {
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      font-size: var(--font-size-md);
+      font-size: var(--font-size-lg);
       font-weight: var(--font-weight-semibold);
       color: var(--text);
     }

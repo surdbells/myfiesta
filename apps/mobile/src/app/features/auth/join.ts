@@ -111,7 +111,7 @@ import { MfButton, MfField, MfScreen } from '../../ui';
     .sent {
       margin: 0;
       color: var(--text);
-      font-size: var(--font-size-md);
+      font-size: var(--font-size-base);
       line-height: var(--font-leading-snug);
     }
 
