@@ -22,6 +22,12 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Server,
   },
   {
+    // An organizer page, for the same reason as an event page: it is a link
+    // meant to be pasted into a bio, and it has to unfurl.
+    path: 'o/:slug',
+    renderMode: RenderMode.Server,
+  },
+  {
     path: ':slug',
     renderMode: RenderMode.Server,
   },

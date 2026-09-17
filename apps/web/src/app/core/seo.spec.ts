@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Meta } from '@angular/platform-browser';
 import { DOCUMENT } from '@angular/core';
-import { EventDetail } from './api.types';
+import { EventDetail, OrganizerPage } from './api.types';
 import { Seo } from './seo';
 
 /**
@@ -32,6 +32,21 @@ function event(overrides: Partial<EventDetail> = {}): EventDetail {
     gallery: [],
     ...overrides,
   } as EventDetail;
+}
+
+/** An organizer, with a night on sale and a mark of their own. */
+function organizer(overrides: Partial<OrganizerPage> = {}): OrganizerPage {
+  return {
+    slug: 'lagos-nights',
+    name: 'Lagos Nights',
+    description: null,
+    is_verified: true,
+    logo_url: 'https://cdn.test/logo.png',
+    following: false,
+    upcoming: [{ ...event(), poster_url: 'https://cdn.test/poster.jpg' }],
+    past: [],
+    ...overrides,
+  };
 }
 
 describe('Seo', () => {
@@ -111,5 +126,47 @@ describe('Seo', () => {
     // Moving on inside the app must not leave the event page unindexable.
     seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
     expect(meta.getTag('name="robots"')).toBeNull();
+  });
+
+  it('points the organizer in an event result at their own page', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+
+    expect(structured()['organizer']).toMatchObject({
+      url: 'https://myfiesta.ca/o/lagos-nights',
+    });
+  });
+
+  it('unfurls an organizer link with their next night, not their logo', () => {
+    // A logo is a small square that arrives as a thumbnail beside a line of
+    // text. The poster fills the card, and it is what they are selling.
+    seo.forOrganizer(organizer(), 'https://myfiesta.ca/o/lagos-nights');
+
+    expect(meta.getTag('property="og:image"')?.content).toBe('https://cdn.test/poster.jpg');
+    expect(meta.getTag('name="twitter:card"')?.content).toBe('summary_large_image');
+  });
+
+  it('falls back to the mark when they have no night on sale', () => {
+    seo.forOrganizer(organizer({ upcoming: [] }), 'https://myfiesta.ca/o/lagos-nights');
+
+    expect(meta.getTag('property="og:image"')?.content).toBe('https://cdn.test/logo.png');
+    expect(meta.getTag('name="description"')?.content).toContain('Lagos Nights');
+  });
+
+  it('describes the page as one thing at a time', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+    seo.forOrganizer(organizer(), 'https://myfiesta.ca/o/lagos-nights');
+
+    // Navigating from an event to the organizer happens in the browser with no
+    // reload. Two blocks left in the head would tell a crawler this page is
+    // both a party next Friday and a company.
+    expect(document.querySelectorAll('script[type="application/ld+json"]').length).toBe(1);
+    expect(structured()).toMatchObject({ '@type': 'Organization', name: 'Lagos Nights' });
+  });
+
+  it('takes the event structured data away again on a page that is neither', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+    seo.forListing("What's on", 'Everything on sale.', 'https://myfiesta.ca/events');
+
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
   });
 });

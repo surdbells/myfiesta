@@ -1,6 +1,6 @@
 import { DOCUMENT, Injectable, inject } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
-import { EventDetail } from './api.types';
+import { EventDetail, OrganizerPage } from './api.types';
 import { formatMoney } from './money';
 
 /**
@@ -74,6 +74,7 @@ export class Seo {
   forPrivatePage(title: string): void {
     this.title.setTitle(`${title} — myFiesta`);
     this.meta.updateTag({ name: 'robots', content: 'noindex, nofollow' }, 'name="robots"');
+    this.jsonLd(null);
   }
 
   /** Undo forPrivatePage when the app moves on to a public page. */
@@ -81,8 +82,60 @@ export class Seo {
     this.meta.removeTag('name="robots"');
   }
 
+  /**
+   * An organizer's own page.
+   *
+   * The picture is their next night's poster rather than their logo. A logo is
+   * a small square that unfurls as a thumbnail beside a line of text; a poster
+   * fills the card — and the link an organizer shares is a link to what they
+   * are putting on.
+   */
+  forOrganizer(organizer: OrganizerPage, url: string): void {
+    const on = organizer.upcoming.length;
+    const summary =
+      organizer.description ??
+      (on > 0
+        ? `${on} ${on === 1 ? 'night' : 'nights'} on sale from ${organizer.name} on myFiesta.`
+        : `Nights by ${organizer.name} on myFiesta.`);
+
+    this.indexable();
+    this.title.setTitle(`${organizer.name} — events and tickets`);
+
+    const poster = organizer.upcoming[0]?.poster_url ?? organizer.logo_url;
+
+    this.set([
+      { name: 'description', content: summary.slice(0, 200) },
+      { property: 'og:type', content: 'profile' },
+      { property: 'og:title', content: organizer.name },
+      { property: 'og:description', content: summary.slice(0, 200) },
+      { property: 'og:url', content: url },
+      { property: 'og:site_name', content: 'myFiesta' },
+      ...(poster
+        ? [
+            { property: 'og:image', content: poster },
+            { property: 'og:image:alt', content: `${organizer.name} on myFiesta` },
+          ]
+        : []),
+      { name: 'twitter:card', content: poster ? 'summary_large_image' : 'summary' },
+    ]);
+
+    this.canonical(url);
+    this.jsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: organizer.name,
+      url,
+      logo: organizer.logo_url ?? undefined,
+      description: organizer.description ?? undefined,
+    });
+  }
+
   forListing(heading: string, description: string, url: string): void {
     this.indexable();
+    // Arriving here from an event page, in the browser: the event's own
+    // structured data would otherwise still be in the head, telling a crawler
+    // this page is a party in Toronto next Friday.
+    this.jsonLd(null);
     this.title.setTitle(`${heading} — myFiesta`);
     this.set([
       { name: 'description', content: description },
@@ -130,7 +183,7 @@ export class Seo {
    * blue link.
    */
   private structuredData(event: EventDetail, url: string): void {
-    const data = {
+    this.jsonLd({
       '@context': 'https://schema.org',
       '@type': 'Event',
       name: event.title,
@@ -160,9 +213,10 @@ export class Seo {
       organizer: {
         '@type': 'Organization',
         name: event.organizer.name,
-        // The organizer's mark, where they have uploaded one. There is no
-        // public organizer page to point a url at — those links belong to the
-        // console — so the logo is the whole of what can be said here.
+        // Their own page, which is a real address a crawler can follow and
+        // the same one a reader sees under "Organized by".
+        url: `${this.origin(url)}/o/${event.organizer.slug}`,
+        // Their mark, where they have uploaded one.
         logo: event.organizer.logo_url ?? undefined,
       },
       offers: event.from_price
@@ -176,10 +230,31 @@ export class Seo {
             url,
           }
         : undefined,
-    };
+    });
+  }
 
-    const id = 'event-structured-data';
+  /** The site's own origin, taken from the page's canonical address. */
+  private origin(url: string): string {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return 'https://myfiesta.ca';
+    }
+  }
+
+  /**
+   * The one block of structured data this page is making.
+   *
+   * One element, replaced rather than added to: navigating from an event to
+   * an organizer happens in the browser without a reload, and two blocks in
+   * the head would tell a crawler the page is both. Null clears it, for the
+   * pages that are neither.
+   */
+  private jsonLd(data: Record<string, unknown> | null): void {
+    const id = 'structured-data';
     this.document.getElementById(id)?.remove();
+
+    if (data === null) return;
 
     const script = this.document.createElement('script');
     script.id = id;

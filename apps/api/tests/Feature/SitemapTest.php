@@ -69,4 +69,54 @@ class SitemapTest extends TestCase
             $this->assertNotContains("https://myfiesta.test/{$hidden}", $locations);
         }
     }
+
+    public function test_it_lists_organizers_who_have_published_a_night(): void
+    {
+        $this->event('afro-fest');
+
+        // An organizer page is linked from their events and from nowhere else,
+        // so without this a crawler that never reaches an event never learns
+        // the page exists.
+        $locations = $this->locations();
+
+        $this->assertContains('https://myfiesta.test/o/lagos-nights', $locations);
+    }
+
+    public function test_an_organizer_with_nothing_public_is_left_out(): void
+    {
+        $this->event('afro-fest');
+
+        Organization::create(['name' => 'Signed Up Yesterday', 'slug' => 'signed-up-yesterday']);
+
+        $wedding = Organization::create(['name' => 'Caterer', 'slug' => 'caterer']);
+        Event::create([
+            'organization_id' => $wedding->id,
+            'slug' => 'ada-and-tunde-again',
+            'title' => 'Ada and Tunde',
+            'currency' => 'CAD',
+            'starts_at' => now()->addWeek(),
+            'timezone' => 'America/Toronto',
+            'city' => 'Toronto',
+            'country' => 'CA',
+            'status' => 'published',
+            'kind' => 'invitation',
+        ]);
+
+        $locations = $this->locations();
+
+        // Both would answer 404: the page applies the same rule. A sitemap
+        // pointing at 404s is worse than one that is short.
+        $this->assertNotContains('https://myfiesta.test/o/signed-up-yesterday', $locations);
+        $this->assertNotContains('https://myfiesta.test/o/caterer', $locations);
+    }
+
+    /** @return list<string> */
+    private function locations(): array
+    {
+        $xml = simplexml_load_string($this->get('/api/sitemap.xml')->assertOk()->getContent());
+
+        $this->assertNotFalse($xml, 'The sitemap must be well-formed XML.');
+
+        return array_map('strval', $xml->xpath('//*[local-name()="loc"]'));
+    }
 }

@@ -188,8 +188,18 @@
         </div>
       </section>
 
-      <!-- Who is behind the night — and whether somebody checked. -->
-      <section class="host flex items-start gap-4 rounded-xl border border-border bg-surface-raised p-6" aria-label="Organizer">
+      <!--
+        Who is behind the night — and whether somebody checked.
+
+        The whole card is a link to their page now. Somebody who liked this
+        night wants to know what else that name is putting on, and until there
+        was a page to send them to, this block was a dead end.
+      -->
+      <a
+        class="host flex items-start gap-4 rounded-xl border border-border bg-surface-raised p-6 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong"
+        [routerLink]="['/o', ev.organizer.slug]"
+        aria-label="Organizer"
+      >
         @if (ev.organizer.logo_url) {
           <img class="h-12 w-12 shrink-0 rounded-full bg-surface-inset object-cover" [src]="ev.organizer.logo_url" alt="" />
         } @else {
@@ -215,8 +225,9 @@
                  hand over forty dollars is deciding about them, not the page. -->
             <p class="mt-1 text-sm leading-snug text-text-muted">{{ ev.organizer.description }}</p>
           }
+          <p class="mt-2 text-sm font-semibold text-primary-text">See all their events</p>
         </div>
-      </section>
+      </a>
     </div>
   </article>
 

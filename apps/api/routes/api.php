@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassCo
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\OrganizerController;
 use App\Http\Controllers\Api\Organizer\BrandController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
@@ -57,6 +58,14 @@ Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
 Route::get('/orders/{reference}', OrderStatusController::class);
+
+/*
+ * An organizer's own page: who they are, what is on, what has been.
+ *
+ * Public, because it is the link a promoter puts in a bio — and the page that
+ * makes following somebody lead somewhere.
+ */
+Route::get('/organizers/{slug}', [OrganizerController::class, 'show']);
 
 /*
  * A buyer's tickets, with the QR the door reads.

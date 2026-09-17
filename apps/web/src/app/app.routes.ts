@@ -90,6 +90,18 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tickets/find-tickets').then((m) => m.FindTickets),
   },
   {
+    /*
+     * An organizer's own page.
+     *
+     * `/o/` rather than a root slug of their own: event slugs are routed at
+     * the root and are imported verbatim from the previous platform, so an
+     * organizer named after one of their nights would shadow it. Two segments
+     * also keeps this above the wildcard by shape rather than by luck.
+     */
+    path: 'o/:slug',
+    loadComponent: () => import('./features/organizers/organizer').then((m) => m.Organizer),
+  },
+  {
     // The two checkout steps. Two-segment paths, so they cannot collide with
     // the single-segment slug wildcard below.
     path: ':slug/tickets',

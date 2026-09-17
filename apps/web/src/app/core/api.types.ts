@@ -24,6 +24,33 @@ export interface OrganizerRef {
   slug: string;
 }
 
+/**
+ * An organizer as a reader meets them: the name, the mark, the words they
+ * wrote, and whether somebody checked who they are.
+ *
+ * The same block on an event page and on their own page, so the two cannot
+ * drift into describing two different organizers.
+ */
+export interface OrganizerBrand extends OrganizerRef {
+  description: string | null;
+  is_verified: boolean;
+  logo_url: string | null;
+  /**
+   * Whether the reader holding this token follows them. Always false on this
+   * site, which has no accounts to hold one — following is done in the app.
+   * Never a count: an organizer is told how many follow them, nobody is told
+   * who.
+   */
+  following?: boolean;
+}
+
+/** An organizer's own page: who they are, what is on, what has been. */
+export interface OrganizerPage extends OrganizerBrand {
+  upcoming: EventSummary[];
+  /** The most recent nights that have already happened, newest first. */
+  past: EventSummary[];
+}
+
 export interface EventSummary {
   slug: string;
   title: string;
@@ -99,11 +126,7 @@ export interface EventDetail extends EventSummary {
   min_age: number | null;
   id_required: boolean;
   venue: Venue | null;
-  organizer: OrganizerRef & {
-    description: string | null;
-    is_verified: boolean;
-    logo_url: string | null;
-  };
+  organizer: OrganizerBrand;
   ticket_types: TicketType[];
   calendar: CalendarLinks;
 }

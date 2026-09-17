@@ -1,0 +1,97 @@
+@if (notFound()) {
+  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+    <h1>Organizer not found</h1>
+    <p class="mt-2 text-text-muted">
+      This organizer may not have published anything yet, or the link may be wrong.
+    </p>
+    <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
+  </section>
+} @else if (organizer(); as org) {
+  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+    <nav class="mb-4 text-sm text-text-muted" aria-label="Breadcrumb">
+      <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
+      <span aria-hidden="true"> / </span>
+      <span class="font-medium text-text">{{ org.name }}</span>
+    </nav>
+
+    <!-- Who they are. The same block an event page carries under "Organized
+         by", given the room it deserves when the page is about them. -->
+    <header class="flex items-start gap-6 max-sm:gap-4">
+      @if (org.logo_url) {
+        <img
+          class="h-20 w-20 shrink-0 rounded-full bg-surface-inset object-cover max-sm:h-16 max-sm:w-16"
+          [src]="org.logo_url"
+          alt=""
+          fetchpriority="high"
+        />
+      } @else {
+        <span
+          class="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-primary-soft text-3xl font-bold text-primary-soft-text max-sm:h-16 max-sm:w-16 max-sm:text-2xl"
+          aria-hidden="true"
+          >{{ initial() }}</span
+        >
+      }
+
+      <div class="min-w-0 flex-1">
+        <h1 class="flex flex-wrap items-center gap-2 text-3xl">
+          {{ org.name }}
+          @if (org.is_verified) {
+            <!-- Somebody checked who this organizer is. Worth more to a
+                 stranger about to pay than anything on the page they wrote
+                 themselves. -->
+            <ui-icon class="text-primary" [icon]="verifiedIcon" label="Identity verified" />
+          }
+        </h1>
+
+        @if (org.description) {
+          <p class="mt-2 max-w-[66ch] text-lg leading-snug text-text-muted">{{ org.description }}</p>
+        }
+
+        <button
+          class="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-transparent px-4 text-sm font-semibold text-text [font-family:inherit] hover:border-border-strong"
+          type="button"
+          (click)="share()"
+        >
+          <ui-icon [icon]="shareIcon" size="sm" />
+          {{ shared() ? 'Link copied' : 'Share' }}
+        </button>
+      </div>
+    </header>
+
+    <!-- ----------------------------------------------------------- what's on -->
+    <h2 class="mt-12 border-b border-border pb-3 text-xl">What&#39;s on</h2>
+
+    @if (org.upcoming.length > 0) {
+      <ul class="m-0 mt-6 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
+        @for (event of org.upcoming; track event.slug) {
+          <li class="min-w-0">
+            <app-event-card [event]="event" [eager]="$first" />
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="mt-6 text-text-muted">
+        {{ org.name }} has nothing on sale right now.
+        @if (org.past.length > 0) {
+          Their last night is below.
+        }
+      </p>
+    }
+
+    <!-- ---------------------------------------------------------- previously -->
+    @if (org.past.length > 0) {
+      <h2 class="mt-12 border-b border-border pb-3 text-xl">Previously</h2>
+
+      <!-- Nights that have happened, and the reason this page convinces
+           anybody: a name with a history behind it is the thing a stranger
+           deciding whether to hand over forty dollars is actually reading. -->
+      <ul class="m-0 mt-6 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
+        @for (event of org.past; track event.slug) {
+          <li class="min-w-0">
+            <app-event-card [event]="event" [past]="true" />
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}

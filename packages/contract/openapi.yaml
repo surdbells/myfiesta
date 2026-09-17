@@ -419,6 +419,37 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/organizers/{slug}:
+    get:
+      operationId: getOrganizer
+      summary: An organizer page — who they are, what is on, what has been
+      description: |
+        Public and shareable — the link a promoter puts in a bio, and where
+        following an organizer leads.
+
+        A slug with no published ticketed event answers 404, whether the
+        account exists or not: registering is not publishing, and a page for
+        every account that ever signed up would confirm which names are taken.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The organizer, with their nights.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/OrganizerPage' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/me/following:
     get:
       operationId: listFollowedOrganizers
@@ -996,6 +1027,25 @@ components:
             Whether the reader holding this token follows the organizer. False
             for a guest. An organizer may be told how many follow them; who is
             never published, here or anywhere.
+
+    OrganizerPage:
+      allOf:
+        - $ref: '#/components/schemas/OrganizerBrand'
+        - type: object
+          required: [upcoming, past]
+          properties:
+            upcoming:
+              type: array
+              description: |
+                Their published nights still to come, soonest first.
+              items: { $ref: '#/components/schemas/EventSummary' }
+            past:
+              type: array
+              description: |
+                The most recent nights that have already happened, newest
+                first and bounded. What a stranger deciding whether to trust a
+                name actually reads.
+              items: { $ref: '#/components/schemas/EventSummary' }
 
     Venue:
       type: object

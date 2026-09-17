@@ -8,6 +8,7 @@ import {
   EventSummary,
   OrderCreated,
   OrderStatus,
+  OrganizerPage,
   Page,
   Quote,
   TicketAccess,
@@ -52,6 +53,11 @@ export class Api {
 
   event(slug: string): Observable<{ data: EventDetail }> {
     return this.http.get<{ data: EventDetail }>(`${this.base}/api/events/${slug}`);
+  }
+
+  /** An organizer's own page: who they are, what is on, what has been. */
+  organizer(slug: string): Observable<{ data: OrganizerPage }> {
+    return this.http.get<{ data: OrganizerPage }>(`${this.base}/api/organizers/${slug}`);
   }
 
   quote(

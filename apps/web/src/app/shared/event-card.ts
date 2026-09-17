@@ -96,7 +96,7 @@ import { formatMoney } from '../core/money';
             }
 
             <span class="absolute bottom-3 left-3 rounded-full bg-[rgba(8,12,9,0.78)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.04em] text-neutral-0 backdrop-blur-[4px]">
-              @if (event().is_sold_out) {
+              @if (event().is_sold_out && !past()) {
                 Sold out
               } @else {
                 {{ shortWhen() }}
@@ -111,9 +111,15 @@ import { formatMoney } from '../core/money';
               {{ event().city }}
             </span>
             <span class="mt-1 flex items-center justify-between gap-3 border-t border-border pt-3">
-              <span class="evt__price text-sm font-semibold text-primary-text tabular-nums group-data-[sold]:font-normal group-data-[sold]:text-text-subtle">{{ price() }}</span>
-              @if (!event().is_sold_out) {
-                <span class="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-on-primary">Details</span>
+              @if (past()) {
+                <!-- No price and no call to action: this night is over, and
+                     the page it links to says so. -->
+                <span class="text-sm text-text-subtle">Past event</span>
+              } @else {
+                <span class="evt__price text-sm font-semibold text-primary-text tabular-nums group-data-[sold]:font-normal group-data-[sold]:text-text-subtle">{{ price() }}</span>
+                @if (!event().is_sold_out) {
+                  <span class="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-on-primary">Details</span>
+                }
               }
             </span>
           </span>
@@ -143,6 +149,16 @@ export class EventCard {
   /** The listing-row layout, for sections holding one or two events. */
   readonly wide = input(false);
 
+  /**
+   * A night that has already happened.
+   *
+   * Shown under "Previously" on an organizer page, where the card is proof
+   * rather than an offer. Without this the same card reads as something to
+   * buy: a date with no year that could be next month, a price, and a button
+   * that says Details — for a party that was last August.
+   */
+  readonly past = input(false);
+
   readonly saves = inject(Saves);
 
   protected readonly whereIcon = MapPin;
@@ -153,11 +169,18 @@ export class EventCard {
 
   readonly shortWhen = computed(() =>
     new Intl.DateTimeFormat('en-CA', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
+      // A night that has gone gets its year and loses its clock: the time
+      // somebody should have arrived is no use to anybody now, and a date
+      // with no year reads as one coming up.
+      ...(this.past()
+        ? { day: 'numeric' as const, month: 'short' as const, year: 'numeric' as const }
+        : {
+            weekday: 'short' as const,
+            day: 'numeric' as const,
+            month: 'short' as const,
+            hour: 'numeric' as const,
+            minute: '2-digit' as const,
+          }),
       // The venue's zone, never the reader's. A Lagos event says 10pm to
       // somebody reading in Toronto.
       timeZone: this.event().timezone,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\Organization;
 use Illuminate\Http\Response;
 
 /**
@@ -12,7 +13,9 @@ use Illuminate\Http\Response;
  * Event pages are rendered per request and linked from the listing, but the
  * listing only shows what is on sale now and paginates — so an event three
  * pages down, or one sold out, was a page a search engine had to stumble on.
- * This lists every public event page directly.
+ * This lists every public event page directly, and every organizer page with
+ * it: an organizer's page is linked from their events and from nowhere else,
+ * so a crawler that never reaches an event never learns it exists.
  *
  * Built here because the API is what knows which events are public. The site
  * proxies it, so the sitemap lives on the site's own origin where crawlers
@@ -48,6 +51,10 @@ class SitemapController extends Controller
             $urls[] = $this->url($base.'/'.$event->slug, $event->updated_at->toAtomString());
         }
 
+        foreach ($this->organizers() as $organizer) {
+            $urls[] = $this->url($base.'/o/'.$organizer->slug, $organizer->updated_at?->toAtomString());
+        }
+
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n"
             .'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'."\n"
             .implode("\n", $urls)."\n"
@@ -57,6 +64,29 @@ class SitemapController extends Controller
             'Content-Type' => 'application/xml; charset=utf-8',
             'Cache-Control' => 'public, max-age=3600',
         ]);
+    }
+
+    /**
+     * Organizers with a page, which is organizers who have published a night.
+     *
+     * The same rule the page itself applies: an account that has only ever
+     * registered has no page, so listing it here would be a sitemap pointing
+     * at 404s. Past events count — a name with a history is exactly what
+     * somebody searching for a promoter is trying to find.
+     */
+    private function organizers()
+    {
+        return Organization::query()
+            ->whereExists(fn ($query) => $query
+                ->selectRaw(1)
+                ->from('events')
+                ->whereColumn('events.organization_id', 'organizations.id')
+                ->where('events.status', 'published')
+                ->where('events.kind', 'ticketed')
+                ->whereNull('events.deleted_at'))
+            ->orderBy('slug')
+            ->limit(self::LIMIT - count(self::PAGES))
+            ->get(['slug', 'updated_at']);
     }
 
     private function url(string $location, ?string $modified = null): string

@@ -1,6 +1,6 @@
 <ui-page-header
   title="How you appear"
-  subtitle="Your name, your mark and what you say about yourself — shown on every event page you publish."
+  subtitle="Your name, your mark and what you say about yourself — on every event page you publish, and on your own page."
 />
 
 @if (loading()) {
@@ -91,18 +91,37 @@
         />
       </ui-field>
 
+      <!--
+        Not a slug in a box any more.
+
+        This is a real page now — everything they have on, everything they have
+        run, and the tick if they have one — and the address is the one thing
+        an organizer would put in a bio. Shown whole, ready to copy, with a way
+        to look at it.
+      -->
       <ui-field
-        label="Web address"
-        hint="Fixed. It is in links you have already handed out, so it cannot be changed here."
+        label="Your page"
+        hint="Everything you have on, in one link. Fixed — it is in links you have already handed out, so it cannot be changed here."
       >
         <input
           id="brand-slug"
           name="brand-slug"
           class="bg-surface-sunken text-text-muted"
           readonly
-          [value]="brand.slug"
+          [value]="pageUrl()"
         />
       </ui-field>
+
+      <p class="-mt-2">
+        <a
+          class="text-sm font-medium text-primary-text underline underline-offset-2"
+          [href]="pageUrl()"
+          target="_blank"
+          rel="noopener"
+        >
+          Open your page
+        </a>
+      </p>
 
       <ui-field
         label="About you"

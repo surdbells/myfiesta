@@ -6,6 +6,7 @@ import { Api } from '../../core/api';
 import { Brand as BrandData } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { SITE_URL } from '../../core/site-url';
 
 /**
  * How the organization appears on the pages it sells from.
@@ -16,7 +17,9 @@ import { SessionStore } from '../../core/session';
  *
  * The web address is shown and not editable. It is in links organizers have
  * already handed out, and tidying up a display name should not quietly break
- * them; the API refuses a change to it for the same reason.
+ * them; the API refuses a change to it for the same reason. It is now the
+ * address of a real page — everything they have on and everything they have
+ * run — so it is shown whole and linked rather than left as a slug in a box.
  *
  * Anybody on the team can open this screen. Only an owner can change anything
  * on it, and the controls say so rather than failing on submit.
@@ -30,6 +33,7 @@ export class Brand {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
   readonly session = inject(SessionStore);
+  private readonly siteUrl = inject(SITE_URL);
 
   readonly brand = signal<BrandData | null>(null);
   readonly loading = signal(true);
@@ -69,6 +73,9 @@ export class Brand {
 
   /** What is left of the description's room, once it is worth mentioning. */
   readonly remaining = computed(() => 600 - this.description().length);
+
+  /** Their page on the public site — the link they hand out. */
+  readonly pageUrl = computed(() => `${this.siteUrl}/o/${this.brand()?.slug ?? ''}`);
 
   readonly initial = computed(() => (this.brand()?.name.trim().charAt(0) ?? '?').toUpperCase());
 

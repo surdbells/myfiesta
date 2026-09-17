@@ -113,6 +113,20 @@ class ContractConformanceTest extends TestCase
         }
     }
 
+    public function test_an_organizer_page_carries_what_the_contract_promises(): void
+    {
+        $slug = $this->event->organization->slug;
+
+        $body = $this->getJson("/api/organizers/{$slug}")->assertOk()->json('data');
+
+        // Also an allOf, over OrganizerBrand — the same block the event page
+        // carries, so the two cannot drift into two different organizers.
+        foreach ($this->propertiesOf('OrganizerPage') as $field) {
+            $this->assertArrayHasKey($field, $body,
+                "OrganizerPage declares '{$field}' and the API does not return it.");
+        }
+    }
+
     public function test_a_quote_carries_what_the_contract_promises(): void
     {
         $body = $this->postJson('/api/events/contract-test/quote', [
