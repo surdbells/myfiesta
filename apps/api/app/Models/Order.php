@@ -118,6 +118,12 @@ class Order extends Model
         return $this->hasMany(Ticket::class);
     }
 
+    /** What the buyer answered: for the order, and about each person on it. */
+    public function answers(): HasMany
+    {
+        return $this->hasMany(OrderAnswer::class);
+    }
+
     public function refunds(): HasMany
     {
         return $this->hasMany(Refund::class);

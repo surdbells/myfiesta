@@ -26,6 +26,6 @@ class RsvpAnswer extends Model
 
     public function question(): BelongsTo
     {
-        return $this->belongsTo(RsvpQuestion::class, 'rsvp_question_id');
+        return $this->belongsTo(EventQuestion::class, 'event_question_id')->withTrashed();
     }
 }

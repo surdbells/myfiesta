@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\OrderAnswer;
+use App\Models\Ticket;
 use App\Services\Door\CheckInService;
 use App\Services\Door\DoorList;
 use App\Services\Door\DoorPasses;
@@ -157,6 +159,23 @@ class DoorController extends Controller
         }
     }
 
+    /**
+     * The answers written on one ticket, ready to read at arm's length.
+     *
+     * @return list<array{label: ?string, value: string}>
+     */
+    private function answers(Ticket $ticket): array
+    {
+        return $ticket->answers()
+            ->with('question')
+            ->get()
+            ->map(fn (OrderAnswer $answer) => [
+                'label' => $answer->question?->label,
+                'value' => $answer->asText(),
+            ])
+            ->all();
+    }
+
     /** @return array<string, mixed> */
     private function present(ScanOutcome $outcome, Event $event): array
     {
@@ -177,6 +196,14 @@ class DoorController extends Controller
                     'type' => $outcome->ticket->ticketType?->name,
                     'admits' => $outcome->ticket->admits,
                     'admitted_count' => $outcome->ticket->admitted_count,
+                    // What this person was asked at checkout, which is the
+                    // whole reason for collecting it: a name to check against
+                    // an ID, a table number, an access requirement.
+                    //
+                    // Only what was asked of them. What the buyer answered for
+                    // the order — how they heard about the night — is not
+                    // somebody on a door's business.
+                    'answers' => $this->answers($outcome->ticket),
                 ]
                 // Nothing about a ticket belonging to another event. A door
                 // token is scoped to one event, and leaking a guest's name from

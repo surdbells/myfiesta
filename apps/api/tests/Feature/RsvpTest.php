@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Exceptions\CheckoutException;
 use App\Models\Event;
+use App\Models\EventQuestion;
 use App\Models\Guest;
 use App\Models\Organization;
 use App\Models\Rsvp;
-use App\Models\RsvpQuestion;
 use App\Models\Ticket;
 use App\Services\Door\CheckInService;
 use App\Services\Door\ScanOutcome;
@@ -184,7 +184,7 @@ class RsvpTest extends TestCase
         $event = $this->wedding();
         $guest = $this->guest($event);
 
-        RsvpQuestion::create([
+        EventQuestion::create([
             'event_id' => $event->id,
             'label' => 'Dietary requirements',
             'type' => 'text',
@@ -200,7 +200,7 @@ class RsvpTest extends TestCase
         $event = $this->wedding();
         $guest = $this->guest($event);
 
-        RsvpQuestion::create([
+        EventQuestion::create([
             'event_id' => $event->id,
             'label' => 'Dietary requirements',
             'type' => 'text',
@@ -219,7 +219,7 @@ class RsvpTest extends TestCase
         $event = $this->wedding();
         $guest = $this->guest($event);
 
-        $question = RsvpQuestion::create([
+        $question = EventQuestion::create([
             'event_id' => $event->id,
             'label' => 'Meal',
             'type' => 'choice',

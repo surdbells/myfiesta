@@ -3,10 +3,10 @@
 namespace App\Services\Invites;
 
 use App\Exceptions\CheckoutException;
+use App\Models\EventQuestion;
 use App\Models\Guest;
 use App\Models\Rsvp;
 use App\Models\RsvpAnswer;
-use App\Models\RsvpQuestion;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Services\Checkout\TicketIssuer;
@@ -147,7 +147,7 @@ class RsvpService
 
             RsvpAnswer::create([
                 'rsvp_id' => $rsvp->id,
-                'rsvp_question_id' => $questionId,
+                'event_question_id' => $questionId,
                 // Always an array in storage, so reporting does not have to
                 // branch on whether a question happened to be multi-choice.
                 'value' => is_array($value) ? array_values($value) : [$value],
@@ -170,10 +170,10 @@ class RsvpService
             return;
         }
 
-        $missing = RsvpQuestion::where('event_id', $eventId)
+        $missing = EventQuestion::where('event_id', $eventId)
             ->where('required', true)
             ->get()
-            ->filter(fn (RsvpQuestion $q) => blank($answers[$q->id] ?? null));
+            ->filter(fn (EventQuestion $q) => blank($answers[$q->id] ?? null));
 
         if ($missing->isNotEmpty()) {
             throw new CheckoutException(

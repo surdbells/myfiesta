@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Requests\CreateOrderRequest;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\TicketType;
@@ -138,6 +139,34 @@ class ContractConformanceTest extends TestCase
         foreach ($declared as $field) {
             $this->assertArrayHasKey($field, $body,
                 "Quote declares '{$field}' and the API does not return it.");
+        }
+    }
+
+    /**
+     * The other direction, which nothing checked.
+     *
+     * Everything above asks whether a response carries what the spec promises.
+     * A request body is the same contract read backwards, and it had already
+     * drifted: the spec declared `buyer_email`, `buyer_name` and `buyer_phone`
+     * as flat fields, and the API has only ever accepted a nested `buyer`
+     * object. A generated client would have encoded a body the server
+     * discards, and the failure would have arrived as a validation error in
+     * front of somebody trying to pay.
+     */
+    public function test_the_order_request_is_the_one_the_api_takes(): void
+    {
+        $declared = $this->propertiesOf('CreateOrderRequest');
+
+        // The root of each validation rule: `buyer.email` is the `buyer` the
+        // spec has to be describing.
+        $accepted = collect(array_keys((new CreateOrderRequest)->rules()))
+            ->map(fn (string $rule) => explode('.', $rule)[0])
+            ->unique()
+            ->all();
+
+        foreach ($declared as $field) {
+            $this->assertContains($field, $accepted,
+                "CreateOrderRequest declares '{$field}' and the API does not accept it.");
         }
     }
 

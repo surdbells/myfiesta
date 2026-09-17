@@ -936,6 +936,13 @@ components:
                 for a guest. There is deliberately no count: saving is a
                 private list, not applause, so a quiet night never advertises
                 how quiet it is.
+            questions:
+              type: array
+              description: |
+                What the organizer asks at checkout. Empty when they ask
+                nothing — a list, never a missing key, so a client cannot
+                mistake 'asks nothing' for 'old server'.
+              items: { $ref: '#/components/schemas/Question' }
             ticket_types:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
@@ -1072,6 +1079,27 @@ components:
           type: string
           enum: [on_sale, sold_out, hidden, closed]
 
+    Question:
+      type: object
+      required: [id, label, type, required, per_attendee]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        type:
+          type: string
+          enum: [text, choice, multi_choice, boolean]
+        options:
+          type: array
+          description: What may be chosen. Empty for a question that is typed into.
+          items: { type: string }
+        required: { type: boolean }
+        per_attendee:
+          type: boolean
+          description: |
+            Asked once for the whole order, or once about each person on it.
+            A name for the door is per attendee; how somebody heard about the
+            night is not.
+
     QuoteRequest:
       type: object
       required: [items]
@@ -1136,17 +1164,48 @@ components:
       allOf:
         - $ref: '#/components/schemas/QuoteRequest'
         - type: object
-          required: [buyer_email, buyer_name]
+          required: [buyer]
           properties:
-            buyer_email: { type: string, format: email }
-            buyer_name: { type: string }
-            buyer_phone: { type: [string, 'null'] }
-            return_url:
-              type: string
-              format: uri
+            buyer:
+              type: object
               description: |
-                Where the gateway sends the buyer afterwards. Cosmetic — the
-                signed webhook is what issues tickets.
+                Who the tickets are for. Nested, because it is one person:
+                the spec described three flat fields the API has never
+                accepted, so a generated client encoded a body that could not
+                be posted.
+              required: [name, email]
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                phone: { type: [string, 'null'], maxLength: 32 }
+            answers:
+              type: object
+              description: |
+                What the buyer answered for the order as a whole, keyed by
+                question id — the questions on the event with per_attendee
+                false. Which of them must be answered is decided by the
+                server against its own rows, never against the form a client
+                rendered.
+              additionalProperties: true
+            attendees:
+              type: array
+              description: |
+                One entry per ticket, in the order they were filled in, when
+                the event asks something of each person. The position within
+                a ticket type is the position of the ticket it belongs to, so
+                the counts here have to match the quantities in items.
+              items:
+                type: object
+                required: [ticket_type_id]
+                properties:
+                  ticket_type_id: { type: string, format: uuid }
+                  answers:
+                    type: object
+                    additionalProperties: true
+            # No return_url. The spec used to declare one and the API has
+            # never read it: where a buyer lands after paying is built from
+            # the platform's own PUBLIC_URL, which is what keeps it from being
+            # somewhere a request asked for.
 
     OrderCreated:
       type: object

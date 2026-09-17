@@ -68,6 +68,8 @@ class CheckoutController extends Controller
                 user: $request->user(),
                 buyerPhone: $request->input('buyer.phone'),
                 accessInput: $request->input('access_code'),
+                answers: $request->orderAnswers(),
+                attendees: $request->attendees(),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);

@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\Organizer\EventImageController;
 use App\Http\Controllers\Api\Organizer\OrderController as OrganizerOrderController;
 use App\Http\Controllers\Api\Organizer\OverviewController;
 use App\Http\Controllers\Api\Organizer\PayoutController;
+use App\Http\Controllers\Api\Organizer\QuestionController;
 use App\Http\Controllers\Api\Organizer\GuestController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\MessageController;
@@ -238,6 +239,14 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // The order tiers are offered in, as one list — see the controller for
         // why this is not a sort_order per tier.
         Route::post('/events/{event:id}/ticket-types/order', [TicketTypeController::class, 'reorder']);
+
+
+        // What the checkout asks, and the order it asks in.
+        Route::get('/events/{event:id}/questions', [QuestionController::class, 'index']);
+        Route::post('/events/{event:id}/questions', [QuestionController::class, 'store']);
+        Route::patch('/events/{event:id}/questions/{question:id}', [QuestionController::class, 'update']);
+        Route::delete('/events/{event:id}/questions/{question:id}', [QuestionController::class, 'destroy']);
+        Route::post('/events/{event:id}/questions/order', [QuestionController::class, 'reorder']);
 
         Route::get('/events/{event:id}/guests', [GuestController::class, 'index']);
         Route::get('/events/{event:id}/guests/export', [GuestController::class, 'export']);

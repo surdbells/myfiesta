@@ -37,7 +37,10 @@ class CheckoutService
      */
     private const HOLD_MINUTES = 20;
 
-    public function __construct(private readonly Pricer $pricer) {}
+    public function __construct(
+        private readonly Pricer $pricer,
+        private readonly Answers $answers,
+    ) {}
 
     /**
      * Price a basket without reserving anything.
@@ -66,13 +69,21 @@ class CheckoutService
         ?User $user = null,
         ?string $buyerPhone = null,
         ?string $accessInput = null,
+        array $answers = [],
+        array $attendees = [],
     ): Order {
         if ($event->status !== 'published') {
             throw new CheckoutException('Tickets for this event are not on sale.');
         }
 
+        // Before the holds, deliberately. A refusal here costs the buyer a
+        // message and nothing else; a hold taken for an order that was never
+        // going to be created is stock nobody else can buy for twenty minutes.
+        $checkedAnswers = $this->answers->check($event, $answers, $attendees, $quantities);
+
         return DB::transaction(function () use (
-            $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone, $accessInput
+            $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone,
+            $accessInput, $checkedAnswers
         ) {
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
@@ -126,6 +137,11 @@ class CheckoutService
                     'discount_amount' => $line->discount->amount,
                 ]);
             }
+
+            // Inside the transaction, so an order cannot exist without the
+            // answers it was placed with — and a required question cannot be
+            // left unanswered by a write that failed on its own.
+            $this->answers->store($order, $checkedAnswers);
 
             return $order->refresh();
         });

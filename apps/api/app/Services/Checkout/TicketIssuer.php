@@ -3,6 +3,7 @@
 namespace App\Services\Checkout;
 
 use App\Models\Order;
+use App\Models\OrderAnswer;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
@@ -47,9 +48,18 @@ class TicketIssuer
 
         $tickets = [];
 
+        /*
+         * Whether anybody was asked anything about themselves.
+         *
+         * Checked once rather than per ticket: on the ordinary order, where
+         * the organizer asks nothing, this is one query and the loop below
+         * touches no answers at all.
+         */
+        $named = $order->answers()->whereNotNull('order_line_id')->exists();
+
         foreach ($order->lines()->with('ticketType:id,admits')->get() as $line) {
             for ($i = 0; $i < $line->quantity; $i++) {
-                $tickets[] = Ticket::create([
+                $ticket = Ticket::create([
                     'code' => $this->code(),
                     'event_id' => $order->event_id,
                     'ticket_type_id' => $line->ticket_type_id,
@@ -63,6 +73,27 @@ class TicketIssuer
                     'holder_name' => $order->buyer_name,
                     'status' => 'valid',
                 ]);
+
+                /*
+                 * Tie this ticket to the person the buyer described.
+                 *
+                 * The answers were given before any ticket existed — a buyer
+                 * fills the form in on the way to a payment page, and the
+                 * tickets are minted by the webhook that comes back. They were
+                 * stored against the line and a position within it, and this
+                 * loop mints them in that same order, so $i is that position.
+                 *
+                 * Doing it here rather than by matching later is what lets a
+                 * door scan one code and read what that person answered.
+                 */
+                if ($named) {
+                    OrderAnswer::query()
+                        ->where('order_line_id', $line->id)
+                        ->where('attendee_index', $i)
+                        ->update(['ticket_id' => $ticket->id]);
+                }
+
+                $tickets[] = $ticket;
             }
         }
 

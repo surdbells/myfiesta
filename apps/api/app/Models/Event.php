@@ -95,6 +95,12 @@ class Event extends Model
             ->orderBy('created_at');
     }
 
+    /** What this event asks the people coming to it, in the order it asks. */
+    public function questions(): HasMany
+    {
+        return $this->hasMany(EventQuestion::class)->orderBy('sort_order')->orderBy('created_at');
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

@@ -112,6 +112,28 @@ class EventResource extends EventSummaryResource
             // "Add to calendar": a file for Apple and Outlook, a link for Google.
             'calendar' => app(CalendarFile::class)->links($this->resource),
 
+            /*
+             * What the organizer asks at checkout.
+             *
+             * On the event page rather than behind a second request: the
+             * checkout screen already has this payload, and a form that
+             * arrives after the page has rendered is a form that appears
+             * under somebody's cursor.
+             *
+             * Only the shape of the question. What must be answered is
+             * decided again on the way in — a client is free to render this
+             * however it likes, and free to be wrong about it.
+             */
+            'questions' => $this->questions->map(fn ($question) => [
+                'id' => $question->id,
+                'label' => $question->label,
+                'type' => $question->type,
+                'options' => $question->options ?? [],
+                'required' => $question->required,
+                // Asked once for the order, or once about each person on it.
+                'per_attendee' => $question->per_attendee,
+            ])->values(),
+
             'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
         ]);
     }

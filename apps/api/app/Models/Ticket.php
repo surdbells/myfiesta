@@ -46,6 +46,17 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'owner_user_id');
     }
 
+    /**
+     * What this ticket's holder was asked at checkout.
+     *
+     * Only the per-person answers reach a ticket. What the buyer answered for
+     * the order as a whole belongs to the order.
+     */
+    public function answers(): HasMany
+    {
+        return $this->hasMany(OrderAnswer::class);
+    }
+
     public function scans(): HasMany
     {
         return $this->hasMany(TicketScan::class);

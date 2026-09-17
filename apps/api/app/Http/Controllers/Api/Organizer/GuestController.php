@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Organizer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\EventQuestion;
+use App\Models\OrderAnswer;
 use App\Models\Ticket;
 use App\Services\Audit\Auditor;
 use App\Support\Csv;
@@ -50,13 +52,20 @@ class GuestController extends Controller
             metadata: ['count' => (clone $query)->count()],
         );
 
-        $rows = (function () use ($query, $event) {
+        // One column per question the event asked, including ones it has
+        // stopped asking: the answers outlive the question, and a column of
+        // dietary requirements with no heading is a column nobody can read.
+        $questions = $this->questionsAnswered($event);
+
+        $rows = (function () use ($query, $event, $questions) {
             $tickets = $query
-                ->with(['ticketType:id,name', 'order:id,reference'])
+                ->with(['ticketType:id,name', 'order:id,reference', 'answers', 'order.answers'])
                 ->orderBy('holder_name')
                 ->orderBy('id');
 
             foreach ($tickets->lazy(500) as $ticket) {
+                $answers = $this->answersFor($ticket);
+
                 yield [
                     Csv::text($ticket->holder_name),
                     Csv::text($ticket->owner_email),
@@ -67,15 +76,70 @@ class GuestController extends Controller
                     // At the venue's clock, which is the night the list is for.
                     $ticket->checked_in_at?->copy()->setTimezone($event->timezone)->format('Y-m-d H:i'),
                     $ticket->order?->reference,
+                    // Every answer is text somebody typed at a checkout, so it
+                    // goes through the same defusing as a name.
+                    ...array_map(
+                        fn (EventQuestion $question) => Csv::text($answers[$question->id] ?? null),
+                        $questions,
+                    ),
                 ];
             }
         })();
 
         return Csv::download(
             Str::slug($event->title).'-guests-'.now()->format('Y-m-d').'.csv',
-            ['Name', 'Email', 'Ticket', 'Admits', 'Arrived', 'Status', 'First arrived at', 'Order reference'],
+            [
+                'Name', 'Email', 'Ticket', 'Admits', 'Arrived', 'Status', 'First arrived at', 'Order reference',
+                ...array_map(fn (EventQuestion $question) => $question->label, $questions),
+            ],
             $rows,
         );
+    }
+
+    /**
+     * The questions worth a column, in the order they were asked.
+     *
+     * Every question the event still asks, plus any it has stopped asking that
+     * somebody answered. A question removed before anybody answered it is not
+     * an empty column in a spreadsheet; one removed afterwards is a heading
+     * that has to survive, or the answers under it mean nothing.
+     *
+     * @return list<EventQuestion>
+     */
+    private function questionsAnswered(Event $event): array
+    {
+        return EventQuestion::withTrashed()
+            ->where('event_id', $event->id)
+            ->where(fn ($query) => $query
+                ->whereNull('deleted_at')
+                ->orWhereExists(fn ($exists) => $exists
+                    ->selectRaw(1)
+                    ->from('order_answers')
+                    ->whereColumn('order_answers.event_question_id', 'event_questions.id')))
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * One ticket's answers, keyed by question.
+     *
+     * Its holder's own, and whatever the buyer answered for the order it is
+     * part of — on a spreadsheet the second repeats down the rows of one
+     * order, which is what a reader expects of a flat list.
+     *
+     * @return array<string, string>
+     */
+    private function answersFor(Ticket $ticket): array
+    {
+        $answers = $ticket->answers->merge(
+            $ticket->order?->answers->whereNull('order_line_id') ?? []
+        );
+
+        return $answers
+            ->mapWithKeys(fn (OrderAnswer $answer) => [$answer->event_question_id => $answer->asText()])
+            ->all();
     }
 
     public function index(Request $request, Event $event): JsonResponse
@@ -105,7 +169,7 @@ class GuestController extends Controller
                         ->orWhereRaw('lower(owner_email) LIKE ?', [$like]);
                 });
             })
-            ->with('ticketType:id,name')
+            ->with(['ticketType:id,name', 'answers.question', 'order:id', 'order.answers.question'])
             ->orderBy('holder_name')
             // Names repeat, and a comp issued without one has none at all;
             // ordered by name alone, the same guest could appear on two pages
@@ -124,6 +188,16 @@ class GuestController extends Controller
                 // a set of working tickets.
                 'checked_in' => $ticket->status === 'checked_in',
                 'checked_in_at' => $ticket->checked_in_at,
+                // What this person was asked at checkout, and what the buyer
+                // answered for the order they are on. Which of the two it was
+                // is not a distinction anybody reading a guest list is making.
+                'answers' => $ticket->answers
+                    ->merge($ticket->order?->answers->whereNull('order_line_id') ?? [])
+                    ->map(fn (OrderAnswer $answer) => [
+                        'label' => $answer->question?->label,
+                        'value' => $answer->asText(),
+                    ])
+                    ->values(),
             ])->values(),
             'meta' => [
                 ...Paging::meta($guests),
