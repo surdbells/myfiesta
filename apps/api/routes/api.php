@@ -195,7 +195,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
          */
         Route::get('/brand', [BrandController::class, 'show']);
         Route::patch('/brand', [BrandController::class, 'update']);
-        Route::post('/brand/logo', [BrandController::class, 'storeLogo']);
+        Route::post('/brand/logo', [BrandController::class, 'storeLogo'])->middleware('throttle:60,1');
         Route::delete('/brand/logo', [BrandController::class, 'destroyLogo']);
 
         Route::get('/team', [TeamController::class, 'index']);
@@ -235,7 +235,14 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/tickets', [IssuedTicketController::class, 'store']);
 
         Route::get('/events/{event:id}/images', [EventImageController::class, 'index']);
-        Route::post('/events/{event:id}/images', [EventImageController::class, 'store']);
+        /*
+         * Decoding an image is the one expensive thing behind this door: a
+         * 12MB upload becomes several renditions in memory. Sixty a minute
+         * comfortably covers dropping a whole gallery in at once — the cap is
+         * thirty per event — and still puts a ceiling on the cost.
+         */
+        Route::post('/events/{event:id}/images', [EventImageController::class, 'store'])
+            ->middleware('throttle:60,1');
         Route::patch('/events/{event:id}/images/{image:id}', [EventImageController::class, 'update']);
         Route::delete('/events/{event:id}/images/{image:id}', [EventImageController::class, 'destroy']);
         Route::post('/events/{event:id}/images/order', [EventImageController::class, 'reorder']);
