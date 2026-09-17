@@ -23,7 +23,7 @@ to act on.
 
 | | |
 | --- | --- |
-| Selling | tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
+| Selling | questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
 | Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
 | The door | scanning by camera or code, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
 | Attendees | tickets on the phone that work offline, transfers, saved events, following organizers, reminders, add to calendar |
@@ -47,20 +47,16 @@ omission — the site has no accounts to hang following on. Both are recorded in
 [DECISIONS.md](DECISIONS.md), along with why an organization that has never
 published gets a 404 instead of an empty page.
 
-### 2. Questions at checkout — **M**
+### 2. Questions at checkout — **done, 17 September 2026**
 
-Eventbrite's order forms are the feature organizers ask for by name. We have
-`rsvp_questions` already, with per-attendee support, but they are wired to the
-invitation flow and its `guests` table — a ticketed order has nowhere to put an
-answer.
+The question model the invitation flow already had, renamed to what it always
+was and put in front of somebody buying a ticket. Asked once for the order, or
+about each person on it; the answers reach the guest list, the export, and the
+door screen under the ticket that was just scanned.
 
-What it is for here: the name on each ticket when a door checks ID, a phone
-number for a table booking, dietary needs for a dinner, "how did you hear about
-this" for promoters.
-
-Reuse the question model, add answers against `order_lines`, put them in the
-guest list and the export. The door screen should show them under a scanned
-ticket, which is the whole reason for collecting them.
+Not scoped to a ticket type — a phone number that only matters for a table is
+the obvious next turn, and it is left out deliberately rather than half-built.
+That and the other decisions this raised are in [DECISIONS.md](DECISIONS.md).
 
 ### 3. Add-ons: tables, bottles, merchandise — **M**
 
@@ -188,9 +184,10 @@ it is the right call to defer it while both markets sell in English.
 
 ## Sequencing
 
-**Now, because they are cheap and unlock what is already built:** the organizer
-page (1) — done — then checkout questions (2). Both are small and both make
-existing features mean more.
+**Done, and they were the cheap two:** the organizer page (1) and checkout
+questions (2). Both made something already built mean more — following now
+leads somewhere, and the question model the invitation flow had is now the
+order form organizers ask for by name.
 
 **Next, because they are how organizers make money here:** add-ons (3) and
 selling at the door (4). Together they are the difference between a ticketing

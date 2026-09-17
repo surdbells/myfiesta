@@ -30,7 +30,7 @@ the random token in the link emailed to them is the whole credential.
 | An event | `/:slug` | the page a shared link opens: poster, when, where, tiers, gallery, organizer |
 | An organizer | `/o/:slug` | who they are, what is on, what has been — the link a promoter puts in a bio |
 | Tickets | `/:slug/tickets` | choosing tiers, and a code if there is one |
-| Checkout | `/:slug/checkout` | paying |
+| Checkout | `/:slug/checkout` | who the tickets are for, anything the organizer asks, and the bill |
 | An order | `/order/:reference` | what was bought, after paying |
 | A ticket | `/tickets/:token` | the QR a guest shows at the door, no account needed |
 | Find my tickets | `/tickets` | asking for the link again, by email |

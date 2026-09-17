@@ -132,6 +132,40 @@ something that does not exist would be worse than its absence, so following
 lives in the app, where there is an account to hang it on. If buyer accounts
 ever reach the site, this is the first thing that changes.
 
+**One question model for both halves of the product.** A wedding asks its
+guests about dietary requirements when they RSVP; a club night asks its buyers
+for the name that goes on each ticket. The question is the same shape either
+way — a label, how it is answered, whether it must be, and whether it is asked
+once or of each person — so `rsvp_questions` was renamed `event_questions` and
+both flows read it. Two tables would have meant two editors, two validators and
+two exports, drifting from the first time somebody added a type to one of them.
+
+**Answers outlive the question they answer.** Questions are soft-deleted:
+removing one stops the checkout asking it and keeps every answer, and the
+export keeps the heading, because a column of dietary requirements with no
+label is a column nobody can read. For the same reason a question can be
+reworded after somebody has answered — a typo does not invalidate an answer —
+and cannot be reshaped: turning a typed question into a choice would leave
+every answer already given outside the list of things it was possible to say.
+
+**A question nobody can answer any more does not fail a sale.** An answer to a
+question that has since been removed is dropped rather than refused. An
+organizer tidying their form while somebody is on the checkout page should not
+turn that person's purchase into an error they cannot act on.
+
+**The door sees what was asked of the person in front of it, and nothing
+else.** Per-person answers are stamped onto the ticket when it is issued, so a
+scan reads them in one query; what the buyer answered for the order — how they
+heard about the night — is not a door's business and is not sent. Door staff
+still cannot read the guest list: that is a separate ability, and a phone
+handed over for one night is not an attendee database.
+
+**Questions are asked of everybody, not per ticket type.** Eventbrite scopes a
+question to a tier; we do not, yet. It is the obvious next turn of this screw —
+a phone number that only matters for a table — and it is left out deliberately
+rather than half-built, because the join it needs touches the checkout, the
+console and the export at once.
+
 **An organization that has never published has no public page.** Registering is
 not publishing. A page per registered account is a thin page for a crawler to
 index and a way for anybody to ask which names are taken, so the API answers
