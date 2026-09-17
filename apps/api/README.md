@@ -9,6 +9,7 @@ write, plus the admin panel platform staff work in.
 composer install
 cp .env.example .env && php artisan key:generate
 php artisan migrate
+php artisan storage:link                # or uploaded images 404 on a page that otherwise works
 php artisan serve                       # http://127.0.0.1:8000
 ```
 

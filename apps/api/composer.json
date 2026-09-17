@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "myfiesta/api",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "myFiesta's API: everything the phone app, the organizer console and the public site read and write.",
+    "keywords": ["ticketing", "events"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
@@ -45,6 +45,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
+            "@php artisan storage:link",
             "npm install --ignore-scripts",
             "npm run build"
         ],
