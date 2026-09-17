@@ -63,13 +63,31 @@ class AccountController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:190'],
             'password' => ['required', 'confirmed', $this->passwordRule()],
-            // Not needed when joining somebody else's organization by invitation.
-            'organization' => ['required_without:invitation', 'nullable', 'string', 'max:120'],
+            /*
+             * Left out by somebody who is going out rather than putting
+             * something on.
+             *
+             * The phone app's sign-up is for people who bought as guests and
+             * want their tickets to follow them, and asking them to name an
+             * events page is asking a question about a business they do not
+             * have. Not needed when joining somebody else's organization by
+             * invitation either.
+             */
+            'organization' => ['required_without_all:invitation,attendee', 'nullable', 'string', 'max:120'],
             'invitation' => ['nullable', 'string', 'max:64'],
+            /*
+             * Declared, not inferred from a missing field.
+             *
+             * Without it, a console sign-up that lost its organization field
+             * on the way would quietly make an attendee account and drop
+             * somebody into a console with nothing in it, which looks like the
+             * console is broken rather than like a form that failed.
+             */
+            'attendee' => ['nullable', 'boolean'],
             'device' => ['nullable', 'string', 'max:64'],
         ], [
             'password.confirmed' => 'The two passwords do not match.',
-            'organization.required' => 'What should we call your events page?',
+            'organization.required_without_all' => 'What should we call your events page?',
         ]);
 
         $email = Str::lower(trim($data['email']));
@@ -127,6 +145,12 @@ class AccountController extends Controller
                 return $user;
             }
 
+            // An attendee account: no organization, and so no organizer
+            // ability when the token is minted below.
+            if (filled($data['attendee'] ?? null) || blank($data['organization'] ?? null)) {
+                return $user;
+            }
+
             $organization = Organization::create([
                 'name' => trim($data['organization']),
                 'slug' => $this->slugFor($data['organization']),
@@ -149,7 +173,10 @@ class AccountController extends Controller
         return response()->json([
             'token' => $user->createToken(
                 $data['device'] ?? 'web',
-                [TokenAbility::Attendee->value, TokenAbility::Organizer->value],
+                // The same rule signing in uses, rather than a second list
+                // that grants the organizer screens to an account with no
+                // organization behind them.
+                $user->tokenAbilities(),
                 now()->addDays(30),
             )->plainTextToken,
             'user' => ['name' => $user->name, 'email' => $user->email],

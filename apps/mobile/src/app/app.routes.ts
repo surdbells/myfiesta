@@ -65,6 +65,17 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },
   {
+    // Signing up here is for somebody going out. Putting on an event is done
+    // in the console, on a screen wide enough to build one.
+    path: 'join',
+    loadComponent: () => import('./features/auth/join').then((m) => m.Join),
+  },
+  {
+    path: 'forgotten-password',
+    loadComponent: () =>
+      import('./features/auth/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
     // Where a door link lands.
     path: 'door-pass/:secret',
     loadComponent: () => import('./features/door/door-pass').then((m) => m.DoorPassOpen),

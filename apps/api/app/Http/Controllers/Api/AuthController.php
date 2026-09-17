@@ -98,13 +98,7 @@ class AuthController extends Controller
      */
     private function abilitiesFor(User $user): array
     {
-        $abilities = [TokenAbility::Attendee->value];
-
-        if ($user->organizations()->exists()) {
-            $abilities[] = TokenAbility::Organizer->value;
-        }
-
-        return $abilities;
+        return $user->tokenAbilities();
     }
 
     public function logout(Request $request): JsonResponse

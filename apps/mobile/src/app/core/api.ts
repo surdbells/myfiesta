@@ -217,6 +217,43 @@ export class Api {
     });
   }
 
+  /**
+   * Making an account from the phone, as somebody who is going out.
+   *
+   * No organization name asked for. Putting on an event is done in the
+   * console, where there is a screen wide enough to build one; this is for
+   * somebody who bought as a guest and wants their tickets to follow them.
+   */
+  register(name: string, email: string, password: string): Promise<Record<string, unknown>> {
+    return this.send('POST', '/api/auth/register', {
+      body: {
+        name,
+        email,
+        password,
+        password_confirmation: password,
+        attendee: true,
+        device: 'mobile',
+      },
+      anonymous: true,
+    });
+  }
+
+  /**
+   * Ask for a reset link.
+   *
+   * The answer is the same whether or not the address is known, and this
+   * repeats it rather than improving on it — anything friendlier would turn
+   * the screen into a way to test who holds an account here.
+   */
+  async forgotPassword(email: string): Promise<string> {
+    const body = await this.send<{ message: string }>('POST', '/api/auth/forgot-password', {
+      body: { email },
+      anonymous: true,
+    });
+
+    return body.message;
+  }
+
   async signOut(): Promise<void> {
     try {
       await this.send('POST', '/api/auth/logout');

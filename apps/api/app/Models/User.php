@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Permission;
 use App\Enums\PlatformRole;
 use App\Enums\Role;
+use App\Enums\TokenAbility;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -169,6 +170,28 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /** Any staff role. Excludes door, which is not general access. */
+    /**
+     * What a token issued to this account may do.
+     *
+     * Decided from what the account actually is, never from what a client
+     * asked for. Everybody is an attendee — an organizer buys tickets to other
+     * people's nights like anyone else — and organizer comes from being staff
+     * somewhere, so an account with no organization behind it cannot be handed
+     * the organizer screens by signing up through a different door.
+     *
+     * @return list<string>
+     */
+    public function tokenAbilities(): array
+    {
+        $abilities = [TokenAbility::Attendee->value];
+
+        if ($this->organizations()->exists()) {
+            $abilities[] = TokenAbility::Organizer->value;
+        }
+
+        return $abilities;
+    }
+
     public function isStaffOf(Organization|string $organization): bool
     {
         return $this->roleIn($organization)?->isStaff() ?? false;

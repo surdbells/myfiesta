@@ -71,7 +71,7 @@ export class App {
   readonly showTabs = computed(() => {
     if (this.session.locked()) return false;
 
-    return !/^\/(sign-in|door|door-pass|ui|tickets\/.)/.test(this.url());
+    return !/^\/(sign-in|join|forgotten-password|door|door-pass|ui|tickets\/.)/.test(this.url());
   });
 
   readonly tabs = computed(() => [

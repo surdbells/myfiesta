@@ -70,6 +70,13 @@ import { MfButton, MfField } from '../../ui';
         </button>
       </form>
 
+      <div class="ways">
+        <button class="link" type="button" (click)="go('/join')">Create an account</button>
+        <button class="link" type="button" (click)="go('/forgotten-password')">
+          Forgotten your password?
+        </button>
+      </div>
+
       <p class="note">
         Buying a ticket needs no account. Sign in to see tickets you already hold, or to run your
         events.
@@ -125,6 +132,24 @@ import { MfButton, MfField } from '../../ui';
       font-size: var(--font-size-sm);
     }
 
+    .ways {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--space-2) var(--space-5);
+    }
+
+    .link {
+      padding: var(--space-2);
+      border: 0;
+      background: none;
+      color: var(--primary-text);
+      font: inherit;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      cursor: pointer;
+    }
+
     .note {
       color: var(--text-muted);
       font-size: var(--font-size-sm);
@@ -151,6 +176,10 @@ export class SignIn {
   readonly password = signal('');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+
+  go(path: string): void {
+    void this.router.navigate([path]);
+  }
 
   async submit(): Promise<void> {
     if (this.busy()) return;

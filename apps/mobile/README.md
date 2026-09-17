@@ -7,6 +7,10 @@ One app, three modes — attendee, organizer, door — decided by the scope the
 server granted, never by a build flavour. The app hides what a scope should not
 see; the API refuses it. Only the second is a boundary.
 
+Signing up here makes an attendee account — no organization name asked for.
+Putting on an event happens in the console, on a screen wide enough to build
+one; somebody signing up on a phone is going out.
+
 Browsing needs no account. Guest checkout is the primary path on this platform,
 so what's on, an event's page and its ticket prices are all open; signing in is
 asked for where it is genuinely needed — the tickets somebody already holds,
@@ -63,7 +67,8 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | Your events | `/events` | organizer: upcoming and past, with arrivals |
 | One night | `/events/:id` | organizer: what it took, and the guest list |
 | Door | `/door` | the scanner — camera or typed code — opened by a door-pass link |
-| You | `/settings` | name, theme, sign out |
+| You | `/settings` | name, theme, reminders, your lists, sign out |
+| Getting in | `/sign-in`, `/join`, `/forgotten-password` | signing in, making an attendee account, asking for a reset link |
 
 Buying is not rebuilt in the app: **Get tickets** opens the web checkout in the
 system browser. Tickets are physical goods, so store purchase rules do not
