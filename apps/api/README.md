@@ -81,6 +81,11 @@ organization, and the clients are handed that list rather than deriving it.
 **Money is a pair** — an amount in minor units and a currency — and prices come
 from the database. Clients send quantities, never amounts.
 
+**An order line is one of two things**: a ticket type, or an add-on sold beside
+it. The database refuses both and refuses neither, and everything that counts
+tickets filters to ticket lines — an add-on admits nobody, so a bottle is money
+but never a person.
+
 ## Tests
 
 ```bash

@@ -27,7 +27,7 @@ membership rather than trusting it.
 | ------ | ----- | ---------- |
 | Dashboard | `/` | what is selling, what needs attention, the month's takings |
 | Events | `/events` | everything upcoming and past; `new` to start one |
-| One event | `/events/:id` | its numbers, and tabs for tickets, what the checkout asks, guests, the door, orders, messages, codes and pictures |
+| One event | `/events/:id` | its numbers, and tabs for tickets, extras sold beside them, what the checkout asks, guests, the door, orders, messages, codes and pictures |
 | Discount codes | `/codes` | codes across every event, and who they are attributed to |
 | Orders | `/orders` | every order, with refunds |
 | Payouts | `/payouts` | what is owed, payout details, and asking to be paid |

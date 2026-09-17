@@ -23,7 +23,7 @@ to act on.
 
 | | |
 | --- | --- |
-| Selling | questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
+| Selling | add-ons sold beside a ticket — tables, bottles, merchandise; questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
 | Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
 | The door | scanning by camera or code, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
 | Attendees | tickets on the phone that work offline, transfers, saved events, following organizers, reminders, add to calendar |
@@ -58,15 +58,17 @@ Not scoped to a ticket type — a phone number that only matters for a table is
 the obvious next turn, and it is left out deliberately rather than half-built.
 That and the other decisions this raised are in [DECISIONS.md](DECISIONS.md).
 
-### 3. Add-ons: tables, bottles, merchandise — **M**
+### 3. Add-ons: tables, bottles, merchandise — **done, 17 September 2026**
 
-The domain has one sellable thing, a `ticket_type`. Nightlife's margin is in
-the second thing: a table with two bottles, a cloakroom pass, a shirt.
+A thing with a price and a stock, sold on the same order, settled through the
+same ledger, and admitting nobody. An order line now carries either a ticket
+type or an add-on, and everything that counts tickets says so rather than
+counting lines.
 
-Modelled honestly this is a product alongside the ticket, with its own stock,
-appearing on the same order and the same settlement, and admitting nobody at
-the door. A table that admits six is a ticket type; a bottle on that table is
-not.
+Bought with a ticket and never instead of one. Organizers price them on an
+Extras tab; buyers add them under the tiers; the sales screen counts them
+apart from the room. The decisions this raised are in
+[DECISIONS.md](DECISIONS.md).
 
 ### 4. Selling at the door — **M**
 
@@ -189,9 +191,9 @@ questions (2). Both made something already built mean more — following now
 leads somewhere, and the question model the invitation flow had is now the
 order form organizers ask for by name.
 
-**Next, because they are how organizers make money here:** add-ons (3) and
-selling at the door (4). Together they are the difference between a ticketing
-tool and the thing a club runs its night on.
+**Next, because it is how organizers make money here:** selling at the door
+(4). With add-ons (3) done, it is the remaining half of the difference between
+a ticketing tool and the thing a club runs its night on.
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week
