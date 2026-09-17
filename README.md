@@ -54,6 +54,12 @@ three feature directories from importing each other.
 cd apps/api && composer install && cp .env.example .env && php artisan key:generate
 php artisan serve
 
+# …and two more processes beside it. Neither says anything when it is missing:
+# with no worker every email queues and is never sent, and with no scheduler
+# abandoned baskets keep holding tickets an event could have sold.
+php artisan queue:work
+php artisan schedule:work
+
 # Public site — http://localhost:4320
 cd apps/web && npm install && npm start
 

@@ -1,58 +1,89 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# The API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 13 on PHP 8.3 and PostgreSQL 17. Everything the three clients read and
+write, plus the admin panel platform staff work in.
 
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Running it
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+php artisan serve                       # http://127.0.0.1:8000
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Two more processes have to run alongside it. Neither announces itself when it
+is missing, which is the point of saying so here.
 
-## Contributing
+```bash
+php artisan queue:work                  # everything the app sends
+php artisan schedule:work               # everything the app does on its own
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### The worker
 
-## Code of Conduct
+`QUEUE_CONNECTION=database`, and every email in this system is queued: the
+ticket somebody just bought, a reminder before doors, a waitlist opening, an
+announcement to an organizer's followers, a password reset.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+With no worker running, none of that fails. The rows sit in the `jobs` table
+and nothing is ever sent — which is a platform that takes money and goes quiet.
+A development database left running without a worker will show them piling up:
 
-## Security Vulnerabilities
+```bash
+php artisan tinker --execute="echo DB::table('jobs')->count();"
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### The scheduler
 
-## License
+Three commands, and one of them touches stock:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+| Command | When | What happens without it |
+| ------- | ---- | ----------------------- |
+| `reminders:send` | every 15 minutes | scheduled reminders never go out |
+| `checkouts:expire` | every 15 minutes | abandoned baskets keep holding tickets, so an event can read as sold out that nobody bought |
+| `series:extend` | 03:30 daily | a repeating event stops appearing on new dates |
+
+In production that is one cron entry running `schedule:run` every minute, the
+standard Laravel arrangement. In development `schedule:work` does the same
+thing in the foreground.
+
+## Configuration
+
+Everything comes from the environment; nothing is compiled in.
+
+| Key | What it decides |
+| --- | --------------- |
+| `DB_*` | PostgreSQL. Development here runs it on port 15432 in Docker |
+| `CORS_ALLOWED_ORIGINS` | which clients may call it — every dev port, and `https://localhost` / `capacitor://localhost` for the phone app |
+| `PUBLIC_URL`, `CONSOLE_URL` | where links in emails point |
+| `MAIL_*` | `log` in development: mail lands in `storage/logs` rather than anywhere real |
+| `QUEUE_CONNECTION` | `database`, which means the worker above |
+
+## What is in here
+
+```
+app/Http/Controllers/Api/      the public, attendee and door surface
+app/Http/Controllers/Api/Organizer/   everything behind an organizer token
+app/Services/                  the decisions: check-in, checkout, payouts, discovery
+app/Filament/                  the admin panel, at /admin
+app/Enums/Permission.php       the authority on what a role may do
+```
+
+**Abilities and permissions are decided by the server**, always, from what an
+account actually is. A token carries `attendee`, `organizer`, or
+`door:{event_id}`; `Permission` resolves what a role may do inside an
+organization, and the clients are handed that list rather than deriving it.
+`PermissionMirrorTest` fails if the console's copy of the list drifts.
+
+**Money is a pair** — an amount in minor units and a currency — and prices come
+from the database. Clients send quantities, never amounts.
+
+## Tests
+
+```bash
+php artisan test
+```
+
+They run against a real PostgreSQL database, because half of what is worth
+testing here is a constraint, a partial index, or a transaction.
