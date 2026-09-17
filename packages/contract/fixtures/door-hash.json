@@ -1,0 +1,23 @@
+{
+  "_why": "The door's offline list carries hashed codes, never codes. The server hashes them in PHP and the phone hashes what somebody scans in WebCrypto; if those two ever disagree, every offline scan reads as a ticket nobody recognises — at a door, with a queue behind it, and no signal to check with. Both sides are tested against these values rather than against each other, so neither can drift quietly. See the API DoorList service and door-rules.ts.",
+  "algorithm": "PBKDF2-SHA256, over the code trimmed and upper-cased, hex",
+  "salt": "fixture-salt-not-a-real-one",
+  "iterations": 1000,
+  "cases": [
+    {
+      "why": "Trimmed and upper-cased on the way in: door staff type with a thumb.",
+      "code": " abc-12345678 ",
+      "hash": "d1d307a6c56c8c60111b7c3b9acd98f528abdc92b90f42aac252f35061cb9d09"
+    },
+    {
+      "why": "An ordinary code, exactly as the alphabet mints them.",
+      "code": "HERP-8FJ8AT4C",
+      "hash": "ef7a55a66a5a2e0e244fa120618f0a3e91d50489e489f723386f14bd865eaab5"
+    },
+    {
+      "why": "Lower case reaches the same ticket as upper.",
+      "code": "lower-case-code",
+      "hash": "b140fc8678e43fd20c9c1c8bb01beb8486bbd4b40ced56bdc0f7d6104ba8186b"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DoorList, DoorListTicket, OfflineScan, ScanResult } from './api.types';
+import { admittedAfter, decideOffline, hashCode } from './door-rules';
 
 const DB_NAME = 'myfiesta-door';
 const DB_VERSION = 1;
@@ -145,53 +146,14 @@ export class DoorOffline {
    */
   async decide(code: string, party: number | null): Promise<ScanResult> {
     const hash = await this.hash(code);
-    const ticket = hash ? this.tickets.get(hash) : undefined;
+    const ticket = hash ? (this.tickets.get(hash) ?? null) : null;
+    const outcome = decideOffline(ticket, party);
 
-    if (!ticket) {
-      return offlineResult('not_found', 'Not on this phone’s list. If they bought in the last few minutes, it will scan once signal is back.');
-    }
+    // Counted only when somebody actually went in. The rules decide; this
+    // writes down what they decided.
+    if (outcome.accepted && ticket) await this.admitLocally(code, party);
 
-    const about = { holder_name: ticket.holder_name, type: ticket.type, admits: ticket.admits, admitted_count: ticket.admitted_count };
-
-    if (ticket.status === 'refunded' || ticket.status === 'void') {
-      return offlineResult('void', 'This ticket was cancelled.', about);
-    }
-
-    const remaining = ticket.admits - ticket.admitted_count;
-
-    if (remaining <= 0) {
-      return offlineResult(
-        'duplicate',
-        ticket.admits === 1 ? 'Already scanned.' : `All ${ticket.admits} already came in.`,
-        about,
-      );
-    }
-
-    const wanted = party ?? remaining;
-
-    if (wanted > remaining) {
-      return offlineResult(
-        'over_capacity',
-        remaining === 1 ? 'Only 1 place left on this ticket.' : `Only ${remaining} places left on this ticket.`,
-        about,
-        { remaining },
-      );
-    }
-
-    await this.admitLocally(code, wanted);
-
-    const left = remaining - wanted;
-
-    return offlineResult(
-      'accepted',
-      ticket.admits === 1
-        ? 'Admitted.'
-        : left === 0
-          ? `Admitted ${wanted}. That is everyone.`
-          : `Admitted ${wanted}. ${left} still to come.`,
-      { ...about, admitted_count: ticket.admits - left },
-      { accepted: true, admitted: wanted, remaining: left },
-    );
+    return outcome;
   }
 
   /**
@@ -206,8 +168,7 @@ export class DoorOffline {
 
     if (!ticket || !this.list) return;
 
-    const next =
-      admittedCount ?? Math.min(ticket.admits, ticket.admitted_count + (party ?? ticket.admits - ticket.admitted_count));
+    const next = admittedCount ?? admittedAfter(ticket, party);
 
     ticket.admitted_count = next;
     ticket.status = next >= ticket.admits ? 'checked_in' : ticket.status;
@@ -258,21 +219,7 @@ export class DoorOffline {
   private async hash(code: string): Promise<string | null> {
     if (!this.list || !this.supported) return null;
 
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(code.trim().toUpperCase()),
-      'PBKDF2',
-      false,
-      ['deriveBits'],
-    );
-    const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(this.list.salt), iterations: this.list.iterations },
-      key,
-      256,
-    );
-
-    return Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return hashCode(code, this.list.salt, this.list.iterations);
   }
 
   private open(): Promise<IDBDatabase> {
@@ -312,24 +259,6 @@ export function scanId(): string {
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-function offlineResult(
-  result: string,
-  message: string,
-  ticket: ScanResult['ticket'] = null,
-  extra: Partial<ScanResult> = {},
-): ScanResult {
-  return {
-    result,
-    accepted: false,
-    admitted: 0,
-    remaining: 0,
-    message,
-    ticket,
-    offline: true,
-    ...extra,
-  };
 }
 
 function strip({ key: _key, event_id: _event, ...ticket }: StoredTicket): DoorListTicket {
