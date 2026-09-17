@@ -27,6 +27,25 @@ class Organization extends Model
         return ['verified_at' => 'datetime'];
     }
 
+    /**
+     * Whether the tick is shown beside this organizer's name.
+     *
+     * Verified *and* still called what it was called when somebody checked.
+     * The verification survives a rename; the public claim does not, because
+     * nobody has checked the new name — and a verified account that can rename
+     * itself to anything is the whole value of a tick, handed away.
+     */
+    public function isVerified(): bool
+    {
+        return $this->verified_at !== null && $this->verified_name === $this->name;
+    }
+
+    /** Whether a rename is waiting on somebody to look at it. */
+    public function awaitsRenameCheck(): bool
+    {
+        return $this->verified_at !== null && $this->verified_name !== $this->name;
+    }
+
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class)

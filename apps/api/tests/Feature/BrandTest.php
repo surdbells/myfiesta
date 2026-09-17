@@ -171,6 +171,65 @@ class BrandTest extends TestCase
         $this->assertNotNull($page['logo_url']);
     }
 
+    public function test_renaming_a_verified_organization_hides_the_tick(): void
+    {
+        $this->org->update(['verified_at' => now(), 'verified_name' => 'Lagos Nights']);
+        $event = \App\Models\Event::factory()->published()->create([
+            'organization_id' => $this->org->id,
+            'slug' => 'afro-fest',
+            'starts_at' => now()->addWeek(),
+        ]);
+
+        $this->assertTrue($this->getJson("/api/events/{$event->slug}")->json('data.organizer.is_verified'));
+
+        $this->signedInAs(Role::Owner);
+        $this->patchJson('/api/organizer/brand', ['name' => 'Someone Else Entirely'])
+            ->assertOk()
+            ->assertJsonPath('is_verified', false)
+            ->assertJsonPath('verification_pending_name', true);
+
+        // The whole value of a tick is that somebody checked the name beside
+        // it. Nobody has checked this one.
+        $this->assertFalse($this->getJson("/api/events/{$event->slug}")->json('data.organizer.is_verified'));
+    }
+
+    public function test_the_verification_itself_survives_a_rename(): void
+    {
+        $this->org->update(['verified_at' => now(), 'verified_name' => 'Lagos Nights']);
+
+        $this->signedInAs(Role::Owner);
+        $this->patchJson('/api/organizer/brand', ['name' => 'Lagos Nights Toronto'])->assertOk();
+
+        // Suspended, not destroyed: staff confirm the new name in a glance
+        // rather than an organizer re-uploading a passport over a typo.
+        $organization = $this->org->fresh();
+        $this->assertNotNull($organization->verified_at);
+        $this->assertTrue($organization->awaitsRenameCheck());
+
+        $organization->update(['verified_name' => $organization->name]);
+        $this->assertTrue($organization->fresh()->isVerified());
+    }
+
+    public function test_changing_only_the_description_keeps_the_tick(): void
+    {
+        $this->org->update(['verified_at' => now(), 'verified_name' => 'Lagos Nights']);
+
+        $this->signedInAs(Role::Owner);
+        $this->patchJson('/api/organizer/brand', ['description' => 'Afrobeats since 2019.'])
+            ->assertOk()
+            ->assertJsonPath('is_verified', true);
+    }
+
+    public function test_an_unverified_organization_may_rename_without_consequence(): void
+    {
+        $this->signedInAs(Role::Owner);
+
+        $this->patchJson('/api/organizer/brand', ['name' => 'Anything At All'])
+            ->assertOk()
+            ->assertJsonPath('is_verified', false)
+            ->assertJsonPath('verification_pending_name', false);
+    }
+
     public function test_a_door_token_cannot_read_or_rewrite_the_brand(): void
     {
         $user = $this->signedInAs(Role::Owner);

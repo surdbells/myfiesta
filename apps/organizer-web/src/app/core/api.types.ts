@@ -52,7 +52,10 @@ export interface Brand {
   slug: string;
   description: string | null;
   logo_url: string | null;
+  /** Whether the tick is shown: verified, and still called what was checked. */
   is_verified: boolean;
+  /** Renamed since verification, waiting on somebody to agree it is still them. */
+  verification_pending_name: boolean;
 }
 
 export interface Membership {

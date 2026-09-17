@@ -34,12 +34,30 @@ class OrganizationsTable
                     ->searchable()
                     ->sortable(),
 
+                /*
+                 * Three states, not two. An organization that renamed itself
+                 * after being verified keeps its approved documents and loses
+                 * the public tick until somebody agrees the new name is still
+                 * them — so "verified" and "verified, but called something
+                 * else now" cannot look the same here.
+                 */
                 IconColumn::make('verified_at')
                     ->label('Verified')
-                    ->boolean()
-                    ->tooltip(fn (Organization $r) => $r->verified_at
-                        ? 'Identity documents approved'
-                        : 'Not yet verified'),
+                    ->icon(fn (Organization $r) => match (true) {
+                        $r->isVerified() => 'heroicon-o-check-circle',
+                        $r->awaitsRenameCheck() => 'heroicon-o-exclamation-triangle',
+                        default => 'heroicon-o-x-circle',
+                    })
+                    ->color(fn (Organization $r) => match (true) {
+                        $r->isVerified() => 'success',
+                        $r->awaitsRenameCheck() => 'warning',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (Organization $r) => match (true) {
+                        $r->isVerified() => 'Identity documents approved',
+                        $r->awaitsRenameCheck() => 'Renamed since verification, from "'.$r->verified_name.'". The tick is hidden until this is confirmed.',
+                        default => 'Not yet verified',
+                    }),
 
                 TextColumn::make('members_count')
                     ->label('Members')
@@ -87,9 +105,37 @@ class OrganizationsTable
                 Filter::make('unverified')
                     ->label('Awaiting verification')
                     ->query(fn (Builder $q) => $q->whereNull('verified_at')),
+
+                Filter::make('renamed')
+                    ->label('Renamed since verification')
+                    ->query(fn (Builder $q) => $q
+                        ->whereNotNull('verified_at')
+                        ->whereColumn('verified_name', '!=', 'name')),
             ])
             ->recordActions([
                 ViewAction::make(),
+
+                /*
+                 * Agreeing that a renamed organization is still the one whose
+                 * documents were approved.
+                 *
+                 * A glance rather than a re-upload: making an organizer send a
+                 * passport again because they fixed a typo in their own name
+                 * is how a verification queue fills with work nobody needed.
+                 */
+                Action::make('confirmName')
+                    ->label('Confirm new name')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('warning')
+                    ->visible(fn (Organization $record) => $record->awaitsRenameCheck()
+                        && (auth()->user()?->hasPlatformRole(PlatformRole::Admin, PlatformRole::Support) ?? false))
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Organization $record) => 'Verified as "'.$record->verified_name.'", now called "'.$record->name.'". Confirming shows the tick again under the new name.')
+                    ->action(function (Organization $record) {
+                        $record->update(['verified_name' => $record->name]);
+
+                        Notification::make()->title('Name confirmed')->success()->send();
+                    }),
 
                 /*
                  * Record a payout.

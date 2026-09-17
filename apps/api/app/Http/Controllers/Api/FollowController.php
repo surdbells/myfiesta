@@ -33,7 +33,7 @@ class FollowController extends Controller
             ->map(fn (Organization $organization) => [
                 'slug' => $organization->slug,
                 'name' => $organization->name,
-                'is_verified' => $organization->verified_at !== null,
+                'is_verified' => $organization->isVerified(),
             ]);
 
         return response()->json(['data' => $following]);

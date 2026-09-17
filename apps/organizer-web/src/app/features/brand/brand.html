@@ -123,9 +123,17 @@
         ></textarea>
       </ui-field>
 
-      @if (brand.is_verified) {
+      @if (brand.verification_pending_name) {
+        <ui-alert tone="warning">
+          Your tick is hidden because the name changed since we checked it. We look at renames as they
+          come in — nothing to re-send, and your verification is not lost.
+        </ui-alert>
+      } @else if (brand.is_verified) {
         <p class="text-sm text-text-muted">
           Your identity is verified, so a tick appears beside your name. That is set by us, not here.
+          @if (nameChanged()) {
+            <strong class="text-text">Changing your name hides the tick until we have looked at the new one.</strong>
+          }
         </p>
       }
 

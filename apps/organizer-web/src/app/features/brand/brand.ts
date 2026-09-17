@@ -55,6 +55,18 @@ export class Brand {
     );
   });
 
+  /**
+   * Whether the name in the box differs from the saved one.
+   *
+   * Used to warn a verified organizer before they save, rather than after
+   * their tick has quietly gone.
+   */
+  readonly nameChanged = computed(() => {
+    const brand = this.brand();
+
+    return !!brand && this.name().trim() !== brand.name;
+  });
+
   /** What is left of the description's room, once it is worth mentioning. */
   readonly remaining = computed(() => 600 - this.description().length);
 

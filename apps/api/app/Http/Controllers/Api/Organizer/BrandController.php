@@ -53,6 +53,17 @@ class BrandController extends Controller
 
         $organization->fill($data)->save();
 
+        // Worth its own line in the record: this is the moment a tick stopped
+        // being shown, and somebody will ask why.
+        if ($organization->awaitsRenameCheck() && $before['name'] !== $organization->name) {
+            $this->auditor->record(
+                'organization.renamed_after_verification',
+                $organization,
+                $request->user(),
+                metadata: ['from' => $before['name'], 'to' => $organization->name],
+            );
+        }
+
         $this->auditor->record(
             'organization.brand_updated',
             $organization,
@@ -133,7 +144,11 @@ class BrandController extends Controller
             'logo_url' => $organization->logo_path
                 ? Storage::disk('public')->url($organization->logo_path)
                 : null,
-            'is_verified' => $organization->verified_at !== null,
+            'is_verified' => $organization->isVerified(),
+            // A rename does not destroy the verification, it suspends the
+            // claim. Said here so the screen can explain rather than leave
+            // somebody wondering where their tick went.
+            'verification_pending_name' => $organization->awaitsRenameCheck(),
         ];
     }
 }

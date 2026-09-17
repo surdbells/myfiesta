@@ -124,7 +124,7 @@ class AuthController extends Controller
                 // than deriving it from the role a second time — which is how
                 // the two drifted before.
                 'permissions' => $user->permissionsIn($o->id),
-                'verified' => $o->verified_at !== null,
+                'verified' => $o->isVerified(),
             ])->values(),
         ]);
     }

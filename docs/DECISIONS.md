@@ -188,6 +188,16 @@ they do not have. Which kind is being made is declared by the client, not
 inferred from a missing field, so a console sign-up that loses its organization
 field fails loudly instead of quietly making the wrong kind of account.
 
+**The tick is shown only under the name that was checked.** Verification means
+somebody read an organizer's identity documents and agreed they are who they
+say. Once organizers could edit their own display name, a verified account
+could rename itself to a household name and keep the tick, which is the whole
+value of the tick handed away. So the name is recorded at the moment of
+verification and the public claim is suspended — never the verification itself
+— until staff agree the new name is still them. A glance, not a re-upload:
+making somebody send a passport again because they fixed a typo is how a
+verification queue fills with work nobody needed.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

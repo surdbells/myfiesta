@@ -80,7 +80,7 @@ class EventResource extends EventSummaryResource
                 'name' => $this->organization->name,
                 'slug' => $this->organization->slug,
                 'description' => $this->organization->description,
-                'is_verified' => $this->organization->verified_at !== null,
+                'is_verified' => $this->organization->isVerified(),
                 'logo_url' => $this->organization->logo_path
                     ? Storage::disk('public')->url($this->organization->logo_path)
                     : null,

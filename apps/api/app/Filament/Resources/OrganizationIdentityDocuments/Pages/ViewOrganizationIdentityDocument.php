@@ -129,7 +129,13 @@ class ViewOrganizationIdentityDocument extends ViewRecord
                         'reviewed_at' => now(),
                     ]);
 
-                    $record->organization()->update(['verified_at' => now()]);
+                    // The name is recorded with the moment, because the tick
+                    // is only shown while the organization is still called
+                    // what the documents said it was called.
+                    $record->organization()->update([
+                        'verified_at' => now(),
+                        'verified_name' => $record->organization->name,
+                    ]);
 
                     Notification::make()->title('Identity approved')->success()->send();
                 }),
