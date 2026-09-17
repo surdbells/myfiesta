@@ -110,7 +110,7 @@ export class Api {
   private async send<T>(
     method: string,
     path: string,
-    options: { body?: unknown; query?: Record<string, string>; token?: string } = {},
+    options: { body?: unknown; query?: Record<string, string>; token?: string; anonymous?: boolean } = {},
   ): Promise<T> {
     const url = new URL(this.base + path);
 
@@ -119,7 +119,7 @@ export class Api {
     }
 
     const headers: Record<string, string> = { Accept: 'application/json' };
-    const token = options.token ?? this.token;
+    const token = options.anonymous ? null : (options.token ?? this.token);
 
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -166,6 +166,22 @@ export class Api {
     const first = errors ? Object.values(errors)[0]?.[0] : null;
 
     return first ?? 'That did not work.';
+  }
+
+  // --- browsing, which needs no account --------------------------------------
+
+  /**
+   * A public GET, deliberately without the token.
+   *
+   * Discovery is the same for everybody, and sending a door pass or an
+   * attendee token with it would have the API answer a question nobody asked.
+   */
+  public<T>(path: string, query?: Record<string, string>): Promise<T> {
+    return this.send<T>('GET', path, { query, anonymous: true });
+  }
+
+  publicPost<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>('POST', path, { body, anonymous: true });
   }
 
   // --- auth -----------------------------------------------------------------

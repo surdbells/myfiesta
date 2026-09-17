@@ -8,8 +8,12 @@ import { SessionStore } from './core/session';
  *
  * Convenience, not security: the API refuses what a token may not do whatever
  * the app renders. This exists so a door-staff phone shows a scanner rather
- * than a screen of failed requests, and so somebody signed out sees a sign-in
- * form rather than an empty ticket list.
+ * than a screen of failed requests, and so somebody signed out lands on
+ * something they can use.
+ *
+ * Browsing is open. Guest checkout is the primary path on this platform, so an
+ * account is asked for only where one is genuinely needed — the tickets
+ * somebody already holds, and the organizer screens.
  */
 const signedIn = () => {
   const session = inject(SessionStore);
@@ -25,16 +29,31 @@ const doorOnly = () => {
   const session = inject(SessionStore);
   const router = inject(Router);
 
-  return session.scope() === 'door' ? true : router.createUrlTree(['/']);
+  return session.scope() === 'door' || session.canSeeSales() ? true : router.createUrlTree(['/']);
 };
 
 export const routes: Routes = [
+  {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/browse/home').then((m) => m.Home),
+  },
+  {
+    path: 'browse',
+    loadComponent: () => import('./features/browse/browse').then((m) => m.Browse),
+  },
+  {
+    // One event. `/e/` rather than `/events/`, which belongs to the organizer
+    // screens — and short enough to be a link worth sharing.
+    path: 'e/:slug',
+    loadComponent: () => import('./features/browse/event').then((m) => m.Event),
+  },
   {
     path: 'sign-in',
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },
   {
-    // Where a door link lands: mfiesta://door-pass/… or the pasted secret.
+    // Where a door link lands.
     path: 'door-pass/:secret',
     loadComponent: () => import('./features/door/door-pass').then((m) => m.DoorPassOpen),
   },
@@ -47,6 +66,11 @@ export const routes: Routes = [
     path: 'tickets',
     canActivate: [signedIn],
     loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets),
+  },
+  {
+    path: 'tickets/:id',
+    canActivate: [signedIn],
+    loadComponent: () => import('./features/tickets/ticket').then((m) => m.TicketDetail),
   },
   {
     path: 'events',
@@ -69,11 +93,6 @@ export const routes: Routes = [
     path: 'ui',
     canActivate: [() => isDevMode()],
     loadComponent: () => import('./features/gallery').then((m) => m.Gallery),
-  },
-  {
-    path: '',
-    pathMatch: 'full',
-    loadComponent: () => import('./features/home').then((m) => m.Home),
   },
   { path: '**', redirectTo: '' },
 ];

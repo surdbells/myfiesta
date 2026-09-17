@@ -7,6 +7,11 @@ One app, three modes — attendee, organizer, door — decided by the scope the
 server granted, never by a build flavour. The app hides what a scope should not
 see; the API refuses it. Only the second is a boundary.
 
+Browsing needs no account. Guest checkout is the primary path on this platform,
+so what's on, an event's page and its ticket prices are all open; signing in is
+asked for where it is genuinely needed — the tickets somebody already holds,
+and the organizer screens.
+
 ## Running it
 
 ```bash
@@ -40,9 +45,29 @@ output.
 
 ```
 src/app/ui/        every control the app draws. Ours, not Ionic's.
-src/app/core/      the API client, the session, the theme, money and time
-src/app/features/  one folder per mode: auth, tickets, organizer, door, settings
+src/app/core/      the API client, discovery, the session, the theme, money, time
+src/app/features/  browse, tickets, organizer, door, auth, settings
 ```
+
+### The screens
+
+| Screen | Route | What it is |
+| ------ | ----- | ---------- |
+| What's on | `/` | a swipeable carousel of featured nights, what is coming up, and what happened recently |
+| Find something on | `/browse` | search with city, category and free-entry filters, paged |
+| An event | `/e/:slug` | poster, when and where, ticket tiers with prices and sold-out states, gallery, organizer, and a buy bar that hands off to the web checkout |
+| Your tickets | `/tickets` | soonest first |
+| A ticket | `/tickets/:id` | the QR full screen, what it admits, and sending it to somebody else |
+| Your events | `/events` | organizer: upcoming and past, with arrivals |
+| One night | `/events/:id` | organizer: what it took, and the guest list |
+| Door | `/door` | the scanner, opened by a door-pass link |
+| You | `/settings` | name, theme, sign out |
+
+Buying is not rebuilt in the app: **Get tickets** opens the web checkout in the
+system browser. Tickets are physical goods, so store purchase rules do not
+apply, and the checkout that exists already handles both gateways, the holds,
+the codes and the receipts — a second implementation would be a second set of
+money bugs.
 
 Features may not import each other — `tools/check-feature-boundaries.sh` fails
 the build if they do. Shared code goes in `core/` or `ui/`.

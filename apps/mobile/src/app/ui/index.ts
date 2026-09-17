@@ -20,3 +20,6 @@ export { MfSkeleton } from './skeleton';
 export { MfSegmented, type MfSegment } from './segmented';
 export { MfToasts, ToastStore } from './toast';
 export { MfQr } from './qr';
+export { MfCarousel } from './carousel';
+export { MfPoster } from './poster';
+export { MfTabs } from './tabs';

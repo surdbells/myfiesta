@@ -123,6 +123,10 @@ class EventSearch
 
         match ($filters->sort) {
             'newest' => $query->orderByDesc('published_at'),
+            // Looking backwards: last night first. Soonest-first over a past
+            // window returns the oldest event on the platform, which is the
+            // opposite of what a "recently" shelf is for.
+            'recent' => $query->orderByDesc('starts_at'),
             default => $query->orderBy('starts_at'),
         };
     }

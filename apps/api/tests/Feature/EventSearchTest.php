@@ -189,6 +189,24 @@ class EventSearchTest extends TestCase
         $this->assertSame(50, EventFilters::fromRequest($request)->perPage);
     }
 
+    public function test_looking_backwards_puts_the_most_recent_night_first(): void
+    {
+        $this->event(['title' => 'Last month', 'starts_at' => now()->subMonth()]);
+        $this->event(['title' => 'Last week', 'starts_at' => now()->subWeek()]);
+        $this->event(['title' => 'Next week', 'starts_at' => now()->addWeek()]);
+
+        // A "recently" shelf asks for a window that has already happened.
+        // Soonest-first over that window answers with the oldest event on the
+        // platform, which is the opposite of what the shelf is for.
+        $results = $this->find([
+            'from' => now()->subYear()->toDateTimeString(),
+            'to' => now()->toDateTimeString(),
+            'sort' => 'recent',
+        ]);
+
+        $this->assertSame(['Last week', 'Last month'], array_map(fn ($e) => $e->title, $results));
+    }
+
     public function test_invitation_events_never_appear_in_public_search(): void
     {
         $this->event(['title' => 'Ada and Sam Wedding', 'kind' => 'invitation']);
