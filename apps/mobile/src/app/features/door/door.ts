@@ -1,9 +1,11 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
+import { Scanner } from '../../core/scanner';
 import { MfBadge, MfButton, MfCard, MfField, MfScreen, ToastStore } from '../../ui';
 
 interface Outcome {
@@ -44,6 +46,28 @@ interface Outcome {
           </p>
         </mf-card>
       } @else {
+        <!--
+          The camera, when this phone has one. Above everything else because a
+          door scans far more often than it types, and the frame is deliberately
+          large: a small preview is one somebody holds at the wrong distance.
+        -->
+<!--
+          The preview stays in the page whether or not it is running: the
+          browser scanner reads frames off this element, so a camera that is
+          only created once scanning starts can never start. Folded away rather
+          than removed when idle.
+        -->
+        <section class="camera" [class.native]="nativePreview" [class.idle]="!scanning()">
+          <video #preview class="preview" [class.hidden]="nativePreview" muted playsinline></video>
+          <div class="reticle" aria-hidden="true"></div>
+
+          @if (scanning()) {
+            <button mfButton class="stop" variant="secondary" size="sm" (click)="stopCamera()">
+              Stop the camera
+            </button>
+          }
+        </section>
+
         <div class="counts">
           <mf-card>
             <p class="figure tabular">{{ admitted() }}</p>
@@ -75,6 +99,21 @@ interface Outcome {
               <p class="who">{{ outcome.result.remaining }} of the party still outside</p>
             }
           </section>
+        }
+
+        @if (!scanning()) {
+          @if (cameraReady()) {
+            <button mfButton class="scan" variant="secondary" size="lg" block (click)="startCamera()">
+              Scan with the camera
+            </button>
+          }
+
+          <!-- Said before it is tried as well as after: a door that cannot
+               scan should learn that from the screen, not from a button that
+               is not there. -->
+          @if (cameraNote(); as why) {
+            <p class="camera-note">{{ why }}</p>
+          }
         }
 
         <form class="entry" (ngSubmit)="submit()">
@@ -117,6 +156,73 @@ interface Outcome {
     </mf-screen>
   `,
   styles: `
+    .camera {
+      position: relative;
+      margin-bottom: var(--space-4);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 4 / 3;
+    }
+
+    /* Folded away, not removed: the element has to exist for the browser
+       scanner to read frames off it. */
+    .camera.idle {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Natively the camera is behind the page, so this frame is a window
+       rather than a container with a picture in it. */
+    .camera.native {
+      background: transparent;
+      box-shadow: 0 0 0 2px var(--border-strong);
+    }
+
+    .preview {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .preview.hidden {
+      display: none;
+    }
+
+    .reticle {
+      position: absolute;
+      inset: 18% 22%;
+      border: 3px solid rgb(255 255 255 / 0.85);
+      border-radius: var(--radius-md);
+      box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.28);
+    }
+
+    .camera.native .reticle {
+      box-shadow: none;
+    }
+
+    .stop {
+      position: absolute;
+      left: 50%;
+      bottom: var(--space-3);
+      transform: translateX(-50%);
+    }
+
+    .scan {
+      margin-top: var(--space-4);
+    }
+
+    .camera-note {
+      margin-top: var(--space-4);
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+    }
+
     .counts {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -231,7 +337,10 @@ export class Door implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
+  private readonly scanner = inject(Scanner);
   readonly session = inject(SessionStore);
+
+  private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
 
   readonly code = signal('');
   readonly busy = signal(false);
@@ -258,9 +367,70 @@ export class Door implements OnDestroy {
 
   private next = 0;
 
+  // --- the camera ------------------------------------------------------------
+
+  readonly scanning = this.scanner.running;
+  /** Null until the question has been asked; a button that flickers in is worse than one that waits. */
+  readonly cameraReady = signal<boolean | null>(null);
+  readonly nativePreview = Capacitor.isNativePlatform();
+
+  /** The last code the camera read, so one ticket held up is one request. */
+  private lastRead = { code: '', at: 0 };
+
+  readonly cameraNote = computed(() => {
+    if (this.cameraReady() === false && this.scanner.refusal() === null) {
+      return 'No camera this app can read codes with. Type the code from the ticket.';
+    }
+
+    switch (this.scanner.refusal()) {
+      case 'permission':
+        return 'The camera was refused. Type the code, or allow the camera in settings.';
+      case 'unsupported':
+        return 'This phone cannot scan. Type the code from the ticket.';
+      case 'unavailable':
+        return 'The camera could not start. Type the code from the ticket.';
+      default:
+        return null;
+    }
+  });
+
+  constructor() {
+    void this.scanner.supported().then((ready) => this.cameraReady.set(ready));
+  }
+
+  async startCamera(): Promise<void> {
+    await this.scanner.start((code) => void this.read(code), this.preview()?.nativeElement);
+  }
+
+  async stopCamera(): Promise<void> {
+    await this.scanner.stop();
+  }
+
+  /**
+   * A code the camera saw.
+   *
+   * The same ticket is read many times a second while it is in frame, and a
+   * scan is not free: it admits somebody. So a code is acted on once, and the
+   * same one is ignored for a few seconds afterwards — long enough for the
+   * guest to walk through and the next to step up.
+   */
+  private async read(code: string): Promise<void> {
+    const now = Date.now();
+
+    if (this.busy()) return;
+    if (code === this.lastRead.code && now - this.lastRead.at < 4000) return;
+
+    this.lastRead = { code, at: now };
+    this.code.set(code);
+
+    await this.submit();
+  }
+
   ngOnDestroy(): void {
-    // Nothing to tear down yet; the camera lands here when the scanner plugin
-    // does, and this is where it will be stopped.
+    // Leaving the screen with the camera running is a phone that stays warm in
+    // somebody's pocket all night, and on the native path a page that has lost
+    // its background.
+    void this.scanner.stop();
   }
 
   async submit(): Promise<void> {
@@ -319,6 +489,8 @@ export class Door implements OnDestroy {
   }
 
   async leave(): Promise<void> {
+    await this.scanner.stop();
+
     if (this.locked()) {
       await this.session.signOut();
       await this.router.navigate(['/sign-in'], { replaceUrl: true });

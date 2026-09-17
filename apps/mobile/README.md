@@ -60,7 +60,7 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | A ticket | `/tickets/:id` | the QR full screen, what it admits, and sending it to somebody else |
 | Your events | `/events` | organizer: upcoming and past, with arrivals |
 | One night | `/events/:id` | organizer: what it took, and the guest list |
-| Door | `/door` | the scanner, opened by a door-pass link |
+| Door | `/door` | the scanner — camera or typed code — opened by a door-pass link |
 | You | `/settings` | name, theme, sign out |
 
 Buying is not rebuilt in the app: **Get tickets** opens the web checkout in the
