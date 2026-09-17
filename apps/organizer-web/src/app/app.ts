@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
-import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ReceiptText, TicketPercent, Users, Wallet, X } from 'lucide-angular';
+import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ReceiptText, Store, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
@@ -119,6 +119,10 @@ export class App {
     if (this.session.canManageTeam()) {
       items.push({ label: 'Team', link: '/team', glyph: Users });
     }
+
+    // Everybody's, because everybody can read it — the screen says who may
+    // change it.
+    items.push({ label: 'How you appear', link: '/brand', glyph: Store });
 
     return items;
   });

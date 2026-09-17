@@ -4,6 +4,7 @@ namespace App\Services\Images;
 
 use App\Models\Event;
 use App\Models\EventImage;
+use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -154,6 +155,66 @@ class ImageStore
                 'uploaded_by' => $uploader?->id,
             ]);
         });
+    }
+
+    /**
+     * An organization's mark.
+     *
+     * One square image and no renditions: it is drawn at 48 pixels on an event
+     * page and nowhere larger, so a second size would be a second file nobody
+     * reads. Everything the event pictures get on the way in applies here too —
+     * the bytes are checked for what they are, the dimensions before anything
+     * is decoded, and the file is re-encoded so a logo exported from a phone
+     * does not publish where it was made.
+     *
+     * Returns the stored path. Replacing one removes the old bytes: an
+     * organization that changes its mark four times should not leave four
+     * files on a disk nothing references.
+     *
+     * @throws ImageRejected when the file is not something we will publish
+     */
+    public function logo(Organization $organization, UploadedFile $file): string
+    {
+        $this->guardDimensions($file);
+
+        $image = $this->decode($file);
+        $image->orient();
+
+        // Cropped to a square, because it is drawn in a circle. Fitting it
+        // inside instead leaves a wide logo floating in a ring of background.
+        $image = $image->cover(512, 512);
+
+        $disk = Storage::disk('public');
+        $path = "organizations/{$organization->id}/".Str::lower(Str::random(16)).'.jpg';
+
+        $disk->put($path, (string) $image->toJpeg(quality: 86));
+
+        unset($image);
+
+        $previous = $organization->logo_path;
+
+        $organization->forceFill(['logo_path' => $path])->save();
+
+        // After the new one is saved, never before: a delete that runs first
+        // and a write that then fails leaves an organization with no mark and
+        // no way to know what it was.
+        if ($previous !== null && $previous !== $path) {
+            $disk->delete($previous);
+        }
+
+        return $path;
+    }
+
+    /** Take the mark away, bytes included. */
+    public function removeLogo(Organization $organization): void
+    {
+        $path = $organization->logo_path;
+
+        $organization->forceFill(['logo_path' => null])->save();
+
+        if ($path !== null) {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     /**

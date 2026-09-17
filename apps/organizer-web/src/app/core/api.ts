@@ -12,6 +12,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import {
   AttendeeMessage,
+  Brand,
   CancellationPreview,
   CancellationResult,
   DoorList,
@@ -561,6 +562,28 @@ export class Api {
    * a series of UploadProgress values and then the finished image. The caller
    * decides what to draw.
    */
+  // --- how the organization appears ------------------------------------------
+
+  brand(): Observable<Brand> {
+    return this.http.get<Brand>(`${this.base}/api/organizer/brand`);
+  }
+
+  saveBrand(changes: { name?: string; description?: string | null }): Observable<Brand> {
+    return this.http.patch<Brand>(`${this.base}/api/organizer/brand`, changes);
+  }
+
+  uploadLogo(file: File): Observable<Brand> {
+    const body = new FormData();
+
+    body.append('file', file);
+
+    return this.http.post<Brand>(`${this.base}/api/organizer/brand/logo`, body);
+  }
+
+  removeLogo(): Observable<Brand> {
+    return this.http.delete<Brand>(`${this.base}/api/organizer/brand/logo`);
+  }
+
   uploadImage(
     eventId: string,
     file: File,

@@ -113,8 +113,9 @@ class PermissionAuthorityTest extends TestCase
                 'attendees.view', 'door.scan',
                 'money.view', 'refunds.process', 'payouts.request',
                 'messages.send',
-                // Owners alone decide who is on the team.
-                'team.manage',
+                // Owners alone decide who is on the team, and what the
+                // organization is called on a page somebody is paying on.
+                'team.manage', 'organization.brand',
             ],
             'manager' => [
                 'events.view', 'events.create', 'events.edit', 'events.publish',

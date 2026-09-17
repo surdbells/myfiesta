@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassCo
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\OrderStatusController;
+use App\Http\Controllers\Api\Organizer\BrandController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
@@ -188,6 +189,15 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::delete('/payouts/requests/{payoutRequest}', [PayoutController::class, 'cancelRequest']);
 
         // The team: who is on it, in what role, and invitations to it.
+        /*
+         * How the organization appears on the pages it sells from. Any staff
+         * member may read it; the owner may change it.
+         */
+        Route::get('/brand', [BrandController::class, 'show']);
+        Route::patch('/brand', [BrandController::class, 'update']);
+        Route::post('/brand/logo', [BrandController::class, 'storeLogo']);
+        Route::delete('/brand/logo', [BrandController::class, 'destroyLogo']);
+
         Route::get('/team', [TeamController::class, 'index']);
         Route::post('/team/invitations', [TeamController::class, 'invite']);
         Route::delete('/team/invitations/{invitation}', [TeamController::class, 'revoke']);

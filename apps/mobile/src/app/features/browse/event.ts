@@ -190,12 +190,20 @@ import { SessionStore } from '../../core/session';
           <section>
             <h2 class="section">Organizer</h2>
             <mf-card quiet>
-              <p class="who">
-                {{ night.organizer.name }}
-                @if (night.organizer.is_verified) {
-                  <mf-badge tone="success">Verified</mf-badge>
+              <div class="host">
+                @if (night.organizer.logo_url) {
+                  <img class="mark" [src]="night.organizer.logo_url" alt="" width="44" height="44" />
+                } @else {
+                  <span class="mark mark--letter" aria-hidden="true">{{ organizerInitial(night) }}</span>
                 }
-              </p>
+
+                <p class="who">
+                  {{ night.organizer.name }}
+                  @if (night.organizer.is_verified) {
+                    <mf-badge tone="success">Verified</mf-badge>
+                  }
+                </p>
+              </div>
               @if (night.organizer.description) {
                 <p class="subtle">{{ night.organizer.description }}</p>
               }
@@ -452,9 +460,40 @@ import { SessionStore } from '../../core/session';
       border-top: 1px solid var(--border-subtle);
     }
 
+    /* The button keeps its words on one line and the sentence beside it
+       gives way — a two-line button reads as a broken one. */
+    .buy [mfButton] {
+      flex: none;
+      white-space: nowrap;
+    }
+
     .buy__text {
       display: grid;
       min-width: 0;
+    }
+
+    .host {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .mark {
+      flex: none;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: var(--radius-full);
+      object-fit: cover;
+      background: var(--surface-inset);
+    }
+
+    .mark--letter {
+      display: grid;
+      place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary-soft-text);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-bold);
     }
 
     .actions {
@@ -593,6 +632,11 @@ export class Event {
   }
 
   money = formatMoney;
+
+  /** Stands in for a mark an organizer has not uploaded. */
+  organizerInitial(night: EventPage): string {
+    return (night.organizer.name?.trim().charAt(0) ?? '?').toUpperCase();
+  }
 
   from(night: EventPage): string {
     const cheapest = this.onSale().reduce<TicketTypeCard | null>(

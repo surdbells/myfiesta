@@ -49,6 +49,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/account/account').then((m) => m.Account),
   },
   {
+    // Readable by the whole team, changeable by an owner. The screen says
+    // which, rather than the save button failing.
+    path: 'brand',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/brand/brand').then((m) => m.Brand),
+  },
+  {
     path: 'team',
     canActivate: [requireSession],
     loadComponent: () => import('./features/team/team').then((m) => m.Team),

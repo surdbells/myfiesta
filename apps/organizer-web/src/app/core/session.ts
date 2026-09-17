@@ -79,6 +79,7 @@ export class SessionStore {
   readonly canPublish = computed(() => this.can('events.publish'));
   readonly canCancel = computed(() => this.can('events.cancel'));
   readonly canManageTeam = computed(() => this.can('team.manage'));
+  readonly canManageBrand = computed(() => this.can('organization.brand'));
 
   get token(): string | null {
     return this.state()?.token ?? null;

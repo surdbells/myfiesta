@@ -56,6 +56,16 @@ enum Permission: string
     case TeamManage = 'team.manage';
 
     /**
+     * The organization's public face: its name, what it says about itself, and
+     * its mark.
+     *
+     * Owner-only, like the team. This is the identity every event page is
+     * published under, and a stranger deciding whether to hand over forty
+     * dollars is partly deciding about it.
+     */
+    case BrandManage = 'organization.brand';
+
+    /**
      * Every permission a role carries.
      *
      * Written as one table rather than scattered through policies, because the

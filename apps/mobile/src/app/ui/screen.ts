@@ -40,13 +40,21 @@ import { Component, booleanAttribute, input, output } from '@angular/core';
   styles: `
     :host {
       display: grid;
+      /* minmax(0, ...) on the column as well as the row.
+         A grid track is max-content by default, so without this the whole
+         screen takes the width of its widest child — one header button too
+         many and the frame is wider than the phone, with every screen under
+         it shifted sideways. */
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr);
+      width: 100%;
       height: 100%;
       background: var(--surface-sunken);
     }
 
     .bar {
       display: flex;
+      min-width: 0;
       align-items: center;
       gap: var(--space-3);
       padding: calc(var(--mf-safe-top) + var(--space-4)) var(--space-5) var(--space-3);

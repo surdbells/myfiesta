@@ -1,0 +1,141 @@
+<ui-page-header
+  title="How you appear"
+  subtitle="Your name, your mark and what you say about yourself — shown on every event page you publish."
+/>
+
+@if (loading()) {
+  <p class="text-sm text-text-muted" role="status">Loading…</p>
+} @else if (failed(); as message) {
+  <ui-alert tone="danger">{{ message }}</ui-alert>
+  <button uiButton class="mt-4" variant="secondary" (click)="load()">Try again</button>
+} @else if (brand(); as brand) {
+  <div class="grid max-w-[40rem] gap-8">
+    @if (!mayEdit()) {
+      <ui-alert tone="info">
+        This is how the organization appears to everybody buying a ticket. Only an owner can change it.
+      </ui-alert>
+    }
+
+    <!-- The mark. Drawn here the size and shape an event page draws it, so
+         nobody uploads a wide banner and finds it cropped to a circle later. -->
+    <section class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6">
+      <h2 class="text-base font-semibold">Your mark</h2>
+
+      <div class="flex items-center gap-5">
+        @if (brand.logo_url) {
+          <img
+            class="h-20 w-20 shrink-0 rounded-full bg-surface-inset object-cover"
+            [src]="brand.logo_url"
+            alt="Your organization's mark"
+          />
+        } @else {
+          <span
+            class="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-primary-soft text-2xl font-bold text-primary-soft-text"
+            aria-hidden="true"
+            >{{ initial() }}</span
+          >
+        }
+
+        <div class="grid gap-2">
+          <p class="text-sm text-text-muted">
+            A square picture works best — it is drawn in a circle. Up to 8MB.
+          </p>
+
+          @if (mayEdit()) {
+            <div class="flex flex-wrap items-center gap-3">
+              <label
+                class="inline-flex h-10 cursor-pointer items-center rounded-md border border-field-border bg-surface-raised px-4 text-sm font-semibold hover:bg-surface-hover"
+                [class.pointer-events-none]="uploading()"
+                [class.opacity-60]="uploading()"
+              >
+                {{ uploading() ? 'Working…' : brand.logo_url ? 'Replace' : 'Upload' }}
+                <input
+                  class="sr-only"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  [disabled]="uploading()"
+                  (change)="chooseLogo($event)"
+                />
+              </label>
+
+              @if (brand.logo_url) {
+                <button uiButton variant="ghost" [disabled]="uploading()" (click)="removeLogo()">Remove</button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      @if (logoError(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+    </section>
+
+    <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="save()">
+      <h2 class="text-base font-semibold">Name and words</h2>
+
+      <ui-field
+        label="Organization name"
+        hint="What appears under “Organized by” on every event page."
+        [error]="nameError()"
+        required
+      >
+        <input
+          id="brand-name"
+          name="brand-name"
+          maxlength="120"
+          required
+          [disabled]="!mayEdit()"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event); nameError.set(null)"
+        />
+      </ui-field>
+
+      <ui-field
+        label="Web address"
+        hint="Fixed. It is in links you have already handed out, so it cannot be changed here."
+      >
+        <input
+          id="brand-slug"
+          name="brand-slug"
+          class="bg-surface-sunken text-text-muted"
+          readonly
+          [value]="brand.slug"
+        />
+      </ui-field>
+
+      <ui-field
+        label="About you"
+        [hint]="
+          remaining() < 100
+            ? remaining() + ' characters left'
+            : 'A line or two for somebody deciding whether to buy from you. Plain words — no formatting.'
+        "
+      >
+        <textarea
+          id="brand-description"
+          name="brand-description"
+          rows="4"
+          maxlength="600"
+          [disabled]="!mayEdit()"
+          [ngModel]="description()"
+          (ngModelChange)="description.set($event)"
+        ></textarea>
+      </ui-field>
+
+      @if (brand.is_verified) {
+        <p class="text-sm text-text-muted">
+          Your identity is verified, so a tick appears beside your name. That is set by us, not here.
+        </p>
+      }
+
+      @if (mayEdit()) {
+        <div>
+          <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !changed()">
+            Save
+          </button>
+        </div>
+      }
+    </form>
+  </div>
+}

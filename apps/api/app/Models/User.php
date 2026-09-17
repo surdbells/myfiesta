@@ -169,7 +169,6 @@ class User extends Authenticatable implements FilamentUser
         return $role === null ? [] : Permission::namesForRole($role);
     }
 
-    /** Any staff role. Excludes door, which is not general access. */
     /**
      * What a token issued to this account may do.
      *
@@ -192,6 +191,7 @@ class User extends Authenticatable implements FilamentUser
         return $abilities;
     }
 
+    /** Any staff role. Excludes door, which is not general access. */
     public function isStaffOf(Organization|string $organization): bool
     {
         return $this->roleIn($organization)?->isStaff() ?? false;

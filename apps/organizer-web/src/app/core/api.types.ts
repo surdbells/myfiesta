@@ -37,7 +37,23 @@ export type Permission =
   | "money.view"
   | "refunds.process"
   | "messages.send"
-  | "team.manage";
+  | "payouts.request"
+  | "team.manage"
+  | "organization.brand";
+
+/**
+ * How an organization appears on the pages it sells from.
+ *
+ * The slug is here to be shown, never to be sent back: it is in links
+ * organizers have already handed out.
+ */
+export interface Brand {
+  name: string;
+  slug: string;
+  description: string | null;
+  logo_url: string | null;
+  is_verified: boolean;
+}
 
 export interface Membership {
   id: string;
