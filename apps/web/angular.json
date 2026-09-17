@@ -75,7 +75,10 @@
               "buildTarget": "web:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4320
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

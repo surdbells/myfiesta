@@ -45,22 +45,27 @@ three feature directories from importing each other.
 ## Running it
 
 ```bash
-# API
+# API — http://127.0.0.1:8000
 cd apps/api && composer install && cp .env.example .env && php artisan key:generate
 php artisan serve
 
-# Public site
+# Public site — http://localhost:4320
 cd apps/web && npm install && npm start
 
-# Organizer console
+# Organizer console — http://localhost:4310
 cd apps/organizer-web && npm install && npm start
 
-# Phone app (browser; see apps/mobile/README.md for devices)
+# Phone app in a browser — http://localhost:4330
+# (see apps/mobile/README.md for running it on a device)
 npm install && npm start --workspace mobile
 
 # Design tokens — after editing packages/tokens/tokens.json
 node packages/tokens/build.mjs
 ```
+
+Each app serves on a port of its own, set in its `angular.json`, so all three
+run at once. Every one of those origins has to be in the API's
+`CORS_ALLOWED_ORIGINS`.
 
 ## Conventions
 

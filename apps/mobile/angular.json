@@ -65,7 +65,10 @@
               "buildTarget": "mobile:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4330
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

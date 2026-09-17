@@ -68,7 +68,10 @@
               "buildTarget": "organizer-web:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4310
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"
