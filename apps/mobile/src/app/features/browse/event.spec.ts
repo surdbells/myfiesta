@@ -57,8 +57,13 @@ const night = (over: Partial<EventPage> = {}): EventPage =>
 describe('Event page', () => {
   let page: Event;
   let showing: EventPage;
+  let joins: { slug: string; body: { name: string; email: string; quantity: number } }[];
+  let joinAnswer: () => Promise<{ message: string }>;
 
   beforeEach(() => {
+    joins = [];
+    joinAnswer = async () => ({ message: "You're on the waitlist." });
+
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -67,6 +72,11 @@ describe('Event page', () => {
           useValue: {
             event: async () => showing,
             siteBase: () => 'https://myfiesta.test',
+            waitlist: async (slug: string, body: { name: string; email: string; quantity: number }) => {
+              joins.push({ slug, body });
+
+              return joinAnswer();
+            },
           },
         },
       ],
@@ -101,6 +111,55 @@ describe('Event page', () => {
     // sell-out — and the two want different words on the button.
     expect(page.soldOut()).toBe(false);
     expect(page.anyTickets()).toBe(false);
+  });
+
+  /**
+   * The waitlist is filled in here rather than on the website. Somebody who
+   * could not buy a ticket has already been disappointed once; sending them to
+   * a browser to type their address is the second time.
+   */
+  describe('the waitlist', () => {
+    async function soldOut() {
+      return open(night({ ticket_types: [tier({ sold_out: true })] }));
+    }
+
+    it('will not post without an address to tell anyone on', async () => {
+      await soldOut();
+      page.email.set('  ');
+
+      await page.join();
+
+      expect(joins).toEqual([]);
+      expect(page.wrong()).toBeTruthy();
+    });
+
+    it('sends the name, the address and how many, and shows what the server said', async () => {
+      await soldOut();
+      page.name.set(' Ada ');
+      page.email.set(' ada@example.test ');
+      page.quantity.set('3');
+
+      await page.join();
+
+      expect(joins).toEqual([
+        { slug: 'afro-fest', body: { name: 'Ada', email: 'ada@example.test', quantity: 3 } },
+      ]);
+      expect(page.joined()).toBe("You're on the waitlist.");
+      expect(page.wrong()).toBeNull();
+    });
+
+    it('keeps the form open with the reason when the server refuses', async () => {
+      await soldOut();
+      page.email.set('ada@example.test');
+      joinAnswer = async () => {
+        throw new Error('Tickets are on sale right now — no need to wait.');
+      };
+
+      await page.join();
+
+      expect(page.joined()).toBeNull();
+      expect(page.wrong()).toContain('on sale right now');
+    });
   });
 
   it('knows a night that has already happened', async () => {

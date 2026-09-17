@@ -1,4 +1,5 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { Browser } from '@capacitor/browser';
@@ -13,12 +14,16 @@ import {
   MfCard,
   MfCarousel,
   MfEmpty,
+  MfField,
+  MfOption,
   MfPoster,
   MfScreen,
+  MfSelect,
   MfSheet,
   MfSkeleton,
   ToastStore,
 } from '../../ui';
+import { SessionStore } from '../../core/session';
 
 /**
  * One event: the poster, the night, what it costs, and the way in.
@@ -35,7 +40,20 @@ import {
  */
 @Component({
   selector: 'mf-event',
-  imports: [MfScreen, MfCard, MfBadge, MfButton, MfPoster, MfCarousel, MfEmpty, MfSkeleton, MfSheet],
+  imports: [
+    FormsModule,
+    MfScreen,
+    MfCard,
+    MfBadge,
+    MfButton,
+    MfPoster,
+    MfCarousel,
+    MfEmpty,
+    MfSkeleton,
+    MfSheet,
+    MfField,
+    MfSelect,
+  ],
   template: `
     <mf-screen [title]="event()?.title ?? 'Event'" back flush (backed)="leave()">
       @if (canShare) {
@@ -203,11 +221,53 @@ import {
       subheading="If tickets open up, the people waiting are told first."
       (closed)="waitlist.set(false)"
     >
-      <p class="subtle">
-        The waitlist is on the website, so you can enter your details once and keep the email that
-        comes with it.
-      </p>
-      <button mfButton class="mt" block (click)="openWaitlist()">Open the waitlist</button>
+      @if (joined()) {
+        <p class="joined">{{ joined() }}</p>
+        <button mfButton class="mt" block variant="secondary" (click)="waitlist.set(false)">Done</button>
+      } @else {
+        <form class="form" (ngSubmit)="join()">
+          <mf-field label="Name" optional>
+            <input
+              name="waitlist-name"
+              type="text"
+              autocomplete="name"
+              enterkeyhint="next"
+              [ngModel]="name()"
+              (ngModelChange)="name.set($event)"
+            />
+          </mf-field>
+
+          <mf-field label="Email" [error]="wrong()">
+            <input
+              name="waitlist-email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="off"
+              autocorrect="off"
+              enterkeyhint="go"
+              required
+              [ngModel]="email()"
+              (ngModelChange)="email.set($event)"
+            />
+          </mf-field>
+
+          <div class="how-many">
+            <span class="label">How many</span>
+            <mf-select
+              heading="How many tickets"
+              ariaLabel="How many"
+              [options]="quantities"
+              [value]="quantity()"
+              (valueChange)="quantity.set($event ?? '1')"
+            />
+          </div>
+
+          <button mfButton type="submit" size="lg" block label="Adding you…" [loading]="joining()">
+            Join the waitlist
+          </button>
+        </form>
+      }
     </mf-sheet>
   `,
   styles: `
@@ -368,6 +428,28 @@ import {
       min-width: 0;
     }
 
+    .form {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .how-many {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .how-many .label {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--text);
+    }
+
+    .joined {
+      margin: 0;
+      color: var(--text);
+      font-size: var(--font-size-md);
+    }
+
     .mt {
       margin-top: var(--space-4);
     }
@@ -378,6 +460,7 @@ export class Event {
   private readonly router = inject(Router);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly toasts = inject(ToastStore);
+  private readonly session = inject(SessionStore);
 
   /** From the route. */
   readonly slug = input.required<string>();
@@ -387,6 +470,18 @@ export class Event {
   readonly failed = signal<string | null>(null);
   readonly opening = signal(false);
   readonly waitlist = signal(false);
+  readonly name = signal('');
+  readonly email = signal('');
+  readonly quantity = signal('1');
+  readonly joining = signal(false);
+  readonly wrong = signal<string | null>(null);
+  readonly joined = signal<string | null>(null);
+
+  /** One to ten, the range the server accepts. */
+  readonly quantities: MfOption[] = Array.from({ length: 10 }, (_, i) => ({
+    value: String(i + 1),
+    label: i === 0 ? '1 ticket' : `${i + 1} tickets`,
+  }));
 
   readonly canShare = Capacitor.isNativePlatform() || typeof navigator !== 'undefined';
 
@@ -412,6 +507,21 @@ export class Event {
 
   constructor() {
     queueMicrotask(() => void this.load());
+
+    // Somebody signed in should not retype what the app already knows, and a
+    // sheet reopened after a mistake should not still be showing the error.
+    effect(() => {
+      if (!this.waitlist()) return;
+
+      const who = this.session.session();
+
+      if (who && !this.email()) {
+        this.name.set(who.name ?? '');
+        this.email.set(who.email ?? '');
+      }
+
+      this.wrong.set(null);
+    });
   }
 
   async load(): Promise<void> {
@@ -464,12 +574,41 @@ export class Event {
     }
   }
 
-  async openWaitlist(): Promise<void> {
+  /**
+   * Joining, in the app.
+   *
+   * The server answers the same whether the address was new or already on the
+   * list, so nobody can use this to find out who is waiting for what. The app
+   * repeats that answer rather than inventing a friendlier one.
+   */
+  async join(): Promise<void> {
     const night = this.event();
-    if (!night) return;
+    if (!night || this.joining()) return;
 
-    this.waitlist.set(false);
-    await Browser.open({ url: this.siteUrl(`/${night.slug}`) });
+    const email = this.email().trim();
+
+    if (!email.includes('@')) {
+      this.wrong.set('We need an email address to tell you on.');
+
+      return;
+    }
+
+    this.joining.set(true);
+    this.wrong.set(null);
+
+    try {
+      const { message } = await this.discover.waitlist(night.slug, {
+        name: this.name().trim(),
+        email,
+        quantity: Number(this.quantity()),
+      });
+
+      this.joined.set(message);
+    } catch (error) {
+      this.wrong.set(error instanceof Error ? error.message : 'Could not add you. Try again.');
+    } finally {
+      this.joining.set(false);
+    }
   }
 
   async share(): Promise<void> {
