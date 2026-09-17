@@ -1,4 +1,14 @@
-import { Component, computed, contentChild, effect, ElementRef, input, signal, booleanAttribute } from '@angular/core';
+import {
+  afterNextRender,
+  booleanAttribute,
+  Component,
+  contentChild,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 
 let nextId = 0;
 
@@ -129,18 +139,40 @@ export class MfField {
 
   protected readonly focused = signal(false);
 
-  private readonly control = contentChild<ElementRef<HTMLElement>>('control');
+  private readonly marked = contentChild<ElementRef<HTMLElement>>('control');
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly generated = `mf-field-${nextId++}`;
 
-  protected readonly controlId = computed(() => this.control()?.nativeElement.id || this.generated);
+  protected readonly controlId = signal(this.generated);
 
   constructor() {
-    // A label needs something to point at. When the projected control has no
-    // id of its own it is given one, rather than the label being decorative.
+    /*
+     * A label needs something to point at.
+     *
+     * The control is taken from a #control reference when there is one, and
+     * found in the projected content when there is not. Requiring the marker
+     * was a quiet trap: forget it on one screen and that label points at
+     * nothing, which looks identical on the page and is a field a screen
+     * reader cannot name.
+     */
+    afterNextRender(() => this.adopt());
     effect(() => {
-      const element = this.control()?.nativeElement;
-
-      if (element && !element.id) element.id = this.generated;
+      this.marked();
+      this.adopt();
     });
+  }
+
+  private adopt(): void {
+    const element =
+      this.marked()?.nativeElement ??
+      (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '.box input, .box textarea, .box select, .box [contenteditable]',
+      );
+
+    if (!element) return;
+
+    if (!element.id) element.id = this.generated;
+
+    this.controlId.set(element.id);
   }
 }
