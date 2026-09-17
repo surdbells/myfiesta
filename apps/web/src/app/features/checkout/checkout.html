@@ -96,6 +96,54 @@
           </span>
         </label>
 
+        <!--
+          What the organizer asked.
+
+          Between the buyer's details and the payment step, which is where a
+          form that has to be filled in belongs: after the part everybody
+          expects, before the part that leaves the site.
+        -->
+        @if (buyerQuestions().length > 0) {
+          <h2 class="mt-10 border-b border-border pb-3 text-xl">{{ ev.organizer.name }} asks</h2>
+
+          <div class="mt-6 grid gap-5">
+            @for (question of buyerQuestions(); track question.id) {
+              <app-question-field
+                [question]="question"
+                [value]="answerFor(question.id)"
+                (valueChange)="setAnswer(question.id, $event)"
+              />
+            }
+          </div>
+        }
+
+        @if (attendeeQuestions().length > 0) {
+          <h2 class="mt-10 border-b border-border pb-3 text-xl">Who is coming</h2>
+
+          <!-- One block per ticket, numbered the way the refusal from the
+               server numbers them: "answer for ticket 2" has to point at
+               something a reader can find. -->
+          <div class="mt-6 grid gap-6">
+            @for (slot of slots(); track slot.key) {
+              <fieldset class="grid gap-5 rounded-lg border border-border bg-surface-sunken p-5">
+                <legend class="px-2 text-sm font-semibold">
+                  Ticket {{ $index + 1 }}
+                  <span class="font-normal text-text-muted">· {{ slot.name }}</span>
+                </legend>
+
+                @for (question of attendeeQuestions(); track question.id) {
+                  <app-question-field
+                    [question]="question"
+                    [slot]="slot.key"
+                    [value]="answerFor(question.id, slot.key)"
+                    (valueChange)="setAnswer(question.id, $event, slot.key)"
+                  />
+                }
+              </fieldset>
+            }
+          </div>
+        }
+
         <h2 class="mt-10 border-b border-border pb-3 text-xl">Payment</h2>
 
         <!--

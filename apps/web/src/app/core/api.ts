@@ -3,6 +3,9 @@ import { API_BASE_URL } from './api-base';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  AccessUnlock,
+  AnswerValue,
+  Attendee,
   Discovery,
   EventDetail,
   EventSummary,
@@ -12,8 +15,25 @@ import {
   Page,
   Quote,
   TicketAccess,
-  AccessUnlock,
 } from './api.types';
+
+/**
+ * Everything the server needs to open an order.
+ *
+ * Nothing with a currency sign in it: the client says which tickets and how
+ * many, and every figure is computed from rows in the database.
+ */
+export interface NewOrder {
+  items: { ticket_type_id: string; quantity: number }[];
+  buyer: { name: string; email: string; phone?: string };
+  code?: string;
+  ref?: string;
+  access_code?: string;
+  /** What the buyer answered for the order, keyed by question id. */
+  answers?: Record<string, AnswerValue>;
+  /** One entry per ticket, in the order they were filled in. */
+  attendees?: Attendee[];
+}
 
 export interface EventQuery {
   q?: string;
@@ -80,21 +100,15 @@ export class Api {
     return this.http.post<AccessUnlock>(`${this.base}/api/events/${slug}/access`, { code });
   }
 
-  order(
-    slug: string,
-    items: { ticket_type_id: string; quantity: number }[],
-    buyer: { name: string; email: string; phone?: string },
-    code?: string,
-    ref?: string,
-    access_code?: string,
-  ): Observable<OrderCreated> {
-    return this.http.post<OrderCreated>(`${this.base}/api/events/${slug}/orders`, {
-      items,
-      buyer,
-      code,
-      ref,
-      access_code,
-    });
+  /**
+   * Place the order.
+   *
+   * One object rather than eight positional arguments: the list had reached
+   * the point where two optional codes sat next to each other and the only
+   * thing telling them apart was their position. Answers made it eight.
+   */
+  order(slug: string, order: NewOrder): Observable<OrderCreated> {
+    return this.http.post<OrderCreated>(`${this.base}/api/events/${slug}/orders`, order);
   }
 
   /**

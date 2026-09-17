@@ -2,10 +2,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { EventDetail, Quote } from '../../core/api.types';
+import { AnswerValue, EventDetail, Quote } from '../../core/api.types';
+import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout-answers';
 import { CheckoutStore } from '../../core/checkout-store';
 import { formatMoney } from '../../core/money';
 import { CheckoutSteps } from '../../shared/checkout-steps';
+import { QuestionField } from './question-field';
 
 /**
  * Step two: who the tickets are for, and the itemized money.
@@ -19,7 +21,7 @@ import { CheckoutSteps } from '../../shared/checkout-steps';
 @Component({
   selector: 'mf-checkout',
   standalone: true,
-  imports: [FormsModule, RouterLink, CheckoutSteps],
+  imports: [FormsModule, RouterLink, CheckoutSteps, QuestionField],
   templateUrl: './checkout.html',
 })
 export class Checkout {
@@ -45,9 +47,42 @@ export class Checkout {
 
   readonly promo = signal('');
 
+  /**
+   * What the organizer asked, and what has been typed so far.
+   *
+   * Two stores, because the questions are asked of two different things: once
+   * for the order, and once about each person on it. The per-person answers
+   * are keyed by the slot they belong to rather than by a ticket — there are
+   * no tickets yet, and will not be until a payment settles.
+   */
+  readonly orderAnswers = signal<Record<string, AnswerValue>>({});
+  readonly attendeeAnswers = signal<Record<string, Record<string, AnswerValue>>>({});
+
   readonly formatMoney = formatMoney;
 
   readonly slug = this.route.snapshot.paramMap.get('slug')!;
+
+  readonly buyerQuestions = computed(() =>
+    (this.event()?.questions ?? []).filter((question) => !question.per_attendee),
+  );
+
+  readonly attendeeQuestions = computed(() =>
+    (this.event()?.questions ?? []).filter((question) => question.per_attendee),
+  );
+
+  /** One slot per ticket being bought, in the order the server will mint them. */
+  readonly slots = computed(() => slotsFor(this.quote()?.lines ?? []));
+
+  /**
+   * Whether every question that has to be answered has been.
+   *
+   * The server decides; this is the same rule applied early, so the answer
+   * arrives beside the field rather than at the payment step.
+   */
+  readonly answersComplete = computed(
+    () =>
+      !missing(this.event()?.questions ?? [], this.orderAnswers(), this.slots(), this.attendeeAnswers()),
+  );
 
   readonly emailsDisagree = computed(
     () =>
@@ -62,8 +97,30 @@ export class Checkout {
       !this.emailsDisagree() &&
       this.confirm().trim() !== '' &&
       this.agreed() &&
+      this.answersComplete() &&
       this.quote() !== null,
   );
+
+  /** What has been said so far, for one question in one place. */
+  answerFor(questionId: string, slotKey = ''): AnswerValue | null {
+    const answers = slotKey ? (this.attendeeAnswers()[slotKey] ?? {}) : this.orderAnswers();
+
+    return answers[questionId] ?? null;
+  }
+
+  setAnswer(questionId: string, value: AnswerValue | null, slotKey = ''): void {
+    if (slotKey === '') {
+      this.orderAnswers.set(withAnswer(this.orderAnswers(), questionId, value));
+
+      return;
+    }
+
+    this.attendeeAnswers.set({
+      ...this.attendeeAnswers(),
+      [slotKey]: withAnswer(this.attendeeAnswers()[slotKey] ?? {}, questionId, value),
+    });
+  }
+
 
   constructor() {
     this.store.loadFor(this.slug);
@@ -105,14 +162,18 @@ export class Checkout {
     const name = `${this.first().trim()} ${this.last().trim()}`.trim();
 
     this.api
-      .order(
-        this.slug,
-        this.store.lines(),
-        { name, email: this.email().trim() },
-        this.store.code() || undefined,
-        this.store.ref() ?? undefined,
-        this.store.access()?.code,
-      )
+      .order(this.slug, {
+        items: this.store.lines(),
+        buyer: { name, email: this.email().trim() },
+        code: this.store.code() || undefined,
+        ref: this.store.ref() ?? undefined,
+        access_code: this.store.access()?.code,
+        answers: this.orderAnswers(),
+        // Only when there is something to say about each person. An empty
+        // list would still have to match the basket, and matching it for no
+        // reason is a way to fail an order over a question nobody asked.
+        attendees: this.attendeeQuestions().length > 0 ? attendeesFor(this.slots(), this.attendeeAnswers()) : undefined,
+      })
       .subscribe({
         next: (order) => {
           this.store.clear(this.slug);

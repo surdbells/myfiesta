@@ -105,6 +105,36 @@ export interface GalleryImage {
   height: number | null;
 }
 
+/**
+ * Something the organizer asks at checkout.
+ *
+ * The shape of the question only. Whether an answer is acceptable is decided
+ * by the server against its own rows — this is what to render, not what to
+ * enforce.
+ */
+export interface Question {
+  id: string;
+  label: string;
+  type: 'text' | 'choice' | 'multi_choice' | 'boolean';
+  /** What may be chosen. Empty for a question that is typed into. */
+  options: string[];
+  required: boolean;
+  /**
+   * Asked once for the whole order, or once about each person on it. A name
+   * for the door is per attendee; how somebody heard about the night is not.
+   */
+  per_attendee: boolean;
+}
+
+/** An answer on its way to the server: words, a choice, several, or yes/no. */
+export type AnswerValue = string | string[] | boolean;
+
+/** One person on an order, and what was asked about them. */
+export interface Attendee {
+  ticket_type_id: string;
+  answers: Record<string, AnswerValue>;
+}
+
 export interface EventDetail extends EventSummary {
   /**
    * Formatted HTML, sanitized by the server to an allowlist — safe to render
@@ -128,6 +158,8 @@ export interface EventDetail extends EventSummary {
   venue: Venue | null;
   organizer: OrganizerBrand;
   ticket_types: TicketType[];
+  /** What the organizer asks at checkout. Empty when they ask nothing. */
+  questions: Question[];
   calendar: CalendarLinks;
 }
 
