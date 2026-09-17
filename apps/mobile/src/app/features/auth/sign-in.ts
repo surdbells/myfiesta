@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api, ApiError } from '../../core/api';
@@ -138,6 +138,15 @@ export class SignIn {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
 
+  /**
+   * Where to go afterwards, when something sent them here mid-task.
+   *
+   * Tapping save on an event and landing on a tickets screen is the app losing
+   * somebody's place. Only a path within the app is honoured — a "next" that
+   * could point anywhere is an open redirect wearing a helpful name.
+   */
+  readonly next = input<string | null>(null);
+
   readonly email = signal('');
   readonly password = signal('');
   readonly busy = signal(false);
@@ -153,9 +162,12 @@ export class SignIn {
       const body = await this.api.signIn(this.email().trim(), this.password());
       const session = await this.session.startFromLogin(body);
 
-      await this.router.navigate([session.scope === 'organizer' ? '/events' : '/tickets'], {
-        replaceUrl: true,
-      });
+      const back = this.next();
+      const where = back?.startsWith('/') && !back.startsWith('//')
+        ? back
+        : session.scope === 'organizer' ? '/events' : '/tickets';
+
+      await this.router.navigateByUrl(where, { replaceUrl: true });
     } catch (error) {
       // ApiError has already decided what is safe to show: a 4xx message is
       // written for the reader, a 5xx one is not repeated.

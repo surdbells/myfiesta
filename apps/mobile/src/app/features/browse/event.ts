@@ -56,9 +56,24 @@ import { SessionStore } from '../../core/session';
   ],
   template: `
     <mf-screen [title]="event()?.title ?? 'Event'" back flush (backed)="leave()">
-      @if (canShare) {
-        <button mfButton variant="ghost" size="sm" screenActions (click)="share()">Share</button>
-      }
+      <span class="actions" screenActions>
+        @if (!past()) {
+          <button
+            mfButton
+            variant="ghost"
+            size="sm"
+            [attr.aria-pressed]="saved()"
+            [attr.aria-label]="saved() ? 'Saved' : 'Save for later'"
+            (click)="toggleSave()"
+          >
+            {{ saved() ? 'Saved' : 'Save' }}
+          </button>
+        }
+
+        @if (canShare) {
+          <button mfButton variant="ghost" size="sm" (click)="share()">Share</button>
+        }
+      </span>
 
       @if (loading()) {
         <div class="pad">
@@ -183,6 +198,20 @@ import { SessionStore } from '../../core/session';
               </p>
               @if (night.organizer.description) {
                 <p class="subtle">{{ night.organizer.description }}</p>
+              }
+
+              @if (night.organizer.slug) {
+                <button
+                  mfButton
+                  class="mt"
+                  size="sm"
+                  [variant]="following() ? 'secondary' : 'primary'"
+                  [loading]="followBusy()"
+                  [attr.aria-pressed]="following()"
+                  (click)="toggleFollow()"
+                >
+                  {{ following() ? 'Following' : 'Follow' }}
+                </button>
               }
             </mf-card>
           </section>
@@ -428,6 +457,12 @@ import { SessionStore } from '../../core/session';
       min-width: 0;
     }
 
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
     .form {
       display: grid;
       gap: var(--space-4);
@@ -476,6 +511,18 @@ export class Event {
   readonly joining = signal(false);
   readonly wrong = signal<string | null>(null);
   readonly joined = signal<string | null>(null);
+
+  /**
+   * Saving and following, answered on the phone first.
+   *
+   * A tap that waits for a round trip before it looks like anything reads as a
+   * broken button, so the star fills immediately and puts itself back if the
+   * server disagrees. Both are also hidden from a guest — there is nowhere to
+   * keep the list — and the sign-in ask comes when they tap, not before.
+   */
+  readonly saved = signal(false);
+  readonly following = signal(false);
+  readonly followBusy = signal(false);
 
   /** One to ten, the range the server accepts. */
   readonly quantities: MfOption[] = Array.from({ length: 10 }, (_, i) => ({
@@ -529,7 +576,11 @@ export class Event {
     this.failed.set(null);
 
     try {
-      this.event.set(await this.discover.event(this.slug()));
+      const night = await this.discover.event(this.slug());
+
+      this.event.set(night);
+      this.saved.set(night.saved === true);
+      this.following.set(night.organizer.following === true);
     } catch (error) {
       this.failed.set(error instanceof Error ? error.message : 'Something went wrong.');
     } finally {
@@ -552,6 +603,54 @@ export class Event {
     if (!cheapest) return 'Tickets';
 
     return cheapest.price.amount === 0 ? 'Free' : `From ${formatMoney(cheapest.price)}`;
+  }
+
+  async toggleSave(): Promise<void> {
+    const night = this.event();
+    if (!night) return;
+
+    if (!this.session.signedIn()) {
+      this.toasts.show('Sign in to keep this for later.');
+      await this.router.navigate(['/sign-in'], { queryParams: { next: `/e/${night.slug}` } });
+
+      return;
+    }
+
+    const next = !this.saved();
+    this.saved.set(next);
+
+    try {
+      await this.discover.save(night.slug, next);
+      this.toasts.show(next ? 'Saved for later.' : 'Taken off your list.');
+    } catch {
+      this.saved.set(!next);
+      this.toasts.show('Could not save that. Try again.', 'danger');
+    }
+  }
+
+  async toggleFollow(): Promise<void> {
+    const slug = this.event()?.organizer.slug;
+    if (!slug || this.followBusy()) return;
+
+    if (!this.session.signedIn()) {
+      this.toasts.show('Sign in to follow this organizer.');
+      await this.router.navigate(['/sign-in'], { queryParams: { next: `/e/${this.slug()}` } });
+
+      return;
+    }
+
+    const next = !this.following();
+    this.following.set(next);
+    this.followBusy.set(true);
+
+    try {
+      await this.discover.follow(slug, next);
+    } catch {
+      this.following.set(!next);
+      this.toasts.show('Could not do that. Try again.', 'danger');
+    } finally {
+      this.followBusy.set(false);
+    }
   }
 
   /**

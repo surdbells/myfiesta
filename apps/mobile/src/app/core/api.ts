@@ -184,6 +184,31 @@ export class Api {
     return this.send<T>('POST', path, { body, anonymous: true });
   }
 
+  /**
+   * A public GET that carries a token when the caller hands one over.
+   *
+   * For the pages that are the same for everybody except for one thing about
+   * the reader — whether they saved this night, whether they follow whoever is
+   * putting it on. Without a token it is the anonymous request above; the
+   * caller decides, so a door pass is never sent to a discovery endpoint.
+   */
+  asReader<T>(path: string, query?: Record<string, string>, token?: string | null): Promise<T> {
+    return this.send<T>('GET', path, { query, anonymous: !token, token: token ?? undefined });
+  }
+
+  /** The reader's own lists: saved nights, organizers followed. */
+  mine<T>(path: string): Promise<T> {
+    return this.send<T>('GET', path);
+  }
+
+  put<T>(path: string): Promise<T> {
+    return this.send<T>('PUT', path, {});
+  }
+
+  remove<T>(path: string): Promise<T> {
+    return this.send<T>('DELETE', path, {});
+  }
+
   // --- auth -----------------------------------------------------------------
 
   signIn(email: string, password: string): Promise<Record<string, unknown>> {

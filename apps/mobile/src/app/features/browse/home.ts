@@ -86,6 +86,25 @@ import {
             </mf-carousel>
           }
 
+          @if (saved().length > 0) {
+            <section>
+              <header class="shelf">
+                <h2>Saved</h2>
+                <button class="link" type="button" (click)="go('/saved')">See all</button>
+              </header>
+
+              <mf-carousel ariaLabel="Saved events" [count]="saved().length">
+                @for (event of saved(); track event.slug) {
+                  <article class="recent" (click)="open(event)">
+                    <mf-poster [url]="event.poster_url" [title]="event.title" shape="wide" />
+                    <p class="when subtle">{{ when(event) }}</p>
+                    <h3>{{ event.title }}</h3>
+                  </article>
+                }
+              </mf-carousel>
+            </section>
+          }
+
           @if (upcoming().length > 0) {
             <section>
               <header class="shelf">
@@ -277,6 +296,13 @@ import {
       list-style: none;
     }
 
+    /* A grid item will not shrink below its content unless told to, and the
+       date on each row refuses to wrap — so without this the card grows past
+       the screen instead of the date ellipsizing. */
+    .stack li {
+      min-width: 0;
+    }
+
     .row {
       display: flex;
       align-items: center;
@@ -329,6 +355,13 @@ export class Home {
   readonly featured = signal<EventCard[]>([]);
   readonly upcoming = signal<EventCard[]>([]);
   readonly past = signal<EventCard[]>([]);
+
+  /**
+   * What this phone's account kept for later. Empty for a guest, and the shelf
+   * disappears with it rather than inviting somebody to sign in twice — the
+   * prompt at the bottom of the screen already does that once.
+   */
+  readonly saved = signal<EventCard[]>([]);
   readonly cities = signal<{ city: string; country: string; events: number }[]>([]);
 
   readonly city = signal<string | null>(null);
@@ -361,10 +394,13 @@ export class Home {
     this.failed.set(null);
 
     try {
-      const [home, past] = await Promise.all([
+      const [home, past, saved] = await Promise.all([
         this.discover.home(this.city()),
         // A shelf that fails should not take the screen with it.
         this.discover.past(this.city()).catch(() => []),
+        this.session.signedIn() && !this.session.locked()
+          ? this.discover.saved().catch(() => [])
+          : Promise.resolve([]),
       ]);
 
       this.featured.set(home.featured);
@@ -374,6 +410,7 @@ export class Home {
       this.upcoming.set(home.upcoming.filter((event) => !shown.has(event.slug)));
       this.cities.set(home.cities);
       this.past.set(past);
+      this.saved.set(saved);
     } catch (error) {
       this.failed.set(error instanceof Error ? error.message : 'Something went wrong.');
     } finally {

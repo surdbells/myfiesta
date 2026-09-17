@@ -49,6 +49,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/browse/event').then((m) => m.Event),
   },
   {
+    // A private list, so it needs an account — but the sign-in it bounces to
+    // comes back here rather than dropping somebody on the tickets screen.
+    path: 'saved',
+    canActivate: [signedIn],
+    loadComponent: () => import('./features/browse/saved').then((m) => m.Saved),
+  },
+  {
     path: 'sign-in',
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },

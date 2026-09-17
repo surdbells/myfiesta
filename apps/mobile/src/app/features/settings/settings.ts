@@ -33,6 +33,14 @@ import {
         }
       </mf-card>
 
+      @if (!session.locked()) {
+        <mf-card class="block">
+          <p class="label">Your lists</p>
+          <button mfButton class="mt" variant="secondary" block (click)="go('/saved')">Saved events</button>
+          <p class="hint muted">Nights you kept for later. Yours alone — nobody else sees them.</p>
+        </mf-card>
+      }
+
       <mf-card class="block">
         <p class="label">Appearance</p>
         <mf-segmented
@@ -108,6 +116,10 @@ import {
       margin-top: var(--space-3);
     }
 
+    .mt {
+      margin-top: var(--space-3);
+    }
+
     .hint {
       margin-top: var(--space-3);
       font-size: var(--font-size-sm);
@@ -168,6 +180,10 @@ export class Settings {
     this.busy.set(true);
     await this.session.signOut();
     await this.router.navigate(['/sign-in'], { replaceUrl: true });
+  }
+
+  go(path: string): void {
+    void this.router.navigate([path]);
   }
 
   leave(): void {

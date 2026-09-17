@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Api } from './api';
+import { SessionStore } from './session';
 import type { Money } from './money';
 
 /** An event as a list card shows it. */
@@ -16,7 +17,10 @@ export interface EventCard {
   poster_url: string | null;
   organizer: { name: string | null; slug: string | null };
   from_price: Money | null;
-  sold_out?: boolean;
+  /** The summary's own name for it — nothing on sale, whether it sold out or
+      the organizer closed sales. Absent on an event page, which says it per
+      tier instead. */
+  is_sold_out?: boolean;
 }
 
 export interface TicketTypeCard {
@@ -40,7 +44,17 @@ export interface EventPage extends EventCard {
   min_age: number | null;
   id_required: boolean;
   venue: { name: string; address: string | null; city: string } | null;
-  organizer: { name: string | null; slug: string | null; description?: string | null; is_verified?: boolean; logo_url?: string | null };
+  organizer: {
+    name: string | null;
+    slug: string | null;
+    description?: string | null;
+    is_verified?: boolean;
+    logo_url?: string | null;
+    /** Whether this reader follows them. False for a guest. */
+    following?: boolean;
+  };
+  /** Whether this reader saved it. False for a guest. */
+  saved?: boolean;
   gallery: { url: string; thumb_url: string; caption: string | null }[];
   ticket_types: TicketTypeCard[];
   calendar: { ics_url: string; google_url: string };
@@ -64,6 +78,7 @@ export interface Discovery {
 export class Discover {
   private readonly api = inject(Api);
   private readonly document = inject(DOCUMENT);
+  private readonly session = inject(SessionStore);
 
   /**
    * Where the public site lives — the checkout, and any link worth sharing.
@@ -134,8 +149,48 @@ export class Discover {
     return body.data;
   }
 
+  /**
+   * One event, read as whoever is holding the phone.
+   *
+   * The token goes unless this phone is a door pass — see below.
+   */
   event(slug: string): Promise<EventPage> {
-    return this.api.public<{ data: EventPage }>(`/api/events/${encodeURIComponent(slug)}`).then((body) => body.data);
+    return this.api
+      .asReader<{ data: EventPage }>(`/api/events/${encodeURIComponent(slug)}`, undefined, this.readerToken())
+      .then((body) => body.data);
+  }
+
+  /** Nights kept for later. Soonest first; past ones drop off on their own. */
+  async saved(): Promise<EventCard[]> {
+    const body = await this.api.mine<{ data: EventCard[] }>('/api/me/saved');
+
+    return body.data;
+  }
+
+  save(slug: string, on: boolean): Promise<{ saved: boolean }> {
+    const path = `/api/events/${encodeURIComponent(slug)}/save`;
+
+    return on ? this.api.put(path) : this.api.remove(path);
+  }
+
+  following(): Promise<{ data: { slug: string; name: string; is_verified?: boolean }[] }> {
+    return this.api.mine('/api/me/following');
+  }
+
+  follow(slug: string, on: boolean): Promise<{ following: boolean }> {
+    const path = `/api/organizers/${encodeURIComponent(slug)}/follow`;
+
+    return on ? this.api.put(path) : this.api.remove(path);
+  }
+
+  private readerToken(): string | null {
+    const who = this.session.session();
+
+    // Anything but a door pass. Every login carries the attendee ability —
+    // an organizer browses and saves nights like everybody else — but a door
+    // token is for a door, and sending it here would have the API answer a
+    // question nobody asked.
+    return who && who.scope !== 'door' ? who.token : null;
   }
 
   /** Join the waitlist for a night with nothing left to buy. */

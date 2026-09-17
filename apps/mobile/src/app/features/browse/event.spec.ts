@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Event } from './event';
 import { Discover, EventPage, TicketTypeCard } from '../../core/discovery';
+import { SessionStore } from '../../core/session';
 
 vi.mock('@capacitor/browser', () => ({ Browser: { open: async () => undefined } }));
 vi.mock('@capacitor/share', () => ({ Share: { share: async () => undefined } }));
@@ -59,14 +60,21 @@ describe('Event page', () => {
   let showing: EventPage;
   let joins: { slug: string; body: { name: string; email: string; quantity: number } }[];
   let joinAnswer: () => Promise<{ message: string }>;
+  let saves: { slug: string; on: boolean }[];
+  let saveAnswer: () => Promise<{ saved: boolean }>;
+  let signedIn: boolean;
 
   beforeEach(() => {
     joins = [];
     joinAnswer = async () => ({ message: "You're on the waitlist." });
+    saves = [];
+    saveAnswer = async () => ({ saved: true });
+    signedIn = true;
 
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
+        // A stub for the one route the page navigates to itself.
+        provideRouter([{ path: 'sign-in', children: [] }]),
         {
           provide: Discover,
           useValue: {
@@ -77,6 +85,19 @@ describe('Event page', () => {
 
               return joinAnswer();
             },
+            save: async (slug: string, on: boolean) => {
+              saves.push({ slug, on });
+
+              return saveAnswer();
+            },
+            follow: async () => ({ following: true }),
+          },
+        },
+        {
+          provide: SessionStore,
+          useValue: {
+            session: () => (signedIn ? { scope: 'attendee', token: 't' } : null),
+            signedIn: () => signedIn,
           },
         },
       ],
@@ -159,6 +180,57 @@ describe('Event page', () => {
 
       expect(page.joined()).toBeNull();
       expect(page.wrong()).toContain('on sale right now');
+    });
+  });
+
+  /**
+   * Saving answers on the phone first.
+   *
+   * A control that waits for a round trip before it changes reads as broken,
+   * and somebody taps it again. It fills immediately and puts itself back if
+   * the server disagrees.
+   */
+  describe('saving', () => {
+    it('fills in straight away and stays filled when the server agrees', async () => {
+      await open(night({ saved: false } as Partial<EventPage>));
+
+      const tapped = page.toggleSave();
+      expect(page.saved()).toBe(true);
+
+      await tapped;
+      expect(saves).toEqual([{ slug: 'afro-fest', on: true }]);
+      expect(page.saved()).toBe(true);
+    });
+
+    it('puts itself back when the save fails', async () => {
+      await open(night({ saved: false } as Partial<EventPage>));
+      saveAnswer = async () => {
+        throw new Error('nope');
+      };
+
+      await page.toggleSave();
+
+      expect(page.saved()).toBe(false);
+    });
+
+    it('reads the state the server sent rather than assuming', async () => {
+      await open(night({ saved: true, organizer: { name: 'Lagos Nights', slug: 'lagos-nights', following: true } } as Partial<EventPage>));
+
+      expect(page.saved()).toBe(true);
+      expect(page.following()).toBe(true);
+    });
+
+    it('asks a guest to sign in instead of quietly doing nothing', async () => {
+      signedIn = false;
+      await open(night());
+
+      await page.toggleSave();
+
+      expect(saves).toEqual([]);
+      expect(page.saved()).toBe(false);
+      // And comes back here afterwards rather than dropping them on a tickets
+      // screen they did not ask for.
+      expect(TestBed.inject(Router).url).toContain('/sign-in?next=%2Fe%2Fafro-fest');
     });
   });
 
