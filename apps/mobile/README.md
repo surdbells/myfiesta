@@ -123,6 +123,10 @@ load, so a ticket handed to a friend stops reminding this phone.
 Push notifications — "the organizer you follow announced a night" — need FCM
 and APNs credentials, which are not in the repository.
 
+A phone asking for less motion gets less: the stylesheet flattens every CSS
+animation, and Ionic's page transitions — which it drives in JavaScript, where
+a media query cannot reach them — are turned off at startup.
+
 Colours, spacing, radii and type all come from `packages/tokens`, the same
 generated CSS the two web apps read. Light and dark follow the phone by
 default; an explicit choice in Settings overrides it and is remembered.

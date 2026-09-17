@@ -14,13 +14,32 @@ import { Theme } from './core/theme';
  * the code — the look is ours either way. Ripples and Ionic's focus outline
  * are off: the app's own controls answer a press themselves.
  */
+/**
+ * Whether the phone has been asked for less movement.
+ *
+ * Read once, at startup: iOS and Android both require the app to be relaunched
+ * for the setting to take effect elsewhere, so re-reading it mid-session would
+ * be the one place in the app that behaves differently from the rest of it.
+ */
+function prefersLessMotion(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideIonicAngular({
       mode: 'md',
       rippleEffect: false,
-      animated: true,
+      /*
+       * Page transitions, unless the phone has been asked for less motion.
+       *
+       * The stylesheet already flattens every CSS animation in the app when
+       * that is set, but Ionic drives its transitions in JavaScript, where a
+       * media query cannot reach them — so somebody who turned motion down to
+       * stop screens sliding still had the screens sliding.
+       */
+      animated: !prefersLessMotion(),
     }),
     provideRouter(routes, withComponentInputBinding()),
 
