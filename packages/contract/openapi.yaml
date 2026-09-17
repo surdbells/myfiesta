@@ -343,6 +343,151 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/me/saved:
+    get:
+      operationId: listSavedEvents
+      summary: Nights the signed-in account saved
+      description: |
+        Soonest first, with what has already happened left out: saving is for
+        later, and once later has happened a past night belongs on the tickets
+        screen instead.
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: Saved events, soonest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventSummary' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/events/{slug}/save:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: saveEvent
+      summary: Keep a night for later
+      description: |
+        Saving twice is saving once — a phone on a bad signal sends the same
+        tap twice, and the second is not an error anybody should have to read.
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saved]
+                properties:
+                  saved: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: unsaveEvent
+      summary: Take a night off the list
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: No longer saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saved]
+                properties:
+                  saved: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/me/following:
+    get:
+      operationId: listFollowedOrganizers
+      summary: Organizers the signed-in account follows
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: Organizers followed, by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrganizerBrand' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/organizers/{slug}/follow:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: followOrganizer
+      summary: Hear about an organizer's next night
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: Following.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [following]
+                properties:
+                  following: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: unfollowOrganizer
+      summary: Stop hearing from an organizer
+      tags: [Discovery]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: No longer following.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [following]
+                properties:
+                  following: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/tickets/{id}/transfer:
     post:
       operationId: transferTicket
@@ -753,6 +898,13 @@ components:
                 Photographs from the night, added after it. Empty before.
               items: { $ref: '#/components/schemas/GalleryImage' }
             organizer: { $ref: '#/components/schemas/OrganizerBrand' }
+            saved:
+              type: boolean
+              description: |
+                Whether the reader holding this token saved the event. False
+                for a guest. There is deliberately no count: saving is a
+                private list, not applause, so a quiet night never advertises
+                how quiet it is.
             ticket_types:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
@@ -838,6 +990,12 @@ components:
         description: { type: [string, 'null'] }
         logo_url: { type: [string, 'null'], format: uri }
         is_verified: { type: boolean }
+        following:
+          type: boolean
+          description: |
+            Whether the reader holding this token follows the organizer. False
+            for a guest. An organizer may be told how many follow them; who is
+            never published, here or anywhere.
 
     Venue:
       type: object

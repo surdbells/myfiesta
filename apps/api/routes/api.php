@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\DoorPassController;
 use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
+use App\Http\Controllers\Api\SavedEventController;
 use App\Http\Controllers\Api\SitemapController;
 use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
@@ -85,6 +87,16 @@ Route::middleware('throttle:20,1')
 Route::middleware(['auth:sanctum', 'token.scope:attendee'])->group(function () {
     Route::get('/me/tickets', [TicketController::class, 'index']);
     Route::post('/tickets/{ticket}/transfer', [TicketController::class, 'transfer']);
+
+    // Nights to come back to, and organizers to hear from. Both are private
+    // lists: an organizer is told how many follow them, never who.
+    Route::get('/me/saved', [SavedEventController::class, 'index']);
+    Route::put('/events/{slug}/save', [SavedEventController::class, 'store']);
+    Route::delete('/events/{slug}/save', [SavedEventController::class, 'destroy']);
+
+    Route::get('/me/following', [FollowController::class, 'index']);
+    Route::put('/organizers/{slug}/follow', [FollowController::class, 'store']);
+    Route::delete('/organizers/{slug}/follow', [FollowController::class, 'destroy']);
 });
 
 /*

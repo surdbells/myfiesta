@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Services\Events\CalendarFile;
 use App\Support\RichText;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -15,9 +16,47 @@ use Illuminate\Support\Facades\Storage;
  */
 class EventResource extends EventSummaryResource
 {
+    /**
+     * The page is public, so a reader may or may not be signed in.
+     *
+     * The token is read through the sanctum guard by hand rather than by
+     * middleware: requiring one here would shut guests out of an event page,
+     * and guest checkout is the primary way people buy.
+     */
+    private function savedByReader(Request $request): bool
+    {
+        $user = $request->user('sanctum');
+
+        if ($user === null) {
+            return false;
+        }
+
+        return DB::table('saved_events')
+            ->where('user_id', $user->id)
+            ->where('event_id', $this->id)
+            ->exists();
+    }
+
+    private function followsOrganizer(Request $request): bool
+    {
+        $user = $request->user('sanctum');
+
+        if ($user === null) {
+            return false;
+        }
+
+        return DB::table('organization_follows')
+            ->where('user_id', $user->id)
+            ->where('organization_id', $this->organization->id)
+            ->exists();
+    }
+
     public function toArray(Request $request): array
     {
-        return parent::toArray($request) + [
+        // array_replace, not +: with + the left operand wins, so every key
+        // the page redefines — the organizer, with its description, its badge
+        // and its logo — silently lost to the summary's two-field version.
+        return array_replace(parent::toArray($request), [
             // Sanitized HTML, safe to render. The model cleans it on the way in,
             // so this is a read, not a second sanitizing pass.
             'description' => $this->description,
@@ -45,7 +84,15 @@ class EventResource extends EventSummaryResource
                 'logo_url' => $this->organization->logo_path
                     ? Storage::disk('public')->url($this->organization->logo_path)
                     : null,
+                // Whether *this* reader follows them. Never how many do: a
+                // follower count is a number an organizer would start managing
+                // instead of running nights.
+                'following' => $this->followsOrganizer($request),
             ],
+
+            // Whether this reader saved it. There is no count — saving is a
+            // private list, not applause.
+            'saved' => $this->savedByReader($request),
 
             // Exactly 1200×630, which is what the social networks read. The
             // display rendition is a different shape and gets cropped by
@@ -66,6 +113,6 @@ class EventResource extends EventSummaryResource
             'calendar' => app(CalendarFile::class)->links($this->resource),
 
             'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
-        ];
+        ]);
     }
 }
