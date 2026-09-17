@@ -136,6 +136,11 @@ fires — somebody on a bus with one bar still gets told. They are off until
 switched on in Settings, and the schedule is rebuilt from the tickets on every
 load, so a ticket handed to a friend stops reminding this phone.
 
+They are not exact alarms. Firing at a precise moment regardless of Doze needs
+`SCHEDULE_EXACT_ALARM`, which Google Play restricts to apps where exact alarms
+are the point; a reminder three hours ahead that arrives a few minutes either
+side is the same reminder.
+
 Push notifications — "the organizer you follow announced a night" — need FCM
 and APNs credentials, which are not in the repository.
 

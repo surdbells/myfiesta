@@ -111,12 +111,32 @@ export class Reminders {
 
     if (due.length === 0) return;
 
+    try {
+      await this.schedule(due);
+    } catch {
+      // A phone that will not schedule — permission withdrawn in settings, a
+      // manufacturer's own battery rules — is a phone without reminders, not
+      // a broken tickets screen. Callers fire this and walk away.
+    }
+  }
+
+  private async schedule(due: { ticket: Ticket; at: number }[]): Promise<void> {
     await LocalNotifications.schedule({
       notifications: due.map((row, index) => ({
         id: index + 1,
         title: row.ticket.event.title,
         body: `Doors in ${LEAD_HOURS} hours — ${shortEventTime(row.ticket.event.starts_at, row.ticket.event.timezone)}. Your ticket is in the app.`,
-        schedule: { at: new Date(row.at), allowWhileIdle: true },
+        /*
+         * Not an exact alarm.
+         *
+         * Asking Android to fire at a precise moment regardless of Doze needs
+         * SCHEDULE_EXACT_ALARM, which Google Play restricts to apps where
+         * exact alarms are the point — clocks and calendars. This is "you are
+         * going out tonight", three hours ahead: a reminder that arrives a few
+         * minutes either side is the same reminder, and it is not worth a
+         * restricted permission or a prompt asking for one.
+         */
+        schedule: { at: new Date(row.at) },
         extra: { slug: row.ticket.event.slug, ticketId: row.ticket.id },
       })),
     });

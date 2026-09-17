@@ -11,12 +11,16 @@ const fake = vi.hoisted(() => ({
   cancelled: [] as unknown[],
   pending: [] as { id: number }[],
   permission: 'granted',
+  /** Set when the phone refuses to schedule at all. */
+  refuses: false,
   store: new Map<string, string>(),
 }));
 
 vi.mock('@capacitor/local-notifications', () => ({
   LocalNotifications: {
     schedule: async (options: (typeof fake.scheduled)[number]) => {
+      if (fake.refuses) throw new Error('Exact alarms are not permitted');
+
       fake.scheduled.push(options);
     },
     getPending: async () => ({ notifications: fake.pending }),
@@ -77,6 +81,7 @@ describe('Reminders', () => {
     fake.cancelled.length = 0;
     fake.pending = [];
     fake.permission = 'granted';
+    fake.refuses = false;
     fake.store.clear();
 
     TestBed.configureTestingModule({});
@@ -151,6 +156,28 @@ describe('Reminders', () => {
     await second.restore();
 
     expect(second.on()).toBe(true);
+  });
+
+  it('does not ask for an exact alarm', async () => {
+    await turnOn([ticket()]);
+
+    const [first] = fake.scheduled[0].notifications as { schedule: Record<string, unknown> }[];
+
+    // Exact alarms need a permission Google Play restricts to clocks and
+    // calendars. Three hours before doors is not that, and a reminder a few
+    // minutes either side is the same reminder.
+    expect(first.schedule).not.toHaveProperty('allowWhileIdle');
+  });
+
+  it('is a phone without reminders, not a broken screen, when scheduling is refused', async () => {
+    await turnOn([]);
+    fake.refuses = true;
+
+    // A manufacturer's own battery rules, a permission withdrawn in settings:
+    // the caller fires this and walks away, so a refusal that escapes is an
+    // unhandled rejection on a screen that was only listing tickets.
+    await expect(reminders.reconcile([ticket()])).resolves.toBeUndefined();
+    expect(fake.scheduled).toEqual([]);
   });
 
   it('takes the schedule with it when switched off', async () => {
