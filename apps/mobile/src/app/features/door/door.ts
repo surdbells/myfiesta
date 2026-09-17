@@ -96,7 +96,13 @@ interface Outcome {
                have been, and door staff have to hear about it while the person
                is still in the room. -->
           <div class="clash" role="alert">
-            <p><strong>{{ conflicts().length }} the server disagreed with</strong></p>
+            <p>
+              <strong>
+                The server disagreed with
+                {{ conflicts().length === 1 ? 'a scan' : conflicts().length + ' scans' }}
+                made offline
+              </strong>
+            </p>
             @for (clash of conflicts(); track clash.client_id) {
               <p class="why">{{ clash.message }}</p>
             }
