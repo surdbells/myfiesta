@@ -25,7 +25,7 @@ to act on.
 | --- | --- |
 | Selling | add-ons sold beside a ticket — tables, bottles, merchandise; questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
 | Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
-| The door | scanning by camera or code, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
+| The door | scanning by camera or code, selling to walk-ups and reconciling the till, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
 | Attendees | tickets on the phone that work offline, transfers, saved events, following organizers, reminders, add to calendar |
 | Organizers | dashboard, sales and orders, refunds, email to ticket holders, roles and permissions, multiple organizations, recurring series, cloning, images, their own brand and their own public page |
 | Platform | admin panel, audit trail, access logging on sensitive data, tax rates, cancellations with refunds |
@@ -70,15 +70,20 @@ Extras tab; buyers add them under the tiers; the sales screen counts them
 apart from the room. The decisions this raised are in
 [DECISIONS.md](DECISIONS.md).
 
-### 4. Selling at the door — **M**
+### 4. Selling at the door — **done, 17 September 2026**
 
-Walk-ups are a large share of a club night, and today the only way to issue on
-the spot is a comp. Taking a card at the door means a terminal or a payment
-link, an order that looks like any other, and a till reconciliation the
-organizer can read the next morning.
+A walk-up is an ordinary order taken on the door phone: the same stock, the
+same tickets, the same reports, and three columns saying how it was paid, who
+took it and on which pass. Sell, then scan them in, on one screen.
 
-The pieces exist — issuing, orders, the ledger. What is missing is a screen
-built for standing up, and a cash line in the takings so the two numbers agree.
+The money stays where it is. The platform charges nothing on cash it never
+touched, and the ledger records the sale and then takes the organizer's share
+back out, because they are holding it already. The console shows the till: per
+method, because a tin and a terminal each have to agree with their own thing,
+and per door after that.
+
+Selling lives on the phone rather than in the console — that is where the door
+is. The decisions are in [DECISIONS.md](DECISIONS.md).
 
 ### 5. Face-value resale — **L, and a decision**
 
@@ -191,9 +196,11 @@ questions (2). Both made something already built mean more — following now
 leads somewhere, and the question model the invitation flow had is now the
 order form organizers ask for by name.
 
-**Next, because it is how organizers make money here:** selling at the door
-(4). With add-ons (3) done, it is the remaining half of the difference between
-a ticketing tool and the thing a club runs its night on.
+**Done:** add-ons (3) and selling at the door (4) — together, the difference
+between a ticketing tool and the thing a club runs its night on.
+
+**Next, once there is somebody to integrate with:** webhooks and keys (10), the
+embeddable widget (9), campaigns (11).
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week

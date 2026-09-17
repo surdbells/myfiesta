@@ -74,6 +74,51 @@ export interface DoorPass {
   };
 }
 
+/** What a door may sell tonight, and what is left of each. */
+export interface Sellable {
+  currency: string;
+  methods: DoorPaymentMethod[];
+  ticket_types: {
+    id: string;
+    name: string;
+    price: Money;
+    admits: number;
+    /** Null where the tier has no limit. */
+    remaining: number | null;
+    sold_out: boolean;
+  }[];
+}
+
+/** How somebody standing at a door actually pays. */
+export type DoorPaymentMethod = 'cash' | 'card' | 'transfer';
+
+export interface DoorSaleRequest {
+  items: { ticket_type_id: string; quantity: number }[];
+  method: DoorPaymentMethod;
+  /** Both optional: a walk-up paying cash gives neither. */
+  name?: string;
+  email?: string;
+}
+
+export interface DoorSale {
+  reference: string;
+  total: Money;
+  method: DoorPaymentMethod;
+  /** Whether an address was given and the ticket sent to it. */
+  emailed: boolean;
+  /** The codes, because the phone that sold them usually scans them next. */
+  tickets: { id: string; code: string; type: string | null; admits: number }[];
+}
+
+/** The till, as somebody counting it at 3am needs to read it. */
+export interface Takings {
+  currency: string;
+  tickets: number;
+  total: Money;
+  by_method: { method: DoorPaymentMethod; orders: number; total: Money }[];
+  by_till: { label: string; orders: number; total: Money }[];
+}
+
 /**
  * Everything the app knows about the server.
  *
@@ -331,5 +376,44 @@ export class Api {
   /** The scans made while offline, sent back once there is signal for them. */
   syncScans(eventId: string, scans: Omit<OfflineScan, 'event_id'>[], token?: string): Promise<SyncResult> {
     return this.send('POST', `/api/events/${eventId}/scans/sync`, { body: { scans }, token });
+  }
+
+  // --- selling to somebody standing there ---------------------------------
+
+  /** What this door may sell, with what is genuinely left of each. */
+  sellable(eventId: string, token?: string): Promise<Sellable> {
+    return this.send('GET', `/api/events/${eventId}/sellable`, { token });
+  }
+
+  /**
+   * Take the money and mint the tickets.
+   *
+   * Online only, deliberately. A sale is money changing hands and stock
+   * leaving the room, and neither can be decided by a phone with no signal —
+   * the offline list exists to admit people who already hold a ticket, not to
+   * invent ones nobody has paid for.
+   */
+  sellAtDoor(eventId: string, body: DoorSaleRequest, token?: string): Promise<DoorSale> {
+    return this.send('POST', `/api/events/${eventId}/door-sales`, { body, token });
+  }
+
+  /**
+   * What to say out loud before any money changes hands.
+   *
+   * Priced by the server like every other figure here. A phone adding up the
+   * tiers itself lands a cent out on the tax often enough, and a cent is
+   * somebody holding coins while a screen disagrees with them.
+   */
+  doorQuote(
+    eventId: string,
+    items: { ticket_type_id: string; quantity: number }[],
+    token?: string,
+  ): Promise<{ total: Money; tax: Money; tax_label: string | null }> {
+    return this.send('POST', `/api/events/${eventId}/door-quote`, { body: { items }, token });
+  }
+
+  /** The till, for whoever is counting it. */
+  takings(eventId: string, token?: string): Promise<Takings> {
+    return this.send('GET', `/api/events/${eventId}/takings`, { token });
   }
 }

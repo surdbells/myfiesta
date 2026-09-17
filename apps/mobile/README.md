@@ -83,7 +83,7 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | A ticket | `/tickets/:id` | the QR full screen, what it admits, and sending it to somebody else |
 | Your events | `/events` | organizer: upcoming and past, with arrivals |
 | One night | `/events/:id` | organizer: what it took, and the guest list |
-| Door | `/door` | the scanner — camera or typed code, working with or without signal — opened by a door-pass link |
+| Door | `/door` | the scanner — camera or typed code, working with or without signal — plus selling to walk-ups, opened by a door-pass link |
 | You | `/settings` | name, theme, reminders, your lists, sign out |
 | Getting in | `/sign-in`, `/join`, `/forgotten-password` | signing in, making an attendee account, asking for a reset link |
 

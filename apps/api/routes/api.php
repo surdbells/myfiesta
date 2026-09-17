@@ -138,6 +138,7 @@ Route::middleware(['auth:sanctum', 'token.scope:door'])->group(function () {
      * which is the control that matters for money handled in a doorway.
      */
     Route::get('/events/{event:id}/sellable', [DoorController::class, 'sellable']);
+    Route::post('/events/{event:id}/door-quote', [DoorController::class, 'quote']);
     Route::post('/events/{event:id}/door-sales', [DoorController::class, 'sell']);
     Route::get('/events/{event:id}/takings', [DoorController::class, 'takings']);
 });

@@ -132,7 +132,72 @@ something that does not exist would be worse than its absence, so following
 lives in the app, where there is an account to hang it on. If buyer accounts
 ever reach the site, this is the first thing that changes.
 
-**An add-on is a line on the order, not a table of its own.** A bottle, a,table, a shirt: sold with a ticket, settled through the same ledger, and,admitting nobody. An order line therefore carries exactly one of a ticket type,or an add-on — the database refuses both and refuses neither — so an order,stays one list of what was bought. The cost of that choice is every query that,silently meant "tickets" when it counted lines, and each of those now says so:,sales by day, sales by code, and a promoter's own figures filter to ticket,lines, while revenue still counts everything, because a bottle is money.,,**Admits nobody is the whole distinction.** It is what decides which console,screen something belongs on, whether buying it mints a ticket, and whether it,appears in the list an organizer reads capacity from. A Table of 6 is a ticket,type because six people walk through a door on it; the bottle on that table is,an add-on because nobody does.,,**A basket of add-ons and no tickets is refused.** A bottle on its own is a bar,tab, and this is not a bar. The checkout page keeps its steppers dead until a,ticket is chosen rather than letting somebody find that out at the end.,,**Discount codes are about the tickets.** "50% off" is something an organizer,says about their night, not about the bar, and a fixed-value code larger than,the tickets it applies to would otherwise spill onto merchandise. A code names,ticket types and discounts ticket lines; add-ons are never eligible.,,**Add-on stock is counted from what was paid for.** A ticket type counts the,tickets it has minted, and twenty tables have no rows to count — so paid order,lines are the count, plus the holds of baskets in progress. A fully refunded,order gives its table back by leaving the paid statuses.,,**One question model for both halves of the product.** A wedding asks its
+**A door sale is an ordinary order with three extra columns.** Same stock, same
+tickets, same reports, same services — it reserves and fulfils through the
+checkout path rather than a second one, so it cannot oversell against an online
+buyer reaching the last ticket at the same moment. What it carries that an
+online order does not: how it was paid, who took it, and on which door pass.
+
+**The platform charges nothing on money it never touched.** The service charge
+is the buyer paying us for a checkout, and at a door there was no checkout.
+Charging for it would mean invoicing an organizer for cash we cannot see.
+
+**The ledger records a door sale and then takes it back out.** The sale, its tax
+and its discount are written as for any order, so the night's gross still reads
+as the night's gross; a `collected` entry then removes the organizer's share,
+because they are holding it already. The two cancel, and nobody is settled twice
+for one ticket. Omitting the sale entirely was the other option, and it makes
+the orders list and the ledger disagree about what the night took.
+
+**A door sale may have no buyer email; nothing else may.** The person paying
+cash in front of you is not going to spell one out, and their ticket is scanned
+by the phone that just sold it. The database says so — `channel = 'door' OR
+buyer_email IS NOT NULL` — so the guarantee every other part of the system
+relies on is unchanged. A ticket with no address must belong to an order, which
+is what keeps a nameless ticket from being something anybody can mint out of
+nowhere.
+
+**Selling is on the door token.** The person selling walk-ups is the person on
+the door, and a sale that needs an owner standing there is a sale that does not
+happen. What makes it safe is that the order names who took it and on which
+pass, and the audit log carries the same entry: a till with a name on it is the
+control that matters for money handled in a doorway.
+
+**Selling needs a connection; scanning does not.** The offline list exists to
+admit people who already hold a ticket. Money changing hands and stock leaving
+the room cannot be decided by a phone on its own, so the sell sheet says plainly
+that it needs signal rather than queueing something it cannot honour.
+
+**An add-on is a line on the order, not a table of its own.** A bottle, a table,
+a shirt: sold with a ticket, settled through the same ledger, and admitting
+nobody. An order line therefore carries exactly one of a ticket type or an
+add-on — the database refuses both and refuses neither — so an order stays one
+list of what was bought. The cost of that choice is every query that silently
+meant "tickets" when it counted lines, and each of those now says so: sales by
+day, sales by code, and a promoter's own figures filter to ticket lines, while
+revenue still counts everything, because a bottle is money.
+
+**Admits nobody is the whole distinction.** It is what decides which console
+screen something belongs on, whether buying it mints a ticket, and whether it
+appears in the list an organizer reads capacity from. A Table of 6 is a ticket
+type because six people walk through a door on it; the bottle on that table is
+an add-on because nobody does.
+
+**A basket of add-ons and no tickets is refused.** A bottle on its own is a bar
+tab, and this is not a bar. The checkout page keeps its steppers dead until a
+ticket is chosen rather than letting somebody find that out at the end.
+
+**Discount codes are about the tickets.** "50% off" is something an organizer
+says about their night, not about the bar, and a fixed-value code larger than
+the tickets it applies to would otherwise spill onto merchandise. A code names
+ticket types and discounts ticket lines; add-ons are never eligible.
+
+**Add-on stock is counted from what was paid for.** A ticket type counts the
+tickets it has minted, and twenty tables have no rows to count — so paid order
+lines are the count, plus the holds of baskets in progress. A fully refunded
+order gives its table back by leaving the paid statuses.
+
+**One question model for both halves of the product.** A wedding asks its
 guests about dietary requirements when they RSVP; a club night asks its buyers
 for the name that goes on each ticket. The question is the same shape either
 way — a label, how it is answered, whether it must be, and whether it is asked

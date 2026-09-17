@@ -86,6 +86,12 @@ it. The database refuses both and refuses neither, and everything that counts
 tickets filters to ticket lines — an add-on admits nobody, so a bottle is money
 but never a person.
 
+**An order knows where it was sold.** Online, or at a door for cash, a card or a
+transfer — and a door sale carries who took it and on which pass. The platform
+charges nothing on money it never touched, and the ledger records the sale and
+then removes the organizer's share with a `collected` entry, because they are
+holding it already.
+
 ## Tests
 
 ```bash

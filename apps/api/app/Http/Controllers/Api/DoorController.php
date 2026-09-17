@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\OrderAnswer;
 use App\Models\Ticket;
+use App\Services\Checkout\CheckoutService;
 use App\Services\Door\CheckInService;
 use App\Services\Door\DoorList;
 use App\Services\Door\DoorPasses;
@@ -160,6 +161,51 @@ class DoorController extends Controller
                     'sold_out' => $type->remainingNow() === 0,
                 ])
                 ->values(),
+        ]);
+    }
+
+    /**
+     * What to say out loud before any money changes hands.
+     *
+     * Priced by the server, like every other figure in this system. The phone
+     * could add up the tiers itself and be a cent out on the tax once the
+     * rounding landed differently — which is a cent somebody is holding in
+     * their hand while a screen disagrees with them.
+     */
+    public function quote(Request $request, Event $event): JsonResponse
+    {
+        $this->authorizeDoor($request, $event);
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:10'],
+            'items.*.ticket_type_id' => ['required', 'uuid'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $quantities = [];
+
+        foreach ($validated['items'] as $item) {
+            $id = $item['ticket_type_id'];
+            $quantities[$id] = ($quantities[$id] ?? 0) + (int) $item['quantity'];
+        }
+
+        try {
+            $quote = app(CheckoutService::class)->quote(
+                event: $event,
+                quantities: $quantities,
+                channel: 'door',
+            );
+        } catch (CheckoutException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        }
+
+        return response()->json([
+            'total' => ['amount' => $quote->total->amount, 'currency' => $quote->currency()],
+            // Said separately because a door often has to answer "how much of
+            // that is tax" out loud, and because there is deliberately no
+            // service charge on money the platform never touched.
+            'tax' => ['amount' => $quote->tax->amount, 'currency' => $quote->currency()],
+            'tax_label' => $quote->taxRate?->name,
         ]);
     }
 

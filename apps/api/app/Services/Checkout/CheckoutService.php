@@ -57,8 +57,9 @@ class CheckoutService
         ?string $ref = null,
         ?string $access = null,
         array $addOns = [],
+        string $channel = 'online',
     ): Quote {
-        return $this->pricer->quote($event, $quantities, $code, $ref, $access, $addOns);
+        return $this->pricer->quote($event, $quantities, $code, $ref, $access, $addOns, $channel);
     }
 
     /**

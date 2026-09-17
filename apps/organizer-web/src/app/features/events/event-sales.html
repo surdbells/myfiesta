@@ -132,6 +132,50 @@
       </div>
     </div>
 
+    <!-- ----------------------------------------------------------- the door -->
+    <!--
+      What was taken in a doorway, for whoever counts it. Per method, because
+      a tin, a terminal and a bank app each have to agree with their own
+      thing; per till after that, because a night with two doors has two tins.
+    -->
+    @if (r.door.tickets > 0) {
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
+          <h3 class="text-base font-semibold">At the door</h3>
+          <p class="text-sm text-text-muted tabular-nums">
+            {{ r.door.tickets }} {{ r.door.tickets === 1 ? 'ticket' : 'tickets' }} ·
+            {{ money(r.door.total) }} taken
+          </p>
+        </header>
+
+        <div class="grid gap-px bg-border sm:grid-cols-2">
+          <div class="bg-surface-raised px-6 py-4">
+            <h4 class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">By payment</h4>
+            <dl class="m-0 mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
+              @for (row of r.door.by_method; track row.method) {
+                <dt class="capitalize">{{ row.method }}</dt>
+                <dd class="m-0 text-right font-medium tabular-nums">{{ money(row.total) }}</dd>
+              }
+            </dl>
+            <!-- The one sentence that makes the figure above safe to act on. -->
+            <p class="mt-3 text-xs text-text-subtle">
+              This money went straight to you. It is counted here and is not part of what we owe you.
+            </p>
+          </div>
+
+          <div class="bg-surface-raised px-6 py-4">
+            <h4 class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">By till</h4>
+            <dl class="m-0 mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
+              @for (row of r.door.by_till; track row.label) {
+                <dt class="truncate">{{ row.label }}</dt>
+                <dd class="m-0 text-right font-medium tabular-nums">{{ money(row.total) }}</dd>
+              }
+            </dl>
+          </div>
+        </div>
+      </div>
+    }
+
     <!-- ---------------------------------------------------------- by extra -->
     <!--
       Its own table rather than rows among the tickets: an extra sells no

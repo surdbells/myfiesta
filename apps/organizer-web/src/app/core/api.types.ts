@@ -231,6 +231,20 @@ export interface SalesReport {
     sold: number;
     revenue: Money;
   }[];
+  /**
+   * What was taken in a doorway.
+   *
+   * Money the organizer already holds: it went into their own tin, onto
+   * their own terminal or straight into their bank, so it is counted here
+   * and is deliberately not part of what the platform owes them.
+   */
+  door: {
+    currency: string;
+    tickets: number;
+    total: Money;
+    by_method: { method: string; orders: number; total: Money }[];
+    by_till: { label: string; orders: number; total: Money }[];
+  };
   /** Every day from the first sale, quiet days included; revenue in minor units. */
   days: { date: string; orders: number; tickets: number; revenue: number }[];
   codes: {

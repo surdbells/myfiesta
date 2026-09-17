@@ -8,6 +8,7 @@ import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { Scanner } from '../../core/scanner';
 import { MfBadge, MfButton, MfCard, MfField, MfScreen, ToastStore } from '../../ui';
+import { DoorSell } from './door-sell';
 
 interface Outcome {
   id: number;
@@ -32,7 +33,7 @@ interface Outcome {
  */
 @Component({
   selector: 'mf-door',
-  imports: [FormsModule, MfScreen, MfCard, MfField, MfButton, MfBadge],
+  imports: [FormsModule, MfScreen, MfCard, MfField, MfButton, MfBadge, DoorSell],
   template: `
     <mf-screen title="Door" [subtitle]="eventTitle()">
       <button mfButton variant="ghost" size="sm" screenActions (click)="leave()">
@@ -187,6 +188,22 @@ interface Outcome {
             Check in
           </button>
         </form>
+
+        <!--
+          Walk-ups. Under the scanner and the code box rather than beside
+          them: most people at a door already hold a ticket, and the two
+          things that admit them come first.
+        -->
+        <button mfButton class="sell" block variant="secondary" size="lg" (click)="openSell()">
+          Sell a ticket
+        </button>
+
+        <mf-door-sell
+          [open]="selling()"
+          [eventId]="eventId() ?? ''"
+          (closed)="sellingClosed($event)"
+          (admitted)="admitSold($event)"
+        />
 
         @if (recent().length > 0) {
           <h2 class="section">Last few</h2>
@@ -564,6 +581,35 @@ export class Door implements OnDestroy {
     // somebody's pocket all night, and on the native path a page that has lost
     // its background.
     void this.scanner.stop();
+  }
+
+  /** Whether the sell sheet is up. */
+  readonly selling = signal(false);
+
+  openSell(): void {
+    // The camera and a sheet over it is a phone doing two things with one
+    // lens; the scanner stops while money is being taken and starts again
+    // after, which is also what a person does.
+    void this.scanner.stop();
+    this.scanning.set(false);
+    this.selling.set(true);
+  }
+
+  async sellingClosed(sold: boolean): Promise<void> {
+    this.selling.set(false);
+
+    // A sale changed the count on the door list this phone decides from when
+    // the signal goes, so it is refreshed rather than left a ticket short.
+    const eventId = this.eventId();
+
+    if (sold && eventId && this.offline.supported) await this.offline.refreshList(eventId);
+  }
+
+  /** Straight from selling to admitting, on the same phone. */
+  admitSold(code: string): void {
+    this.selling.set(false);
+    this.code.set(code);
+    void this.submit();
   }
 
   async submit(): Promise<void> {
