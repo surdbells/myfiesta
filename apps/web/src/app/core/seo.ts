@@ -137,6 +137,10 @@ export class Seo {
       startDate: event.starts_at,
       endDate: event.ends_at ?? undefined,
       eventStatus: 'https://schema.org/EventScheduled',
+      // Said explicitly. Google has warned about events that leave it out
+      // since everything moved online in 2020, and a warning on a rich result
+      // is a rich result that may not be shown.
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
       url,
       image: event.poster_url ?? undefined,
       // The plain-words version: Google shows this as text, and markup here
@@ -153,7 +157,14 @@ export class Seo {
           addressCountry: event.country,
         },
       },
-      organizer: { '@type': 'Organization', name: event.organizer.name },
+      organizer: {
+        '@type': 'Organization',
+        name: event.organizer.name,
+        // The organizer's mark, where they have uploaded one. There is no
+        // public organizer page to point a url at — those links belong to the
+        // console — so the logo is the whole of what can be said here.
+        logo: event.organizer.logo_url ?? undefined,
+      },
       offers: event.from_price
         ? {
             '@type': 'Offer',

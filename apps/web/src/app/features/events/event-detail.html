@@ -154,7 +154,7 @@
             class="mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-md bg-primary text-base font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
             [routerLink]="['/', ev.slug, 'tickets']"
           >
-            Register now →
+            Get tickets
           </a>
         } @else if (ev.is_sold_out) {
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
@@ -189,7 +189,7 @@
       </section>
 
       <!-- Who is behind the night — and whether somebody checked. -->
-      <section class="host flex items-center gap-4 rounded-xl border border-border bg-surface-raised p-6" aria-label="Organizer">
+      <section class="host flex items-start gap-4 rounded-xl border border-border bg-surface-raised p-6" aria-label="Organizer">
         @if (ev.organizer.logo_url) {
           <img class="h-12 w-12 shrink-0 rounded-full bg-surface-inset object-cover" [src]="ev.organizer.logo_url" alt="" />
         } @else {
@@ -210,6 +210,11 @@
               <ui-icon class="shrink-0 text-primary" [icon]="verifiedIcon" size="sm" label="Identity verified" />
             }
           </p>
+          @if (ev.organizer.description) {
+            <!-- Who they are in their own words. A stranger deciding whether to
+                 hand over forty dollars is deciding about them, not the page. -->
+            <p class="mt-1 text-sm leading-snug text-text-muted">{{ ev.organizer.description }}</p>
+          }
         </div>
       </section>
     </div>

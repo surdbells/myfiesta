@@ -57,6 +57,27 @@ describe('Seo', () => {
     }
   });
 
+  /** What the page is telling Google, parsed back out of the tag. */
+  const structured = (): Record<string, unknown> =>
+    JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '{}');
+
+  it('says the event happens in a place, rather than leaving it to be guessed', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+
+    // Every event on this platform is somebody standing in a room. Leaving the
+    // mode out earns a warning on the rich result, and a warned result is one
+    // that may not be shown at all.
+    expect(structured()['eventAttendanceMode']).toBe('https://schema.org/OfflineEventAttendanceMode');
+  });
+
+  it('carries the organizer mark when they have one, and nothing when they do not', () => {
+    seo.forEvent(event({ organizer: { name: 'Lagos Nights', slug: 'lagos-nights', description: null, is_verified: true, logo_url: 'https://cdn.test/logo.png' } } as Partial<EventDetail>), 'https://myfiesta.ca/afrobeats-rooftop');
+    expect(structured()['organizer']).toMatchObject({ name: 'Lagos Nights', logo: 'https://cdn.test/logo.png' });
+
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+    expect(structured()['organizer']).not.toHaveProperty('logo');
+  });
+
   it('keeps markup out of the structured data Google reads', () => {
     seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
 
