@@ -117,6 +117,27 @@ for promoter attribution, captured on landing and persisted to the order.
 **One codes namespace.** A code may discount, attribute a promoter, or both — in
 nightlife the discount code is frequently the attribution mechanism.
 
+**An organizer's page is at `/o/{slug}`, not at a slug of its own.** Event slugs
+are routed at the root and are imported verbatim from the previous platform, so
+an organizer named after one of their own nights would shadow it — and the
+namespace organizers name events in should not start losing words to
+organization names. The app uses the same address, so a link shared out of it
+and a link opened in it are the same link.
+
+**There is no follow button on the public site.** Following needs an account,
+and the site has none: guest checkout is the primary path, sign-in there means
+the organizer console, and even the heart on an event card is a bookmark in
+that browser rather than a synced list. A button asking somebody to sign in to
+something that does not exist would be worse than its absence, so following
+lives in the app, where there is an account to hang it on. If buyer accounts
+ever reach the site, this is the first thing that changes.
+
+**An organization that has never published has no public page.** Registering is
+not publishing. A page per registered account is a thin page for a crawler to
+index and a way for anybody to ask which names are taken, so the API answers
+404 — the same answer it gives for a name that does not exist — and the sitemap
+applies the same rule rather than listing addresses that 404.
+
 **The mobile app ships under the existing bundle ID, `myfiesta.os.ca`**, as an
 update to the current store listings. A new listing would mean every user has to
 find and install a different app by hand, and the forced-update gate would have

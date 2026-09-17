@@ -27,7 +27,7 @@ to act on.
 | Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
 | The door | scanning by camera or code, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
 | Attendees | tickets on the phone that work offline, transfers, saved events, following organizers, reminders, add to calendar |
-| Organizers | dashboard, sales and orders, refunds, email to ticket holders, roles and permissions, multiple organizations, recurring series, cloning, images, their own brand |
+| Organizers | dashboard, sales and orders, refunds, email to ticket holders, roles and permissions, multiple organizations, recurring series, cloning, images, their own brand and their own public page |
 | Platform | admin panel, audit trail, access logging on sensitive data, tax rates, cancellations with refunds |
 | Reach | server-rendered pages that unfurl, structured data, sitemap, promoter attribution through `?ref=`, announcements to followers |
 
@@ -35,19 +35,17 @@ to act on.
 
 ## The gaps
 
-### 1. A public page for an organizer — **S**
+### 1. A public page for an organizer — **done, 17 September 2026**
 
-Every comparable platform has one. RA's promoter pages and DICE's artist pages
-are where people actually browse; ours is the one link an organizer cannot
-share. We have everything behind it already — a brand with a name, a mark, a
-description and a verified tick, plus followers who asked to hear from them —
-and nowhere to put it.
+`/o/{slug}` on the public site and at the same address in the app: who they
+are, what is on, what has been. The organizer card on an event page leads to
+it, the sitemap lists it, and the console shows an organizer the link with a
+way to open it.
 
-`/o/{slug}` on the public site: who they are, what is on, what has been, and a
-follow button. The API returns all of it today.
-
-Do this first. It is the cheapest thing on the list and it is the one that
-makes following mean something.
+The follow button is in the app only, and that is a decision rather than an
+omission — the site has no accounts to hang following on. Both are recorded in
+[DECISIONS.md](DECISIONS.md), along with why an organization that has never
+published gets a 404 instead of an empty page.
 
 ### 2. Questions at checkout — **M**
 
@@ -191,9 +189,8 @@ it is the right call to defer it while both markets sell in English.
 ## Sequencing
 
 **Now, because they are cheap and unlock what is already built:** the organizer
-page (1), then checkout questions (2). Both are small, both make existing
-features mean more, and the first one is a day's work against an API that
-already returns everything it needs.
+page (1) — done — then checkout questions (2). Both are small and both make
+existing features mean more.
 
 **Next, because they are how organizers make money here:** add-ons (3) and
 selling at the door (4). Together they are the difference between a ticketing

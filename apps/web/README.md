@@ -28,6 +28,7 @@ the random token in the link emailed to them is the whole credential.
 | What's on | `/` | featured and upcoming nights |
 | Find something | `/events` | search, with city, category and price filters |
 | An event | `/:slug` | the page a shared link opens: poster, when, where, tiers, gallery, organizer |
+| An organizer | `/o/:slug` | who they are, what is on, what has been — the link a promoter puts in a bio |
 | Tickets | `/:slug/tickets` | choosing tiers, and a code if there is one |
 | Checkout | `/:slug/checkout` | paying |
 | An order | `/order/:reference` | what was bought, after paying |
@@ -47,7 +48,7 @@ Event pages and the listing are rendered per request, never prerendered: a
 build-time snapshot means a link shared an hour after publishing unfurls as a
 404. The static pages are prerendered.
 
-`core/seo.ts` writes the meta tags and a schema.org `Event` for each page. Two
+`core/seo.ts` writes the meta tags, and a schema.org `Event` or `Organization` for the page it is on — one block, replaced on each navigation rather than added to. Two
 rules it exists to keep: the description in a tag is the plain-text version, so
 a WhatsApp group is not shown the markup it is made of; and the structured data
 says the event is offline and names its organizer, because a warned rich result

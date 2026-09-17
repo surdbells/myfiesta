@@ -32,7 +32,7 @@ membership rather than trusting it.
 | Orders | `/orders` | every order, with refunds |
 | Payouts | `/payouts` | what is owed, payout details, and asking to be paid |
 | Team | `/team` | who is on it, in what role, and invitations |
-| How you appear | `/brand` | the organization's name, mark and description — what a buyer sees |
+| How you appear | `/brand` | the organization's name, mark and description — what a buyer sees, and the address of your public page |
 | Your account | `/account` | your own name and password |
 | Door | `/scan/:id` | the scanner, for an organizer working their own door |
 
