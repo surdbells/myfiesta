@@ -93,6 +93,12 @@ before the application scales horizontally — that must stay a config change.
 
 **Store paths, not URLs.** A full URL in a column hardcodes the storage driver.
 
+**Addresses are stamped at run time, not compiled in.** The site reads the API
+host and the console host out of meta tags its own server fills in, so one
+build serves staging and production. `npm run check` holds the two files to the
+same shape — a tag the server does not fill in is a link pointing at localhost
+in production, and it fails silently.
+
 **Generated files are committed and verified.** `packages/tokens/dist` is
 output; edit `tokens.json` and rerun the build. CI fails if it drifts.
 

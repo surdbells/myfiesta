@@ -56,6 +56,17 @@ app.use(
 const apiBaseUrl = process.env['API_BASE_URL'] ?? 'http://127.0.0.1:8000';
 
 /**
+ * Where the organizer console lives, stamped for the same reason.
+ *
+ * This one was being read from the document by the browser and never written
+ * into it: the server rendered the right hrefs from its own environment, and
+ * then the browser hydrated, read `content="http://localhost:4310"` out of the
+ * template, and pointed every "Sell tickets" link at the visitor's own
+ * machine. Which are the most commercially important links on the site.
+ */
+const consoleUrl = process.env['CONSOLE_URL'] ?? 'http://localhost:4310';
+
+/**
  * What crawlers may read.
  *
  * Event pages and the listing, yes — they are the storefront. A buyer's
@@ -156,10 +167,9 @@ app.use((req, res, next) => {
       // bare `content`. An exact replace silently does nothing, and the
       // symptom is a browser calling its own origin for an API that is not
       // there — which is precisely the bug this replaced.
-      const html = (await response.text()).replace(
-        /<meta name="api-base"[^>]*>/,
-        `<meta name="api-base" content="${apiBaseUrl}">`,
-      );
+      const html = (await response.text())
+        .replace(/<meta name="api-base"[^>]*>/, `<meta name="api-base" content="${apiBaseUrl}">`)
+        .replace(/<meta name="console-url"[^>]*>/, `<meta name="console-url" content="${consoleUrl}">`);
 
       res.status(response.status);
       response.headers.forEach((value, key) => {
