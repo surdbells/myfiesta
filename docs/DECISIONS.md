@@ -149,6 +149,45 @@ and a browser screenshot are recognisably one product. The rule is worth
 stating because the cheap path is always to reach for the framework's
 component and override it until it nearly matches.
 
+**A door reads a ticket with the camera, and can always be typed into.** ML Kit
+natively, because a queue moves at the speed of its worst scan and a WebView
+decoder is the worst scan; `BarcodeDetector` in a browser, which is for
+development rather than a promise, since Safari has none. The code box stays on
+screen under both — a cracked lens, a flat battery and a screen that will not
+brighten all end there, and that is not a moment to be hunting for a fallback.
+The same code is read thirty times a second, so the door ignores a repeat for
+four seconds: one guest, one admission, rather than a wall of "already used".
+
+**Reminders are scheduled on the phone, not pushed.** Three hours before a
+night somebody holds a ticket for. No certificates to manage, no device token
+to keep in sync, and nothing needed at the moment it fires — somebody on a bus
+with one bar still gets told. The schedule is rebuilt from the tickets on every
+load rather than added to, because a transferred ticket, a cancelled night and
+a moved start time all have to be able to remove one.
+
+**Saving and following are private, and have no counts.** Saving is for later,
+not applause: a save count on an event page tells everyone how quiet a night
+is. An organizer is told how many follow them and never who — a follower list
+is a mailing list built without asking, and nobody follows a party expecting to
+end up on one.
+
+**Announcements go out by email, and once.** Publishing an event tells the
+organizer's followers. `announced_at` is claimed before the sending starts, so
+unpublishing to fix a typo and publishing again is not a second email, and a
+worker that dies halfway leaves some people untold rather than telling everyone
+twice. Two ways out, because they mean different things: stop following this
+organizer, and the blanket no to mail like this from anyone. Both work without
+an account, and both are a page with a button — a mail scanner following a link
+must not be able to unsubscribe somebody.
+
+**An account's abilities come from what the account is.** Everybody is an
+attendee; organizer comes from being staff somewhere. Signing up on the phone
+makes an attendee account with no organization and no organizer ability, and
+asking that person to name an events page would be a question about a business
+they do not have. Which kind is being made is declared by the client, not
+inferred from a missing field, so a console sign-up that loses its organization
+field fails loudly instead of quietly making the wrong kind of account.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,
@@ -158,3 +197,11 @@ component and override it until it nearly matches.
 - **Stripe variance handling** — reconciliation will surface historical sales
   whose recorded amount differs from what was charged, some already settled to
   organizers. A commercial conversation, not a code path.
+- **Push credentials** — FCM and APNs. Blocked on keys, not on code: following
+  an organizer is the list a "they announced a night" push would ride on, and
+  it already sends by email. Push is an addition to that, not a replacement —
+  a mailbox reaches somebody who installed the app once in June.
+- **Wallet passes** — an Apple Wallet signing certificate and a Google Wallet
+  issuer account. Nothing is built against either yet, deliberately: a pass
+  format that cannot be signed cannot be tested, and an untested signing path
+  is one that fails on the first real ticket.
