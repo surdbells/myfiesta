@@ -3,6 +3,7 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { routes } from './app.routes';
 import { SessionStore } from './core/session';
+import { Reminders } from './core/reminders';
 import { Theme } from './core/theme';
 
 /**
@@ -34,9 +35,11 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(async () => {
       const theme = inject(Theme);
       const session = inject(SessionStore);
+      const reminders = inject(Reminders);
 
       await theme.restore();
       await session.restore();
+      await reminders.restore();
     }),
   ],
 };

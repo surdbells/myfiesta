@@ -18,6 +18,7 @@ export { MfBadge } from './badge';
 export { MfEmpty } from './empty';
 export { MfSkeleton } from './skeleton';
 export { MfSegmented, type MfSegment } from './segmented';
+export { MfSwitch } from './switch';
 export { MfToasts, ToastStore } from './toast';
 export { MfQr } from './qr';
 export { MfCarousel } from './carousel';

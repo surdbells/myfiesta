@@ -86,7 +86,18 @@ areas) and nothing a person looks at. Everything else is in `src/app/ui`:
 | `mf-select`    | a sheet that can be searched; the native select cannot be typed into    |
 | `mf-screen`    | the header/scroll frame, without platform chrome                        |
 | `mf-qr`        | the ticket code, drawn on the phone so it works with no signal          |
+| `mf-switch`    | on or off, drawn the same on both platforms — the native switch is the control iOS and Android differ on most |
 | `mf-segmented`, `mf-card`, `mf-badge`, `mf-empty`, `mf-skeleton`, `mf-toasts` | the rest of the kit |
+
+Reminders are scheduled on the phone rather than pushed from a server: three
+hours before a night somebody holds a ticket for, with no certificates to
+manage, no device token to keep in sync, and nothing needed at the moment it
+fires — somebody on a bus with one bar still gets told. They are off until
+switched on in Settings, and the schedule is rebuilt from the tickets on every
+load, so a ticket handed to a friend stops reminding this phone.
+
+Push notifications — "the organizer you follow announced a night" — need FCM
+and APNs credentials, which are not in the repository.
 
 Colours, spacing, radii and type all come from `packages/tokens`, the same
 generated CSS the two web apps read. Light and dark follow the phone by

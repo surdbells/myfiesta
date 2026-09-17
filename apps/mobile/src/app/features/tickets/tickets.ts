@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Reminders } from '../../core/reminders';
 import { Api, ApiError, Ticket } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { shortEventTime } from '../../core/event-time';
@@ -96,6 +97,7 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton } from '../../
 })
 export class Tickets {
   private readonly api = inject(Api);
+  private readonly reminders = inject(Reminders);
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
 
@@ -120,7 +122,13 @@ export class Tickets {
     this.failed.set(null);
 
     try {
-      this.tickets.set(await this.api.tickets());
+      const tickets = await this.api.tickets();
+
+      this.tickets.set(tickets);
+      // A ticket handed to a friend should stop reminding this phone about a
+      // night it is no longer going to, so the schedule is rebuilt from what
+      // came back rather than added to.
+      void this.reminders.reconcile(tickets);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await this.session.clear();

@@ -42,5 +42,9 @@
     <!-- The door scanner. Declared as not required so a tablet without a
          camera can still install the app and type codes. -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Android 13 and up ask before an app may put anything in the shade.
+         Requested when reminders are switched on, not at first launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

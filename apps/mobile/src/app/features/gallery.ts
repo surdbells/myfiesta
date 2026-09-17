@@ -10,6 +10,7 @@ import {
   MfQr,
   MfScreen,
   MfSegmented,
+  MfSwitch,
   MfSelect,
   MfSheet,
   MfSkeleton,
@@ -38,6 +39,7 @@ import {
     MfSelect,
     MfSheet,
     MfSegmented,
+    MfSwitch,
     MfBadge,
     MfEmpty,
     MfSkeleton,
@@ -91,6 +93,17 @@ import {
         (valueChange)="city.set($event)"
       />
 
+      <h2 class="section">Switch</h2>
+      <mf-card>
+        <mf-switch
+          label="Remind me before doors"
+          hint="Three hours before a night you hold a ticket for."
+          [checked]="reminding()"
+          (changed)="reminding.set($event)"
+        />
+        <mf-switch class="mt" label="Disabled, and on" checked disabled />
+      </mf-card>
+
       <h2 class="section">Badges</h2>
       <div class="row">
         <mf-badge tone="success">Ready</mf-badge>
@@ -137,6 +150,10 @@ import {
     </mf-sheet>
   `,
   styles: `
+    .mt {
+      margin-top: var(--space-4);
+    }
+
     .section {
       margin: var(--space-6) 0 var(--space-3);
       font-size: var(--font-size-xs);
@@ -169,6 +186,8 @@ import {
   `,
 })
 export class Gallery {
+  readonly reminding = signal(true);
+
   readonly theme = inject(Theme);
   readonly toasts = inject(ToastStore);
 

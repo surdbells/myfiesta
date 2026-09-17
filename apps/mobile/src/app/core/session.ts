@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
 import { Api } from './api';
+import { Reminders } from './reminders';
 
 const KEY = 'myfiesta.session';
 
@@ -42,6 +43,7 @@ export interface Session {
 @Injectable({ providedIn: 'root' })
 export class SessionStore {
   private readonly api = inject(Api);
+  private readonly reminders = inject(Reminders);
 
   private readonly state = signal<Session | null>(null);
 
@@ -135,6 +137,8 @@ export class SessionStore {
   async clear(): Promise<void> {
     this.state.set(null);
     this.api.token = null;
+    // A phone handed back must not keep announcing somebody else's Saturday.
+    await this.reminders.clear();
 
     try {
       await Preferences.remove({ key: KEY });

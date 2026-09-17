@@ -2,6 +2,8 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
+import { Reminders } from '../../core/reminders';
+import { Api, Ticket } from '../../core/api';
 import {
   MfButton,
   MfCard,
@@ -9,6 +11,7 @@ import {
   MfSegmented,
   MfSelect,
   MfSheet,
+  MfSwitch,
   type MfOption,
   type MfSegment,
 } from '../../ui';
@@ -22,7 +25,7 @@ import {
  */
 @Component({
   selector: 'mf-settings',
-  imports: [MfScreen, MfCard, MfButton, MfSegmented, MfSelect, MfSheet],
+  imports: [MfScreen, MfCard, MfButton, MfSegmented, MfSelect, MfSheet, MfSwitch],
   template: `
     <mf-screen title="Settings" back (backed)="leave()">
       <mf-card>
@@ -32,6 +35,23 @@ import {
           <p class="muted">{{ email }}</p>
         }
       </mf-card>
+
+      @if (reminders.available && !session.locked()) {
+        <mf-card class="block">
+          <p class="label">Reminders</p>
+          <mf-switch
+            label="Remind me before doors"
+            hint="Three hours before a night you hold a ticket for. Scheduled on this phone, so it arrives with or without signal."
+            [checked]="reminders.on() === true"
+            (changed)="setReminders($event)"
+          />
+          @if (reminders.refused()) {
+            <p class="hint muted">
+              Your phone is not letting this app send notifications. Turn them on in its settings and try again.
+            </p>
+          }
+        </mf-card>
+      }
 
       @if (!session.locked()) {
         <mf-card class="block">
@@ -141,6 +161,8 @@ import {
 export class Settings {
   readonly session = inject(SessionStore);
   readonly theme = inject(Theme);
+  readonly reminders = inject(Reminders);
+  private readonly api = inject(Api);
   private readonly router = inject(Router);
 
   readonly version = '2.0.0';
@@ -163,6 +185,26 @@ export class Settings {
   );
 
   readonly organizationId = computed(() => this.session.organization()?.id ?? null);
+
+  /**
+   * Turning reminders on needs the tickets, because turning them on is what
+   * schedules them — a switch that only takes effect at the next refresh is a
+   * switch somebody flips twice.
+   */
+  async setReminders(on: boolean): Promise<void> {
+    let tickets: Ticket[] = [];
+
+    if (on) {
+      try {
+        tickets = await this.api.tickets();
+      } catch {
+        // No tickets read means nothing to schedule yet. The switch still goes
+        // on, and the next visit to the tickets screen fills the schedule in.
+      }
+    }
+
+    await this.reminders.set(on, tickets);
+  }
 
   choose(choice: string): void {
     void this.theme.set(choice as ThemeChoice);
