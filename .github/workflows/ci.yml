@@ -44,6 +44,11 @@ jobs:
       # surface and not another.
       - run: node packages/tokens/build.mjs
       - run: git diff --exit-code -- packages/tokens/dist
+      # The two beside the generator, which were never run here: every pairing
+      # legible in both themes, every var() resolving, and nothing painting
+      # with a colour of its own.
+      - run: node packages/tokens/contrast.mjs
+      - run: node packages/tokens/usage.mjs
 
   contract:
     needs: changes
@@ -54,6 +59,23 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '24' }
       - run: npx --yes @redocly/cli@latest lint packages/contract/openapi.yaml
+
+  # What one file assumes about another. None of these build anything; they
+  # read, compare, and fail with the name of the file to fix.
+  agreements:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      # The addresses each app is told at run time, and whatever is supposed
+      # to write them in. A tag nothing fills is a link pointing at localhost
+      # in production.
+      - run: node tools/check-runtime-config.cjs
+      # Capacitor plugins installed against the ones each native project
+      # actually links. One that is not linked never fails; the feature that
+      # needed it simply does nothing on a device.
+      - run: node tools/check-native-plugins.cjs
 
   api:
     needs: changes
@@ -86,14 +108,21 @@ jobs:
           coverage: none
       - run: composer install --prefer-dist --no-progress
       - run: cp .env.example .env && php artisan key:generate
+      # Every value the services here differ on, named rather than inherited.
+      # .env.example describes the developer stack in compose.yaml, where
+      # Postgres is on 15432 and Redis on 56379 to stay clear of Windows'
+      # ephemeral range; a service container publishes the ordinary ports. A
+      # port left unset falls through to the file and points at nothing.
       - run: php artisan test
         env:
           DB_CONNECTION: pgsql
           DB_HOST: localhost
+          DB_PORT: 5432
           DB_DATABASE: myfiesta_test
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
           REDIS_HOST: localhost
+          REDIS_PORT: 6379
 
   web:
     needs: changes
