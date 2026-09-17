@@ -29,7 +29,27 @@ class QuoteRequest extends FormRequest
             // A presale code, opening tiers that are hidden or not yet on sale.
             'access_code' => ['nullable', 'string', 'max:64'],
             'ref' => ['nullable', 'string', 'max:64'],
+
+            // Things sold with a ticket that are not one. Bought alongside,
+            // never instead of: an order of bottles and no tickets is a bar
+            // tab, and this is not a bar.
+            'add_ons' => ['nullable', 'array', 'max:20'],
+            'add_ons.*.add_on_id' => ['required', 'uuid'],
+            'add_ons.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],
         ];
+    }
+
+    /** @return array<string, int> add-on id => quantity */
+    public function addOnQuantities(): array
+    {
+        $out = [];
+
+        foreach ($this->input('add_ons', []) as $item) {
+            $id = $item['add_on_id'];
+            $out[$id] = ($out[$id] ?? 0) + (int) $item['quantity'];
+        }
+
+        return $out;
     }
 
     /** @return array<string, int> ticket type id => quantity */

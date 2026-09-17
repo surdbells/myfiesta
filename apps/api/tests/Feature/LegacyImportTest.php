@@ -427,7 +427,7 @@ class LegacyImportTest extends TestCase
         $this->assertSame(3, $line->quantity);
         $this->assertSame(500, $line->unit_price_amount);
         $this->assertSame(1500, $line->line_total_amount);
-        $this->assertSame('Standard Ticket', $line->ticket_type_name);
+        $this->assertSame('Standard Ticket', $line->name);
 
         // The lines have to add up to what was charged, or refunds allocate
         // against weights that do not describe the order.

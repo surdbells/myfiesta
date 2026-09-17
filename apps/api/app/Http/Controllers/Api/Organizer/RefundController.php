@@ -76,7 +76,7 @@ class RefundController extends Controller
                     'id' => $ticket->id,
                     'holder_name' => $ticket->holder_name,
                     'ticket_type_name' => $order->lines
-                        ->firstWhere('ticket_type_id', $ticket->ticket_type_id)?->ticket_type_name,
+                        ->firstWhere('ticket_type_id', $ticket->ticket_type_id)?->name,
                     'status' => $ticket->status,
                     // The code itself is deliberately absent. This list is read
                     // on a laptop in an office, and a ticket code is the thing

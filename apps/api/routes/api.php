@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\OrganizerController;
+use App\Http\Controllers\Api\Organizer\AddOnController;
 use App\Http\Controllers\Api\Organizer\BrandController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
@@ -240,6 +241,13 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // why this is not a sort_order per tier.
         Route::post('/events/{event:id}/ticket-types/order', [TicketTypeController::class, 'reorder']);
 
+
+        // What is sold beside a ticket: a table, a bottle, a shirt.
+        Route::get('/events/{event:id}/add-ons', [AddOnController::class, 'index']);
+        Route::post('/events/{event:id}/add-ons', [AddOnController::class, 'store']);
+        Route::patch('/events/{event:id}/add-ons/{addOn:id}', [AddOnController::class, 'update']);
+        Route::delete('/events/{event:id}/add-ons/{addOn:id}', [AddOnController::class, 'destroy']);
+        Route::post('/events/{event:id}/add-ons/order', [AddOnController::class, 'reorder']);
 
         // What the checkout asks, and the order it asks in.
         Route::get('/events/{event:id}/questions', [QuestionController::class, 'index']);

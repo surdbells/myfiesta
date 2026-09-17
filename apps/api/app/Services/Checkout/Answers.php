@@ -94,7 +94,9 @@ class Answers
             return;
         }
 
-        $lines = $order->lines()->get()->keyBy('ticket_type_id');
+        // Ticket lines only. An add-on line has no ticket type, so keying on
+        // one would put every bottle under the same null key.
+        $lines = $order->lines()->whereNotNull('ticket_type_id')->get()->keyBy('ticket_type_id');
 
         foreach ($checked['attendees'] as $attendee) {
             $line = $lines->get($attendee['ticket_type_id']);

@@ -111,7 +111,7 @@ class RefundTest extends TestCase
 
         $order->lines()->create([
             'ticket_type_id' => $this->type->id,
-            'ticket_type_name' => 'General',
+            'name' => 'General',
             'unit_price_amount' => 5000,
             'quantity' => $quantity,
             'line_total_amount' => $subtotal,
@@ -233,14 +233,14 @@ class RefundTest extends TestCase
 
         $order->lines()->create([
             'ticket_type_id' => $this->type->id,
-            'ticket_type_name' => 'General',
+            'name' => 'General',
             'unit_price_amount' => 5000,
             'quantity' => 1,
             'line_total_amount' => 5000,
         ]);
         $order->lines()->create([
             'ticket_type_id' => $table->id,
-            'ticket_type_name' => 'Table of 5',
+            'name' => 'Table of 5',
             'unit_price_amount' => 20000,
             'quantity' => 1,
             'line_total_amount' => 20000,

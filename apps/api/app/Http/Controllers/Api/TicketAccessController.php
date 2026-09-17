@@ -27,7 +27,7 @@ class TicketAccessController extends Controller
 
     public function __invoke(string $token, QrEncoder $qr): JsonResponse
     {
-        $order = Order::with(['event.venue', 'event.organization', 'tickets.ticketType'])
+        $order = Order::with(['event.venue', 'event.organization', 'tickets.ticketType', 'lines'])
             ->where('access_token', $token)
             ->first();
 
@@ -56,6 +56,22 @@ class TicketAccessController extends Controller
                 'organizer' => $event->organization->name,
                 'calendar' => app(CalendarFile::class)->links($event),
             ],
+            /*
+             * What else is on the order.
+             *
+             * An add-on has no code and nothing to scan — it is claimed at a
+             * bar or a cloakroom by somebody looking at this screen, so it
+             * has to be on this screen. Without it a buyer has paid for two
+             * bottles and holds no evidence of it.
+             */
+            'extras' => $order->lines
+                ->filter(fn ($line) => ! $line->isTicket())
+                ->map(fn ($line) => [
+                    'name' => $line->name,
+                    'quantity' => $line->quantity,
+                ])
+                ->values(),
+
             'tickets' => $order->tickets
                 // Refunded tickets are not shown. A QR that will be turned away
                 // at the door is worse than no QR, because the holder does not

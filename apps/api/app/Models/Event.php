@@ -95,6 +95,12 @@ class Event extends Model
             ->orderBy('created_at');
     }
 
+    /** Sold with a ticket and admitting nobody: a table, a bottle, a shirt. */
+    public function addOns(): HasMany
+    {
+        return $this->hasMany(AddOn::class)->orderBy('sort_order')->orderBy('created_at');
+    }
+
     /** What this event asks the people coming to it, in the order it asks. */
     public function questions(): HasMany
     {

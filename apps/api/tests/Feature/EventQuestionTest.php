@@ -109,7 +109,7 @@ class EventQuestionTest extends TestCase
         OrderLine::create([
             'order_id' => $order->id,
             'ticket_type_id' => $type->id,
-            'ticket_type_name' => 'General',
+            'name' => 'General',
             'unit_price_amount' => 1000,
             'quantity' => 1,
             'line_total_amount' => 1000,

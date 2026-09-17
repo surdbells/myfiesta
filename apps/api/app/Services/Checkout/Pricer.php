@@ -3,6 +3,7 @@
 namespace App\Services\Checkout;
 
 use App\Exceptions\CheckoutException;
+use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
 use App\Models\TaxRate;
@@ -36,6 +37,7 @@ class Pricer
 
     /**
      * @param  array<string, int>  $quantities  ticket type id => quantity
+     * @param  array<string, int>  $addOns  add-on id => quantity
      */
     public function quote(
         Event $event,
@@ -43,6 +45,7 @@ class Pricer
         ?string $codeInput = null,
         ?string $refSlug = null,
         ?string $accessInput = null,
+        array $addOns = [],
     ): Quote {
         // Codes first: whether a locked tier may be priced at all depends on
         // what they unlock.
@@ -56,6 +59,11 @@ class Pricer
         if ($lines === []) {
             throw new CheckoutException('Select at least one ticket.');
         }
+
+        // After the tickets, always. An add-on is bought with a ticket and
+        // not instead of one — a bottle on its own is a bar tab, and this is
+        // not a bar.
+        $lines = [...$lines, ...$this->priceAddOns($event, $addOns)];
 
         $currency = $event->currency;
 
@@ -121,7 +129,7 @@ class Pricer
             refSlug: $code?->ref_slug ?? $refSlug,
             // Recorded only when it opened something in this order. A presale
             // code typed by a buyer who then bought a public ticket used nothing.
-            accessCode: $accessCode !== null && array_filter($lines, fn (QuoteLine $l) => $l->ticketType->isLocked()) !== []
+            accessCode: $accessCode !== null && array_filter($lines, fn (QuoteLine $l) => $l->isTicket() && $l->ticketType->isLocked()) !== []
                 ? $accessCode
                 : null,
         );
@@ -193,6 +201,63 @@ class Pricer
                 unitPrice: $unit,
                 lineTotal: $unit->times($quantity),
                 discount: Money::zero($event->currency),
+            );
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The things on the order that are not tickets.
+     *
+     * Priced from the database like everything else, and checked against this
+     * event by the query rather than by trusting an id — otherwise a cheap
+     * add-on from another event could be bought against this one.
+     *
+     * Stock is not checked here. Quoting takes no locks and reserves nothing,
+     * so a count read now would be out of date by the time anybody paid; the
+     * hold at reserve time is what decides, and it is the only thing that can.
+     *
+     * @param  array<string, int>  $quantities  add-on id => quantity
+     * @return list<QuoteLine>
+     */
+    private function priceAddOns(Event $event, array $quantities): array
+    {
+        $lines = [];
+
+        foreach ($quantities as $addOnId => $quantity) {
+            $quantity = (int) $quantity;
+
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            /** @var AddOn|null $addOn */
+            $addOn = $event->addOns()->whereKey($addOnId)->first();
+
+            if ($addOn === null) {
+                throw new CheckoutException('That extra is not available for this event.');
+            }
+
+            if ($addOn->status !== 'on_sale') {
+                throw new CheckoutException("{$addOn->name} is not currently available.");
+            }
+
+            if ($addOn->max_per_order !== null && $quantity > $addOn->max_per_order) {
+                throw new CheckoutException(
+                    "You can add at most {$addOn->max_per_order} of {$addOn->name} to one order."
+                );
+            }
+
+            $unit = new Money($addOn->price_amount, $event->currency);
+
+            $lines[] = new QuoteLine(
+                ticketType: null,
+                quantity: $quantity,
+                unitPrice: $unit,
+                lineTotal: $unit->times($quantity),
+                discount: Money::zero($event->currency),
+                addOn: $addOn,
             );
         }
 
@@ -297,9 +362,14 @@ class Pricer
 
         $restricted = $code->ticketTypes()->pluck('ticket_types.id')->all();
 
+        // Tickets only. A code is something an organizer puts on their
+        // tickets — "20% off" said about a night, not about the bottle
+        // somebody added to the table. A fixed-value code larger than the
+        // tickets it applies to would otherwise spill onto the bar.
         $eligible = array_keys(array_filter(
             $lines,
-            fn (QuoteLine $line) => $restricted === [] || in_array($line->ticketType->id, $restricted, true),
+            fn (QuoteLine $line) => $line->isTicket()
+                && ($restricted === [] || in_array($line->ticketType->id, $restricted, true)),
         ));
 
         if ($eligible === []) {

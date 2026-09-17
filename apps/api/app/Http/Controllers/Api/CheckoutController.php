@@ -45,6 +45,7 @@ class CheckoutController extends Controller
                 $request->input('code'),
                 $request->input('ref'),
                 $request->input('access_code'),
+                $request->addOnQuantities(),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
@@ -70,6 +71,7 @@ class CheckoutController extends Controller
                 accessInput: $request->input('access_code'),
                 answers: $request->orderAnswers(),
                 attendees: $request->attendees(),
+                addOns: $request->addOnQuantities(),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
@@ -172,8 +174,13 @@ class CheckoutController extends Controller
 
         return [
             'lines' => array_map(fn ($line) => [
-                'ticket_type_id' => $line->ticketType->id,
-                'name' => $line->ticketType->name,
+                // Which of the two this line is, said rather than inferred
+                // from a null: a client counting people to ask questions of
+                // must not count bottles.
+                'kind' => $line->isTicket() ? 'ticket' : 'add_on',
+                'ticket_type_id' => $line->ticketType?->id,
+                'add_on_id' => $line->addOn?->id,
+                'name' => $line->name(),
                 'quantity' => $line->quantity,
                 'unit_price' => $money($line->unitPrice),
                 'line_total' => $money($line->lineTotal),

@@ -438,6 +438,9 @@ class CodeController extends Controller
             ->whereIn('orders.code_id', $codeIds)
             ->whereIn('orders.status', Code::PAID_STATUSES)
             ->groupBy('orders.code_id', 'orders.currency')
+            // Tickets, and only tickets: an add-on on the same order is a
+            // bottle, and a promoter who sold four tickets did not sell six.
+            ->whereNotNull('order_lines.ticket_type_id')
             ->selectRaw('orders.code_id, orders.currency, sum(order_lines.quantity) as tickets')
             ->get()
             ->keyBy(fn ($row) => $row->code_id.'|'.$row->currency);

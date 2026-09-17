@@ -165,12 +165,17 @@ class Fulfiller
      */
     private function releaseHolds(Order $order): void
     {
-        $ticketTypeIds = $order->lines()->pluck('ticket_type_id');
+        $lines = $order->lines()->get();
 
-        InventoryHold::whereIn('ticket_type_id', $ticketTypeIds)
+        // Both kinds: a table held for twenty minutes is stock somebody else
+        // could not buy, and it has been bought now.
+        InventoryHold::query()
+            ->where(fn ($query) => $query
+                ->whereIn('ticket_type_id', $lines->pluck('ticket_type_id')->filter())
+                ->orWhereIn('add_on_id', $lines->pluck('add_on_id')->filter()))
             ->where('expires_at', '>', now())
             ->orderBy('created_at')
-            ->limit($order->lines()->sum('quantity'))
+            ->limit((int) $lines->sum('quantity'))
             ->delete();
     }
 

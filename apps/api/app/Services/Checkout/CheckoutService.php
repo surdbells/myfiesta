@@ -3,6 +3,7 @@
 namespace App\Services\Checkout;
 
 use App\Exceptions\CheckoutException;
+use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
 use App\Models\InventoryHold;
@@ -49,9 +50,15 @@ class CheckoutService
      *
      * @param  array<string, int>  $quantities
      */
-    public function quote(Event $event, array $quantities, ?string $code = null, ?string $ref = null, ?string $access = null): Quote
-    {
-        return $this->pricer->quote($event, $quantities, $code, $ref, $access);
+    public function quote(
+        Event $event,
+        array $quantities,
+        ?string $code = null,
+        ?string $ref = null,
+        ?string $access = null,
+        array $addOns = [],
+    ): Quote {
+        return $this->pricer->quote($event, $quantities, $code, $ref, $access, $addOns);
     }
 
     /**
@@ -71,6 +78,7 @@ class CheckoutService
         ?string $accessInput = null,
         array $answers = [],
         array $attendees = [],
+        array $addOns = [],
     ): Order {
         if ($event->status !== 'published') {
             throw new CheckoutException('Tickets for this event are not on sale.');
@@ -83,14 +91,16 @@ class CheckoutService
 
         return DB::transaction(function () use (
             $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone,
-            $accessInput, $checkedAnswers
+            $accessInput, $checkedAnswers, $addOns
         ) {
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
-            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput);
+            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns);
 
             foreach ($quote->lines as $line) {
-                $this->takeHold($line->ticketType, $line->quantity);
+                $line->isTicket()
+                    ? $this->takeHold($line->ticketType, $line->quantity)
+                    : $this->takeAddOnHold($line->addOn, $line->quantity);
             }
 
             if ($quote->code !== null) {
@@ -129,8 +139,13 @@ class CheckoutService
             foreach ($quote->lines as $line) {
                 OrderLine::create([
                     'order_id' => $order->id,
-                    'ticket_type_id' => $line->ticketType->id,
-                    'ticket_type_name' => $line->ticketType->name,
+                    // Exactly one of the two, which the database holds as a
+                    // check constraint rather than trusting this loop.
+                    'ticket_type_id' => $line->ticketType?->id,
+                    'add_on_id' => $line->addOn?->id,
+                    // Snapshotted: either may be renamed or repriced later,
+                    // and an order has to stay explainable afterwards.
+                    'name' => $line->name(),
                     'unit_price_amount' => $line->unitPrice->amount,
                     'quantity' => $line->quantity,
                     'line_total_amount' => $line->lineTotal->amount,
@@ -194,6 +209,55 @@ class CheckoutService
 
         InventoryHold::create([
             'ticket_type_id' => $type->id,
+            'quantity' => $quantity,
+            'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
+        ]);
+    }
+
+    /**
+     * The same reservation, for the thing that is not a ticket.
+     *
+     * Counted differently because an add-on mints nothing: a ticket type can
+     * count the tickets it has issued, and twenty tables have no rows to
+     * count, so what has been paid for is the count. Locked and held the same
+     * way — the last table goes to one of two people reaching it together,
+     * not to both.
+     */
+    private function takeAddOnHold(AddOn $addOn, int $quantity): void
+    {
+        if ($addOn->quantity_available === null) {
+            InventoryHold::create([
+                'add_on_id' => $addOn->id,
+                'quantity' => $quantity,
+                'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
+            ]);
+
+            return;
+        }
+
+        $locked = AddOn::query()->whereKey($addOn->id)->lockForUpdate()->first();
+
+        $sold = (int) DB::table('order_lines')
+            ->join('orders', 'orders.id', '=', 'order_lines.order_id')
+            ->where('order_lines.add_on_id', $addOn->id)
+            ->whereIn('orders.status', Code::PAID_STATUSES)
+            ->sum('order_lines.quantity');
+
+        $held = (int) DB::table('inventory_holds')
+            ->where('add_on_id', $addOn->id)
+            ->where('expires_at', '>', now())
+            ->sum('quantity');
+
+        $remaining = $locked->quantity_available - $sold - $held;
+
+        if ($remaining < $quantity) {
+            throw new CheckoutException($remaining <= 0
+                ? "{$locked->name} has gone."
+                : "Only {$remaining} of {$locked->name} left.");
+        }
+
+        InventoryHold::create([
+            'add_on_id' => $addOn->id,
             'quantity' => $quantity,
             'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
         ]);

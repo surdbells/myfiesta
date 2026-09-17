@@ -2,6 +2,7 @@
 
 namespace App\Services\Events;
 
+use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
 use Carbon\CarbonImmutable;
@@ -42,6 +43,7 @@ class SalesReport
             'currency' => $event->currency,
             'timezone' => $event->timezone,
             'ticket_types' => $this->byTicketType($event),
+            'add_ons' => $this->byAddOn($event),
             'days' => $this->byDay($event),
             'codes' => $this->byCode($event),
         ];
@@ -94,6 +96,55 @@ class SalesReport
     }
 
     /**
+     * What was sold alongside the tickets.
+     *
+     * Its own section rather than a row among the tiers: an add-on sells no
+     * places and fills no room, so putting a bottle in the list an organizer
+     * reads capacity from would make both numbers wrong.
+     *
+     * Removed add-ons are included when they sold anything. An organizer
+     * taking a bottle off the list does not unsell the ones already bought,
+     * and a report that quietly drops them stops adding up.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function byAddOn(Event $event): array
+    {
+        $sold = $this->paidLines($event)
+            ->whereNotNull('order_lines.add_on_id')
+            ->groupBy('order_lines.add_on_id')
+            ->selectRaw('order_lines.add_on_id')
+            ->selectRaw('sum(order_lines.quantity) as sold')
+            ->selectRaw('sum(order_lines.line_total_amount - order_lines.discount_amount) as revenue')
+            ->get()
+            ->keyBy('add_on_id');
+
+        return AddOn::withTrashed()
+            ->where('event_id', $event->id)
+            ->where(fn ($query) => $query
+                ->whereNull('deleted_at')
+                ->orWhereIn('id', $sold->keys()))
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (AddOn $addOn) use ($sold, $event) {
+                $row = $sold->get($addOn->id);
+
+                return [
+                    'id' => $addOn->id,
+                    'name' => $addOn->name,
+                    'status' => $addOn->trashed() ? 'removed' : $addOn->status,
+                    'price' => ['amount' => (int) $addOn->price_amount, 'currency' => $event->currency],
+                    'capacity' => $addOn->quantity_available,
+                    'sold' => (int) ($row->sold ?? 0),
+                    'revenue' => ['amount' => (int) ($row->revenue ?? 0), 'currency' => $event->currency],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * Sales per day, in the event's own time zone.
      *
      * A Lagos event's midnight is not the server's. Days with no sales are
@@ -108,7 +159,9 @@ class SalesReport
             ->groupByRaw('1')
             ->selectRaw('(coalesce(orders.paid_at, orders.created_at) at time zone ?)::date as day', [$event->timezone])
             ->selectRaw('count(distinct orders.id) as orders')
-            ->selectRaw('sum(order_lines.quantity) as tickets')
+            // Tickets counted as tickets; revenue counts everything sold,
+            // because a bottle is money the organizer took that day.
+            ->selectRaw('sum(order_lines.quantity) filter (where order_lines.ticket_type_id is not null) as tickets')
             ->selectRaw('sum(order_lines.line_total_amount - order_lines.discount_amount) as revenue')
             ->orderBy('day')
             ->get()
@@ -163,7 +216,7 @@ class SalesReport
             ->groupBy('orders.code_id', 'orders.ref_slug')
             ->selectRaw('orders.code_id, orders.ref_slug')
             ->selectRaw('count(distinct orders.id) as orders')
-            ->selectRaw('sum(order_lines.quantity) as tickets')
+            ->selectRaw('sum(order_lines.quantity) filter (where order_lines.ticket_type_id is not null) as tickets')
             ->selectRaw('sum(order_lines.discount_amount) as discount')
             ->selectRaw('sum(order_lines.line_total_amount - order_lines.discount_amount) as revenue')
             ->get();

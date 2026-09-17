@@ -578,7 +578,7 @@ class LegacyImporter
                 'ticket_type_id' => $typeId,
                 // Snapshotted, as it is for a live order: the type's price can
                 // change afterwards and this has to stay what was charged.
-                'ticket_type_name' => $type?->name ?? 'Ticket',
+                'name' => $type?->name ?? 'Ticket',
                 'unit_price_amount' => intdiv($line['line_total'], $quantity),
                 'quantity' => $quantity,
                 'line_total_amount' => $line['line_total'],

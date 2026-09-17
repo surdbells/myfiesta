@@ -134,6 +134,28 @@ class EventResource extends EventSummaryResource
                 'per_attendee' => $question->per_attendee,
             ])->values(),
 
+            /*
+             * Sold with a ticket and admitting nobody: a table, a bottle, a
+             * shirt. Only what is on sale — a closed one is not offered and
+             * is not admitted to exist.
+             *
+             * remaining is what is genuinely left, counted with the baskets
+             * in progress: twenty tables with eighteen sold and one held is
+             * one table, not two.
+             */
+            'add_ons' => $this->addOns
+                ->where('status', 'on_sale')
+                ->map(fn ($addOn) => [
+                    'id' => $addOn->id,
+                    'name' => $addOn->name,
+                    'description' => $addOn->description,
+                    'price' => ['amount' => (int) $addOn->price_amount, 'currency' => $this->currency],
+                    'max_per_order' => $addOn->max_per_order,
+                    'remaining' => $addOn->remainingNow(),
+                    'sold_out' => $addOn->remainingNow() === 0,
+                ])
+                ->values(),
+
             'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
         ]);
     }

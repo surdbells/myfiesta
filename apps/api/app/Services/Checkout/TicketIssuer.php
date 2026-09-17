@@ -57,7 +57,15 @@ class TicketIssuer
          */
         $named = $order->answers()->whereNotNull('order_line_id')->exists();
 
-        foreach ($order->lines()->with('ticketType:id,admits')->get() as $line) {
+        /*
+         * Ticket lines only, and the filter is the rule rather than a
+         * convenience: an add-on admits nobody. Two bottles on a table are
+         * two on the order and nothing at the door, so minting a ticket for
+         * them would put a stranger through it.
+         */
+        $ticketLines = $order->lines()->whereNotNull('ticket_type_id')->with('ticketType:id,admits')->get();
+
+        foreach ($ticketLines as $line) {
             for ($i = 0; $i < $line->quantity; $i++) {
                 $ticket = Ticket::create([
                     'code' => $this->code(),

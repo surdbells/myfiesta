@@ -936,6 +936,13 @@ components:
                 for a guest. There is deliberately no count: saving is a
                 private list, not applause, so a quiet night never advertises
                 how quiet it is.
+            add_ons:
+              type: array
+              description: |
+                What is sold beside a ticket and admits nobody. Only what is
+                on sale; a closed one is not offered and not admitted to
+                exist. Empty when the event sells nothing extra.
+              items: { $ref: '#/components/schemas/AddOn' }
             questions:
               type: array
               description: |
@@ -979,6 +986,17 @@ components:
       type: object
       required: [reference, status, event, tickets]
       properties:
+        extras:
+          type: array
+          description: |
+            What else was on the order. An add-on has no code and nothing to
+            scan, so this screen is the only evidence its buyer holds.
+          items:
+            type: object
+            required: [name, quantity]
+            properties:
+              name: { type: string }
+              quantity: { type: integer }
         reference: { type: string }
         status: { type: string }
         buyer_name: { type: [string, 'null'] }
@@ -1079,6 +1097,22 @@ components:
           type: string
           enum: [on_sale, sold_out, hidden, closed]
 
+    AddOn:
+      type: object
+      required: [id, name, price]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        price: { $ref: '#/components/schemas/Money' }
+        max_per_order: { type: [integer, 'null'] }
+        remaining:
+          type: [integer, 'null']
+          description: |
+            What is genuinely left, counted with the baskets in progress.
+            Null where there is no limit.
+        sold_out: { type: boolean }
+
     Question:
       type: object
       required: [id, label, type, required, per_attendee]
@@ -1122,6 +1156,18 @@ components:
         ref:
           type: [string, 'null']
           description: Promoter attribution captured from the link.
+        add_ons:
+          type: array
+          description: |
+            Things sold with a ticket that are not one: a table, a bottle, a
+            shirt. Bought alongside and never instead of — a basket of
+            add-ons and no tickets is refused.
+          items:
+            type: object
+            required: [add_on_id, quantity]
+            properties:
+              add_on_id: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1 }
 
     Quote:
       type: object
@@ -1149,9 +1195,17 @@ components:
           type: array
           items:
             type: object
-            required: [ticket_type_id, name, unit_price, quantity, line_total]
+            required: [kind, name, unit_price, quantity, line_total]
             properties:
-              ticket_type_id: { type: string, format: uuid }
+              kind:
+                type: string
+                enum: [ticket, add_on]
+                description: |
+                  Which of the two this line is, said rather than inferred
+                  from a null. A client counting people to ask questions of
+                  must not count bottles.
+              ticket_type_id: { type: [string, 'null'], format: uuid }
+              add_on_id: { type: [string, 'null'], format: uuid }
               name: { type: string }
               unit_price: { $ref: '#/components/schemas/Money' }
               quantity: { type: integer }

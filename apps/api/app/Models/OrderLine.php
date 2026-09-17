@@ -20,9 +20,23 @@ class OrderLine extends Model
         return $this->belongsTo(Order::class);
     }
 
+    /** Set on a ticket line, null on an add-on. Exactly one of the two is. */
     public function ticketType(): BelongsTo
     {
         return $this->belongsTo(TicketType::class);
+    }
+
+    public function addOn(): BelongsTo
+    {
+        // Including removed ones: an order line points at what was sold, and
+        // an organizer taking a bottle off the list does not unsell it.
+        return $this->belongsTo(AddOn::class)->withTrashed();
+    }
+
+    /** Whether this line is a thing somebody walks through a door on. */
+    public function isTicket(): bool
+    {
+        return $this->ticket_type_id !== null;
     }
 
     /** Snapshotted: the ticket type may be renamed or repriced afterwards. */

@@ -100,7 +100,7 @@ class SalesReportTest extends TestCase
             OrderLine::create([
                 'order_id' => $order->id,
                 'ticket_type_id' => $type->id,
-                'ticket_type_name' => $type->name,
+                'name' => $type->name,
                 'unit_price_amount' => $type->price_amount,
                 'quantity' => $quantity,
                 'line_total_amount' => $type->price_amount * $quantity,
