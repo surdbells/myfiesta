@@ -56,6 +56,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/browse/saved').then((m) => m.Saved),
   },
   {
+    path: 'following',
+    canActivate: [signedIn],
+    loadComponent: () => import('./features/browse/following').then((m) => m.Following),
+  },
+  {
     path: 'sign-in',
     loadComponent: () => import('./features/auth/sign-in').then((m) => m.SignIn),
   },

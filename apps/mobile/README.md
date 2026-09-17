@@ -57,6 +57,7 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | Find something on | `/browse` | search with city, category and free-entry filters, paged |
 | An event | `/e/:slug` | poster, when and where, ticket tiers with prices and sold-out states, gallery, organizer, a waitlist for a sold-out night, and a buy bar that hands off to the web checkout |
 | Saved | `/saved` | nights kept for later, soonest first |
+| Following | `/following` | organizers you hear from, and letting one go |
 | Your tickets | `/tickets` | soonest first |
 | A ticket | `/tickets/:id` | the QR full screen, what it admits, and sending it to somebody else |
 | Your events | `/events` | organizer: upcoming and past, with arrivals |

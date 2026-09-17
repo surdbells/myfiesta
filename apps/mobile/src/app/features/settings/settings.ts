@@ -57,7 +57,11 @@ import {
         <mf-card class="block">
           <p class="label">Your lists</p>
           <button mfButton class="mt" variant="secondary" block (click)="go('/saved')">Saved events</button>
-          <p class="hint muted">Nights you kept for later. Yours alone — nobody else sees them.</p>
+          <button mfButton class="mt" variant="secondary" block (click)="go('/following')">Following</button>
+          <p class="hint muted">
+            Nights you kept for later, and organizers you hear from. Yours alone — an organizer is told how
+            many follow them, never who.
+          </p>
         </mf-card>
       }
 
