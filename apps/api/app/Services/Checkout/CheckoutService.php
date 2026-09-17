@@ -69,7 +69,7 @@ class CheckoutService
     public function reserve(
         Event $event,
         array $quantities,
-        string $buyerEmail,
+        ?string $buyerEmail,
         string $buyerName,
         ?string $codeInput = null,
         ?string $refSlug = null,
@@ -79,6 +79,18 @@ class CheckoutService
         array $answers = [],
         array $attendees = [],
         array $addOns = [],
+        /*
+         * Where the sale is happening, and how the money arrived.
+         *
+         * A door sale is an ordinary order in every other respect: same stock,
+         * same tickets, same reports. What it carries that an online order
+         * does not is how it was paid for and who took it — somebody counts a
+         * tin at 3am, and the two numbers have to agree.
+         */
+        string $channel = 'online',
+        ?string $paymentMethod = null,
+        ?User $soldBy = null,
+        ?string $doorPassId = null,
     ): Order {
         if ($event->status !== 'published') {
             throw new CheckoutException('Tickets for this event are not on sale.');
@@ -91,11 +103,11 @@ class CheckoutService
 
         return DB::transaction(function () use (
             $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone,
-            $accessInput, $checkedAnswers, $addOns
+            $accessInput, $checkedAnswers, $addOns, $channel, $paymentMethod, $soldBy, $doorPassId
         ) {
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
-            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns);
+            $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns, $channel);
 
             foreach ($quote->lines as $line) {
                 $line->isTicket()
@@ -117,7 +129,10 @@ class CheckoutService
                 'organization_id' => $event->organization_id,
                 'event_id' => $event->id,
                 'user_id' => $user?->id,
-                'buyer_email' => strtolower(trim($buyerEmail)),
+                // Null where nobody gave one, which only a door sale may do:
+                // the person paying cash in front of you is not going to
+                // spell out an address, and they are scanned in on the spot.
+                'buyer_email' => filled($buyerEmail) ? strtolower(trim($buyerEmail)) : null,
                 'buyer_name' => trim($buyerName),
                 'buyer_phone' => $buyerPhone,
                 'currency' => $quote->currency(),
@@ -134,6 +149,10 @@ class CheckoutService
                 'ref_slug' => $quote->refSlug,
                 'idempotency_key' => (string) Str::uuid(),
                 'status' => 'pending',
+                'channel' => $channel,
+                'payment_method' => $paymentMethod,
+                'sold_by_user_id' => $soldBy?->id,
+                'door_pass_id' => $doorPassId,
             ]);
 
             foreach ($quote->lines as $line) {
@@ -275,7 +294,7 @@ class CheckoutService
      * read it. It is by email address: a buyer with two addresses gets two
      * goes, which is the most a checkout without accounts can promise.
      */
-    private function redeem(Code $code, string $buyerEmail): void
+    private function redeem(Code $code, ?string $buyerEmail): void
     {
         $locked = Code::query()->whereKey($code->id)->lockForUpdate()->first();
 
@@ -284,7 +303,9 @@ class CheckoutService
             throw new CheckoutException('That code has been fully redeemed.');
         }
 
-        if ($locked->max_per_customer !== null
+        // A per-buyer limit needs a buyer. A door sale may have no address at
+        // all, and a cap by email cannot be checked against nobody.
+        if ($buyerEmail !== null && $locked->max_per_customer !== null
             && $locked->usesInFlight(self::HOLD_MINUTES, $buyerEmail) >= $locked->max_per_customer) {
             throw new CheckoutException(
                 $locked->max_per_customer === 1

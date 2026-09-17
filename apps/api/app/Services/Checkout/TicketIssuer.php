@@ -38,13 +38,22 @@ class TicketIssuer
     /** @return list<Ticket> */
     public function issueFor(Order $order): array
     {
-        // An unclaimed account, so the buyer's tickets are already waiting if
-        // they later register with the same address. Creating it now is free;
-        // reconstructing the link afterwards means matching on email anyway.
-        $owner = $order->user ?? User::firstOrCreate(
-            ['email' => $order->buyer_email],
-            ['name' => $order->buyer_name, 'password' => null],
-        );
+        /*
+         * An unclaimed account, so the buyer's tickets are already waiting if
+         * they later register with the same address. Creating it now is free;
+         * reconstructing the link afterwards means matching on email anyway.
+         *
+         * Null when nobody gave an address, which only a door sale may do.
+         * The ticket then belongs to nobody, is reachable by no link, and can
+         * be transferred by nobody — which is exactly what a walk-up scanned
+         * in on the spot is.
+         */
+        $owner = $order->user ?? (filled($order->buyer_email)
+            ? User::firstOrCreate(
+                ['email' => $order->buyer_email],
+                ['name' => $order->buyer_name, 'password' => null],
+            )
+            : null);
 
         $tickets = [];
 
@@ -76,7 +85,7 @@ class TicketIssuer
                     // month must not silently shrink a table already sold.
                     'admits' => $line->ticketType?->admits ?? 1,
                     'order_id' => $order->id,
-                    'owner_user_id' => $owner->id,
+                    'owner_user_id' => $owner?->id,
                     'owner_email' => $order->buyer_email,
                     'holder_name' => $order->buyer_name,
                     'status' => 'valid',

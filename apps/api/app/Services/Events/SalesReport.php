@@ -5,6 +5,7 @@ namespace App\Services\Events;
 use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
+use App\Services\Door\DoorSales;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,11 @@ class SalesReport
             'timezone' => $event->timezone,
             'ticket_types' => $this->byTicketType($event),
             'add_ons' => $this->byAddOn($event),
+            // What was taken in a doorway, from the same service the door
+            // screen reads. An organizer reconciling the money should not
+            // have to open another tab to find the half of it that arrived
+            // in cash.
+            'door' => app(DoorSales::class)->takings($event),
             'days' => $this->byDay($event),
             'codes' => $this->byCode($event),
         ];

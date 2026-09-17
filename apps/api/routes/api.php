@@ -129,6 +129,17 @@ Route::middleware(['auth:sanctum', 'token.scope:door'])->group(function () {
     // and the scans it made meanwhile, sent back once it returns.
     Route::get('/events/{event:id}/door-list', [DoorController::class, 'list']);
     Route::post('/events/{event:id}/scans/sync', [DoorController::class, 'sync']);
+
+    /*
+     * Selling to somebody standing at the door.
+     *
+     * On the door token deliberately: the person selling walk-ups is the
+     * person on the door. The order names who took it and on which phone,
+     * which is the control that matters for money handled in a doorway.
+     */
+    Route::get('/events/{event:id}/sellable', [DoorController::class, 'sellable']);
+    Route::post('/events/{event:id}/door-sales', [DoorController::class, 'sell']);
+    Route::get('/events/{event:id}/takings', [DoorController::class, 'takings']);
 });
 
 /*

@@ -724,6 +724,167 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/events/{event}/sellable:
+    get:
+      operationId: doorSellable
+      summary: What the door may sell, and what is left of it
+      description: |
+        The same tiers a buyer sees, with what is genuinely left on each —
+        somebody selling the last four tickets needs the number to be true at
+        the moment they say it out loud.
+      tags: [Door]
+      security:
+        - bearerAuth: [door]
+      parameters:
+        - { name: event, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: What is on sale at this door.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [currency, methods, ticket_types]
+                properties:
+                  currency: { type: string }
+                  methods:
+                    type: array
+                    items: { type: string, enum: [cash, card, transfer] }
+                  ticket_types:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, price]
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        price: { $ref: '#/components/schemas/Money' }
+                        admits: { type: integer }
+                        remaining: { type: [integer, 'null'] }
+                        sold_out: { type: boolean }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/events/{event}/door-sales:
+    post:
+      operationId: sellAtTheDoor
+      summary: Sell to somebody standing in front of you
+      description: |
+        A walk-up, paid for on the spot. An ordinary order in every respect
+        that matters — it takes the same stock, mints the same tickets and
+        cannot oversell against an online buyer reaching the last ticket at
+        the same moment.
+
+        What it carries that an online order does not: how it was paid, and
+        who took it. The money never reaches the platform, so nothing is
+        charged on it and the ledger takes it back out of what is owed.
+
+        Neither a name nor an address is required. The person paying cash is
+        not going to spell one out, and their ticket is scanned by the phone
+        that just sold it — the codes come back in the response for exactly
+        that reason. Give an address and the ticket is emailed as usual.
+      tags: [Door]
+      security:
+        - bearerAuth: [door]
+      parameters:
+        - { name: event, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, method]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [ticket_type_id, quantity]
+                    properties:
+                      ticket_type_id: { type: string, format: uuid }
+                      quantity: { type: integer, minimum: 1 }
+                method: { type: string, enum: [cash, card, transfer] }
+                name: { type: [string, 'null'] }
+                email: { type: [string, 'null'], format: email }
+      responses:
+        '201':
+          description: Sold, and paid.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reference, total, method, tickets]
+                properties:
+                  reference: { type: string }
+                  total: { $ref: '#/components/schemas/Money' }
+                  method: { type: string }
+                  emailed:
+                    type: boolean
+                    description: Whether an address was given and the ticket sent to it.
+                  tickets:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, code]
+                      properties:
+                        id: { type: string, format: uuid }
+                        code: { type: string }
+                        type: { type: [string, 'null'] }
+                        admits: { type: integer }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Sold out, or a method nobody pays with.
+
+  /api/events/{event}/takings:
+    get:
+      operationId: doorTakings
+      summary: The till, for whoever is counting it
+      description: |
+        Per method, because that is what is being counted — a tin of cash, a
+        terminal's own total, a bank app's list of transfers — and each has to
+        agree with its own thing. Per till after that: a night with two doors
+        has two tins, and a manager reconciles them one at a time.
+      tags: [Door]
+      security:
+        - bearerAuth: [door]
+      parameters:
+        - { name: event, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: What was taken at the door.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [currency, tickets, total, by_method, by_till]
+                properties:
+                  currency: { type: string }
+                  tickets: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  by_method:
+                    type: array
+                    items:
+                      type: object
+                      required: [method, orders, total]
+                      properties:
+                        method: { type: string }
+                        orders: { type: integer }
+                        total: { $ref: '#/components/schemas/Money' }
+                  by_till:
+                    type: array
+                    items:
+                      type: object
+                      required: [label, orders, total]
+                      properties:
+                        label: { type: string }
+                        orders: { type: integer }
+                        total: { $ref: '#/components/schemas/Money' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/door-passes/{secret}:
     get:
       operationId: previewDoorPass

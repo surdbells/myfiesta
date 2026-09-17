@@ -181,6 +181,22 @@ class Order extends Model
      * straight to fulfilment. Checkout that assumes a payment session exists
      * breaks the first time an organizer comps someone.
      */
+    /** Sold in a doorway, cash or terminal, by somebody standing there. */
+    public function soldAtDoor(): bool
+    {
+        return $this->channel === 'door';
+    }
+
+    public function soldBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sold_by_user_id');
+    }
+
+    public function doorPass(): BelongsTo
+    {
+        return $this->belongsTo(DoorPass::class);
+    }
+
     public function requiresPayment(): bool
     {
         return $this->total_amount > 0;

@@ -38,6 +38,7 @@ class Pricer
     /**
      * @param  array<string, int>  $quantities  ticket type id => quantity
      * @param  array<string, int>  $addOns  add-on id => quantity
+     * @param  string  $channel  online, or door for a walk-up paid on the spot
      */
     public function quote(
         Event $event,
@@ -46,6 +47,7 @@ class Pricer
         ?string $refSlug = null,
         ?string $accessInput = null,
         array $addOns = [],
+        string $channel = 'online',
     ): Quote {
         // Codes first: whether a locked tier may be priced at all depends on
         // what they unlock.
@@ -111,7 +113,18 @@ class Pricer
         //
         // On the net, so an organizer who discounts 40% is charged on what was
         // collected rather than on the list price.
-        $serviceCharge = $netRevenue->percentage($this->serviceChargeBps());
+        /*
+         * Nothing on a door sale.
+         *
+         * The service charge is the buyer paying the platform for the
+         * checkout, and at a door there was no checkout — the money went
+         * from a hand into a tin and we never touched it. Charging for it
+         * would mean invoicing an organizer for cash we cannot see, which is
+         * a worse business than not charging.
+         */
+        $serviceCharge = $channel === 'door'
+            ? Money::zero($currency)
+            : $netRevenue->percentage($this->serviceChargeBps());
 
         $total = $ticketSide->plus($serviceCharge);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\TokenAbility;
+use App\Exceptions\CheckoutException;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\OrderAnswer;
@@ -10,10 +11,12 @@ use App\Models\Ticket;
 use App\Services\Door\CheckInService;
 use App\Services\Door\DoorList;
 use App\Services\Door\DoorPasses;
+use App\Services\Door\DoorSales;
 use App\Services\Door\ScanOutcome;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * Scanning at the door.
@@ -29,6 +32,7 @@ class DoorController extends Controller
         private readonly CheckInService $door,
         private readonly DoorList $list,
         private readonly DoorPasses $passes,
+        private readonly DoorSales $sales,
     ) {}
 
     public function scan(Request $request, Event $event): JsonResponse
@@ -127,6 +131,106 @@ class DoorController extends Controller
             // turned away that should not have been.
             'conflicts' => $conflicts,
         ]);
+    }
+
+    /**
+     * What the door can sell, and what it costs.
+     *
+     * The same tiers a buyer sees, with what is genuinely left on each —
+     * somebody selling the last four tickets needs the number to be true at
+     * the moment they say it out loud.
+     */
+    public function sellable(Request $request, Event $event): JsonResponse
+    {
+        $this->authorizeDoor($request, $event);
+
+        return response()->json([
+            'currency' => $event->currency,
+            'methods' => DoorSales::METHODS,
+            'ticket_types' => $event->ticketTypes()
+                ->whereIn('status', ['on_sale', 'sold_out'])
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn ($type) => [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                    'price' => ['amount' => (int) $type->price_amount, 'currency' => $event->currency],
+                    'admits' => $type->admits,
+                    'remaining' => $type->remainingNow(),
+                    'sold_out' => $type->remainingNow() === 0,
+                ])
+                ->values(),
+        ]);
+    }
+
+    /**
+     * Sell to somebody standing in front of you.
+     *
+     * Reachable by a door token, deliberately: the person selling walk-ups is
+     * the person on the door, and a sale that needs an owner to be standing
+     * there is a sale that does not happen. What makes that safe is that the
+     * order names who took it and on which phone, and the audit log has the
+     * same entry — a till with a name on it is the control that matters when
+     * money is handled in a doorway.
+     */
+    public function sell(Request $request, Event $event): JsonResponse
+    {
+        $this->authorizeDoor($request, $event);
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:10'],
+            'items.*.ticket_type_id' => ['required', 'uuid'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
+            'method' => ['required', Rule::in(DoorSales::METHODS)],
+            // Both optional. A walk-up paying cash gives neither, and asking
+            // for an address with a queue behind them is how a door stops.
+            'name' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email:rfc', 'max:255'],
+        ]);
+
+        $quantities = [];
+
+        foreach ($validated['items'] as $item) {
+            $id = $item['ticket_type_id'];
+            $quantities[$id] = ($quantities[$id] ?? 0) + (int) $item['quantity'];
+        }
+
+        try {
+            $order = $this->sales->sell(
+                event: $event,
+                quantities: $quantities,
+                method: $validated['method'],
+                soldBy: $request->user(),
+                doorPassId: $this->passes->forToken($request->user()->currentAccessToken())?->id,
+                buyerName: $validated['name'] ?? null,
+                buyerEmail: $validated['email'] ?? null,
+            );
+        } catch (CheckoutException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        }
+
+        return response()->json([
+            'reference' => $order->reference,
+            'total' => ['amount' => $order->total_amount, 'currency' => $order->currency],
+            'method' => $order->payment_method,
+            // The codes, because the phone that sold them is usually the
+            // phone that scans them straight back in.
+            'tickets' => $order->tickets()->get()->map(fn (Ticket $ticket) => [
+                'id' => $ticket->id,
+                'code' => $ticket->code,
+                'type' => $ticket->ticketType?->name,
+                'admits' => $ticket->admits,
+            ])->values(),
+            'emailed' => filled($order->buyer_email),
+        ], 201);
+    }
+
+    /** The till, for whoever is counting it. */
+    public function takings(Request $request, Event $event): JsonResponse
+    {
+        $this->authorizeDoor($request, $event);
+
+        return response()->json($this->sales->takings($event));
     }
 
     /**

@@ -61,9 +61,11 @@ class Fulfiller
             $this->writeLedger($locked);
             $this->releaseHolds($locked);
 
-            // A paid use of its code, now that it is one.
-            // Somebody from the waitlist who got in.
-            app(Waitlist::class)->markPurchased($locked->event_id, $locked->buyer_email);
+            // Somebody from the waitlist who got in. Only when we know who
+            // they are: a door sale may carry no address.
+            if (filled($locked->buyer_email)) {
+                app(Waitlist::class)->markPurchased($locked->event_id, $locked->buyer_email);
+            }
 
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);
@@ -71,8 +73,13 @@ class Fulfiller
             // Queued, and dispatched only after the transaction commits.
             // Sending inside it risks a buyer holding tickets in their inbox
             // that a rollback then erased.
-            DB::afterCommit(fn () => Mail::to($locked->buyer_email)
-                ->send(new TicketsIssued($locked)));
+            //
+            // Nowhere to send it when nobody gave an address: a walk-up who
+            // paid cash is scanned in on the spot and holds nothing.
+            if (filled($locked->buyer_email)) {
+                DB::afterCommit(fn () => Mail::to($locked->buyer_email)
+                    ->send(new TicketsIssued($locked)));
+            }
 
             return $locked->refresh();
         });
@@ -142,6 +149,28 @@ class Fulfiller
                 'type' => 'tax',
                 'amount' => -$order->tax_amount,
                 'reason' => "Order {$order->reference}",
+            ]);
+        }
+
+        /*
+         * Money the organizer already has.
+         *
+         * A door sale was paid into their own tin, or onto their own terminal,
+         * or straight into their bank. We never touched it, so we cannot pay
+         * it out — and an organizer whose balance grew by cash they are
+         * holding would be settled twice for one ticket.
+         *
+         * Written rather than omitted, then taken back out: the sale, its tax
+         * and its discount are recorded exactly as for any order, so the
+         * night's gross still reads as the night's gross, and this entry
+         * removes the organizer's share from what we owe. The two cancel, and
+         * the reason says which door it went through.
+         */
+        if ($order->channel === 'door') {
+            LedgerEntry::create($common + [
+                'type' => 'collected',
+                'amount' => -$order->net_revenue_amount,
+                'reason' => 'Taken at the door — '.($order->payment_method ?? 'unknown'),
             ]);
         }
 
