@@ -6,6 +6,7 @@ use App\Enums\EventStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
+use App\Services\Follows\Announcements;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
@@ -340,7 +341,7 @@ class EventController extends Controller
      * Publishing is refused without something to sell: a published event with
      * no tickets is a shared link that disappoints everyone who follows it.
      */
-    public function publish(Request $request, Event $event): JsonResponse
+    public function publish(Request $request, Event $event, Announcements $announcements): JsonResponse
     {
         $this->authorize('publish', $event);
 
@@ -408,7 +409,17 @@ class EventController extends Controller
 
         $this->scheduleDefaultReminders($event);
 
-        $this->auditor->record('event.published', $event, $request->user());
+        // Everybody following this organizer hears about it — once, however
+        // many times it is unpublished and published again while a typo gets
+        // fixed.
+        $told = $announcements->announce($event);
+
+        $this->auditor->record(
+            'event.published',
+            $event,
+            $request->user(),
+            metadata: $told > 0 ? ['followers_told' => $told] : [],
+        );
 
         return response()->json(['status' => 'published']);
     }

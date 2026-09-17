@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FollowLeaveController;
 use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\UnsubscribeController;
@@ -64,6 +65,16 @@ Route::get('/waitlist/{token}/leave', [WaitlistLeaveController::class, 'show'])
 
 Route::post('/waitlist/{token}/leave', [WaitlistLeaveController::class, 'store'])
     ->name('waitlist.leave.confirm');
+
+/*
+ * Leaving a following from its announcement: the same shape, and for the same
+ * reason — a mail scanner must not be able to unfollow somebody.
+ */
+Route::get('/follows/{token}/leave', [FollowLeaveController::class, 'show'])
+    ->name('follows.leave');
+
+Route::post('/follows/{token}/leave', [FollowLeaveController::class, 'store'])
+    ->name('follows.leave.confirm');
 
 Route::get('/unsubscribe/{token}', [UnsubscribeController::class, 'show'])
     ->name('unsubscribe');

@@ -440,8 +440,8 @@ export class Api {
     );
   }
 
-  publish(id: string, status: 'draft' | 'published'): Observable<{ status: string }> {
-    return this.http.post<{ status: string }>(`${this.base}/api/organizer/events/${id}/publish`, {
+  publish(id: string, status: 'draft' | 'published'): Observable<{ status: string; followers_told?: number }> {
+    return this.http.post<{ status: string; followers_told?: number }>(`${this.base}/api/organizer/events/${id}/publish`, {
       status,
     });
   }

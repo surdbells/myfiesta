@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Models\OrganizationFollow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -43,15 +43,13 @@ class FollowController extends Controller
     {
         $organization = $this->organization($slug);
 
-        DB::table('organization_follows')->upsert([
-            [
-                'id' => (string) Str::uuid7(),
-                'user_id' => $request->user()->id,
-                'organization_id' => $organization->id,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ], ['user_id', 'organization_id'], ['updated_at']);
+        // Through the model, not a raw upsert: the row carries the token that
+        // an announcement email's way out is built on, and the model is where
+        // that gets generated.
+        OrganizationFollow::firstOrCreate([
+            'user_id' => $request->user()->id,
+            'organization_id' => $organization->id,
+        ]);
 
         return response()->json(['following' => true]);
     }

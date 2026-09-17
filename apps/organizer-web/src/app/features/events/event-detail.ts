@@ -297,12 +297,14 @@ export class EventDetail {
     this.error.set(null);
 
     this.api.publish(this.eventId, next).subscribe({
-      next: ({ status }) => {
+      next: ({ status, followers_told: told }) => {
         this.publishing.set(false);
         this.event.set({ ...event, status: status as OrganizerEvent['status'] });
         this.notice.set(
           status === 'published'
-            ? 'Live. The link is ready to share.'
+            ? told
+              ? `Live, and ${told} ${told === 1 ? 'follower has' : 'followers have'} been told. The link is ready to share.`
+              : 'Live. The link is ready to share.'
             : 'Taken down. Existing tickets still work.',
         );
       },
