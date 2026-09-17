@@ -1,6 +1,7 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HeldTicketStore } from '../../core/held-tickets';
 import { Api, ApiError, Ticket } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { longEventTime } from '../../core/event-time';
@@ -182,6 +183,7 @@ import {
 })
 export class TicketDetail {
   private readonly api = inject(Api);
+  private readonly held = inject(HeldTicketStore);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
   readonly session = inject(SessionStore);
@@ -191,6 +193,7 @@ export class TicketDetail {
 
   readonly tickets = signal<Ticket[]>([]);
   readonly loading = signal(true);
+  readonly stale = signal(false);
 
   readonly transferring = signal(false);
   readonly sending = signal(false);
@@ -206,7 +209,10 @@ export class TicketDetail {
 
   private async load(): Promise<void> {
     try {
-      this.tickets.set(await this.api.tickets());
+      const { tickets, stale } = await this.held.list();
+
+      this.tickets.set(tickets);
+      this.stale.set(stale);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await this.session.clear();

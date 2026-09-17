@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Reminders } from '../../core/reminders';
+import { HeldTicketStore } from '../../core/held-tickets';
 import { Api, ApiError, Ticket } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { shortEventTime } from '../../core/event-time';
@@ -19,6 +20,14 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton } from '../../
   template: `
     <mf-screen title="Your tickets" [subtitle]="subtitle()">
       <button mfButton variant="ghost" size="sm" screenActions (click)="settings()">Settings</button>
+
+      @if (stale()) {
+        <!-- Above everything, including an empty list: "No tickets yet" while
+             offline is the app reporting a fact it could not check. -->
+        <p class="offline" role="status">
+          No connection — this is what was last saved on this phone. Tickets here still scan.
+        </p>
+      }
 
       @if (loading()) {
         <div class="stack">
@@ -63,6 +72,16 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton } from '../../
 
   `,
   styles: `
+    .offline {
+      margin: 0 0 var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--surface-inset);
+      color: var(--text-muted);
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+    }
+
     .stack {
       display: grid;
       gap: var(--space-3);
@@ -97,12 +116,22 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton } from '../../
 })
 export class Tickets {
   private readonly api = inject(Api);
+  private readonly held = inject(HeldTicketStore);
   private readonly reminders = inject(Reminders);
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
 
   readonly tickets = signal<Ticket[]>([]);
   readonly loading = signal(true);
+
+  /**
+   * True when this list came off the phone rather than the server.
+   *
+   * Said quietly rather than hidden. A ticket bought ten minutes ago on
+   * another device will not be in here, and somebody at a door should know
+   * which of the two they are looking at.
+   */
+  readonly stale = signal(false);
   readonly failed = signal<string | null>(null);
 
   readonly subtitle = computed(() => {
@@ -122,9 +151,10 @@ export class Tickets {
     this.failed.set(null);
 
     try {
-      const tickets = await this.api.tickets();
+      const { tickets, stale } = await this.held.list();
 
       this.tickets.set(tickets);
+      this.stale.set(stale);
       // A ticket handed to a friend should stop reminding this phone about a
       // night it is no longer going to, so the schedule is rebuilt from what
       // came back rather than added to.

@@ -95,6 +95,13 @@ areas) and nothing a person looks at. Everything else is in `src/app/ui`:
 | `mf-switch`    | on or off, drawn the same on both platforms — the native switch is the control iOS and Android differ on most |
 | `mf-segmented`, `mf-card`, `mf-badge`, `mf-empty`, `mf-skeleton`, `mf-toasts` | the rest of the kit |
 
+The tickets somebody holds are kept on the phone as well as fetched, because
+the app promises they work with no signal and most venues are basements. A
+reachable server is always the truth — a ticket transferred away has to stop
+working on the phone that sent it — so the saved copy is used only when the
+server cannot be reached, and never when it refuses. The screen says which of
+the two you are looking at.
+
 Reminders are scheduled on the phone rather than pushed from a server: three
 hours before a night somebody holds a ticket for, with no certificates to
 manage, no device token to keep in sync, and nothing needed at the moment it
