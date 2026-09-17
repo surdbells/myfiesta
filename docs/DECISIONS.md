@@ -207,6 +207,13 @@ verification queue fills with work nobody needed.
 - **Stripe variance handling** — reconciliation will surface historical sales
   whose recorded amount differs from what was charged, some already settled to
   organizers. A commercial conversation, not a code path.
+- **Camera scanning on iPhone** — the ML Kit scanner ships a CocoaPods podspec
+  and no `Package.swift`, and the iOS project links its plugins through Swift
+  Package Manager. So `cap sync` leaves it out, silently, and camera scanning
+  at a door works on Android and not on iPhone. The app says so and offers the
+  code box, which is the fallback that has to exist anyway. Answering it means
+  moving iOS to CocoaPods — a structural choice with its own cost — or finding
+  a scanner that ships SPM. `npm run check` holds the gap visible meanwhile.
 - **Push credentials** — FCM and APNs. Blocked on keys, not on code: following
   an organizer is the list a "they announced a night" push would ride on, and
   it already sends by email. Push is an addition to that, not a replacement —
