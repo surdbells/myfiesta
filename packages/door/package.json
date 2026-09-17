@@ -1,0 +1,11 @@
+{
+  "name": "@myfiesta/door",
+  "private": true,
+  "version": "0.0.0",
+  "description": "What a door decides with no signal, and where it keeps what it needs to decide. Shared by the console and the phone app.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "_comment": "Framework-free on purpose: plain TypeScript and browser APIs, compiled as source by whichever app imports it. Two apps admitting people through the same doors must not be two implementations of when to admit them."
+}

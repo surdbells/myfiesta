@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { Scanner } from '../../core/scanner';
@@ -67,6 +68,41 @@ interface Outcome {
             </button>
           }
         </section>
+
+        @if (offlineNow()) {
+          <!-- Said plainly, because it changes what the answers mean: this
+               phone is deciding from a list, and a ticket bought in the last
+               few minutes is not on it. -->
+          <p class="no-signal" role="status">
+            <strong>No signal.</strong>
+            @if (offlineReady()) {
+              Deciding from the list saved on this phone.
+              @if (waiting() > 0) {
+                {{ waiting() }} {{ waiting() === 1 ? 'scan is' : 'scans are' }} waiting to be sent.
+              }
+            } @else {
+              There is no list saved on this phone, so nothing can be checked until signal is back.
+            }
+          </p>
+        } @else if (waiting() > 0) {
+          <p class="no-signal" role="status">
+            Sending {{ waiting() }} {{ waiting() === 1 ? 'scan' : 'scans' }} made while offline…
+          </p>
+        }
+
+        @if (conflicts().length > 0) {
+          <!-- The server disagreed with what this phone decided. Somebody was
+               let in who should not have been, or turned away who should not
+               have been, and door staff have to hear about it while the person
+               is still in the room. -->
+          <div class="clash" role="alert">
+            <p><strong>{{ conflicts().length }} the server disagreed with</strong></p>
+            @for (clash of conflicts(); track clash.client_id) {
+              <p class="why">{{ clash.message }}</p>
+            }
+            <button mfButton variant="secondary" size="sm" (click)="dismissConflicts()">Got it</button>
+          </div>
+        }
 
         <div class="counts">
           <mf-card>
@@ -223,6 +259,36 @@ interface Outcome {
       color: var(--text-muted);
     }
 
+    .no-signal {
+      margin: 0 0 var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--surface-inset);
+      color: var(--text);
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+    }
+
+    .clash {
+      display: grid;
+      gap: var(--space-2);
+      margin: 0 0 var(--space-4);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      color: var(--danger-text);
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+    }
+
+    .clash p {
+      margin: 0;
+    }
+
+    .clash button {
+      justify-self: start;
+    }
+
     .counts {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -338,6 +404,7 @@ export class Door implements OnDestroy {
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
   private readonly scanner = inject(Scanner);
+  private readonly offline = inject(DoorOffline);
   readonly session = inject(SessionStore);
 
   private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
@@ -366,6 +433,15 @@ export class Door implements OnDestroy {
   );
 
   private next = 0;
+  private timers: ReturnType<typeof setInterval>[] = [];
+
+  // --- when the signal goes --------------------------------------------------
+
+  readonly offlineReady = computed(() => this.offline.supported && this.offline.listCount() > 0);
+  readonly offlineNow = this.offline.connectionLost;
+  readonly waiting = this.offline.pendingCount;
+  readonly listUpdatedAt = this.offline.listUpdatedAt;
+  readonly conflicts = this.offline.conflicts;
 
   // --- the camera ------------------------------------------------------------
 
@@ -396,10 +472,35 @@ export class Door implements OnDestroy {
 
   constructor() {
     void this.scanner.supported().then((ready) => this.cameraReady.set(ready));
+    void this.prepareForNoSignal();
+  }
+
+  /**
+   * Get ready to work without the server.
+   *
+   * The list is fetched on arrival and every few minutes after, and the queue
+   * is sent on a timer rather than only when the browser says it is online —
+   * a venue wifi that quietly starts working again fires no such event.
+   */
+  private async prepareForNoSignal(): Promise<void> {
+    const eventId = this.eventId();
+
+    if (!eventId || !this.offline.supported) return;
+
+    await this.offline.prepare(eventId);
+    await this.offline.sync(eventId);
+    await this.offline.refreshList(eventId);
+
+    this.timers.push(setInterval(() => void this.offline.sync(eventId), 15_000));
+    this.timers.push(setInterval(() => void this.offline.refreshList(eventId), 3 * 60_000));
   }
 
   async startCamera(): Promise<void> {
     await this.scanner.start((code) => void this.read(code), this.preview()?.nativeElement);
+  }
+
+  dismissConflicts(): void {
+    this.offline.dismissConflicts();
   }
 
   async stopCamera(): Promise<void> {
@@ -427,6 +528,9 @@ export class Door implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.timers.forEach(clearInterval);
+    this.timers = [];
+
     // Leaving the screen with the camera running is a phone that stays warm in
     // somebody's pocket all night, and on the native path a page that has lost
     // its background.
@@ -443,7 +547,26 @@ export class Door implements OnDestroy {
     this.error.set(null);
 
     try {
-      const result = await this.api.scan(eventId, code);
+      let result: ScanResult;
+
+      try {
+        result = await this.api.scan(eventId, code);
+        this.offline.connectionLost.set(false);
+
+        // Counted on the phone too, so losing signal a minute from now does
+        // not make it think a ticket it just admitted is still unused.
+        if (result.accepted) await this.offline.admitLocally(code, null, result.ticket?.admitted_count);
+
+        // Anything waiting goes now that the server is answering.
+        if (this.offline.pendingCount() > 0) void this.offline.sync(eventId);
+      } catch (error) {
+        // Only the connection. A refusal is the server speaking, and a door
+        // must not fall back to its own judgement because the server said no.
+        if (!this.offline.lostConnection(error) || !this.offline.supported) throw error;
+
+        this.offline.connectionLost.set(true);
+        result = await this.offline.decideAndQueue(eventId, code, null);
+      }
 
       this.outcomes.update((all) => [{ id: this.next++, at: new Date(), code, result }, ...all].slice(0, 40));
       this.code.set('');

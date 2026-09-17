@@ -21,6 +21,11 @@ docs/                Decisions and reference
 
 Two structural notes, because neither is obvious from the tree:
 
+**`packages/door` is shared on purpose.** The console and the phone app both
+scan tickets, and both have to keep working when a venue's wifi does not. What
+a door decides with no signal lives in one place so that two apps cannot become
+two answers.
+
 **`packages/contract` is load-bearing.** The OpenAPI document is what keeps
 the clients honest about what the API actually promises, and it is where a new
 endpoint is described before anything calls it. Endpoints that are not in the

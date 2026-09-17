@@ -7,6 +7,7 @@
     "apps/web",
     "apps/mobile",
     "packages/tokens",
+    "packages/door",
     "packages/ui"
   ],
   "scripts": {

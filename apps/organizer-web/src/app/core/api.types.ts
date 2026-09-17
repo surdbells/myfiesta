@@ -481,61 +481,15 @@ export interface Series {
 }
 
 /** What the door gets back from one scan. */
-export interface ScanResult {
-  result: string;
-  /** Whether anybody went in. A table can be partly admitted. */
-  accepted: boolean;
-  admitted: number;
-  /** Still outstanding on this ticket — what keeps a table open. */
-  remaining: number;
-  message: string;
-  ticket: {
-    holder_name: string | null;
-    type: string | null;
-    admits: number;
-    admitted_count: number;
-  } | null;
-  /** Decided on this phone from its saved list, with no connection. */
-  offline?: boolean;
-  /** What the door did offline, echoed back when a queued scan is synced. */
-  offline_result?: string | null;
-  /** Where the offline door and the server disagreed. */
-  conflict?: 'admitted_invalid' | 'refused_valid' | null;
-}
-
-/** One ticket in the list a door phone keeps for when signal goes. */
-export interface DoorListTicket {
-  /** PBKDF2 of the code — enough to recognise one, never enough to show one. */
-  hash: string;
-  status: string;
-  admits: number;
-  admitted_count: number;
-  holder_name: string | null;
-  type: string | null;
-}
-
-export interface DoorList {
-  event_id: string;
-  salt: string;
-  iterations: number;
-  generated_at: string;
-  tickets: DoorListTicket[];
-}
-
-/** A scan the door made offline, waiting on the phone to be sent. */
-export interface OfflineScan {
-  client_id: string;
-  event_id: string;
-  code: string;
-  party: number | null;
-  offline_result: string;
-  scanned_at: string;
-}
-
-export interface SyncResult {
-  data: (ScanResult & { client_id: string })[];
-  conflicts: (ScanResult & { client_id: string })[];
-}
+/*
+ * The door's shapes are defined once, in @myfiesta/door, and re-exported here
+ * so every existing import keeps working.
+ *
+ * They were declared in this file and again in the phone app. Two apps scan
+ * the same tickets against the same server, and a field that drifts between
+ * them is a door that stops recognising people.
+ */
+export type { ScanResult, DoorListTicket, DoorList, OfflineScan, SyncResult } from '@myfiesta/door';
 
 /** One message an organizer sent to their ticket holders. */
 export interface AttendeeMessage {

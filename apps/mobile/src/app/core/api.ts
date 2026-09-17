@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
+import type { DoorList, OfflineScan, ScanResult, SyncResult } from '@myfiesta/door';
 import type { Money } from './money';
 
 /** A refusal with a sentence worth showing, and the status it came with. */
@@ -49,14 +50,13 @@ export interface Guest {
   checked_in: boolean;
 }
 
-export interface ScanResult {
-  result: string;
-  accepted: boolean;
-  admitted: number;
-  remaining: number;
-  message: string;
-  ticket: { holder_name: string | null; type: string | null; admits: number; admitted_count: number } | null;
-}
+/*
+ * Defined once, in @myfiesta/door, and re-exported so existing imports keep
+ * working. The console declared the same shapes and so did this app; two apps
+ * scanning the same tickets against the same server must not be two ideas of
+ * what a scan is.
+ */
+export type { ScanResult, DoorList, OfflineScan, SyncResult } from '@myfiesta/door';
 
 export interface DoorPass {
   token: string;
@@ -316,5 +316,20 @@ export class Api {
 
   scan(eventId: string, code: string, token?: string): Promise<ScanResult> {
     return this.send('POST', `/api/events/${eventId}/scan`, { body: { code }, token });
+  }
+
+  /**
+   * The list this phone decides from when the signal goes.
+   *
+   * Hashes, never codes: enough to recognise a ticket somebody shows and never
+   * enough to mint one, because a door phone is lent out for a night.
+   */
+  doorList(eventId: string, token?: string): Promise<DoorList> {
+    return this.send('GET', `/api/events/${eventId}/door-list`, { token });
+  }
+
+  /** The scans made while offline, sent back once there is signal for them. */
+  syncScans(eventId: string, scans: Omit<OfflineScan, 'event_id'>[], token?: string): Promise<SyncResult> {
+    return this.send('POST', `/api/events/${eventId}/scans/sync`, { body: { scans }, token });
   }
 }

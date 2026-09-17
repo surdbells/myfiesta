@@ -1,4 +1,4 @@
-import { DoorListTicket, ScanResult } from './api.types';
+import { DoorListTicket, ScanResult } from './types';
 
 /**
  * What a door decides when it cannot ask the server.

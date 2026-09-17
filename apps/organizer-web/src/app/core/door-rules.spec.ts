@@ -1,6 +1,5 @@
 import fixture from '../../../../../packages/contract/fixtures/door-hash.json';
-import { DoorListTicket } from './api.types';
-import { admittedAfter, decideOffline, hashCode } from './door-rules';
+import { DoorListTicket, admittedAfter, decideOffline, hashCode } from '@myfiesta/door';
 
 const ticket = (over: Partial<DoorListTicket> = {}): DoorListTicket =>
   ({

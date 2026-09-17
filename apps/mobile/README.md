@@ -66,7 +66,7 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | A ticket | `/tickets/:id` | the QR full screen, what it admits, and sending it to somebody else |
 | Your events | `/events` | organizer: upcoming and past, with arrivals |
 | One night | `/events/:id` | organizer: what it took, and the guest list |
-| Door | `/door` | the scanner — camera or typed code — opened by a door-pass link |
+| Door | `/door` | the scanner — camera or typed code, working with or without signal — opened by a door-pass link |
 | You | `/settings` | name, theme, reminders, your lists, sign out |
 | Getting in | `/sign-in`, `/join`, `/forgotten-password` | signing in, making an attendee account, asking for a reset link |
 
@@ -94,6 +94,17 @@ areas) and nothing a person looks at. Everything else is in `src/app/ui`:
 | `mf-qr`        | the ticket code, drawn on the phone so it works with no signal          |
 | `mf-switch`    | on or off, drawn the same on both platforms — the native switch is the control iOS and Android differ on most |
 | `mf-segmented`, `mf-card`, `mf-badge`, `mf-empty`, `mf-skeleton`, `mf-toasts` | the rest of the kit |
+
+The door keeps working when the venue's wifi does not. The list it decides
+from and the scans it makes meanwhile live in IndexedDB, and the deciding
+itself is `@myfiesta/door`, shared with the console — two apps admitting people
+through the same doors must not be two ideas of when to admit them. The list
+carries hashed codes, never codes: enough to recognise a ticket somebody
+shows, never enough to mint one, because a door phone gets lent out.
+
+Only a lost connection falls back. A refusal is the server speaking, and a
+pass that has been taken back must stop working rather than carry on deciding
+for itself.
 
 The tickets somebody holds are kept on the phone as well as fetched, because
 the app promises they work with no signal and most venues are basements. A
