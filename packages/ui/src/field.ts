@@ -1,5 +1,7 @@
 import {
+  AfterContentChecked,
   AfterContentInit,
+  afterNextRender,
   Component,
   ElementRef,
   booleanAttribute,
@@ -97,7 +99,7 @@ let sequence = 0;
     }
   `,
 })
-export class UiField implements AfterContentInit {
+export class UiField implements AfterContentInit, AfterContentChecked {
   readonly label = input.required<string>();
   readonly hint = input<string | null>(null);
 
@@ -133,7 +135,7 @@ export class UiField implements AfterContentInit {
    * label pointing at an element that does not exist — which looks correct
    * on screen and is the exact failure this component exists to prevent.
    */
-  readonly controlId = signal(this.uid);
+  readonly controlId = signal<string | null>(null);
 
   readonly hintId = computed(() => `${this.uid}-hint`);
   readonly errorId = computed(() => `${this.uid}-error`);
@@ -141,6 +143,18 @@ export class UiField implements AfterContentInit {
   private control: HTMLElement | null = null;
 
   constructor() {
+    /*
+     * Looked for again once there is a page, always — not only when nothing
+     * was found the first time.
+     *
+     * A projected component renders its own template after this one's content
+     * is initialised, and sets its own id on the pass after that. Looking once
+     * caught the control mid-build, gave it an id of ours, and then watched
+     * the component overwrite it — leaving the label pointing at an id nothing
+     * had. By the time the page is rendered, the control is finished.
+     */
+    afterNextRender(() => this.find());
+
     // Re-applied whenever the error appears or clears, since aria-invalid and
     // aria-describedby both change with it.
     effect(() => {
@@ -152,12 +166,54 @@ export class UiField implements AfterContentInit {
   }
 
   ngAfterContentInit(): void {
-    // The combobox first: a ui-select holds a search input too, and the label
-    // belongs on the control, not on a field that only exists while it is open.
-    // querySelector returns in document order, and the trigger comes first.
-    this.control = this.host.nativeElement.querySelector(
-      'button[role=combobox], input, select, textarea',
-    );
+    this.find();
+  }
+
+  /**
+   * Keep pointing at the control, as it is now.
+   *
+   * Looking once is not enough, in two ways. A projected component renders its
+   * own template after this one's content is initialised, and a control inside
+   * a drawer is thrown away and rebuilt each time it opens — so a field that
+   * looked once labels an element that is gone. And a component that sets its
+   * own id does it on a later pass, overwriting the one put there here: the
+   * label went on pointing at an id nothing had any more, which looks perfect
+   * on screen and is a control a screen reader cannot name.
+   *
+   * Cheap: it does nothing while the control is still attached and still
+   * called what the label says it is called.
+   */
+  ngAfterContentChecked(): void {
+    if (this.control?.isConnected && this.control.id === this.controlId()) return;
+
+    this.find();
+  }
+
+  /**
+   * Look for the control, twice.
+   *
+   * A plain input is there by the time content is initialised. A projected
+   * component is not: its own template renders later, so a field wrapping a
+   * ui-select found nothing and left its label pointing at an id that did not
+   * exist — which looks perfect on screen and is a control a screen reader
+   * cannot name. Looking again after the first render catches it.
+   */
+  private find(): void {
+    /*
+     * Asked in order of preference, one at a time.
+     *
+     * Not one selector list: querySelector returns the first match in document
+     * order, not the first selector that matches. A ui-select holds a search
+     * box as well as its trigger, and asking for both at once labelled
+     * whichever the template happened to put first — the search box, which
+     * only exists while the menu is open.
+     */
+    const host = this.host.nativeElement as HTMLElement;
+
+    this.control =
+      host.querySelector('button[role=combobox]') ??
+      host.querySelector('input:not([role=searchbox]), select, textarea');
+
     this.apply();
   }
 
@@ -172,7 +228,13 @@ export class UiField implements AfterContentInit {
   private apply(): void {
     const control = this.control;
 
-    if (!control) return;
+    if (!control) {
+      // No control, no label pointing at one. A dangling `for` is worse than
+      // none: it reads as wired and is not.
+      this.controlId.set(null);
+
+      return;
+    }
 
     if (!control.id) control.id = this.uid;
 

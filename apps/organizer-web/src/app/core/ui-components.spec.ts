@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
-import { UiField, UiPagination, UiSortHeader, type Sort } from '@myfiesta/ui';
+import { UiField, UiPagination, UiSelect, UiSortHeader, type Sort } from '@myfiesta/ui';
 
 /**
  * The component library's contracts, tested where they are invisible.
@@ -26,6 +26,56 @@ class FieldHost {
   readonly error = signal<string | null>(null);
   readonly required = signal(false);
 }
+
+@Component({
+  imports: [UiField, UiSelect],
+  template: `
+    <ui-field label="How you want to be paid" required>
+      <ui-select ariaLabel="How you want to be paid" [options]="[{ value: 'interac', label: 'Interac' }]" />
+    </ui-field>
+  `,
+})
+class FieldAroundSelect {}
+
+/**
+ * A field whose control is a component, not an input.
+ *
+ * The control arrives one render later than a plain input does, and the field
+ * used to look for it once — so the label ended up pointing at an id nothing
+ * had, which looks perfect on screen and is a control a screen reader cannot
+ * name. Found by an audit on the payouts screen.
+ */
+describe('UiField around a component', () => {
+  it('points its label at the control, whenever that control turns up', async () => {
+    const fixture = TestBed.createComponent(FieldAroundSelect);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const label = element.querySelector('label')!;
+    const trigger = element.querySelector('button[role=combobox]')!;
+
+    expect(trigger.id).toBeTruthy();
+    expect(label.getAttribute('for')).toBe(trigger.id);
+  });
+
+  it('points at nothing rather than at something that is not there', async () => {
+    const fixture = TestBed.createComponent(EmptyField);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    const label = (fixture.nativeElement as HTMLElement).querySelector('label')!;
+
+    // A dangling `for` reads as wired and is not.
+    expect(label.getAttribute('for')).toBeNull();
+  });
+});
+
+@Component({
+  imports: [UiField],
+  template: `<ui-field label="Nothing here" />`,
+})
+class EmptyField {}
 
 describe('UiField', () => {
   function mount() {
