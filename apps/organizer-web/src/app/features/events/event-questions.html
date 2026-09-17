@@ -1,0 +1,243 @@
+@if (loading()) {
+  <div class="grid gap-3">
+    @for (n of [0, 1]; track n) {
+      <div class="block min-h-[4.5rem] rounded-lg border border-border bg-surface-raised px-6 py-4"><ui-skeleton height="2.5rem" /></div>
+    }
+  </div>
+} @else if (failed()) {
+  <ui-error-state
+    title="Could not load your questions"
+    detail="We could not reach the server. It is usually temporary."
+    (retried)="load()"
+  />
+} @else {
+  <section class="mb-6 flex items-start justify-between gap-8 rounded-lg border border-border bg-surface-raised p-6 max-[720px]:flex-wrap max-[720px]:gap-4">
+    <div class="max-w-[52ch]">
+      <h2 class="text-base font-semibold">What the checkout asks</h2>
+      <p class="mt-1 text-sm text-text-muted">
+        Anything a basket cannot say: the name on each ticket for the door, a phone number for a
+        table, dietary requirements, how somebody heard about the night. Answers arrive on your
+        guest list, in your export, and under a ticket when it is scanned.
+      </p>
+    </div>
+
+    <div class="shrink-0 max-[720px]:w-full">
+      <button uiButton type="button" (click)="openNew()">
+        <ui-icon [icon]="addIcon" size="sm" />
+        Add a question
+      </button>
+    </div>
+  </section>
+
+  @if (questions().length === 0) {
+    <ui-empty
+      title="You are not asking anything yet"
+      hint="Most nights do not need to. Add one when you need a name for the door or something to plan around."
+    />
+  } @else {
+    <ul class="m-0 grid list-none gap-3 p-0">
+      @for (question of questions(); track question.id) {
+        <li
+          class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 rounded-lg border border-border bg-surface-raised px-6 py-4 max-[720px]:grid-cols-1 max-[720px]:gap-3"
+        >
+          <div class="min-w-0">
+            <p class="flex flex-wrap items-center gap-2 font-semibold">
+              {{ question.label }}
+              @if (question.required) {
+                <ui-badge tone="warning">Must be answered</ui-badge>
+              }
+              <!-- The distinction that decides where an answer ends up: on the
+                   order, or on one person's ticket at a door. -->
+              <ui-badge [tone]="question.per_attendee ? 'success' : 'neutral'">
+                {{ question.per_attendee ? 'About each person' : 'Once per order' }}
+              </ui-badge>
+            </p>
+
+            <p class="mt-1 text-sm text-text-muted">
+              {{ kind(question) }}
+              @if (question.options.length > 0) {
+                <span aria-hidden="true"> · </span>{{ question.options.join(' · ') }}
+              }
+              @if (question.answered) {
+                <span aria-hidden="true"> · </span>
+                <span>answered already — the wording can change, the rest cannot</span>
+              }
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 max-[720px]:justify-end">
+            <span class="mr-1 flex gap-1">
+              <button
+                type="button"
+                class="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
+                [attr.aria-label]="'Ask ' + question.label + ' earlier'"
+                [disabled]="$first || savingOrder()"
+                (click)="move(question, -1)"
+              >
+                <ui-icon [icon]="upIcon" size="sm" />
+              </button>
+              <button
+                type="button"
+                class="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
+                [attr.aria-label]="'Ask ' + question.label + ' later'"
+                [disabled]="$last || savingOrder()"
+                (click)="move(question, 1)"
+              >
+                <ui-icon [icon]="downIcon" size="sm" />
+              </button>
+            </span>
+
+            <button uiButton variant="secondary" size="sm" type="button" (click)="edit(question)">
+              <ui-icon [icon]="editIcon" size="sm" />
+              Edit
+            </button>
+
+            <button
+              uiButton
+              variant="ghost"
+              size="sm"
+              type="button"
+              [attr.aria-label]="'Stop asking ' + question.label"
+              (click)="removing.set(question)"
+            >
+              <ui-icon [icon]="deleteIcon" size="sm" />
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+}
+
+<!-- One form for both, because the fields are identical and two would drift. -->
+<ui-modal
+  [open]="formOpen()"
+  [heading]="editing() ? 'Edit question' : 'Add a question'"
+  (dismissed)="formOpen.set(false)"
+>
+  @if (formError(); as message) {
+    <p class="mb-4 rounded-md border border-[color-mix(in_srgb,var(--danger)_26%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] px-4 py-3 text-sm text-danger-text" role="alert">{{ message }}</p>
+  }
+
+  <div class="grid gap-4">
+    <ui-field label="The question" hint="How it appears at the checkout. “Name on the ticket”, “Dietary requirements”." required>
+      <input
+        name="label"
+        maxlength="120"
+        [ngModel]="draft().label"
+        (ngModelChange)="update('label', $event)"
+      />
+    </ui-field>
+
+    <ui-field
+      label="How it is answered"
+      [hint]="editing()?.answered ? 'People have already answered this one, so this cannot change.' : ''"
+    >
+      <ui-select
+        name="type"
+        ariaLabel="How it is answered"
+        [options]="typeOptions"
+        [disabled]="!!editing()?.answered"
+        [ngModel]="draft().type"
+        (ngModelChange)="update('type', $event)"
+      />
+    </ui-field>
+
+    @if (choosing()) {
+      <!-- The list they choose from. Two at least, or there is nothing to
+           choose and a required question nobody can get past. -->
+      <fieldset class="grid gap-2">
+        <legend class="mb-1 text-sm font-semibold">The options</legend>
+
+        @for (option of draft().options; track $index) {
+          <div class="flex items-center gap-2">
+            <input
+              class="flex-1"
+              [name]="'option-' + $index"
+              maxlength="80"
+              [placeholder]="'Option ' + ($index + 1)"
+              [ngModel]="option"
+              (ngModelChange)="setOption($index, $event)"
+            />
+            <button
+              type="button"
+              class="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-md border border-border bg-surface text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-35"
+              [attr.aria-label]="'Remove option ' + ($index + 1)"
+              [disabled]="draft().options.length <= 2"
+              (click)="removeOption($index)"
+            >
+              <ui-icon [icon]="removeOptionIcon" size="sm" />
+            </button>
+          </div>
+        }
+
+        <div>
+          <button uiButton variant="secondary" size="sm" type="button" (click)="addOption()">
+            <ui-icon [icon]="addIcon" size="sm" />
+            Add an option
+          </button>
+        </div>
+      </fieldset>
+    }
+
+    <ui-field
+      label="Who it is asked of"
+      [hint]="
+        editing()?.answered
+          ? 'People have already answered this one, so this cannot change.'
+          : 'A name for the door is asked about each person. How somebody heard about the night is asked once.'
+      "
+    >
+      <ui-select
+        name="asked"
+        ariaLabel="Who it is asked of"
+        [options]="askedOptions"
+        [disabled]="!!editing()?.answered"
+        [ngModel]="draft().perAttendee ? 'attendee' : 'order'"
+        (ngModelChange)="setAsked($event)"
+      />
+    </ui-field>
+
+    <label class="flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
+      <input
+        class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+        type="checkbox"
+        name="required"
+        [ngModel]="draft().required"
+        (ngModelChange)="update('required', $event)"
+      />
+      <span>
+        Nobody can finish the checkout without answering this
+        <span class="mt-1 block text-text-muted">
+          Ask sparingly. Every required question is one more thing between somebody and their
+          ticket.
+        </span>
+      </span>
+    </label>
+  </div>
+
+  <ng-container modalActions>
+    <button uiButton variant="secondary" type="button" (click)="formOpen.set(false)">Cancel</button>
+    <button
+      uiButton
+      type="button"
+      [loading]="saving()"
+      [disabled]="!canSave() || saving()"
+      (click)="save()"
+    >
+      {{ editing() ? 'Save changes' : 'Add question' }}
+    </button>
+  </ng-container>
+</ui-modal>
+
+@if (removing(); as question) {
+  <ui-confirm
+    [open]="true"
+    [heading]="'Stop asking “' + question.label + '”?'"
+    [consequence]="consequence(question)"
+    confirmLabel="Stop asking"
+    destructive
+    (confirmed)="confirmRemove()"
+    (cancelled)="removing.set(null)"
+  />
+}

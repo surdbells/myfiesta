@@ -116,6 +116,33 @@ export interface OrganizerEventDetail extends OrganizerEvent {
   poster_url: string | null;
 }
 
+/**
+ * Something the checkout asks the people coming.
+ *
+ * The same row a wedding asks its guests with — one question model for both
+ * halves of the product, so there is one editor and one validator rather than
+ * two of each drifting apart.
+ */
+export interface EventQuestion {
+  id: string;
+  label: string;
+  type: 'text' | 'choice' | 'multi_choice' | 'boolean';
+  /** What may be chosen. Empty for a question that is typed into. */
+  options: string[];
+  required: boolean;
+  /** Asked once for the order, or once about each person on it. */
+  per_attendee: boolean;
+  sort_order: number;
+  /**
+   * Whether anybody has answered it.
+   *
+   * Once they have, the wording can still be corrected and the shape cannot:
+   * turning a typed question into a choice would leave every answer already
+   * given outside the list of things it was possible to say.
+   */
+  answered: boolean;
+}
+
 export interface TicketType {
   id: string;
   name: string;
@@ -206,6 +233,12 @@ export interface IssueResult {
   tickets: { id: string; code: string; admits: number; holder_name: string }[];
 }
 
+/** An answer as it is read back: the question, and what was said. */
+export interface GivenAnswer {
+  label: string | null;
+  value: string;
+}
+
 export interface Guest {
   id: string;
   name: string;
@@ -213,6 +246,12 @@ export interface Guest {
   ticket_type: string | null;
   checked_in: boolean;
   checked_in_at: string | null;
+  /**
+   * What this person was asked at checkout, and what the buyer answered for
+   * the order they are on. Which of the two it was is not a distinction
+   * anybody reading a guest list is making.
+   */
+  answers: GivenAnswer[];
 }
 
 /**

@@ -146,6 +146,21 @@
           · admits {{ ticket.admits }}, {{ ticket.admitted_count }} in
         }
       </p>
+
+      <!-- What this person answered at checkout, which is the whole reason
+           for collecting it: the name to check against an ID, the table they
+           are on, what they need. Read at arm's length, so it is a list
+           rather than a sentence. -->
+      @if (ticket.answers?.length) {
+        <dl class="verdict__answers m-0 grid justify-items-center gap-1 text-sm opacity-90">
+          @for (answer of ticket.answers; track answer.label) {
+            <div class="flex flex-wrap items-baseline justify-center gap-2">
+              <dt class="text-xs uppercase tracking-[0.06em] opacity-70">{{ answer.label }}</dt>
+              <dd class="m-0 font-semibold">{{ answer.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
     }
   </section>
 }

@@ -20,6 +20,18 @@ export interface ScanResult {
     type: string | null;
     admits: number;
     admitted_count: number;
+    /**
+     * What this person was asked at checkout: a name to check against an ID,
+     * a table number, an access requirement.
+     *
+     * Only what was asked of them. What the buyer answered for the order —
+     * how they heard about the night — is not a door's business, and the
+     * server does not send it.
+     *
+     * Absent on a scan decided offline: the saved list carries hashes and a
+     * name, never the answers.
+     */
+    answers?: { label: string | null; value: string }[];
   } | null;
   /** Decided on this phone from its saved list, with no connection. */
   offline?: boolean;

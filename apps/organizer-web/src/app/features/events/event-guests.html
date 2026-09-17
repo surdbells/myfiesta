@@ -146,6 +146,15 @@
         <span class="who grid min-w-0">
           <span class="name truncate font-medium">{{ guest.name }}</span>
           <span class="email truncate text-xs text-text-muted">{{ guest.email }}</span>
+
+          <!-- What they were asked at checkout. Under the name rather than in
+               a column of its own: it is different on every event, and a
+               column that is empty for most of them is worse than none. -->
+          @for (answer of guest.answers; track answer.label) {
+            <span class="truncate text-xs text-text-muted">
+              <span class="text-text-subtle">{{ answer.label }}:</span> {{ answer.value }}
+            </span>
+          }
         </span>
         <span class="type whitespace-nowrap text-sm text-text-muted max-sm:col-start-1 max-sm:row-start-2">{{ guest.ticket_type }}</span>
         <span

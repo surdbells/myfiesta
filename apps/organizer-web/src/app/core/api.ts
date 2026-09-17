@@ -26,6 +26,7 @@ import {
   EventImage,
   EventImages,
   EventOption,
+  EventQuestion,
   OrganizationOrderPage,
   Page,
   OrganizerEvent,
@@ -495,6 +496,46 @@ export class Api {
   deleteTicketType(eventId: string, id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(
       `${this.base}/api/organizer/events/${eventId}/ticket-types/${id}`,
+    );
+  }
+
+  // --- what the checkout asks ---------------------------------------------
+
+  eventQuestions(eventId: string): Observable<{ data: EventQuestion[] }> {
+    return this.http.get<{ data: EventQuestion[] }>(
+      `${this.base}/api/organizer/events/${eventId}/questions`,
+    );
+  }
+
+  createEventQuestion(eventId: string, body: Record<string, unknown>): Observable<{ data: EventQuestion }> {
+    return this.http.post<{ data: EventQuestion }>(
+      `${this.base}/api/organizer/events/${eventId}/questions`,
+      body,
+    );
+  }
+
+  updateEventQuestion(
+    eventId: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Observable<{ data: EventQuestion }> {
+    return this.http.patch<{ data: EventQuestion }>(
+      `${this.base}/api/organizer/events/${eventId}/questions/${id}`,
+      body,
+    );
+  }
+
+  deleteEventQuestion(eventId: string, id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.base}/api/organizer/events/${eventId}/questions/${id}`,
+    );
+  }
+
+  /** The order they are asked in, as one list — two writes can disagree. */
+  reorderEventQuestions(eventId: string, ids: string[]): Observable<{ data: EventQuestion[] }> {
+    return this.http.post<{ data: EventQuestion[] }>(
+      `${this.base}/api/organizer/events/${eventId}/questions/order`,
+      { ids },
     );
   }
 

@@ -140,6 +140,14 @@ interface Outcome {
             @if (outcome.result.accepted && outcome.result.remaining > 0) {
               <p class="who">{{ outcome.result.remaining }} of the party still outside</p>
             }
+
+            <!-- What this person answered at checkout: the name to check
+                 against an ID, the table they are on, what they need. Never
+                 on an offline decision — the saved list carries hashes and a
+                 name, never the answers. -->
+            @for (answer of outcome.result.ticket?.answers ?? []; track answer.label) {
+              <p class="answer"><span class="answer__label">{{ answer.label }}</span> {{ answer.value }}</p>
+            }
           </section>
         }
 
@@ -346,6 +354,21 @@ interface Outcome {
 
     .why {
       font-size: var(--font-size-base);
+    }
+
+    .answer {
+      margin: var(--space-2) 0 0;
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .answer__label {
+      display: block;
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-regular);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.75;
     }
 
     .who {
