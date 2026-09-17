@@ -30,7 +30,11 @@ class EventSearch
             ->where('kind', 'ticketed')
             // banner eager-loaded: a listing page renders one per card, and
             // lazily loading it turns one query into thirty.
-            ->with(['organization:id,name,slug,logo_path', 'venue:id,name,city', 'banner']);
+            // The two verification columns come along even though a list card
+            // never draws a tick: without them a partial select makes every
+            // organization read as unverified, silently, wherever one is
+            // asked later.
+            ->with(['organization:id,name,slug,logo_path,verified_at,verified_name', 'venue:id,name,city', 'banner']);
 
         $this->applyText($query, $filters->text);
         $this->applyPlace($query, $filters);

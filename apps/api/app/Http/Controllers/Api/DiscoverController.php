@@ -120,7 +120,7 @@ class DiscoverController extends Controller
             ->published()
             ->where('kind', 'ticketed')
             ->where('starts_at', '>', now())
-            ->with(['organization:id,name,slug,logo_path', 'banner', 'ticketTypes']);
+            ->with(['organization:id,name,slug,logo_path,verified_at,verified_name', 'banner', 'ticketTypes']);
 
         if (filled($city)) {
             $query->where('city', $city);
