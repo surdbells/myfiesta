@@ -41,13 +41,17 @@ RUN composer install \
         --prefer-dist \
         --no-interaction
 
+# The source, then the autoloader — in that order so a change to a controller
+# does not reinstall every dependency, and in this stage because composer
+# lives here and deliberately not in the image that ships.
+COPY apps/api .
+
+RUN composer dump-autoload --optimize --classmap-authoritative --no-dev
+
 # --- the image that runs -------------------------------------------------------
 FROM base AS runtime
 
-COPY --from=vendor /var/www/api/vendor ./vendor
-COPY apps/api .
-
-RUN composer dump-autoload --optimize --classmap-authoritative --no-dev 2>/dev/null || true
+COPY --from=vendor /var/www/api .
 
 # Writable by the runtime user and nobody else. Storage holds private files —
 # identity documents, data exports — and is a mounted volume in production so

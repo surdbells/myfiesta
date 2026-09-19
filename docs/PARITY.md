@@ -260,36 +260,30 @@ it is the right call to defer it while both markets sell in English.
 
 ## Sequencing
 
-**Done, and they were the cheap two:** the organizer page (1) and checkout
-questions (2). Both made something already built mean more — following now
-leads somewhere, and the question model the invitation flow had is now the
-order form organizers ask for by name.
+**Done, in this order.** The organizer page (1) and checkout questions (2)
+first, because both made something already built mean more. Then add-ons (3)
+and selling at the door (4) — together, the difference between a ticketing
+tool and the thing a club runs its night on. Then the block that makes larger
+promoters possible: webhooks and keys (10), selling from an organizer's own
+site (9), campaigns (11), and the analytics to judge all three by (13). Then
+the two compliance pieces that should never wait for the first request or the
+first chargeback: data requests (16) and disputes (17). Then resale (5), built
+as a return rather than a marketplace.
 
-**Done:** add-ons (3) and selling at the door (4) — together, the difference
-between a ticketing tool and the thing a club runs its night on.
+**Built, waiting on an account:** SMS (12). The path runs end to end against a
+log driver; a provider account in each market is the only missing piece.
 
-**Done:** webhooks and keys (10), selling from an organizer's own site (9) and
-campaigns (11) — the block that makes larger promoters possible — and the
-analytics an organizer can act on (13).
+**Waiting on credentials, and nothing else:** wallet passes (6) and push (7).
+Neither needs design work, so both should be picked up the week the keys
+arrive rather than scheduled.
 
-**Done:** data requests (16).
+**Waiting on a decision, not on work:** camera scanning on iPhone (8) — the
+scanner library ships CocoaPods and this project links through SPM, so it is
+a choice between moving iOS to CocoaPods and finding another scanner.
 
-**Done:** chargebacks and fraud (17).
-
-**Built, waiting on somebody to open an account:** SMS (12).
-
-**Done:** resale (5), as a return rather than a marketplace.
-
-**In parallel, whenever the credentials land:** wallet passes (6), push (7).
-Neither needs design work — only keys — so they should be picked up the week
-they arrive rather than scheduled.
-
-**Deliberately later:** resale (5) until we decide whether it is our argument,
-instalments (14) until a festival needs it, reserved seating (15) until a
-seated venue does, translation (18) while both markets read English.
-
-**On a date, not a backlog:** data requests (16). Compliance work that waits
-for a request is compliance work done badly.
+**Deliberately later:** instalments (14) until a festival needs them, reserved
+seating (15) until a seated venue does, translation (18) while both markets
+read English.
 
 ---
 
