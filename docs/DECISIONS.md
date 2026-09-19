@@ -318,6 +318,34 @@ verification and the public claim is suspended — never the verification itself
 making somebody send a passport again because they fixed a typo is how a
 verification queue fills with work nobody needed.
 
+**Other systems hear from us, signed, and never at our own network.** An
+organizer's webhook address is somewhere we will post buyers' names to, and an
+address is also a way to make our server fetch something. So it must be https,
+every address its name resolves to must be public, the connection goes to the
+address that was checked rather than to whatever the name answers a second
+time, and redirects are not followed — at saving and again at every delivery,
+because what a name resolves to can change in between. Each delivery is signed
+over its timestamp and exact body, so a receiver can refuse a forgery and a
+replay alike.
+
+**A webhook never breaks the thing it is about.** Emitting writes a row inside
+the transaction and queues the send for after it commits, so a rolled-back
+order never announces itself and a receiver that is down never rolls one back.
+Retries come from the schedule, not the queue's own retry machinery: a
+delivery then survives a flushed queue and a deploy, and what is outstanding is
+a query rather than a guess. Twenty-five failures in a row switches the
+address off and says so, rather than sending personal data at a dead host for
+ever.
+
+**Keys belong to the organization and can only read.** A person's token can
+refund; a key in somebody's accounting script should not be able to. Keys are
+shown once, kept as a hash with the last four characters for recognising them,
+see only their own organization — an event of anyone else's is a 404, not a
+403 — and never reach the console API. Both directions carry the same payload
+shape, and neither carries a ticket code: an integration is an export by
+another name, and codes have never been in an export. Only an owner can create
+either, and creating or removing one is in the audit trail.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

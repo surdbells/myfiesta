@@ -1,0 +1,294 @@
+<ui-page-header
+  title="Integrations"
+  subtitle="Send your sales to the other tools you use, or let them read your events, orders and guests."
+/>
+
+@if (loading()) {
+  <div class="grid gap-2">
+    @for (n of [0, 1]; track n) {
+      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="3rem" /></div>
+    }
+  </div>
+} @else if (refused()) {
+  <ui-empty title="Only owners connect other tools" hint="These send buyers' names and addresses out of myFiesta, so an owner decides where they go." />
+} @else if (failed()) {
+  <ui-error-state title="Could not load your integrations" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
+} @else if (data(); as all) {
+  <div class="grid max-w-[52rem] gap-10">
+    <!-- Shown once. Everything on this screen afterwards shows the last four
+         characters at most. -->
+    @if (reveal(); as secret) {
+      <section class="grid gap-3 rounded-lg border border-border bg-surface-raised p-5" role="status" aria-live="polite">
+        <div>
+          <p class="font-semibold">
+            {{ secret.kind === 'key' ? 'Your key for ' + secret.label : 'The signing secret for ' + secret.label }}
+          </p>
+          <p class="text-pretty text-sm text-text-muted">
+            @if (secret.kind === 'key') {
+              Copy it into the tool that will use it. This is the only time it is shown — if it is lost, revoke it and make another.
+            } @else {
+              Your receiver uses this to check each delivery came from us. This is the only time it is shown — if it is lost, remove the address and add it again.
+            }
+          </p>
+        </div>
+        <p class="m-0 select-all break-all rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs">{{ secret.value }}</p>
+        <div class="flex flex-wrap gap-2">
+          <button uiButton type="button" variant="secondary" size="sm" (click)="copy(secret.value)">{{ copied() ? 'Copied' : 'Copy' }}</button>
+          <button uiButton type="button" variant="ghost" size="sm" (click)="reveal.set(null)">I have saved it</button>
+        </div>
+      </section>
+    }
+
+    <!-- Going out. -->
+    <section class="grid gap-4" aria-labelledby="webhooks-heading">
+      <div>
+        <h2 id="webhooks-heading" class="text-base font-semibold">Send updates to your tools</h2>
+        <p class="text-pretty text-sm text-text-muted">
+          Give us a web address and we post there each time something happens — for a CRM, an accounting tool, or Zapier.
+          Every delivery is signed, and one that fails is tried again over the next day.
+        </p>
+      </div>
+
+      @if (all.endpoints.length > 0) {
+        <ul class="m-0 grid list-none gap-2 p-0">
+          @for (endpoint of all.endpoints; track endpoint.id) {
+            @let state = health(endpoint);
+            <li class="grid gap-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+              <div class="flex flex-wrap items-start gap-x-6 gap-y-2">
+                <div class="min-w-0 flex-1">
+                  <p class="flex flex-wrap items-center gap-2">
+                    <span class="break-all font-mono text-sm">{{ endpoint.url }}</span>
+                    <ui-badge [tone]="state.tone">{{ state.label }}</ui-badge>
+                  </p>
+                  <p class="text-sm text-text-muted">
+                    @if (endpoint.description) {
+                      {{ endpoint.description }} ·
+                    }
+                    @for (name of endpoint.events; track name; let last = $last) {
+                      {{ labels[name].title }}{{ last ? '' : ', ' }}
+                    }
+                  </p>
+                  @if (!endpoint.enabled && endpoint.disabled_reason) {
+                    <p class="text-sm text-danger">{{ endpoint.disabled_reason }}</p>
+                  } @else if (endpoint.last_delivery; as last) {
+                    <p class="text-xs text-text-muted">
+                      Last sent {{ last.at | date: 'd MMM, HH:mm' }}
+                      @if (last.response_status) {
+                        — answered {{ last.response_status }}
+                      }
+                    </p>
+                  }
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  @if (endpoint.enabled) {
+                    <button uiButton type="button" variant="secondary" size="sm" [loading]="busyEndpoint() === endpoint.id" [disabled]="busyEndpoint() !== null" (click)="sendTest(endpoint)">Send a test</button>
+                  }
+                  <button uiButton type="button" variant="ghost" size="sm" [attr.aria-expanded]="openHistory() === endpoint.id" (click)="toggleHistory(endpoint)">
+                    {{ openHistory() === endpoint.id ? 'Hide history' : 'History' }}
+                  </button>
+                  <button uiButton type="button" variant="ghost" size="sm" [disabled]="busyEndpoint() !== null" (click)="setEnabled(endpoint, !endpoint.enabled)">
+                    {{ endpoint.enabled ? 'Turn off' : 'Turn on' }}
+                  </button>
+                  <button uiButton type="button" variant="ghost" size="sm" (click)="removing.set(endpoint)">Remove</button>
+                </div>
+              </div>
+
+              @if (openHistory() === endpoint.id) {
+                <div class="border-t border-border pt-3">
+                  @if (historyFailed()) {
+                    <p class="text-sm text-text-muted">The history could not be loaded.</p>
+                  } @else if (history(); as deliveries) {
+                    @if (deliveries.length === 0) {
+                      <p class="text-sm text-text-muted">Nothing has been sent here yet. Send a test to see one arrive.</p>
+                    } @else {
+                      <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm tabular-nums">
+                          <thead class="text-xs text-text-muted">
+                            <tr>
+                              <th class="py-1 pr-4 font-medium">When</th>
+                              <th class="py-1 pr-4 font-medium">What</th>
+                              <th class="py-1 pr-4 font-medium">Result</th>
+                              <th class="py-1 font-medium">Your system said</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (delivery of deliveries; track delivery.id) {
+                              <tr class="border-t border-border align-top">
+                                <td class="whitespace-nowrap py-2 pr-4">{{ delivery.created_at | date: 'd MMM, HH:mm' }}</td>
+                                <td class="whitespace-nowrap py-2 pr-4 font-mono text-xs">{{ delivery.event }}</td>
+                                <td class="whitespace-nowrap py-2 pr-4">
+                                  @switch (delivery.status) {
+                                    @case ('succeeded') {
+                                      <ui-badge tone="success">Delivered</ui-badge>
+                                    }
+                                    @case ('pending') {
+                                      <ui-badge tone="warning">Trying again {{ delivery.next_attempt_at | date: 'HH:mm' }}</ui-badge>
+                                    }
+                                    @default {
+                                      <ui-badge tone="danger">Gave up after {{ delivery.attempts }}</ui-badge>
+                                    }
+                                  }
+                                </td>
+                                <td class="py-2">
+                                  @if (delivery.response_status) {
+                                    <span class="font-semibold">{{ delivery.response_status }}</span>
+                                  }
+                                  <span class="block max-w-[24rem] truncate font-mono text-xs text-text-muted" [title]="delivery.response_excerpt ?? ''">{{ delivery.response_excerpt }}</span>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    }
+                  } @else {
+                    <ui-skeleton height="2rem" />
+                  }
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-5" (ngSubmit)="addWebhook()">
+        <h3 class="text-sm font-semibold">Add an address</h3>
+
+        <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 max-[720px]:grid-cols-1">
+          <div class="field min-w-0">
+            <label for="webhookUrl">Web address</label>
+            <input
+              id="webhookUrl"
+              name="webhookUrl"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              placeholder="https://hooks.example.com/myfiesta"
+              required
+              [ngModel]="url()"
+              (ngModelChange)="url.set($event)"
+            />
+          </div>
+          <div class="field min-w-0">
+            <label for="webhookNote">What it is for <span class="font-normal text-text-muted">(optional)</span></label>
+            <input id="webhookNote" name="webhookNote" maxlength="120" autocomplete="off" placeholder="Our CRM" [ngModel]="description()" (ngModelChange)="description.set($event)" />
+          </div>
+        </div>
+
+        <fieldset class="m-0 grid gap-2 border-0 p-0">
+          <legend class="mb-1 text-sm font-medium">Tell it when</legend>
+          @for (name of all.events; track name) {
+            <label class="flex cursor-pointer items-start gap-3 text-sm">
+              <input class="mt-0.5" type="checkbox" [name]="'event-' + name" [checked]="chosen().has(name)" (change)="toggleEvent(name, $any($event.target).checked)" />
+              <span>
+                <span class="font-medium">{{ labels[name].title }}</span>
+                <span class="block text-text-muted">{{ labels[name].hint }}</span>
+              </span>
+            </label>
+          }
+        </fieldset>
+
+        @if (addError(); as message) {
+          <ui-alert tone="danger">{{ message }}</ui-alert>
+        }
+
+        <div>
+          <button uiButton type="submit" [loading]="adding()" [disabled]="!canAdd()">Add address</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Coming in. -->
+    <section class="grid gap-4" aria-labelledby="keys-heading">
+      <div>
+        <h2 id="keys-heading" class="text-base font-semibold">Let your tools read from myFiesta</h2>
+        <p class="text-pretty text-sm text-text-muted">
+          A key lets another system read your events, orders and guest list. It cannot change or refund anything, and it never sees ticket codes.
+        </p>
+      </div>
+
+      @if (all.keys.length > 0) {
+        <ul class="m-0 grid list-none gap-2 p-0">
+          @for (key of all.keys; track key.id) {
+            <li class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised px-5 py-3">
+              <div class="min-w-0 flex-1">
+                <p class="flex flex-wrap items-center gap-2">
+                  <span class="font-medium">{{ key.name }}</span>
+                  <span class="font-mono text-xs text-text-muted">mf_live_…{{ key.last_four }}</span>
+                </p>
+                <p class="text-xs text-text-muted">
+                  @if (key.last_used_at) {
+                    Last used {{ key.last_used_at | date: 'd MMM, HH:mm' }}
+                  } @else {
+                    Not used yet
+                  }
+                  · made {{ key.created_at | date: 'd MMM y' }}
+                </p>
+              </div>
+              <button uiButton type="button" variant="ghost" size="sm" (click)="revoking.set(key)">Revoke</button>
+            </li>
+          }
+        </ul>
+      }
+
+      <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-5" (ngSubmit)="createKey()">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 max-[520px]:grid-cols-1">
+          <div class="field min-w-0">
+            <label for="keyName">Name it after where it will live</label>
+            <input id="keyName" name="keyName" maxlength="80" autocomplete="off" placeholder="Accounting sync" required [ngModel]="keyName()" (ngModelChange)="keyName.set($event)" />
+          </div>
+          <button uiButton type="submit" [loading]="making()" [disabled]="making() || !keyName().trim()">Make a key</button>
+        </div>
+
+        @if (keyError(); as message) {
+          <ui-alert tone="danger">{{ message }}</ui-alert>
+        }
+
+        <details class="text-sm">
+          <summary class="cursor-pointer font-medium">What a key can read</summary>
+          <div class="mt-3 grid gap-3 text-text-muted">
+            <ul class="m-0 grid gap-1 pl-5">
+              <li><code class="font-mono text-xs">GET /api/v1/events</code> — your events</li>
+              <li><code class="font-mono text-xs">GET /api/v1/events/&#123;id&#125;/orders</code> — paid and refunded orders</li>
+              <li><code class="font-mono text-xs">GET /api/v1/events/&#123;id&#125;/attendees</code> — who holds a ticket, and who is in</li>
+            </ul>
+            <p class="m-0">
+              Add <code class="font-mono text-xs">?since=</code> with a date to get only what changed after it. Pages are 100 long; follow
+              <code class="font-mono text-xs">next_cursor</code> for the rest.
+            </p>
+            <pre class="m-0 overflow-x-auto rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs">{{ example() }}</pre>
+          </div>
+        </details>
+      </form>
+    </section>
+  </div>
+
+  @if (removing(); as endpoint) {
+    <ui-confirm
+      [open]="true"
+      heading="Stop sending here?"
+      [consequence]="endpoint.url + ' will get nothing more from us, and its history goes with it. To start again you would add it back and get a new secret.'"
+      confirmLabel="Remove"
+      busyLabel="Removing…"
+      destructive
+      [busy]="removingBusy()"
+      (confirmed)="confirmRemove()"
+      (cancelled)="removing.set(null)"
+    />
+  }
+
+  @if (revoking(); as key) {
+    <ui-confirm
+      [open]="true"
+      [heading]="'Revoke ' + key.name + '?'"
+      consequence="Anything using this key stops working straight away. This cannot be undone — you would make a new key and put it where this one was."
+      confirmLabel="Revoke"
+      busyLabel="Revoking…"
+      destructive
+      [busy]="revokingBusy()"
+      (confirmed)="confirmRevoke()"
+      (cancelled)="revoking.set(null)"
+    />
+  }
+}

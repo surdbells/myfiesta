@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["apps/api/artisan", "serve", "--host=127.0.0.1", "--port=8000"],
+      "port": 8000,
+      "autoPort": false
+    },
+    {
       "name": "organizer-console",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "--prefix", "apps/organizer-web"],

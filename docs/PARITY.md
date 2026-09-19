@@ -127,12 +127,20 @@ iframe from a promoter's own page. Every competitor has this and it is how a
 venue with an existing website adopts a ticketing platform without rebuilding
 anything.
 
-### 10. Webhooks and keys for organizers — **M**
+### 10. Webhooks and keys for organizers — **done, 19 September 2026**
 
-We consume webhooks from gateways; we emit none. A larger promoter wants
-`order.paid` arriving at their own system, and an API key to read their own
-sales. This is also the cheapest route to the integrations everybody asks for
-by name — Zapier, Mailchimp, a CRM — without building any of them.
+An owner can point up to five addresses at `order.paid`, `order.refunded` and
+`ticket.checked_in`, and make read-only keys for `/api/v1` — events, orders
+and attendees, paged by cursor, with `since` for a sync that only wants what
+changed. One payload shape serves both directions, and neither ever carries a
+ticket code.
+
+Every delivery is signed, retried from the scheduler for most of a day, and
+recorded with what came back; an address that fails twenty-five times in a
+row is switched off and says why. Addresses are checked for being on the
+public internet when saved and again at every delivery. The console's
+Integrations screen is owners-only. The decisions are in
+[DECISIONS.md](DECISIONS.md).
 
 ### 11. Campaigns, not just messages — **M**
 

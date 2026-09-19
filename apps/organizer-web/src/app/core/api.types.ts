@@ -59,6 +59,52 @@ export interface Brand {
   verification_pending_name: boolean;
 }
 
+/** Something another system is told about. */
+export type WebhookEventName = 'order.paid' | 'order.refunded' | 'ticket.checked_in';
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  events: WebhookEventName[];
+  description: string | null;
+  enabled: boolean;
+  /** Why it is off — by hand, or after too many failures in a row. */
+  disabled_reason: string | null;
+  consecutive_failures: number;
+  last_delivery: { status: WebhookDeliveryStatus; event: string; response_status: number | null; at: string } | null;
+  created_at: string;
+}
+
+export type WebhookDeliveryStatus = 'pending' | 'succeeded' | 'failed';
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status: WebhookDeliveryStatus;
+  attempts: number;
+  response_status: number | null;
+  /** The first 500 characters of what came back, or why nothing did. */
+  response_excerpt: string | null;
+  next_attempt_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+/** Never the key itself: that is shown once, when it is made. */
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  last_four: string;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface Integrations {
+  events: WebhookEventName[];
+  endpoints: WebhookEndpoint[];
+  keys: ApiKeySummary[];
+}
+
 export interface Membership {
   id: string;
   name: string;

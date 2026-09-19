@@ -38,13 +38,15 @@ php artisan tinker --execute="echo DB::table('jobs')->count();"
 
 ### The scheduler
 
-Three commands, and one of them touches stock:
+Five commands, and one of them touches stock:
 
 | Command | When | What happens without it |
 | ------- | ---- | ----------------------- |
 | `reminders:send` | every 15 minutes | scheduled reminders never go out |
 | `checkouts:expire` | every 15 minutes | abandoned baskets keep holding tickets, so an event can read as sold out that nobody bought |
 | `series:extend` | 03:30 daily | a repeating event stops appearing on new dates |
+| `webhooks:retry` | every minute | a delivery that failed once is never tried again |
+| `webhooks:prune` | 04:00 daily | copies of what was sent to organizers' systems — buyers' names inside — pile up past their thirty days |
 
 In production that is one cron entry running `schedule:run` every minute, the
 standard Laravel arrangement. In development `schedule:work` does the same

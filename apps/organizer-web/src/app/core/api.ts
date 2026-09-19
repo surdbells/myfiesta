@@ -13,6 +13,11 @@ import { catchError, map } from 'rxjs/operators';
 import {
   AttendeeMessage,
   Brand,
+  ApiKeySummary,
+  Integrations,
+  WebhookDelivery,
+  WebhookEndpoint,
+  WebhookEventName,
   CancellationPreview,
   CancellationResult,
   DoorList,
@@ -628,6 +633,48 @@ export class Api {
    * decides what to draw.
    */
   // --- how the organization appears ------------------------------------------
+
+  // --- other systems -------------------------------------------------------
+
+  integrations(): Observable<Integrations> {
+    return this.http.get<Integrations>(`${this.base}/api/organizer/integrations`);
+  }
+
+  /** The secret comes back here and nowhere else. */
+  addWebhook(body: { url: string; events: WebhookEventName[]; description: string | null }): Observable<{ data: WebhookEndpoint; secret: string }> {
+    return this.http.post<{ data: WebhookEndpoint; secret: string }>(`${this.base}/api/organizer/integrations/webhooks`, body);
+  }
+
+  updateWebhook(id: string, changes: { events?: WebhookEventName[]; description?: string | null; enabled?: boolean }): Observable<WebhookEndpoint> {
+    return this.http
+      .patch<{ data: WebhookEndpoint }>(`${this.base}/api/organizer/integrations/webhooks/${id}`, changes)
+      .pipe(map((response) => response.data));
+  }
+
+  removeWebhook(id: string): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/organizer/integrations/webhooks/${id}`);
+  }
+
+  testWebhook(id: string): Observable<WebhookDelivery> {
+    return this.http
+      .post<{ data: WebhookDelivery }>(`${this.base}/api/organizer/integrations/webhooks/${id}/test`, {})
+      .pipe(map((response) => response.data));
+  }
+
+  webhookDeliveries(id: string): Observable<WebhookDelivery[]> {
+    return this.http
+      .get<{ data: WebhookDelivery[] }>(`${this.base}/api/organizer/integrations/webhooks/${id}/deliveries`)
+      .pipe(map((response) => response.data));
+  }
+
+  /** The key comes back here and nowhere else. */
+  createApiKey(name: string): Observable<{ data: ApiKeySummary; key: string }> {
+    return this.http.post<{ data: ApiKeySummary; key: string }>(`${this.base}/api/organizer/integrations/keys`, { name });
+  }
+
+  revokeApiKey(id: string): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/organizer/integrations/keys/${id}`);
+  }
 
   brand(): Observable<Brand> {
     return this.http.get<Brand>(`${this.base}/api/organizer/brand`);

@@ -56,6 +56,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/brand/brand').then((m) => m.Brand),
   },
   {
+    // Owners only; the API refuses anybody else, and the nav hides it.
+    path: 'integrations',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/integrations/integrations').then((m) => m.IntegrationsScreen),
+  },
+  {
     path: 'team',
     canActivate: [requireSession],
     loadComponent: () => import('./features/team/team').then((m) => m.Team),
