@@ -110,6 +110,22 @@ return [
             'columns' => ['from_email', 'to_email'],
         ],
 
+        /*
+         * The privacy requests themselves, and the one place keeping an
+         * address is the point.
+         *
+         * A record that somebody asked to be erased, and what was done about
+         * it, is the evidence that the law was obeyed — erasing it with them
+         * would leave nothing to show for the request but their absence. The
+         * export file it points at is deleted after a week; the row stays,
+         * holding the address it was about and nothing else about them.
+         */
+        'data_requests' => [
+            'strategy' => 'retain',
+            'key' => 'email',
+            'reason' => 'Proof that a privacy request was made and answered. Erasing it destroys the record of the erasure.',
+        ],
+
         'password_reset_tokens' => [
             'strategy' => 'delete',
             'key' => 'email',

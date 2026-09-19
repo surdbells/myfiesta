@@ -71,3 +71,13 @@ Schedule::command('campaigns:send')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Privacy requests: an export is deleted a week after it is made, and a
+ * request nobody proved is closed after a day. Both are personal data with a
+ * shelf life, so neither waits on anybody remembering.
+ */
+Schedule::command('privacy:prune')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->runInBackground();

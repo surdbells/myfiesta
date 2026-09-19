@@ -404,6 +404,29 @@ cannot know and they cannot act on. The comparison lines both nights up by
 days before the doors, so "by a week out last time we had sold 140" is a
 sentence the screen can say in March about a night in June.
 
+**A privacy request is proved by reaching the address, not by signing in.**
+Guest checkout means most of the people with a right to ask have no account,
+so an erasure behind a login would be closed to exactly the people who most
+often want one. The link in the email is the whole credential, a GET only
+shows what will happen, and the POST is what acts — mail scanners follow links
+in messages, and an erasure on a prefetch would erase somebody who never
+clicked. An address we hold nothing about is never written to, so the form
+cannot be used to send mail to a stranger, and the answer on screen is the same
+either way so it cannot be used to ask who has an account.
+
+**Erasure says what it actually did.** It is not a DELETE across the schema and
+claiming otherwise would not survive being looked at. Rows that owe nobody
+anything go; orders, tickets and audit entries stay with the person taken out
+of them, because both laws permit keeping financial records and the ledger's
+append-only trigger would refuse to give them up anyway; and two things are
+kept on purpose — the suppression list, because forgetting somebody's "stop
+emailing me" starts the emails again, and the security access log, which
+exists to catch misuse. The person is shown the list, table by table.
+
+**The record of a privacy request outlives the data it was about.** Erasing
+the request along with the person would leave nothing to show for it but their
+absence, which is the opposite of what a regulator asks for.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

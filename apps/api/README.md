@@ -50,7 +50,7 @@ against the organizer's last one.
 
 ## The scheduler
 
-Six commands, and one of them touches stock:
+Seven commands, and one of them touches stock:
 
 | Command | When | What happens without it |
 | ------- | ---- | ----------------------- |
@@ -60,6 +60,7 @@ Six commands, and one of them touches stock:
 | `webhooks:retry` | every minute | a delivery that failed once is never tried again |
 | `webhooks:prune` | 04:00 daily | copies of what was sent to organizers' systems — buyers' names inside — pile up past their thirty days |
 | `campaigns:send` | every 5 minutes | a scheduled campaign never goes out |
+| `privacy:prune` | 04:30 daily | data exports sit on disk past their week, and unproved requests stay open |
 
 In production that is one cron entry running `schedule:run` every minute, the
 standard Laravel arrangement. In development `schedule:work` does the same

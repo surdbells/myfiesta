@@ -143,6 +143,16 @@ export class Api {
     this.http.post(`${this.base}/api/events/${slug}/views`, embed ? { embed: true } : {}).subscribe({ error: () => undefined });
   }
 
+  /**
+   * Ask for a copy of your data, or to be erased.
+   *
+   * The answer is the same whether or not the address is known here, so
+   * there is nothing in the response worth reading beyond "it worked".
+   */
+  requestMyData(kind: 'export' | 'erasure', email: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/privacy/requests`, { kind, email });
+  }
+
   orderStatus(reference: string): Observable<OrderStatus> {
     return this.http.get<OrderStatus>(`${this.base}/api/orders/${reference}`);
   }

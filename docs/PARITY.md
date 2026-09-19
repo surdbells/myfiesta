@@ -193,13 +193,22 @@ seated concert hall wants to use this, and not before — but it is the single
 biggest thing on this list, so it should be a deliberate "not yet" rather than
 an oversight.
 
-### 16. Data requests — **S to M**, compliance
+### 16. Data requests — **done, 19 September 2026**
 
-PIPEDA in Canada and NDPR in Nigeria both give people the right to a copy of
-their data and to have it deleted. We have the audit trail to do it honestly
-and the append-only constraint that makes "delete everything" a question rather
-than a `DELETE` — which is exactly the design conversation to have before the
-first request arrives rather than during it.
+Asked for from the privacy page, by anybody with an address and no account.
+A link goes to that address and nothing happens until it comes back — an
+erasure that ran on a typed-in address would be a way to delete a stranger.
+
+An export is every row the map points at, as one file on the private disk for
+a week, without ticket codes or anything else that opens a door. An erasure
+runs the map's three strategies and says which happened to what: rows deleted,
+rows kept without the person in them, and the two things kept on purpose — the
+suppression list, because forgetting it starts the emails again, and the
+security log. Somebody who is the only owner of an organization is refused,
+with the step to take first.
+
+Staff see the queue and anything past its thirty days in the admin panel, which
+should always be empty: requests are carried out the moment they are proved.
 
 ### 17. Chargebacks and fraud — **M**
 
@@ -228,9 +237,10 @@ between a ticketing tool and the thing a club runs its night on.
 campaigns (11) — the block that makes larger promoters possible — and the
 analytics an organizer can act on (13).
 
-**Next, and both need a decision rather than a sprint:** SMS (12) needs a
-provider account in each market; data requests (16) needs the erasure
-conversation the append-only ledger forces.
+**Done:** data requests (16).
+
+**Next:** chargebacks (17), then SMS (12) — which needs a provider account in
+each market before it can send anything — and resale (5).
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week

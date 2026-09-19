@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\DataRequestController;
 use App\Http\Controllers\Api\DiscoverController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\DoorPassController;
@@ -63,6 +64,14 @@ Route::get('/event-categories', EventCategoryController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
+
+/*
+ * "Send me what you hold about me", and "forget me".
+ *
+ * No account needed: most people holding a ticket here have never had one.
+ * Throttled hard — each one sends an email to an address somebody typed.
+ */
+Route::post('/privacy/requests', [DataRequestController::class, 'store'])->middleware('throttle:5,60');
 
 // A page view, counted and nothing else. See EventViewController.
 Route::post('/events/{slug}/views', EventViewController::class)->middleware('throttle:30,1');

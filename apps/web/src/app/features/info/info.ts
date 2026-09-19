@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Seo } from '../../core/seo';
+import { DataRequestForm } from './data-request-form';
 
 /**
  * Help, terms, privacy and contact.
@@ -20,7 +21,7 @@ import { Seo } from '../../core/seo';
  */
 @Component({
   selector: 'app-info',
-  imports: [RouterLink],
+  imports: [RouterLink, DataRequestForm],
   templateUrl: './info.html',
   styleUrl: './info.css',
 })

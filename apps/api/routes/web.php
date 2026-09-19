@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DataRequestPageController;
 use App\Http\Controllers\FollowLeaveController;
 use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
@@ -84,3 +85,22 @@ Route::post('/unsubscribe/{token}', [UnsubscribeController::class, 'store'])
 
 Route::post('/unsubscribe/{token}/resubscribe', [UnsubscribeController::class, 'resubscribe'])
     ->name('unsubscribe.resubscribe');
+
+/*
+ * A privacy request, from the link emailed to the address it is about.
+ *
+ * Here rather than on the site app, and plain HTML, because it has to work
+ * with no account, no session and no JavaScript — often in a mail client's
+ * own browser. The GET only shows what will happen; the POST is what acts.
+ */
+Route::get('/privacy/requests/{token}', [DataRequestPageController::class, 'show'])
+    ->name('privacy.request')
+    ->middleware('throttle:60,1');
+
+Route::post('/privacy/requests/{token}', [DataRequestPageController::class, 'confirm'])
+    ->name('privacy.confirm')
+    ->middleware('throttle:20,1');
+
+Route::get('/privacy/requests/{token}/download', [DataRequestPageController::class, 'download'])
+    ->name('privacy.download')
+    ->middleware('throttle:60,1');
