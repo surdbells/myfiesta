@@ -39,7 +39,8 @@ export type Permission =
   | "messages.send"
   | "payouts.request"
   | "team.manage"
-  | "organization.brand";
+  | "organization.brand"
+  | "organization.integrations";
 
 /**
  * How an organization appears on the pages it sells from.

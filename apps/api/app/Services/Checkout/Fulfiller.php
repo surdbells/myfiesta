@@ -4,11 +4,13 @@ namespace App\Services\Checkout;
 
 use App\Mail\TicketsIssued;
 use App\Models\Code;
-use App\Services\Waitlist\Waitlist;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
+use App\Services\Integrations\Payloads;
+use App\Services\Integrations\Webhooks;
 use App\Services\Payments\GatewayFee;
+use App\Services\Waitlist\Waitlist;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
@@ -69,6 +71,11 @@ class Fulfiller
 
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);
+
+            // Whoever asked to hear about sales. Inside the transaction so a
+            // rolled-back order never announces itself; the delivery goes
+            // after commit, and a receiver that is down never touches this.
+            app(Webhooks::class)->emit($locked->organization_id, 'order.paid', app(Payloads::class)->order($locked->fresh()));
 
             // Queued, and dispatched only after the transaction commits.
             // Sending inside it risks a buyer holding tickets in their inbox

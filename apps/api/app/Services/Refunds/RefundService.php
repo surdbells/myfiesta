@@ -11,6 +11,8 @@ use App\Models\Refund;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Integrations\Payloads;
+use App\Services\Integrations\Webhooks;
 use App\Support\Allocation;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -255,6 +257,19 @@ class RefundService
             // A fully refunded order gives its code's use back.
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);
+
+            // Inside the transaction, so a refund that rolls back never
+            // announces itself; the delivery itself goes after commit.
+            app(Webhooks::class)->emit($locked->organization_id, 'order.refunded', [
+                ...app(Payloads::class)->order($locked->fresh()),
+                'refund' => [
+                    'amount' => ['amount' => (int) $refund->amount, 'currency' => $locked->currency],
+                    'reason' => $refund->reason,
+                    // How many tickets this refund stopped working, which
+                    // is what an attendee list elsewhere has to take off.
+                    'tickets' => $refund->tickets()->count(),
+                ],
+            ]);
 
             return $refund->refresh();
         });

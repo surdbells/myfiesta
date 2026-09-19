@@ -5,6 +5,8 @@ namespace App\Services\Door;
 use App\Models\Ticket;
 use App\Models\TicketScan;
 use App\Models\User;
+use App\Services\Integrations\Payloads;
+use App\Services\Integrations\Webhooks;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -131,6 +133,19 @@ class CheckInService
                     'checked_in_at' => $ticket->checked_in_at ?? $scannedAt ?? now(),
                     'checked_in_by' => $ticket->checked_in_by ?? $scanner?->id,
                 ]);
+
+                // Somebody walked in. For a live screen elsewhere — a bar
+                // that wants to know the room is filling, a promoter watching
+                // their list arrive. The person, never their code.
+                app(Webhooks::class)->emit(
+                    $ticket->event()->value('organization_id'),
+                    'ticket.checked_in',
+                    [
+                        ...app(Payloads::class)->attendee($ticket),
+                        'admitted_now' => $admitCount,
+                        'event_id' => $eventId,
+                    ],
+                );
             }
 
             $row = [

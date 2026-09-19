@@ -44,3 +44,20 @@ Schedule::command('checkouts:expire')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Webhooks.
+ *
+ * Retries every minute: the backoff is written on each delivery, so this only
+ * picks up the ones that are due. Deliveries are pruned nightly because each
+ * one carries a buyer's name and address — see WebhookDelivery::KEEP_DAYS.
+ */
+Schedule::command('webhooks:retry')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('webhooks:prune')
+    ->dailyAt('04:00')
+    ->withoutOverlapping()
+    ->runInBackground();

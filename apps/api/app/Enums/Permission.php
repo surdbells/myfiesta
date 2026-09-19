@@ -66,6 +66,17 @@ enum Permission: string
     case BrandManage = 'organization.brand';
 
     /**
+     * Webhooks and API keys: pointing the organization's data at another
+     * system.
+     *
+     * Owner-only. Both send buyers' names and addresses somewhere this
+     * platform does not control, for as long as they stay switched on, and
+     * choosing where that goes is a decision about everybody who ever bought
+     * a ticket — not one to hand every member.
+     */
+    case IntegrationsManage = 'organization.integrations';
+
+    /**
      * Every permission a role carries.
      *
      * Written as one table rather than scattered through policies, because the

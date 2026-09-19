@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnforceTokenScope;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // what keeps a door-staff phone away from sales and payouts.
         $middleware->alias([
             'token.scope' => EnforceTokenScope::class,
+            'api.key' => AuthenticateApiKey::class,
         ]);
 
         // Webhooks carry no browser session, so there is no CSRF token to

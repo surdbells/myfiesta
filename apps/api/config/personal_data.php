@@ -206,6 +206,27 @@ return [
             'files' => ['document_path'],
             'reason' => 'Stored on the private disk; the file is removed with the row.',
         ],
+
+        /*
+         * A copy of what was sent to an organizer's own systems — buyers'
+         * names and addresses inside the payload. Kept thirty days for
+         * debugging a receiver, pruned daily after that (webhooks:prune), and
+         * gone with the organization.
+         *
+         * Not erased per buyer: once delivered, the organizer's copy is theirs
+         * to answer for, and ours expires on its own.
+         */
+        'webhook_deliveries' => [
+            'strategy' => 'delete',
+            'key' => 'organization_id',
+            'columns' => ['payload', 'response_excerpt'],
+        ],
+
+        'webhook_endpoints' => [
+            'strategy' => 'delete',
+            'key' => 'organization_id',
+            'encrypted' => ['secret'],
+        ],
     ],
 
     /*

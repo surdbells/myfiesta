@@ -1,43 +1,45 @@
 <?php
 
+use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
-use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\DiscoverController;
-use App\Http\Controllers\Api\InvitationController;
-use App\Http\Controllers\Api\Organizer\TeamController;
-use App\Http\Controllers\Api\WaitlistController;
-use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
-use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\DoorPassController;
-use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassController;
+use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\FollowController;
+use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\OrderStatusController;
-use App\Http\Controllers\Api\OrganizerController;
 use App\Http\Controllers\Api\Organizer\AddOnController;
 use App\Http\Controllers\Api\Organizer\BrandController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
+use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassController;
 use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
 use App\Http\Controllers\Api\Organizer\EventImageController;
+use App\Http\Controllers\Api\Organizer\GuestController;
+use App\Http\Controllers\Api\Organizer\IntegrationController;
+use App\Http\Controllers\Api\Organizer\IssuedTicketController;
+use App\Http\Controllers\Api\Organizer\MessageController;
 use App\Http\Controllers\Api\Organizer\OrderController as OrganizerOrderController;
 use App\Http\Controllers\Api\Organizer\OverviewController;
 use App\Http\Controllers\Api\Organizer\PayoutController;
 use App\Http\Controllers\Api\Organizer\QuestionController;
-use App\Http\Controllers\Api\Organizer\GuestController;
-use App\Http\Controllers\Api\Organizer\IssuedTicketController;
-use App\Http\Controllers\Api\Organizer\MessageController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
+use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
+use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
+use App\Http\Controllers\Api\OrganizerController;
 use App\Http\Controllers\Api\SavedEventController;
 use App\Http\Controllers\Api\SitemapController;
 use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\V1\ReadController;
+use App\Http\Controllers\Api\WaitlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => ['status' => 'ok']);
@@ -211,7 +213,6 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/payouts/requests', [PayoutController::class, 'requestPayout']);
         Route::delete('/payouts/requests/{payoutRequest}', [PayoutController::class, 'cancelRequest']);
 
-        // The team: who is on it, in what role, and invitations to it.
         /*
          * How the organization appears on the pages it sells from. Any staff
          * member may read it; the owner may change it.
@@ -221,6 +222,20 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/brand/logo', [BrandController::class, 'storeLogo'])->middleware('throttle:60,1');
         Route::delete('/brand/logo', [BrandController::class, 'destroyLogo']);
 
+        /*
+         * Other systems: webhooks out, keys in. Owner-only, checked inside —
+         * the list names where the organization's data goes.
+         */
+        Route::get('/integrations', [IntegrationController::class, 'index']);
+        Route::post('/integrations/webhooks', [IntegrationController::class, 'storeEndpoint'])->middleware('throttle:20,1');
+        Route::patch('/integrations/webhooks/{endpoint}', [IntegrationController::class, 'updateEndpoint']);
+        Route::delete('/integrations/webhooks/{endpoint}', [IntegrationController::class, 'destroyEndpoint']);
+        Route::post('/integrations/webhooks/{endpoint}/test', [IntegrationController::class, 'test'])->middleware('throttle:10,1');
+        Route::get('/integrations/webhooks/{endpoint}/deliveries', [IntegrationController::class, 'deliveries']);
+        Route::post('/integrations/keys', [IntegrationController::class, 'storeKey'])->middleware('throttle:20,1');
+        Route::delete('/integrations/keys/{key}', [IntegrationController::class, 'revokeKey']);
+
+        // The team: who is on it, in what role, and invitations to it.
         Route::get('/team', [TeamController::class, 'index']);
         Route::post('/team/invitations', [TeamController::class, 'invite']);
         Route::delete('/team/invitations/{invitation}', [TeamController::class, 'revoke']);
@@ -252,7 +267,6 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // The order tiers are offered in, as one list — see the controller for
         // why this is not a sort_order per tier.
         Route::post('/events/{event:id}/ticket-types/order', [TicketTypeController::class, 'reorder']);
-
 
         // What is sold beside a ticket: a table, a bottle, a shirt.
         Route::get('/events/{event:id}/add-ons', [AddOnController::class, 'index']);
@@ -322,3 +336,16 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::get('/events/{event:id}/code-batches/{batch}/export', [CodeBatchController::class, 'export']);
         Route::post('/events/{event:id}/code-batches/{batch}/deactivate', [CodeBatchController::class, 'deactivate']);
     });
+
+/*
+ * Another system reading an organization's data with one of its keys.
+ *
+ * Versioned, because somebody else's code depends on these shapes and cannot
+ * be redeployed alongside ours. Read only; the key decides the organization.
+ * Throttled before the key is checked, so guessing keys costs the same budget.
+ */
+Route::prefix('v1')->middleware(['throttle:api-key', 'api.key'])->group(function () {
+    Route::get('/events', [ReadController::class, 'events']);
+    Route::get('/events/{event}/orders', [ReadController::class, 'orders']);
+    Route::get('/events/{event}/attendees', [ReadController::class, 'attendees']);
+});

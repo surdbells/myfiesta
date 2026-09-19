@@ -2,7 +2,13 @@
 
 namespace App\Providers;
 
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,9 +26,9 @@ class AppServiceProvider extends ServiceProvider
          * Imagick is better at colour profiles and worse at being present.
          */
         $this->app->singleton(
-            \Intervention\Image\ImageManager::class,
-            fn () => new \Intervention\Image\ImageManager(
-                new \Intervention\Image\Drivers\Gd\Driver
+            ImageManager::class,
+            fn () => new ImageManager(
+                new Driver
             ),
         );
     }
@@ -33,6 +39,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         /*
+         * Per key, not per address: two integrations behind one office NAT
+         * are two budgets, and one key spread across servers is one.
+         */
+        RateLimiter::for('api-key', fn (Request $request) => Limit::perMinute(120)
+            ->by('key:'.hash('sha256', (string) $request->bearerToken())));
+
+        /*
          * The reset link points at the console, not at this API.
          *
          * Laravel's default builds a URL for a Blade route that does not exist
@@ -41,7 +54,7 @@ class AppServiceProvider extends ServiceProvider
          * to a 404, which is the kind of break nobody notices until a real
          * person is locked out.
          */
-        \Illuminate\Auth\Notifications\ResetPassword::createUrlUsing(
+        ResetPassword::createUrlUsing(
             fn ($user, string $token) => rtrim(config('app.console_url'), '/')
                 .'/reset-password?token='.$token
                 .'&email='.urlencode($user->getEmailForPasswordReset()),
