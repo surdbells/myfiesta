@@ -61,3 +61,13 @@ Schedule::command('webhooks:prune')
     ->dailyAt('04:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Campaigns an organizer scheduled. Every five minutes: "Friday at 6pm" going
+ * out at 6:04 is on time as far as anybody reading it can tell, and the list
+ * is worked out when it sends, not when it was written.
+ */
+Schedule::command('campaigns:send')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();

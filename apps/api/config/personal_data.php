@@ -141,6 +141,12 @@ return [
             'reason' => 'Only exists to stop a resumed send emailing somebody twice. Once the tickets are gone there is nothing left to send.',
         ],
 
+        'campaign_deliveries' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'Stops a resumed send writing to somebody twice, and one organizer writing to them more than once a week. Nothing is lost by forgetting it.',
+        ],
+
         'event_message_deliveries' => [
             'strategy' => 'delete',
             'key' => 'email',

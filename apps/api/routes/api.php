@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\AddOnController;
 use App\Http\Controllers\Api\Organizer\BrandController;
+use App\Http\Controllers\Api\Organizer\CampaignController;
 use App\Http\Controllers\Api\Organizer\CodeBatchController;
 use App\Http\Controllers\Api\Organizer\CodeController;
 use App\Http\Controllers\Api\Organizer\DoorPassController as OrganizerDoorPassController;
@@ -221,6 +222,16 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::patch('/brand', [BrandController::class, 'update']);
         Route::post('/brand/logo', [BrandController::class, 'storeLogo'])->middleware('throttle:60,1');
         Route::delete('/brand/logo', [BrandController::class, 'destroyLogo']);
+
+        /*
+         * Campaigns: writing to people who might come. Anybody who can
+         * message ticket holders; who they may reach is decided inside.
+         */
+        Route::get('/campaigns', [CampaignController::class, 'index']);
+        Route::post('/campaigns/audience', [CampaignController::class, 'audience'])->middleware('throttle:60,1');
+        Route::post('/campaigns', [CampaignController::class, 'store'])->middleware('throttle:20,1');
+        Route::put('/campaigns/{campaign}', [CampaignController::class, 'update'])->middleware('throttle:20,1');
+        Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel']);
 
         /*
          * Other systems: webhooks out, keys in. Owner-only, checked inside —
