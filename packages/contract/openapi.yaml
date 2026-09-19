@@ -1417,6 +1417,11 @@ components:
                   answers:
                     type: object
                     additionalProperties: true
+            embedded:
+              type: boolean
+              description: |
+                Placed inside an organizer's own website through the embed.
+                A label for their reports; it changes nothing about the sale.
             # No return_url. The spec used to declare one and the API has
             # never read it: where a buyer lands after paying is built from
             # the platform's own PUBLIC_URL, which is what keeps it from being

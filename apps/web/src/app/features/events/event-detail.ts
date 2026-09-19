@@ -6,6 +6,7 @@ import { BadgeCheck, CalendarDays, Clock, Heart, MapPin, Share2 } from 'lucide-a
 import { Api } from '../../core/api';
 import { EventDetail as EventDetailModel } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
+import { viewedOnce } from '../../core/embed';
 import { Saves } from '../../core/saves';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
@@ -53,6 +54,9 @@ export class EventDetail {
       next: ({ data }) => {
         this.event.set(data);
         this.seo.forEvent(data, `https://myfiesta.ca/${data.slug}`);
+
+        // Counted once the page has something on it, and once a session.
+        if (viewedOnce(data.slug, false)) this.api.recordView(data.slug, false);
       },
       error: () => this.notFound.set(true),
     });

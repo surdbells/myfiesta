@@ -166,12 +166,18 @@ Worth more in Nigeria than in Canada, where email deliverability is weaker and
 a phone number is the reliable address. Orders already collect `buyer_phone`.
 Scope it to the messages that matter: the ticket itself, and doors-in-three-hours.
 
-### 13. Analytics an organizer can act on — **M**
+### 13. Analytics an organizer can act on — **done, 19 September 2026**
 
-Today: what sold and what it earned. Missing: where the buyers came from (we
-capture `ref_slug` and never report on it), how many who opened the page
-bought, how many who bought turned up, and how this night compares to the last
-one. Attendance rate in particular is ours to give — we own the door.
+The sales screen now opens with four numbers: how many looked, how many of
+them bought, how many came, and how that stands against the same point before
+the last night. Under them, the pace of both nights lined up by days to go,
+where the buyers came from — found it themselves, a promoter's link, one of
+your emails, your own website, the door — and the two nights side by side on
+the same measures.
+
+Looking is counted as a number per event per day, from the browser, once a
+visit. Nothing about who: no address, no cookie, no visitor, so there is
+nothing to export or erase and nothing to ask anybody about.
 
 ### 14. Instalments — **M**, market-dependent
 
@@ -219,7 +225,12 @@ order form organizers ask for by name.
 between a ticketing tool and the thing a club runs its night on.
 
 **Done:** webhooks and keys (10), selling from an organizer's own site (9) and
-campaigns (11) — the block that makes larger promoters possible.
+campaigns (11) — the block that makes larger promoters possible — and the
+analytics an organizer can act on (13).
+
+**Next, and both need a decision rather than a sprint:** SMS (12) needs a
+provider account in each market; data requests (16) needs the erasure
+conversation the append-only ledger forces.
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week
@@ -239,8 +250,9 @@ for a request is compliance work done badly.
 Neither is on any competitor's page, and both would be felt immediately.
 
 **Nothing runs the queue or the scheduler** unless a deployment says so. Every
-email in this system is queued, and three scheduled commands matter — one of
-them releases stock from abandoned baskets. Both are now in
+email in this system is queued, and six scheduled commands matter — one
+releases stock from abandoned baskets, one retries webhooks, one sends
+scheduled campaigns. Both are now in
 [the API's README](../apps/api/README.md); they need to be in the deployment
 before launch, not at it.
 

@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { AddOn, EventDetail, Quote, TicketType } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
-import { EmbedMode } from '../../core/embed';
+import { EmbedMode, viewedOnce } from '../../core/embed';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
@@ -111,6 +111,10 @@ export class TicketSelect {
   });
 
   constructor() {
+    // Inside an organizer's site this is the first thing anybody sees, so
+    // it is where a look is counted. On ours, the event page counts it.
+    if (this.embed.active() && viewedOnce(this.slug, true)) this.api.recordView(this.slug, true);
+
     this.store.loadFor(this.slug);
 
     // A presale link: /{slug}/tickets?access=CODE opens the tiers straight away.

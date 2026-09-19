@@ -52,6 +52,8 @@ class SalesReport
             'door' => app(DoorSales::class)->takings($event),
             'days' => $this->byDay($event),
             'codes' => $this->byCode($event),
+            // Looked, bought, came, from where, and against last time.
+            'insights' => app(Insights::class)->for($event),
         ];
     }
 

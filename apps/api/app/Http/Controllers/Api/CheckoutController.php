@@ -77,6 +77,10 @@ class CheckoutController extends Controller
             return response()->json(['message' => $e->getMessage()], $e->status);
         }
 
+        if ($request->boolean('embedded')) {
+            $order->forceFill(['embedded' => true])->save();
+        }
+
         // Nothing to charge — a comp, a full-value code, a free event. There is
         // no gateway to talk to, so the tickets are issued now.
         if (! $order->requiresPayment()) {

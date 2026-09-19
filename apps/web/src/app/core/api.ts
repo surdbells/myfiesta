@@ -40,6 +40,8 @@ export interface NewOrder extends Basket {
   answers?: Record<string, AnswerValue>;
   /** One entry per ticket, in the order they were filled in. */
   attendees?: Attendee[];
+  /** Bought inside an organizer's own site, for their reports. */
+  embedded?: boolean;
 }
 
 export interface EventQuery {
@@ -129,6 +131,16 @@ export class Api {
     const params = city ? new HttpParams().set('city', city) : undefined;
 
     return this.http.get<Discovery>(`${this.base}/api/discover`, { params });
+  }
+
+  /**
+   * Somebody looked at this event. A count, and nothing about who.
+   *
+   * Fire and forget: a view that fails to count costs nothing, and a buyer
+   * must never wait on it.
+   */
+  recordView(slug: string, embed: boolean): void {
+    this.http.post(`${this.base}/api/events/${slug}/views`, embed ? { embed: true } : {}).subscribe({ error: () => undefined });
   }
 
   orderStatus(reference: string): Observable<OrderStatus> {

@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { Api } from '../../core/api';
 import { Money, SalesReport } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
+import { EventInsights } from './event-insights';
 
 /** One bar of the daily chart, in viewBox units. */
 interface Bar {
@@ -22,6 +23,7 @@ interface Bar {
  */
 @Component({
   selector: 'app-event-sales',
+  imports: [EventInsights],
   templateUrl: './event-sales.html',
 })
 export class EventSales {

@@ -389,6 +389,21 @@ client draws from List-Unsubscribe stops the same thing. Until campaigns, every
 link stopped reminders, which meant pressing unsubscribe on an announcement
 lost somebody the reminder for their ticket and kept the announcements coming.
 
+**How many looked is a count, not a log.** An organizer needs to know whether
+a quiet night is a traffic problem or a pricing one, which takes one number:
+views. So that is all that is kept — one row per event per day with two
+counters, no visitor id, no cookie, no address, nothing to join against
+anything. It is sent from the browser once a session, so a crawler reading the
+server-rendered page is not a person who looked and a buyer going back and
+forth to the checkout is one. It is honest about being approximate, and it is
+not a number anybody is paid on; promoter links are counted from orders, which
+are facts.
+
+**The benchmark is their own last night.** Not an industry average, which we
+cannot know and they cannot act on. The comparison lines both nights up by
+days before the doors, so "by a week out last time we had sold 140" is a
+sentence the screen can say in March about a night in June.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

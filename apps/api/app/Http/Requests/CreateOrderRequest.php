@@ -28,6 +28,9 @@ class CreateOrderRequest extends QuoteRequest
             // 1000 is the largest order this API will take: 20 line types at
             // 50 each.
             'attendees' => ['nullable', 'array', 'max:1000'],
+            // Bought inside an organizer's own site. Only ever a label on the
+            // order for their reports; it changes nothing about the sale.
+            'embedded' => ['sometimes', 'boolean'],
             'attendees.*.ticket_type_id' => ['required', 'uuid'],
             'attendees.*.answers' => ['nullable', 'array', 'max:50'],
         ]);

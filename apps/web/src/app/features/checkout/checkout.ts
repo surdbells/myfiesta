@@ -181,6 +181,7 @@ export class Checkout {
         // list would still have to match the basket, and matching it for no
         // reason is a way to fail an order over a question nobody asked.
         attendees: this.attendeeQuestions().length > 0 ? attendeesFor(this.slots(), this.attendeeAnswers()) : undefined,
+        embedded: this.embed.active() || undefined,
       })
       .subscribe({
         next: (order) => {

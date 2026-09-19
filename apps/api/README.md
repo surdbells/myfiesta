@@ -36,7 +36,19 @@ A development database left running without a worker will show them piling up:
 php artisan tinker --execute="echo DB::table('jobs')->count();"
 ```
 
-### The scheduler
+### Counting without watching
+
+Event page views are a number per event per day, sent by the browser once a
+visit (`POST /api/events/{slug}/views`). There is no visitor id, no cookie and
+no address anywhere in `event_views` — the table has four columns and two of
+them are counts. It answers "how many looked", which is a question about the
+page, and it cannot answer anything about a person, which is the point.
+
+`Services\Events\Insights` turns that, the tickets and the door into what the
+console shows: conversion, attendance, where orders came from, and this night
+against the organizer's last one.
+
+## The scheduler
 
 Six commands, and one of them touches stock:
 

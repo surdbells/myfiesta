@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\DoorPassController;
 use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\EventViewController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\OrderStatusController;
@@ -62,6 +63,9 @@ Route::get('/event-categories', EventCategoryController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
+
+// A page view, counted and nothing else. See EventViewController.
+Route::post('/events/{slug}/views', EventViewController::class)->middleware('throttle:30,1');
 Route::get('/orders/{reference}', OrderStatusController::class);
 
 /*

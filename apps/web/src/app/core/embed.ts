@@ -96,3 +96,25 @@ export function paymentFor(reference: string): string | null {
     return null;
   }
 }
+
+/**
+ * Count a look at an event once per browsing session.
+ *
+ * Flicking from the event to its tickets and back is one person looking, not
+ * three, and a reload is not a second visitor. Only in the browser: a
+ * crawler reading the server-rendered page is not somebody who looked.
+ */
+export function viewedOnce(slug: string, embed: boolean): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const key = `myfiesta.viewed.${embed ? 'embed.' : ''}${slug}`;
+
+  try {
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+  } catch {
+    // Storage refused: count it, once per page load, rather than never.
+  }
+
+  return true;
+}

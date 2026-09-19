@@ -282,9 +282,39 @@ export interface TicketType {
  * to decide what a number means.
  */
 /** Where an event's sales came from. See SalesReport on the API for what each part counts. */
+export interface InsightSummary {
+  orders: number;
+  tickets: number;
+  revenue: Money;
+  views: number;
+  /** Opened inside the organizer's own website. */
+  embed_views: number;
+  /** Online orders over views. Null when nothing was counted. */
+  conversion: number | null;
+  people: number;
+  arrived: number;
+  /** Arrived over people. Null until the doors have opened. */
+  attendance: number | null;
+  started: boolean;
+}
+
+export type InsightSource = 'direct' | 'link' | 'campaign' | 'embed' | 'door';
+
+export interface SalesInsights {
+  summary: InsightSummary;
+  sources: { source: InsightSource; orders: number; tickets: number; revenue: Money }[];
+  previous: { id: string; title: string; starts_at: string; summary: InsightSummary } | null;
+  pace: {
+    this: { days_before: number; tickets: number }[];
+    previous: { days_before: number; tickets: number }[] | null;
+  };
+}
+
 export interface SalesReport {
   currency: string;
   timezone: string;
+  /** Looked, bought, came, from where, and against the last night. */
+  insights: SalesInsights;
   ticket_types: {
     id: string;
     name: string;
