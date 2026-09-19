@@ -5,6 +5,8 @@ namespace App\Services\Reminders;
 use App\Mail\EventReminderMail;
 use App\Models\EmailPreference;
 use App\Models\EventReminder;
+use App\Models\Order;
+use App\Services\Sms\Texts;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -30,6 +32,9 @@ use Illuminate\Support\Facades\Mail;
  */
 class ReminderDispatcher
 {
+    /** Reminders this close to the doors also go out as a text. */
+    public const TEXT_WITHIN_MINUTES = 6 * 60;
+
     /**
      * Send everything due now.
      *
@@ -117,6 +122,8 @@ class ReminderDispatcher
             $sent++;
         }
 
+        $this->text($reminder);
+
         $reminder->update([
             'status' => 'sent',
             'sent_at' => now(),
@@ -126,6 +133,39 @@ class ReminderDispatcher
         ]);
 
         return $sent > 0;
+    }
+
+    /**
+     * The last reminder, as a text as well.
+     *
+     * Only the last one. A text is worth sending when somebody is deciding
+     * what to do this evening; a week out it is an interruption they paid for
+     * the privilege of receiving, and every one of them costs money.
+     *
+     * By order rather than by ticket, because the number was given at
+     * checkout by the person who bought — a transferred ticket carries an
+     * address, never a phone.
+     */
+    private function text(EventReminder $reminder): void
+    {
+        if ($reminder->offset_minutes > self::TEXT_WITHIN_MINUTES) {
+            return;
+        }
+
+        $event = $reminder->event;
+        $whenWords = 'is tonight — doors at '
+            .$event->starts_at->timezone($event->timezone)->format('g:ia');
+
+        Order::query()
+            ->where('event_id', $event->id)
+            ->whereIn('status', ['paid', 'partially_refunded'])
+            ->whereNotNull('buyer_phone')
+            ->with('event')
+            ->chunkById(200, function ($orders) use ($whenWords) {
+                foreach ($orders as $order) {
+                    app(Texts::class)->doorsSoon($order, $whenWords);
+                }
+            });
     }
 
     /**

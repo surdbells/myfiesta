@@ -44,6 +44,17 @@ class Exporter
             }
         }
 
+        // One section is keyed by something a person can have several of.
+        foreach ($subject->phones() as $phone) {
+            foreach (config('personal_data.by_phone') as $table => $spec) {
+                $rows = $this->rows($table, $spec['key'], $phone);
+
+                if ($rows !== []) {
+                    $data[$table] = array_merge($data[$table] ?? [], $rows);
+                }
+            }
+        }
+
         return [
             'about' => [
                 'email' => $subject->email,

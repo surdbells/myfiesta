@@ -202,6 +202,31 @@ return [
     ],
 
     /*
+     * Identified by phone number.
+     *
+     * A third way to be somebody here, and the shortest: a number is given at
+     * checkout and the only thing kept against it is whether it has asked to
+     * stop being texted.
+     */
+    'by_phone' => [
+
+        /*
+         * Numbers that replied STOP.
+         *
+         * Kept for the same reason as email_preferences and erased for none:
+         * forgetting that somebody asked not to be texted starts the texts
+         * again the next time they buy a ticket. Keyed by the number, which is
+         * the whole of the record.
+         */
+        'phone_preferences' => [
+            'strategy' => 'retain',
+            'key' => 'phone',
+            'reason' => 'A suppression list only works if it outlives the order. Deleting it starts texting somebody who asked us to stop.',
+        ],
+
+    ],
+
+    /*
      * Held about an organization rather than an individual, but personal in
      * substance — legal names, dates of birth, government identifiers, bank
      * details. Encrypted at rest, access-logged, and never returned by a

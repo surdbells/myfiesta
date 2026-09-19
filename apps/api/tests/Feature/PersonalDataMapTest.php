@@ -24,6 +24,7 @@ class PersonalDataMapTest extends TestCase
         return [
             'by_user' => ['by_user'],
             'by_email' => ['by_email'],
+            'by_phone' => ['by_phone'],
             'organization_scoped' => ['organization_scoped'],
         ];
     }

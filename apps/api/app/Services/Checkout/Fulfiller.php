@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Services\Integrations\Payloads;
 use App\Services\Integrations\Webhooks;
 use App\Services\Payments\GatewayFee;
+use App\Services\Sms\Texts;
 use App\Services\Waitlist\Waitlist;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -86,6 +87,13 @@ class Fulfiller
             if (filled($locked->buyer_email)) {
                 DB::afterCommit(fn () => Mail::to($locked->buyer_email)
                     ->send(new TicketsIssued($locked)));
+            }
+
+            // And by text, where a text is the thing that gets read. After the
+            // commit for the same reason as the email, and never instead of
+            // it: the email is the one that holds the tickets.
+            if (filled($locked->buyer_phone)) {
+                DB::afterCommit(fn () => app(Texts::class)->ticketsReady($locked->fresh()->load('event')));
             }
 
             return $locked->refresh();

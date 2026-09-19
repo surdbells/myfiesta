@@ -28,6 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // signature over the raw body, checked inside each gateway adapter.
         $middleware->validateCsrfTokens(except: [
             'webhooks/payments/*',
+            // Same arrangement for inbound texts: no session, and the
+            // secret in the path is the authorisation.
+            'webhooks/sms/*',
             // Gmail and Outlook post here directly when they render their own
             // unsubscribe control, from the List-Unsubscribe-Post header. Those
             // requests carry no session and no token, and the token in the URL

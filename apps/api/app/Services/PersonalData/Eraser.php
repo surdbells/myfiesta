@@ -52,6 +52,16 @@ class Eraser
             }
         }
 
+        foreach ($subject->phones() as $phone) {
+            foreach (config('personal_data.by_phone') as $table => $spec) {
+                $result = $this->apply($table, $spec, $phone);
+
+                if ($result !== null) {
+                    $done[$table] = $result;
+                }
+            }
+        }
+
         if ($subject->user !== null) {
             $done['account'] = $this->closeAccount($subject);
         }

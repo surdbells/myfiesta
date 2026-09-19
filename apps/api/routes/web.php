@@ -6,6 +6,7 @@ use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WaitlistLeaveController;
+use App\Http\Controllers\Webhooks\InboundSmsController;
 use App\Http\Controllers\Webhooks\PaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -104,3 +105,12 @@ Route::post('/privacy/requests/{token}', [DataRequestPageController::class, 'con
 Route::get('/privacy/requests/{token}/download', [DataRequestPageController::class, 'download'])
     ->name('privacy.download')
     ->middleware('throttle:60,1');
+
+/*
+ * A text coming back the other way, which in practice means STOP.
+ *
+ * The secret is in the path because the providers sign inbound callbacks
+ * differently and neither convincingly; without it this is an endpoint anybody
+ * could use to unsubscribe a stranger's phone.
+ */
+Route::post('/webhooks/sms/{secret}', InboundSmsController::class)->middleware('throttle:120,1');

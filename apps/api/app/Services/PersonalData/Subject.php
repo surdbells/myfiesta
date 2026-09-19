@@ -4,6 +4,7 @@ namespace App\Services\PersonalData;
 
 use App\Models\EmailPreference;
 use App\Models\User;
+use App\Services\Sms\PhoneNumber;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -61,9 +62,40 @@ class Subject
         return false;
     }
 
+    /**
+     * The numbers this person has given us, in the form they are stored in.
+     *
+     * From their own account and from the orders they placed: somebody who
+     * typed a number at checkout and never made an account still has one.
+     *
+     * @return list<string>
+     */
+    public function phones(): array
+    {
+        $numbers = DB::table('orders')
+            ->whereRaw('lower(buyer_email) = ?', [$this->email])
+            ->whereNotNull('buyer_phone')
+            ->pluck('buyer_phone')
+            ->push($this->user?->phone)
+            ->filter()
+            ->map(fn (string $raw) => PhoneNumber::e164($raw))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return $numbers;
+    }
+
     /** The value that identifies this person in a given section of the map. */
     public function keyFor(string $section): string|int|null
     {
-        return $section === 'by_user' ? $this->user?->id : $this->email;
+        return match ($section) {
+            'by_user' => $this->user?->id,
+            // A person can have several numbers, so this section is walked
+            // per number rather than once — see Exporter and Eraser.
+            'by_phone' => null,
+            default => $this->email,
+        };
     }
 }
