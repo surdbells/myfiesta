@@ -364,6 +364,31 @@ says to the page around it is the height and, when an order is paid, the event
 and the number of tickets: nothing the buyer could not see on screen, so it
 can go to any origin.
 
+**A campaign chooses a list, never an address.** An organizer picks one of
+three lists and the server decides who is on it: followers, people whose
+ticket stood to one of their nights in the last two years, and people who gave
+an address for this event's basket in the last thirty days and never paid.
+The windows are CASL's implied consent — two years after a purchase, six
+months after an enquiry — tightened for the basket, because a nudge about May
+arriving in September is not a reminder. Every list then loses anybody who
+turned marketing off, anybody already holding a ticket to the night being
+sold, and anybody this organizer wrote a campaign to in the last seven days.
+The list is worked out when the campaign sends, not when it is written, so
+somebody who unsubscribed on Tuesday is not written to on Friday.
+
+**What a campaign did is counted from its link, not from a pixel.** Every
+campaign has a ref on its ticket button, and the orders that carry it are what
+it sold. That is the number an organizer wants; opens are a guess the mail
+client makes up, and a tracking pixel tells us something about the reader
+they did not choose to tell.
+
+**Two kinds of unsubscribe.** Reminders are about a night somebody bought for;
+marketing is everything they did not ask for individually — announcements,
+campaigns. The link in each email says which it stops, and the button a mail
+client draws from List-Unsubscribe stops the same thing. Until campaigns, every
+link stopped reminders, which meant pressing unsubscribe on an announcement
+lost somebody the reminder for their ticket and kept the announcements coming.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

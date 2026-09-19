@@ -59,6 +59,42 @@ export interface Brand {
   verification_pending_name: boolean;
 }
 
+/** Who a campaign is written to. The server decides who is on each. */
+export type CampaignAudience = 'followers' | 'past_attendees' | 'abandoned';
+
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled';
+
+export interface Campaign {
+  id: string;
+  audience: CampaignAudience;
+  event: { id: string; title: string; slug: string } | null;
+  subject: string;
+  body: string;
+  status: CampaignStatus;
+  scheduled_for: string | null;
+  sent_at: string | null;
+  recipients: number | null;
+  /** On the list, but left out: opted out, or written to this week already. */
+  suppressed: number | null;
+  /** What came in through the email's link. Only once it has been sent. */
+  results: { orders: number; tickets: number; revenue: Money } | null;
+  created_at: string;
+}
+
+export interface CampaignPage extends Page<Campaign> {
+  audiences: { value: CampaignAudience; label: string; needs_event: boolean }[];
+  events: { id: string; title: string; starts_at: string }[];
+}
+
+export interface CampaignDraft {
+  audience: CampaignAudience;
+  event_id: string | null;
+  subject: string;
+  body: string;
+  send: 'draft' | 'now' | 'later';
+  scheduled_for: string | null;
+}
+
 /** Something another system is told about. */
 export type WebhookEventName = 'order.paid' | 'order.refunded' | 'ticket.checked_in';
 

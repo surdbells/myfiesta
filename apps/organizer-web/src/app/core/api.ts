@@ -13,6 +13,10 @@ import { catchError, map } from 'rxjs/operators';
 import {
   AttendeeMessage,
   Brand,
+  Campaign,
+  CampaignAudience,
+  CampaignDraft,
+  CampaignPage,
   ApiKeySummary,
   Integrations,
   WebhookDelivery,
@@ -633,6 +637,30 @@ export class Api {
    * decides what to draw.
    */
   // --- how the organization appears ------------------------------------------
+
+  // --- campaigns ---------------------------------------------------------
+
+  campaigns(page = 1): Observable<CampaignPage> {
+    return this.http.get<CampaignPage>(`${this.base}/api/organizer/campaigns`, { params: new HttpParams().set('page', page) });
+  }
+
+  /** How many are on a list, and how many would be written to now. */
+  campaignAudience(audience: CampaignAudience, eventId: string | null): Observable<{ all: number; reachable: number }> {
+    return this.http.post<{ all: number; reachable: number }>(`${this.base}/api/organizer/campaigns/audience`, {
+      audience,
+      event_id: eventId,
+    });
+  }
+
+  saveCampaign(draft: CampaignDraft, id: string | null): Observable<{ message?: string; data: Campaign }> {
+    return id
+      ? this.http.put<{ message?: string; data: Campaign }>(`${this.base}/api/organizer/campaigns/${id}`, draft)
+      : this.http.post<{ message?: string; data: Campaign }>(`${this.base}/api/organizer/campaigns`, draft);
+  }
+
+  cancelCampaign(id: string): Observable<{ data: Campaign }> {
+    return this.http.post<{ data: Campaign }>(`${this.base}/api/organizer/campaigns/${id}/cancel`, {});
+  }
 
   // --- other systems -------------------------------------------------------
 

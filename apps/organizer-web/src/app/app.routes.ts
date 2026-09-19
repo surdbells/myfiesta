@@ -56,6 +56,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/brand/brand').then((m) => m.Brand),
   },
   {
+    // Writing to people who might come. Whoever can message ticket holders.
+    path: 'campaigns',
+    canActivate: [requireSession],
+    loadComponent: () => import('./features/campaigns/campaigns').then((m) => m.Campaigns),
+  },
+  {
     // Owners only; the API refuses anybody else, and the nav hides it.
     path: 'integrations',
     canActivate: [requireSession],

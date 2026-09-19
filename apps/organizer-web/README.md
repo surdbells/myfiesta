@@ -33,6 +33,7 @@ membership rather than trusting it.
 | Payouts | `/payouts` | what is owed, payout details, and asking to be paid |
 | Team | `/team` | who is on it, in what role, and invitations |
 | How you appear | `/brand` | the organization's name, mark and description — what a buyer sees, and the address of your public page |
+| Campaigns | `/campaigns` | writing to followers, past attendees or abandoned baskets — the count before sending, and what it sold after. Owners, managers and marketing |
 | Integrations | `/integrations` | owners only — webhook addresses for sales, refunds and check-ins, with their delivery history; read-only API keys. Secrets are shown once |
 | Your account | `/account` | your own name and password |
 | Door | `/scan/:id` | the scanner, for an organizer working their own door |

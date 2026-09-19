@@ -144,12 +144,21 @@ public internet when saved and again at every delivery. The console's
 Integrations screen is owners-only. The decisions are in
 [DECISIONS.md](DECISIONS.md).
 
-### 11. Campaigns, not just messages — **M**
+### 11. Campaigns, not just messages — **done, 19 September 2026**
 
-`EventMessage` sends to everybody holding a ticket for one event. A campaign is
-choosing who — people who came last time, people who abandoned a basket, people
-who follow and have not bought — writing once, scheduling it, and seeing what
-it did. The audience data is all in the database already.
+Three lists, chosen and never edited: followers, people who came in the last
+two years, and people who got as far as a basket for the event in the last
+thirty days. Written once, sent now or at a time, and counted afterwards by
+the orders, tickets and money that came through the email's link — no pixel.
+
+Each list drops anybody who turned marketing off, anybody already holding a
+ticket to the night being sold, and anybody this organizer wrote to in the
+last week. Owners, managers and marketing can send; every send is in the audit
+trail.
+
+Building it found that the unsubscribe on a follower announcement had never
+stopped announcements — it switched off reminders instead. Links now say
+which kind of mail they stop.
 
 ### 12. SMS — **S to M**
 
@@ -209,10 +218,8 @@ order form organizers ask for by name.
 **Done:** add-ons (3) and selling at the door (4) — together, the difference
 between a ticketing tool and the thing a club runs its night on.
 
-**Done:** webhooks and keys (10) and selling from an organizer's own site (9).
-
-**Next:** campaigns (11), which finishes the block that makes larger
-promoters possible.
+**Done:** webhooks and keys (10), selling from an organizer's own site (9) and
+campaigns (11) — the block that makes larger promoters possible.
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week

@@ -1,0 +1,206 @@
+<ui-page-header
+  title="Campaigns"
+  subtitle="Write to people who came before, who follow you, or who nearly bought — and see what it sold."
+/>
+
+@if (loading() && !page()) {
+  <div class="grid gap-2">
+    @for (n of [0, 1]; track n) {
+      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="3rem" /></div>
+    }
+  </div>
+} @else if (refused()) {
+  <ui-empty title="Your role does not send campaigns" hint="Owners, managers and marketing can. Ask one of them." />
+} @else if (failed()) {
+  <ui-error-state title="Could not load your campaigns" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
+} @else if (page(); as all) {
+  <div class="grid max-w-[52rem] gap-10">
+    <form class="grid gap-5 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="text-base font-semibold">{{ editing() ? 'Change this campaign' : 'New campaign' }}</h2>
+        @if (editing()) {
+          <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text" type="button" (click)="reset()">
+            Start a new one instead
+          </button>
+        }
+      </div>
+
+      <!-- Who. The lists are the server's; this only chooses one. -->
+      <fieldset class="m-0 grid gap-2 border-0 p-0">
+        <legend class="mb-1 text-sm font-medium">Who it goes to</legend>
+        @for (option of all.audiences; track option.value) {
+          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border px-4 py-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
+            <input class="mt-0.5" type="radio" name="audience" [value]="option.value" [checked]="audience() === option.value" (change)="chooseAudience(option.value)" />
+            <span class="font-medium">{{ option.label }}</span>
+          </label>
+        }
+      </fieldset>
+
+      <div class="field max-w-[28rem]">
+        <label for="campaignEvent">{{ needsEvent() ? 'The event they were buying for' : 'The event it is selling' }}</label>
+        @if (all.events.length === 0) {
+          <p class="text-sm text-text-muted">You have nothing on sale right now, so this can be news without a ticket link.</p>
+        } @else {
+          <ui-select
+            controlId="campaignEvent"
+            name="campaignEvent"
+            ariaLabel="Event"
+            [options]="eventOptions()"
+            [ngModel]="eventId() ?? ''"
+            (ngModelChange)="chooseEvent($event)"
+          />
+          <p class="help text-xs text-text-muted">People who already have a ticket to it are left out, and the email gets a button to buy.</p>
+        }
+      </div>
+
+      <!-- How many: the number that is misread most, so both halves of it. -->
+      <div class="grid gap-1 rounded-md bg-surface-inset px-4 py-3 text-sm" aria-live="polite">
+        @if (reach(); as r) {
+          <p>
+            <strong class="text-lg tabular-nums">{{ r.reachable }}</strong>
+            {{ r.reachable === 1 ? 'person' : 'people' }} would get this now.
+          </p>
+          @if (r.all > r.reachable) {
+            <p class="text-text-muted">
+              {{ r.all - r.reachable }} more on the list are left out: they turned these emails off, already have a ticket, or heard
+              from you in the last week.
+            </p>
+          }
+        } @else if (reachFailed()) {
+          <p class="text-text-muted">Could not count the list just now.</p>
+        } @else {
+          <p class="text-text-muted">Counting…</p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="campaignSubject">Subject</label>
+        <input id="campaignSubject" name="campaignSubject" maxlength="150" required placeholder="We're back on the 14th" [ngModel]="subject()" (ngModelChange)="subject.set($event)" />
+      </div>
+
+      <div class="field">
+        <label for="campaignBody">Message</label>
+        <textarea id="campaignBody" name="campaignBody" rows="7" maxlength="4000" required [ngModel]="body()" (ngModelChange)="body.set($event)"></textarea>
+        <p class="help text-xs text-text-muted">
+          Signed with your organization's name. When it is selling an event, the date, place and a ticket button are added for you.
+        </p>
+      </div>
+
+      <fieldset class="m-0 grid gap-2 border-0 p-0">
+        <legend class="mb-1 text-sm font-medium">When</legend>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="now" [checked]="when() === 'now'" (change)="when.set('now')" /> Now</label>
+          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="later" [checked]="when() === 'later'" (change)="when.set('later')" /> At a time</label>
+          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="draft" [checked]="when() === 'draft'" (change)="when.set('draft')" /> Save to finish later</label>
+        </div>
+        @if (when() === 'later') {
+          <div class="field mt-2 max-w-[16rem]">
+            <label for="campaignAt">Send at (your time)</label>
+            <input id="campaignAt" name="campaignAt" type="datetime-local" [min]="minAt" [ngModel]="at()" (ngModelChange)="at.set($event)" />
+            <p class="help text-xs text-text-muted">It goes to whoever is on the list at that moment.</p>
+          </div>
+        }
+      </fieldset>
+
+      @if (error(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+
+      <div>
+        <button uiButton type="submit" [loading]="saving()" [disabled]="!ready() || saving() || (when() === 'now' && reach()?.reachable === 0)">
+          {{ submitLabel() }}
+        </button>
+      </div>
+    </form>
+
+    <section class="grid gap-3" aria-labelledby="campaigns-heading">
+      <h2 id="campaigns-heading" class="text-base font-semibold">What you have sent</h2>
+
+      @if (all.data.length === 0) {
+        <p class="text-sm text-text-muted">Nothing yet. What each one sells shows up here.</p>
+      } @else {
+        <ul class="m-0 grid list-none gap-2 p-0">
+          @for (campaign of all.data; track campaign.id) {
+            <li class="grid gap-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+              <div class="flex flex-wrap items-start gap-x-6 gap-y-2">
+                <div class="min-w-0 flex-1">
+                  <p class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium">{{ campaign.subject }}</span>
+                    <ui-badge [tone]="statusTone(campaign.status)">{{ statusLabel(campaign.status) }}</ui-badge>
+                  </p>
+                  <p class="text-sm text-text-muted">
+                    {{ audienceLabel(campaign.audience) }}
+                    @if (campaign.event) {
+                      · {{ campaign.event.title }}
+                    }
+                  </p>
+                  <p class="text-xs text-text-muted">
+                    @switch (campaign.status) {
+                      @case ('sent') {
+                        Sent {{ campaign.sent_at | date: 'd MMM, HH:mm' }} to {{ campaign.recipients }}
+                        {{ campaign.recipients === 1 ? 'person' : 'people' }}
+                        @if (campaign.suppressed) {
+                          ({{ campaign.suppressed }} left out)
+                        }
+                      }
+                      @case ('scheduled') {
+                        Goes {{ campaign.scheduled_for | date: 'EEE d MMM, HH:mm' }}
+                      }
+                      @case ('cancelled') {
+                        Cancelled — nobody got it
+                      }
+                      @default {
+                        Started {{ campaign.created_at | date: 'd MMM' }}
+                      }
+                    }
+                  </p>
+                </div>
+
+                @if (campaign.status === 'draft' || campaign.status === 'scheduled') {
+                  <div class="flex flex-wrap gap-2">
+                    <button uiButton type="button" variant="ghost" size="sm" (click)="edit(campaign)">Edit</button>
+                    <button uiButton type="button" variant="ghost" size="sm" (click)="cancelling.set(campaign)">Cancel</button>
+                  </div>
+                }
+              </div>
+
+              @if (campaign.results; as r) {
+                <!-- What it did, counted from orders through its link. -->
+                <dl class="m-0 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border text-sm tabular-nums max-[480px]:grid-cols-1">
+                  <div class="bg-surface px-4 py-2">
+                    <dt class="text-xs text-text-muted">Orders</dt>
+                    <dd class="m-0 font-semibold">{{ r.orders }}</dd>
+                  </div>
+                  <div class="bg-surface px-4 py-2">
+                    <dt class="text-xs text-text-muted">Tickets</dt>
+                    <dd class="m-0 font-semibold">{{ r.tickets }}</dd>
+                  </div>
+                  <div class="bg-surface px-4 py-2">
+                    <dt class="text-xs text-text-muted">Earned</dt>
+                    <dd class="m-0 font-semibold">{{ r.revenue.currency ? formatMoney(r.revenue) : '—' }}</dd>
+                  </div>
+                </dl>
+              }
+            </li>
+          }
+        </ul>
+
+        <ui-pagination [page]="all.meta.current_page" [perPage]="all.meta.per_page" [total]="all.meta.total" noun="campaigns" (changed)="goTo($event)" />
+      }
+    </section>
+  </div>
+
+  @if (cancelling(); as campaign) {
+    <ui-confirm
+      [open]="true"
+      [heading]="'Cancel “' + campaign.subject + '”?'"
+      consequence="Nobody will get it. You can write it again from scratch if you change your mind."
+      confirmLabel="Cancel it"
+      busyLabel="Cancelling…"
+      destructive
+      [busy]="cancellingBusy()"
+      (confirmed)="confirmCancel()"
+      (cancelled)="cancelling.set(null)"
+    />
+  }
+}
