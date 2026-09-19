@@ -71,11 +71,6 @@ class Fulfiller
                 app(Waitlist::class)->markPurchased($locked->event_id, $locked->buyer_email);
             }
 
-            // Somebody gave a place back and this order took it. The
-            // seller's money goes back through the ordinary refund path; a
-            // failure there is loud and never fails this order.
-            app(Resale::class)->matchPaidOrder($locked);
-
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);
 
@@ -94,6 +89,21 @@ class Fulfiller
                 DB::afterCommit(fn () => Mail::to($locked->buyer_email)
                     ->send(new TicketsIssued($locked)));
             }
+
+            /*
+             * Somebody gave a place back and this order took it.
+             *
+             * After the commit, with the mail, and for a sharper reason than
+             * tidiness: paying the seller back calls the payment processor
+             * over the internet, and doing that inside this transaction would
+             * hold the buyer's order locked for as long as Stripe takes to
+             * answer. A processor having a slow morning would become a
+             * checkout having one.
+             *
+             * A failure here is loud and changes nothing about this order:
+             * the buyer has paid and holds tickets either way.
+             */
+            DB::afterCommit(fn () => app(Resale::class)->matchPaidOrder($locked));
 
             // And by text, where a text is the thing that gets read. After the
             // commit for the same reason as the email, and never instead of
