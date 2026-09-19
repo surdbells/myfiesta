@@ -29,6 +29,10 @@
       }
     </header>
 
+    @if (notice(); as message) {
+      <p class="notice mb-4 rounded-md bg-surface-sunken p-3 text-center text-sm" role="status">{{ message }}</p>
+    }
+
     @if (o.tickets.length === 0) {
       <p class="muted">There are no live tickets on this order.</p>
     } @else {
@@ -42,7 +46,14 @@
               The QR is the whole point of the screen, so it leads. Everything
               below it is what somebody checks after the scanner has beeped.
             -->
-            <div class="qr rounded-md bg-white p-3 [line-height:0] [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(260px,68vw)]" [innerHTML]="qr(ticket.qr)"></div>
+            @if (ticket.qr) {
+              <div class="qr rounded-md bg-white p-3 [line-height:0] [&_svg]:block [&_svg]:h-auto [&_svg]:w-[min(260px,68vw)]" [innerHTML]="qr(ticket.qr)"></div>
+            } @else {
+              <!-- Handed back: there is deliberately nothing to scan. -->
+              <div class="qr grid h-[min(260px,68vw)] w-[min(260px,68vw)] place-items-center rounded-md border border-dashed border-border-strong bg-surface-sunken p-6 text-center text-sm text-text-muted">
+                Waiting for somebody to take this place
+              </div>
+            }
 
             <div class="detail grid gap-1 sm:justify-items-start sm:self-stretch sm:content-center sm:border-l sm:border-dashed sm:border-border-strong sm:pl-6">
               <p class="type text-lg font-semibold">{{ ticket.type }}</p>
@@ -54,7 +65,9 @@
                 Shown in the same grouping the code is printed in, because it
                 gets read aloud when a scanner will not focus.
               -->
-              <p class="code mt-1 select-all font-mono text-lg tracking-[0.12em] text-text">{{ ticket.code }}</p>
+              @if (ticket.code) {
+                <p class="code mt-1 select-all font-mono text-lg tracking-[0.12em] text-text">{{ ticket.code }}</p>
+              }
 
               @if (ticket.admits > 1) {
                 <p class="admits text-sm font-medium text-primary-text">
@@ -67,6 +80,59 @@
 
               @if (ticket.admitted >= ticket.admits) {
                 <p class="state mt-2 justify-self-center rounded-full sm:justify-self-start bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-3 py-1 text-sm font-medium text-success">Checked in</p>
+              }
+
+              <!--
+                Giving it back. Only when the organizer allows it and the
+                ticket can still be given back — and the confirmation says
+                plainly that the money comes when somebody takes the place,
+                not now, because that is the part people get wrong.
+              -->
+              @if (ticket.return.listed) {
+                <div class="mt-2 grid justify-items-center gap-1 sm:justify-items-start">
+                  <p class="text-sm text-text-muted">You will be paid back as soon as somebody takes it.</p>
+                  <button
+                    class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-primary-text underline underline-offset-2 [font-family:inherit]"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="keep(ticket.id)"
+                  >
+                    Actually, I'll keep it
+                  </button>
+                </div>
+              } @else if (!ticket.return.refusal) {
+                @if (returning() === ticket.id) {
+                  <div class="mt-2 grid justify-items-center gap-2 sm:justify-items-start">
+                    <p class="text-sm text-text-muted">
+                      It stops working straight away, and you get back what you paid once somebody takes the place.
+                    </p>
+                    <div class="flex flex-wrap gap-3">
+                      <button
+                        class="h-10 cursor-pointer rounded-md border-0 bg-primary px-4 text-sm font-semibold text-on-primary [font-family:inherit]"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="giveBack(ticket.id)"
+                      >
+                        {{ busy() ? 'Giving it back…' : 'Give it back' }}
+                      </button>
+                      <button
+                        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit]"
+                        type="button"
+                        (click)="returning.set(null)"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                } @else {
+                  <button
+                    class="mt-2 cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+                    type="button"
+                    (click)="returning.set(ticket.id)"
+                  >
+                    Can't go? Give this ticket back
+                  </button>
+                }
               }
             </div>
           </li>

@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { Observable } from 'rxjs';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
@@ -32,11 +33,21 @@ export class Tickets {
   readonly loading = signal(true);
   readonly notFound = signal(false);
 
+  /** The link is the whole credential, and everything here is done with it. */
+  private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
+
+  /** The ticket being asked about before it is handed back. */
+  readonly returning = signal<string | null>(null);
+  readonly busy = signal(false);
+  readonly notice = signal<string | null>(null);
+
   constructor() {
     this.seo.forPrivatePage('Your tickets');
-    const token = this.route.snapshot.paramMap.get('token') ?? '';
+    this.load();
+  }
 
-    this.api.ticketsByToken(token).subscribe({
+  private load(): void {
+    this.api.ticketsByToken(this.token).subscribe({
       next: (order) => {
         this.order.set(order);
         this.loading.set(false);
@@ -44,6 +55,44 @@ export class Tickets {
       error: () => {
         this.loading.set(false);
         this.notFound.set(true);
+      },
+    });
+  }
+
+  /**
+   * Hand a ticket back, then ask the server what the page looks like now.
+   *
+   * Reloaded rather than patched in place: a returned ticket has no QR, no
+   * code and a different set of things its holder can do, and that shape is
+   * the server's answer rather than a second copy of the rules here.
+   */
+  giveBack(ticketId: string): void {
+    this.act(this.api.returnTicket(this.token, ticketId));
+  }
+
+  keep(ticketId: string): void {
+    this.act(this.api.keepTicket(this.token, ticketId));
+  }
+
+  private act(request: Observable<{ message: string; access: TicketAccess }>): void {
+    if (this.busy()) return;
+
+    this.busy.set(true);
+    this.notice.set(null);
+
+    request.subscribe({
+      next: ({ message, access }) => {
+        this.busy.set(false);
+        this.returning.set(null);
+        this.notice.set(message);
+        // The server's own answer, not a second fetch: an identical GET can
+        // come back from the hydration cache showing the page as it was.
+        this.order.set(access);
+      },
+      error: (response) => {
+        this.busy.set(false);
+        this.returning.set(null);
+        this.notice.set(response?.error?.message ?? 'That could not be done just now.');
       },
     });
   }

@@ -84,6 +84,7 @@ export class EventEdit {
     endsAt: '',
     category: '',
     minAge: '',
+    resaleEnabled: false,
   });
 
   readonly needsProvince = computed(() => this.form().country === 'CA');
@@ -129,6 +130,7 @@ export class EventEdit {
           endsAt: event.ends_at ? (isoToZonedWallClock(event.ends_at, event.timezone) ?? '') : '',
           category: event.category ?? '',
           minAge: event.min_age === null ? '' : String(event.min_age),
+          resaleEnabled: event.resale_enabled,
         });
       },
       error: (response) => {
@@ -166,6 +168,7 @@ export class EventEdit {
         country: form.country,
         category: form.category.trim() || null,
         min_age: form.minAge ? Number(form.minAge) : null,
+        resale_enabled: form.resaleEnabled,
       })
       .subscribe({
         next: () => {

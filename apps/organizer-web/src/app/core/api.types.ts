@@ -196,6 +196,10 @@ export interface OrganizerEventDetail extends OrganizerEvent {
   category: string | null;
   min_age: number | null;
   id_required: boolean;
+  /** Whether ticket holders may hand a ticket back to be resold. */
+  resale_enabled: boolean;
+  /** How close to the doors returns stop being accepted. */
+  resale_closes_hours: number;
   poster_url: string | null;
 }
 

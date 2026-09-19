@@ -85,18 +85,25 @@ and per door after that.
 Selling lives on the phone rather than in the console — that is where the door
 is. The decisions are in [DECISIONS.md](DECISIONS.md).
 
-### 5. Face-value resale — **L, and a decision**
+### 5. Face-value resale — **done, 19 September 2026**, one decision taken by default
 
-This is DICE's whole argument, and it matters most in exactly our market: a
-sold-out night whose tickets reappear at triple on Instagram. Returning a
-ticket to a waiting list at the price paid takes touts out of it.
+Built as a return rather than a marketplace, which removes the fraud surface
+instead of policing it. Somebody who cannot go hands the ticket back from the
+link in their email; it stops working that moment, and the place goes back
+into the event's ordinary stock because availability counts live tickets. The
+next buyer goes through the ordinary checkout at the organizer's own price and
+is never told whose place it was, because it was not anybody's — they bought
+from the organizer, and a stranger got their money back.
 
-It is long because it is money moving between two strangers: a return, a
-refund, a reissue, and a fraud surface that has to be thought about before any
-of it is written. The waitlist and transfer machinery are the foundation, and
-both already exist.
+The seller is paid when the place sells, not when they return it, and gets
+exactly what they paid including the booking fee. Returns are the organizer's
+to allow, per event, and close 24 hours before the doors.
 
-Worth deciding whether this is a differentiator we want before it is scheduled.
+**The decision was taken by default and is worth revisiting.** Face value
+only, no choosing whose ticket to buy, no asking price, seller paid on sale.
+That is the strictest reading of "takes touts out of it" and the easiest to
+explain; a looser one — letting sellers set a price, or paying them at once —
+is a different product and a much larger fraud surface.
 
 ### 6. Wallet passes — **M**, blocked
 
@@ -271,7 +278,7 @@ analytics an organizer can act on (13).
 
 **Built, waiting on somebody to open an account:** SMS (12).
 
-**Next:** resale (5).
+**Done:** resale (5), as a return rather than a marketplace.
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week

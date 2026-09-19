@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Services\Integrations\Payloads;
 use App\Services\Integrations\Webhooks;
 use App\Services\Payments\GatewayFee;
+use App\Services\Resale\Resale;
 use App\Services\Sms\Texts;
 use App\Services\Waitlist\Waitlist;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +70,11 @@ class Fulfiller
             if (filled($locked->buyer_email)) {
                 app(Waitlist::class)->markPurchased($locked->event_id, $locked->buyer_email);
             }
+
+            // Somebody gave a place back and this order took it. The
+            // seller's money goes back through the ordinary refund path; a
+            // failure there is loud and never fails this order.
+            app(Resale::class)->matchPaidOrder($locked);
 
             Code::recount($locked->code_id);
             Code::recount($locked->access_code_id);

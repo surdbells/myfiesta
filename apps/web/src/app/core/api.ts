@@ -153,6 +153,16 @@ export class Api {
     return this.http.post<{ message: string }>(`${this.base}/api/privacy/requests`, { kind, email });
   }
 
+  /** Give a ticket back, from the same link that shows it. */
+  returnTicket(token: string, ticketId: string): Observable<{ message: string; access: TicketAccess }> {
+    return this.http.post<{ message: string; access: TicketAccess }>(`${this.base}/api/tickets/${token}/resale/${ticketId}`, {});
+  }
+
+  /** Changed their mind, before anybody took the place. */
+  keepTicket(token: string, ticketId: string): Observable<{ message: string; access: TicketAccess }> {
+    return this.http.delete<{ message: string; access: TicketAccess }>(`${this.base}/api/tickets/${token}/resale/${ticketId}`);
+  }
+
   orderStatus(reference: string): Observable<OrderStatus> {
     return this.http.get<OrderStatus>(`${this.base}/api/orders/${reference}`);
   }

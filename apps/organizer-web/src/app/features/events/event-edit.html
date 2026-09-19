@@ -127,6 +127,29 @@
       </div>
     </div>
 
+    <!--
+      Letting people hand tickets back. Off unless it is turned on, because it
+      changes who is standing in the room: a sold-out night where nobody can
+      return a ticket is the night the touts get paid.
+    -->
+    <label class="mt-2 flex max-w-[44rem] cursor-pointer items-start gap-3 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+      <input
+        class="mt-0.5"
+        type="checkbox"
+        name="resaleEnabled"
+        [ngModel]="form().resaleEnabled"
+        (ngModelChange)="form.set({ ...form(), resaleEnabled: $event })"
+      />
+      <span>
+        <span class="font-medium">Let people give tickets back</span>
+        <span class="block text-text-muted">
+          Somebody who cannot come hands the ticket back and it stops working straight away. The place goes
+          back on sale at your price, and they get what they paid once it sells. Returns close 24 hours
+          before the doors.
+        </span>
+      </span>
+    </label>
+
     <div class="actions flex items-center gap-4">
       <button uiButton type="submit" [loading]="saving()" [disabled]="saving()">
         @if (saving()) { Saving… } @else { Save changes }

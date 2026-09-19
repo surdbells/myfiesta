@@ -469,6 +469,25 @@ survives an erasure for the same reason the email suppression list does.
 country code would eventually send a stranger somebody's ticket link, which is
 worse than the text not arriving.
 
+**A returned ticket is stock again, not a listing.** The whole of resale here
+is: the ticket stops working, its place goes back on sale at the organizer's
+price, and whoever returned it is paid what they paid when somebody takes it.
+There is no asking price to inflate, no choosing whose ticket to buy, nobody
+paying a stranger, and nothing for a tout to list — the surface is removed
+rather than watched. It also means the buyer's path is the ordinary checkout,
+so pricing, tax, stock and tickets have one implementation and not two.
+
+**The ticket dies at the moment it is handed back, not when it sells.** That
+is what makes the place safe to sell again: anything else lets somebody sell
+their place and walk in on it. The door says so in as many words, and the
+holder can take it back off the list until somebody buys it.
+
+**The seller is paid when the place goes, and gets the booking fee back too.**
+Paying them at once would make the organizer the underwriter of other
+people's change of heart. Keeping their fee would charge them for the
+privilege of not going. The platform earns its fee from whoever takes the
+place instead.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

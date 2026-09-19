@@ -268,6 +268,13 @@ class CheckInService
             return new ScanOutcome(ScanOutcome::VOID, 'This ticket was cancelled.');
         }
 
+        // Given back and waiting for somebody else. Named rather than lumped
+        // in with cancelled: the person at the door may have listed it by
+        // accident and can take it back off the list from their email.
+        if ($ticket->status === 'listed') {
+            return new ScanOutcome(ScanOutcome::VOID, 'This ticket was handed back and is waiting to be resold.');
+        }
+
         $remaining = $ticket->admits - $ticket->admitted_count;
 
         if ($remaining <= 0) {

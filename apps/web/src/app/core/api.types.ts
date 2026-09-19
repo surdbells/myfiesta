@@ -261,7 +261,7 @@ export interface OrderStatus {
 /** One ticket as its holder sees it, with the symbol a door reads. */
 export interface HeldTicket {
   id: string;
-  code: string;
+  code: string | null;
   type: string | null;
   holder: string | null;
   status: string;
@@ -269,8 +269,16 @@ export interface HeldTicket {
   admits: number;
   /** How many of them are already inside. A table can arrive in two groups. */
   admitted: number;
-  /** SVG markup, drawn by the server from the ticket code. */
-  qr: string;
+  /**
+   * SVG markup, drawn by the server from the ticket code.
+   *
+   * Null once the ticket has been handed back: a QR that will be turned away
+   * is worse than none, because its holder finds out at the front of the
+   * queue.
+   */
+  qr: string | null;
+  /** Whether it can be given back, and if not, the reason to show. */
+  return: { listed: boolean; refusal: string | null };
 }
 
 export interface TicketAccess {

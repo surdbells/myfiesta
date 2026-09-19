@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
 use App\Http\Controllers\Api\OrganizerController;
+use App\Http\Controllers\Api\ResaleController;
 use App\Http\Controllers\Api\SavedEventController;
 use App\Http\Controllers\Api\SitemapController;
 use App\Http\Controllers\Api\TicketAccessController;
@@ -93,6 +94,10 @@ Route::get('/organizers/{slug}', [OrganizerController::class, 'show']);
  * the whole credential.
  */
 Route::get('/tickets/{token}', TicketAccessController::class)->middleware('throttle:60,1');
+
+// Giving one back, on the same credential as the tickets themselves.
+Route::post('/tickets/{token}/resale/{ticket}', [ResaleController::class, 'store'])->middleware('throttle:20,1');
+Route::delete('/tickets/{token}/resale/{ticket}', [ResaleController::class, 'destroy'])->middleware('throttle:20,1');
 
 Route::middleware('throttle:120,1')
     ->post('/events/{slug}/quote', [CheckoutController::class, 'quote']);

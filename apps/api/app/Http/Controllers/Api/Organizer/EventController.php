@@ -153,6 +153,8 @@ class EventController extends Controller
             'category' => $event->category,
             'min_age' => $event->min_age,
             'id_required' => $event->id_required,
+            'resale_enabled' => (bool) $event->resale_enabled,
+            'resale_closes_hours' => (int) $event->resale_closes_hours,
             'poster_url' => $event->banner?->renditionUrl('display'),
         ]);
     }
@@ -323,6 +325,10 @@ class EventController extends Controller
             'category' => ['nullable', Rule::in([...config('events.categories'), $event->category])],
             'min_age' => ['nullable', 'integer', 'min:0', 'max:99'],
             'id_required' => ['sometimes', 'boolean'],
+            // Letting people hand tickets back. Off unless it is turned on:
+            // it changes who is in the room, which is the organizer's call.
+            'resale_enabled' => ['sometimes', 'boolean'],
+            'resale_closes_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
         ]);
 
         // Currency is absent on purpose. Changing it after a sale would leave
