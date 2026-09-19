@@ -1,0 +1,109 @@
+# Everything that has to be running for this platform to work.
+#
+#   docker compose -f ops/docker/compose.prod.yml up -d --build
+#
+# Host-agnostic on purpose: it runs on one box, and it is a readable statement
+# of what any other arrangement — Kubernetes, ECS, a platform-as-a-service —
+# has to provide. The two processes people forget are here first, because
+# forgetting them is silent: without the worker no email ever sends, and
+# without the scheduler abandoned baskets hold stock until an event reads as
+# sold out that nobody bought.
+#
+# Postgres and Redis are deliberately not here. A managed database with
+# backups somebody else tests is worth more than a container on the same host
+# as the application; point DB_HOST and REDIS_HOST at it.
+
+name: myfiesta
+
+x-api: &api
+  build:
+    context: ../..
+    dockerfile: ops/docker/api.Dockerfile
+  image: myfiesta/api:${TAG:-latest}
+  env_file: [../../.env.production]
+  restart: unless-stopped
+  volumes:
+    # Private files: identity documents, data exports. On a volume so a
+    # redeploy does not take somebody's export with it, and never in the image.
+    - api-storage:/var/www/api/storage/app
+  depends_on:
+    api-migrate:
+      condition: service_completed_successfully
+
+services:
+  # Runs once per deploy, before anything serves. A container that starts
+  # against a schema it does not match is the worst five minutes of a release.
+  api-migrate:
+    build:
+      context: ../..
+      dockerfile: ops/docker/api.Dockerfile
+    image: myfiesta/api:${TAG:-latest}
+    env_file: [../../.env.production]
+    command: >
+      sh -c "php artisan migrate --force
+      && php artisan config:cache
+      && php artisan route:cache
+      && php artisan event:cache"
+    restart: "no"
+
+  api:
+    <<: *api
+
+  # The one that sends every email this platform sends.
+  worker:
+    <<: *api
+    command: php artisan queue:work --tries=3 --max-time=3600 --sleep=1
+    # A worker is not a web server: it must finish the job in its hands before
+    # it goes, or somebody's tickets are minted and never sent.
+    stop_grace_period: 90s
+
+  # Six commands matter and all of them are in here — see apps/api/README.md.
+  # schedule:work runs in the foreground, which is what a container wants;
+  # cron is the arrangement on a host without one.
+  scheduler:
+    <<: *api
+    command: php artisan schedule:work
+
+  api-web:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./api.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [api]
+    ports:
+      - "${API_PORT:-8000}:80"
+
+  site:
+    build:
+      context: ../..
+      dockerfile: ops/docker/web.Dockerfile
+    image: myfiesta/web:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Not optional. Angular refuses to render for an unrecognised Host and
+      # falls back to client rendering without saying so, which is a shared
+      # link unfurling as nothing.
+      ALLOWED_HOSTS: ${SITE_HOSTS:?set the hostnames this site answers to}
+      API_BASE_URL: ${API_BASE_URL:?set the public API address}
+      CONSOLE_URL: ${CONSOLE_URL:?set the console address}
+      PUBLIC_URL: ${PUBLIC_URL:?set this site's own address}
+    ports:
+      - "${SITE_PORT:-4000}:4000"
+
+  console:
+    build:
+      context: ../..
+      dockerfile: ops/docker/console.Dockerfile
+    image: myfiesta/console:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Stamped into index.html at start-up by the image's entrypoint, which
+      # refuses to start without them rather than serving a console that calls
+      # localhost.
+      API_BASE_URL: ${API_BASE_URL:?set the public API address}
+      PUBLIC_URL: ${PUBLIC_URL:?set the public site address}
+    ports:
+      - "${CONSOLE_PORT:-4310}:80"
+
+volumes:
+  api-storage:

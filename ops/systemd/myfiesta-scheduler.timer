@@ -1,0 +1,15 @@
+# Every minute, for ever.
+#
+# Persistent so a host that was off catches up once on boot rather than
+# silently skipping whatever was due while it was down.
+
+[Unit]
+Description=Run myFiesta scheduled commands every minute
+
+[Timer]
+OnCalendar=*:0/1
+AccuracySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

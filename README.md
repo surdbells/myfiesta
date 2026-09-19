@@ -116,6 +116,8 @@ output; edit `tokens.json` and rerun the build. CI fails if it drifts.
 ## Documentation
 
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — what was decided, and what it cost
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — what has to be running, what
+  each part is told at run time, and what breaks when one of them is not
 - [`docs/PARITY.md`](docs/PARITY.md) — what the platforms an organizer would
   otherwise use have that we do not, what each would cost, and the order to do
   them in

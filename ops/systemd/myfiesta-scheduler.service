@@ -1,0 +1,21 @@
+# The scheduler's minute.
+#
+# Paired with myfiesta-scheduler.timer. Laravel decides which commands are due;
+# this only has to run every minute, which is the standard arrangement and the
+# one the schedule in routes/console.php is written against.
+#
+# What stops working without it: abandoned baskets keep holding stock, webhook
+# deliveries stop being retried, scheduled campaigns never send, reminders
+# never go out, repeating events stop appearing on new dates, and data exports
+# sit on disk past the week they are allowed.
+
+[Unit]
+Description=myFiesta scheduled commands
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/myfiesta/apps/api
+ExecStart=/usr/bin/php artisan schedule:run

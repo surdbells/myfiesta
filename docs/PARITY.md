@@ -293,17 +293,25 @@ for a request is compliance work done badly.
 
 ---
 
-## Two operational gaps that are not features
+## The two operational gaps — **closed, 20 September 2026**
 
-Neither is on any competitor's page, and both would be felt immediately.
+Neither is on any competitor's page and both would have been felt in the first
+hour.
 
-**Nothing runs the queue or the scheduler** unless a deployment says so. Every
-email in this system is queued, and six scheduled commands matter — one
-releases stock from abandoned baskets, one retries webhooks, one sends
-scheduled campaigns. Both are now in
-[the API's README](../apps/api/README.md); they need to be in the deployment
-before launch, not at it.
+**Nothing ran the queue or the scheduler** unless a deployment said so, and
+neither failure says anything: with no worker, an order is paid, tickets are
+minted, and the buyer is told nothing; with no scheduler, abandoned baskets
+hold stock until a night reads as sold out that nobody bought. Both are now in
+`ops/docker/compose.prod.yml` and in `ops/systemd/` for a host without
+containers, and [DEPLOYMENT.md](DEPLOYMENT.md) opens with them.
 
-**There is no staging environment in this repository.** Every address is
-supplied at run time precisely so one build can serve staging and production —
-`npm run check` holds that true — but nothing here describes where staging is.
+**Nothing described where staging is.** Every address is supplied at run time
+precisely so one build serves both, and that is now written down along with the
+two things staging must not share: a database with real addresses in it, and a
+mailer that can reach real people.
+
+The console was the missing half of the run-time address arrangement — its
+meta tags were stamped by nobody, which would have pointed every organizer's
+console at their own laptop. Its image stamps them at start-up and refuses to
+start without them, and `npm run check` now holds that to the same standard as
+the site and the phone app.

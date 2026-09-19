@@ -1,0 +1,34 @@
+# The queue worker, on a host without containers.
+#
+#   sudo cp ops/systemd/myfiesta-*.{service,timer} /etc/systemd/system/
+#   sudo systemctl enable --now myfiesta-worker myfiesta-scheduler.timer
+#
+# Every email this platform sends is queued: tickets, reminders, campaigns,
+# announcements, password resets. With nothing running this, an order is paid,
+# the tickets are minted, and the buyer is told nothing.
+
+[Unit]
+Description=myFiesta queue worker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/myfiesta/apps/api
+
+# --max-time recycles the process hourly: a long-lived PHP worker holds onto
+# whatever the last job leaked, and a fresh one costs a second.
+ExecStart=/usr/bin/php artisan queue:work --tries=3 --max-time=3600 --sleep=1
+
+# Stopped between jobs rather than mid-job. The tickets in this one's hands
+# are somebody's evening.
+ExecStop=/usr/bin/php artisan queue:restart
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

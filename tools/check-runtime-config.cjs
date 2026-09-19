@@ -86,6 +86,33 @@ for (const variable of ['API_BASE_URL', 'CONSOLE_URL']) {
 }
 
 /*
+ * The console is told the same thing, by a third route.
+ *
+ * It is a static build with no server of its own, so its addresses are
+ * stamped into index.html when the container starts. Nothing stamped them
+ * until there was a deployment to do it, and the symptom would have been
+ * every organizer's console quietly calling 127.0.0.1 for an API on their own
+ * laptop.
+ */
+const consoleTemplate = readFileSync(join(ROOT, 'apps/organizer-web/src/index.html'), 'utf8');
+const consoleEntrypoint = readFileSync(join(ROOT, 'ops/docker/console-entrypoint.sh'), 'utf8');
+
+for (const name of ['api-base', 'public-base']) {
+  if (!new RegExp(`<meta name="${name}"`).test(consoleTemplate)) {
+    problems.push(`console ${name}: the template has no such meta tag to fill in`);
+  } else if (!new RegExp(`stamp ${name}`).test(consoleEntrypoint)) {
+    problems.push(`console ${name}: nothing stamps it at start-up, so the console would call localhost in production`);
+  }
+}
+
+// And refuses to start rather than serving a console pointed at nobody.
+for (const variable of ['API_BASE_URL', 'PUBLIC_URL']) {
+  if (!consoleEntrypoint.includes(`${variable}:-`)) {
+    problems.push(`console ${variable}: the entrypoint does not check it, so an unset address would ship as empty`);
+  }
+}
+
+/*
  * The phone app is told the same thing, by a different route.
  *
  * It has no server to stamp the page while rendering, so the address is
@@ -115,4 +142,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`runtime config: ${STAMPED.length} addresses stamped into the page and read back out`);
+console.log(`runtime config: ${STAMPED.length + 3} addresses stamped into a page and read back out, across the site, the console and the phone app`);
