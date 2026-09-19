@@ -40,6 +40,8 @@ class TicketPolicy
             return $ticket->owner_user_id === $user->id;
         }
 
-        return strcasecmp($ticket->owner_email, $user->email) === 0;
+        // A door sale can leave a ticket with no address at all; nobody owns
+        // that one by email.
+        return $ticket->owner_email !== null && strcasecmp($ticket->owner_email, $user->email) === 0;
     }
 }

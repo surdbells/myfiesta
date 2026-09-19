@@ -140,6 +140,8 @@ class ReminderDispatcher
         $emails = $reminder->event
             ->tickets()
             ->whereIn('status', ['valid', 'checked_in'])
+            // A walk-up who paid cash at the door may have left no address.
+            ->whereNotNull('owner_email')
             ->pluck('owner_email')
             ->all();
 

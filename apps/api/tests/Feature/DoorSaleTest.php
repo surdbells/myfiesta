@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Enums\TokenAbility;
+use App\Mail\EventReminderMail;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -11,11 +12,16 @@ use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Checkout\CheckoutService;
+use App\Services\Checkout\Fulfiller;
 use App\Services\Door\DoorPasses;
+use App\Services\Reminders\ReminderDispatcher;
 use Database\Seeders\TaxRateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -97,7 +103,7 @@ class DoorSaleTest extends TestCase
         $this->app['auth']->forgetGuards();
     }
 
-    private function sell(array $body = []): \Illuminate\Testing\TestResponse
+    private function sell(array $body = []): TestResponse
     {
         return $this->postJson("/api/events/{$this->event->id}/door-sales", [
             'items' => [['ticket_type_id' => $this->general->id, 'quantity' => 1]],
@@ -215,14 +221,14 @@ class DoorSaleTest extends TestCase
     {
         // The other side of the same rule, so the door case cannot quietly
         // start applying to everything.
-        $order = app(\App\Services\Checkout\CheckoutService::class)->reserve(
+        $order = app(CheckoutService::class)->reserve(
             event: $this->event,
             quantities: [$this->general->id => 1],
             buyerEmail: 'ada@example.test',
             buyerName: 'Ada',
         );
 
-        app(\App\Services\Checkout\Fulfiller::class)->fulfil($order);
+        app(Fulfiller::class)->fulfil($order);
 
         $this->assertSame(5000, (int) LedgerEntry::where('order_id', $order->id)->sum('amount'));
         $this->assertSame(0, LedgerEntry::where('order_id', $order->id)->where('type', 'collected')->count());
@@ -284,8 +290,8 @@ class DoorSaleTest extends TestCase
 
     public function test_an_online_order_is_not_in_the_takings(): void
     {
-        app(\App\Services\Checkout\Fulfiller::class)->fulfil(
-            app(\App\Services\Checkout\CheckoutService::class)->reserve(
+        app(Fulfiller::class)->fulfil(
+            app(CheckoutService::class)->reserve(
                 event: $this->event,
                 quantities: [$this->general->id => 1],
                 buyerEmail: 'ada@example.test',
@@ -354,6 +360,52 @@ class DoorSaleTest extends TestCase
             'items' => [['ticket_type_id' => $theirType->id, 'quantity' => 1]],
             'method' => 'cash',
         ])->assertForbidden();
+    }
+
+    public function test_a_walk_up_with_no_address_does_not_break_messages_or_reminders(): void
+    {
+        Mail::fake();
+
+        // Cash, no name, no email: a ticket nobody can be written to.
+        $this->sell()->assertCreated();
+
+        // Somebody who bought online beside them.
+        $online = Order::create([
+            'organization_id' => $this->org->id,
+            'event_id' => $this->event->id,
+            'reference' => 'ONLINE0001',
+            'buyer_email' => 'ada@example.com',
+            'buyer_name' => 'Ada',
+            'currency' => 'CAD',
+            'subtotal_amount' => 0,
+            'total_amount' => 0,
+            'net_revenue_amount' => 0,
+            'status' => 'paid',
+        ]);
+        Ticket::create([
+            'event_id' => $this->event->id,
+            'ticket_type_id' => $this->general->id,
+            'order_id' => $online->id,
+            'owner_email' => 'ada@example.com',
+            'code' => 'ONLINECODE1',
+            'status' => 'valid',
+        ]);
+
+        // Each of these plucked every ticket's address and assumed one was
+        // there.
+        $this->postJson("/api/organizer/events/{$this->event->id}/messages", [
+            'subject' => 'Doors at 9',
+            'body' => 'An hour earlier than advertised.',
+        ])->assertCreated()->assertJsonPath('message', 'Sent to 1 person.');
+
+        $this->getJson("/api/organizer/events/{$this->event->id}/messages")->assertOk();
+
+        $this->event->reminders()->create(['offset_minutes' => 60, 'status' => 'scheduled']);
+        $this->event->update(['starts_at' => now()->addMinutes(59)]);
+
+        app(ReminderDispatcher::class)->dispatchDue();
+
+        Mail::assertQueued(EventReminderMail::class, 1);
     }
 
     public function test_marketing_cannot_take_money_at_a_door(): void
