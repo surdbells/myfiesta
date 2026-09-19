@@ -453,6 +453,22 @@ against you in June" is something an organizer can check and act on. A number
 out of a hundred is something they refuse a stranger over, built from
 behaviour we would have to follow people around to collect.
 
+**A text is for the two things somebody paid for, and nothing else.** The
+ticket, and the reminder on the day. Marketing by text needs consent neither
+market lets us assume from a purchase, so the campaign machinery is email and
+this is not part of it. Texting also costs where email does not, which is why
+`SMS_COUNTRIES` exists: in Canada the email is read, and paying per head to
+repeat it is a cost with no argument behind it.
+
+**STOP is honoured for everything, including the ticket.** Making our most
+important message the exception is how a suppression list stops meaning
+anything, and the tickets are in the buyer's inbox regardless. The number
+survives an erasure for the same reason the email suppression list does.
+
+**A number that could belong to two countries is not texted.** Guessing a
+country code would eventually send a stranger somebody's ticket link, which is
+worse than the text not arriving.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

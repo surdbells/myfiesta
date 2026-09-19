@@ -48,6 +48,20 @@ page, and it cannot answer anything about a person, which is the point.
 console shows: conversion, attendance, where orders came from, and this night
 against the organizer's last one.
 
+## Text messages
+
+`config/sms.php` picks one driver. With no credentials that is `log`, which
+writes what it would have sent and reports success — the path runs in
+development and in tests exactly as it will in production, and an account is
+the only missing piece. Termii covers Nigeria, Twilio the rest.
+
+Two messages, both asked for by buying a ticket: the link when the payment
+settles, and the last reminder before the doors (anything further out stays
+email-only — see `ReminderDispatcher::TEXT_WITHIN_MINUTES`). `SMS_COUNTRIES`
+limits texting to where it is worth its cost. A reply of STOP posts to
+`/webhooks/sms/{secret}` and suppresses that number for everything, including
+its own ticket.
+
 ## The scheduler
 
 Seven commands, and one of them touches stock:

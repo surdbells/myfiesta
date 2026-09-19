@@ -160,11 +160,22 @@ Building it found that the unsubscribe on a follower announcement had never
 stopped announcements — it switched off reminders instead. Links now say
 which kind of mail they stop.
 
-### 12. SMS — **S to M**
+### 12. SMS — **built, waiting on an account**
 
-Worth more in Nigeria than in Canada, where email deliverability is weaker and
-a phone number is the reliable address. Orders already collect `buyer_phone`.
-Scope it to the messages that matter: the ticket itself, and doors-in-three-hours.
+Both messages are wired: the ticket link when the payment settles, and the
+last reminder before the doors. Nothing sells anything, because a marketing
+text needs consent this platform does not collect in either market.
+
+With no credentials the log driver writes what it would have sent and reports
+success, so the whole path runs in development and in the tests. Filling in
+`TERMII_API_KEY` (or Twilio's) and setting `SMS_DRIVER` is the only step
+between that and real messages. `SMS_COUNTRIES` decides where a text is worth
+its cost — Nigeria by default, since that is where it is the message that gets
+read.
+
+STOP works before anything is switched on: replies land on a secret-bearing
+webhook and the number goes on a suppression list that is honoured for every
+message, including somebody's own ticket, and survives erasure.
 
 ### 13. Analytics an organizer can act on — **done, 19 September 2026**
 
@@ -258,8 +269,9 @@ analytics an organizer can act on (13).
 
 **Done:** chargebacks and fraud (17).
 
-**Next:** SMS (12) — which needs a provider account in each market before it
-can send anything — and resale (5).
+**Built, waiting on somebody to open an account:** SMS (12).
+
+**Next:** resale (5).
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week
