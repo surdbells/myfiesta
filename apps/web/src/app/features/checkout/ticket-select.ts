@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { AddOn, EventDetail, Quote, TicketType } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
+import { EmbedMode } from '../../core/embed';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
@@ -29,6 +30,7 @@ export class TicketSelect {
   private readonly router = inject(Router);
   private readonly seo = inject(Seo);
   readonly store = inject(CheckoutStore);
+  readonly embed = inject(EmbedMode);
 
   readonly event = signal<EventDetail | null>(null);
   readonly notFound = signal(false);
@@ -247,7 +249,7 @@ export class TicketSelect {
 
   continueToCheckout(): void {
     if (!this.hasSelection()) return;
-    void this.router.navigate(['/', this.slug, 'checkout']);
+    void this.router.navigate(this.embed.checkout(this.slug));
   }
 
   private refreshQuote(): void {

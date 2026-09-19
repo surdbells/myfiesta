@@ -1,8 +1,10 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, PLATFORM_ID, afterNextRender, inject, signal } from '@angular/core';
+import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
 import { Menu, X } from 'lucide-angular';
 import { CONSOLE_URL } from './core/console-url';
+import { EmbedMode } from './core/embed';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +15,9 @@ import { CONSOLE_URL } from './core/console-url';
 export class App {
   /** The console, for the links that turn a visitor into an organizer. */
   readonly consoleUrl = inject(CONSOLE_URL);
+
+  /** Inside an organizer's own site, or on ours. */
+  readonly embed = inject(EmbedMode);
 
   protected readonly menuIcon = Menu;
   protected readonly closeIcon = X;
@@ -32,6 +37,32 @@ export class App {
       if (event instanceof NavigationEnd) this.menuOpen.set(false);
     });
 
-    inject(DestroyRef).onDestroy(() => subscription.unsubscribe());
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => subscription.unsubscribe());
+
+    /*
+     * Framed, the page reports its own height so the frame can fit it.
+     *
+     * A frame with a fixed height either cuts the basket off or leaves a
+     * gap under it on somebody's venue site, and the content changes height
+     * as tickets are chosen and questions appear. Only the browser has a
+     * height to report.
+     */
+    const document = inject(DOCUMENT);
+
+    if (isPlatformBrowser(inject(PLATFORM_ID))) {
+      afterNextRender(() => {
+        let last = 0;
+        const observer = new ResizeObserver(() => {
+          const height = Math.ceil(document.documentElement.scrollHeight);
+          if (height === last) return;
+          last = height;
+          this.embed.tell({ type: 'resize', height });
+        });
+
+        observer.observe(document.body);
+        destroyRef.onDestroy(() => observer.disconnect());
+      });
+    }
   }
 }

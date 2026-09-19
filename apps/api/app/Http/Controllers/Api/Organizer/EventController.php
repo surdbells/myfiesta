@@ -6,13 +6,13 @@ use App\Enums\EventStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
-use App\Services\Follows\Announcements;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
 use App\Services\Events\SalesReport;
+use App\Services\Follows\Announcements;
 use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -507,7 +507,7 @@ class EventController extends Controller
         $slug = $base;
         $n = 2;
 
-        while (Event::where('slug', $slug)->exists()) {
+        while (Event::slugIsTaken($slug)) {
             $slug = $base.'-'.$n++;
         }
 

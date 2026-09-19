@@ -18,11 +18,12 @@ import { longEventTime } from '../../core/event-time';
 import { zonedWallClockToIso } from '../../core/zoned-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
+import { EventEmbed } from './event-embed';
 import { EventSales } from './event-sales';
 
 @Component({
   selector: 'app-event-detail',
-  imports: [FormsModule, RouterLink, UiButton, UiSelect, EventSales],
+  imports: [FormsModule, RouterLink, UiButton, UiSelect, EventSales, EventEmbed],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {

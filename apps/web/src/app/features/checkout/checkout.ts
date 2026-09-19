@@ -5,6 +5,7 @@ import { Api } from '../../core/api';
 import { AnswerValue, EventDetail, Quote } from '../../core/api.types';
 import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout-answers';
 import { CheckoutStore } from '../../core/checkout-store';
+import { EmbedMode, rememberPayment } from '../../core/embed';
 import { formatMoney } from '../../core/money';
 import { CheckoutSteps } from '../../shared/checkout-steps';
 import { QuestionField } from './question-field';
@@ -29,6 +30,7 @@ export class Checkout {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   readonly store = inject(CheckoutStore);
+  readonly embed = inject(EmbedMode);
 
   readonly event = signal<EventDetail | null>(null);
   readonly quote = signal<Quote | null>(null);
@@ -128,7 +130,7 @@ export class Checkout {
     // Arriving with nothing chosen — a bookmark, an expired session — goes
     // back to the choosing, not to an empty bill.
     if (this.store.lines().length === 0) {
-      void this.router.navigate(['/', this.slug, 'tickets']);
+      void this.router.navigate(this.embed.tickets(this.slug));
       return;
     }
 
@@ -159,6 +161,11 @@ export class Checkout {
     this.placing.set(true);
     this.orderError.set(null);
 
+    // Inside a frame, payment gets a tab of its own — processors refuse to be
+    // framed. Opened now, while the click still counts as the buyer's: a tab
+    // opened after the order comes back is one the browser blocks as a popup.
+    const payTab = this.embed.active() && (this.quote()?.total.amount ?? 0) > 0 ? this.openPaymentTab() : null;
+
     const name = `${this.first().trim()} ${this.last().trim()}`.trim();
 
     this.api
@@ -179,15 +186,24 @@ export class Checkout {
         next: (order) => {
           this.store.clear(this.slug);
 
-          if (order.payment) {
+          if (order.payment && this.embed.active()) {
+            // The frame waits on the order while the tab takes the money.
+            // Kept, for a browser that refused the tab: the order page offers
+            // it again from a click of the buyer's own.
+            rememberPayment(order.reference, order.payment.redirect_url);
+            if (payTab) payTab.location.href = order.payment.redirect_url;
+            void this.router.navigate(this.embed.order(order.reference));
+          } else if (order.payment) {
             // The processor's page, same tab. The order page picks the story
             // back up when they return.
             window.location.href = order.payment.redirect_url;
           } else {
-            void this.router.navigate(['/order', order.reference]);
+            payTab?.close();
+            void this.router.navigate(this.embed.order(order.reference));
           }
         },
         error: (response) => {
+          payTab?.close();
           this.placing.set(false);
           this.orderError.set(
             response?.error?.message ??
@@ -195,6 +211,23 @@ export class Checkout {
           );
         },
       });
+  }
+
+  /**
+   * A blank tab to send the buyer to payment in, or null if the browser said no.
+   *
+   * Cut loose from this page before it goes anywhere: the processor's page
+   * should not be able to reach back into a frame on somebody else's site.
+   */
+  private openPaymentTab(): Window | null {
+    const tab = window.open('', '_blank');
+    if (!tab) return null;
+
+    tab.opener = null;
+    tab.document.title = 'Opening payment…';
+    tab.document.body.textContent = 'Opening secure payment…';
+
+    return tab;
   }
 
   /**

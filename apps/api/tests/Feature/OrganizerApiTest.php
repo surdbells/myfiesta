@@ -283,6 +283,28 @@ class OrganizerApiTest extends TestCase
             ->assertJsonPath('slug', 'afro-fest-2');
     }
 
+    public function test_a_title_the_site_already_answers_to_gets_a_suffix(): void
+    {
+        $this->asOrganizer($this->owner);
+
+        // myfiesta.ca/help is the help page, and myfiesta.ca/embed is where
+        // framed checkouts live. An event given either slug could never be
+        // reached at its own address.
+        foreach (['Help' => 'help-2', 'Embed' => 'embed-2'] as $title => $slug) {
+            $this->postJson('/api/organizer/events', [
+                'organization_id' => $this->org->id,
+                'title' => $title,
+                'currency' => 'CAD',
+                'starts_at' => now()->addMonths(2)->toIso8601String(),
+                'timezone' => 'America/Toronto',
+                'city' => 'Toronto',
+                'country' => 'CA',
+            ])
+                ->assertCreated()
+                ->assertJsonPath('slug', $slug);
+        }
+    }
+
     public function test_currency_cannot_be_changed_after_the_fact(): void
     {
         $this->asOrganizer($this->owner);

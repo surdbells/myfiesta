@@ -1,12 +1,18 @@
 @if (event(); as ev) {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
-    <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
-      <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
-      <span aria-hidden="true"> / </span>
-      <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
-      <span aria-hidden="true"> / </span>
-      <span class="font-medium text-text">Checkout</span>
-    </nav>
+    <!-- Inside somebody else's page there is no "Home" to go back to: the
+         page around the frame is theirs. The event is named instead. -->
+    @if (embed.active()) {
+      <p class="text-sm font-medium text-text-muted">{{ ev.title }}</p>
+    } @else {
+      <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
+        <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
+        <span aria-hidden="true"> / </span>
+        <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
+        <span aria-hidden="true"> / </span>
+        <span class="font-medium text-text">Checkout</span>
+      </nav>
+    }
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-6">
       <h1 class="text-3xl">Checkout</h1>
@@ -158,7 +164,11 @@
             <strong class="text-text">You pay on {{ ev.currency === 'NGN' ? "Paystack's" : "Stripe's" }} secure page.</strong>
             After you continue, {{ ev.currency === 'NGN' ? 'Paystack' : 'Stripe' }} takes the payment —
             card, and whatever local methods they offer — and your card details never touch myFiesta.
-            You will be brought straight back here for your tickets.
+            @if (embed.active()) {
+              It opens in a new tab; this page moves on by itself once you have paid.
+            } @else {
+              You will be brought straight back here for your tickets.
+            }
           </p>
         </div>
 
@@ -284,7 +294,7 @@
             </button>
 
             <p class="mt-3 text-center">
-              <a class="text-sm text-text-muted" [routerLink]="['/', ev.slug, 'tickets']">Change tickets</a>
+              <a class="text-sm text-text-muted" [routerLink]="embed.tickets(ev.slug)">Change tickets</a>
             </p>
           } @else if (quoteError(); as message) {
             <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
@@ -299,7 +309,7 @@
             <strong>Need help?</strong><br />
             Anything about the event itself — timings, door policy, refunds — is the
             organizer's call. For the order or payment,
-            <a class="font-medium" routerLink="/contact">contact us</a>.
+            <a class="font-medium" routerLink="/contact" [attr.target]="embed.active() ? '_blank' : null">contact us</a>.
           </p>
         </div>
       </aside>

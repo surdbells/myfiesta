@@ -6,10 +6,29 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
+import { framingHeaders } from './framing';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
+
+app.use((req, res, next) => {
+  for (const [name, value] of Object.entries(framingHeaders(req.path))) res.setHeader(name, value);
+  next();
+});
+
+/**
+ * The script an organizer pastes into their own site.
+ *
+ * Not content-hashed — its address is in other people's HTML and cannot
+ * change — so it gets an hour, not the year the built assets get. A fix to it
+ * then reaches every venue site the same afternoon.
+ */
+app.get('/embed.js', (_req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.set('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 /**
  * Hosts this server will render for.
@@ -42,6 +61,9 @@ app.use(
     maxAge: '1y',
     index: false,
     redirect: false,
+    setHeaders: (res, path) => {
+      if (path.endsWith('embed.js')) res.setHeader('Cache-Control', 'public, max-age=3600');
+    },
   }),
 );
 
@@ -75,7 +97,7 @@ const consoleUrl = process.env['CONSOLE_URL'] ?? 'http://localhost:4310';
  * disallow alone still lets a search engine list a URL it saw linked
  * somewhere without reading it.
  */
-const PRIVATE_PATHS = ['/tickets/', '/order/', '/sign-in', '/register', '/login'];
+const PRIVATE_PATHS = ['/tickets/', '/order/', '/sign-in', '/register', '/login', '/embed/'];
 
 app.get('/robots.txt', (req, res) => {
   const origin = siteOrigin(req);

@@ -120,12 +120,14 @@ SPM, so `cap sync` silently omits it. Android scans; iPhone offers the code
 box. The way out is moving iOS to CocoaPods or finding a scanner that ships
 SPM.
 
-### 9. Organizers selling from their own site — **M**
+### 9. Organizers selling from their own site — **done, 19 September 2026**
 
-An embeddable widget, or at minimum a checkout that survives being opened in an
-iframe from a promoter's own page. Every competitor has this and it is how a
-venue with an existing website adopts a ticketing platform without rebuilding
-anything.
+One script tag and one element, from the event's overview in the console: a
+button that opens the tickets over the organizer's page, or the tickets laid
+into it. The buying steps are the ordinary ones under `/embed/`; payment opens
+in its own tab, because processors will not be framed, and the frame follows
+the order until it is paid and tells the page around it. Only `/embed/` can be
+framed — every other page now refuses, which nothing did before.
 
 ### 10. Webhooks and keys for organizers — **done, 19 September 2026**
 
@@ -207,16 +209,14 @@ order form organizers ask for by name.
 **Done:** add-ons (3) and selling at the door (4) — together, the difference
 between a ticketing tool and the thing a club runs its night on.
 
-**Next, once there is somebody to integrate with:** webhooks and keys (10), the
-embeddable widget (9), campaigns (11).
+**Done:** webhooks and keys (10) and selling from an organizer's own site (9).
+
+**Next:** campaigns (11), which finishes the block that makes larger
+promoters possible.
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week
 they arrive rather than scheduled.
-
-**Then, once there is somebody to integrate with:** webhooks and keys (10), the
-embeddable widget (9), campaigns (11). This is the block that makes larger
-promoters possible.
 
 **Deliberately later:** resale (5) until we decide whether it is our argument,
 instalments (14) until a festival needs it, reserved seating (15) until a

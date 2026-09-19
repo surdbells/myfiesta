@@ -193,6 +193,11 @@
     </section>
   }
 
+  <!-- Anybody who can edit the event can hand it to their web person. -->
+  @if (session.canEditEvents() && event.status !== 'cancelled') {
+    <app-event-embed [slug]="event.slug" [published]="event.status === 'published'" />
+  }
+
   @if (event.status === 'published' && session.canCancel()) {
     <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Danger</h2>
 

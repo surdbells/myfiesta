@@ -34,13 +34,36 @@ the random token in the link emailed to them is the whole credential.
 | An order | `/order/:reference` | what was bought, after paying |
 | A ticket | `/tickets/:token` | the QR a guest shows at the door, no account needed |
 | Find my tickets | `/tickets` | asking for the link again, by email |
+| Framed | `/embed/:slug`, `/embed/:slug/checkout`, `/embed/order/:reference` | the same buying steps inside an organizer's own website |
 | Help, terms, privacy, contact | `/help`, `/terms`, `/privacy`, `/contact` | the ordinary pages |
 
 Event slugs sit at the root — `myfiesta.ca/{slug}` — because those links are in
 bios, printed QR codes and shared messages, and cannot be edited. The organizer
 paths (`/sign-in`, `/register`, `/login`) are matched *before* the event
 wildcard and redirect to the console; getting that order wrong once told
-intending organizers "Event not found", which `app.spec.ts` now guards.
+intending organizers "Event not found", which `app.spec.ts` now guards. The API
+refuses to give a new event any slug the site answers to itself
+(`Event::RESERVED_SLUGS`); keep the two lists in step.
+
+## On an organizer's own site
+
+`public/embed.js` is the one script an organizer pastes into their website. It
+turns `<div data-myfiesta-event="slug">` into the tickets, in the page, and
+`<a … data-myfiesta-mode="button">` into a button that opens them over it —
+still an ordinary link to the event if the script never loads. The console's
+event overview hands out both snippets.
+
+The frame shows the ordinary buying steps under `/embed/`, and `core/embed.ts`
+changes what is around them: no site header or footer, the height reported to
+the page outside so the frame fits, links that would leave the flow opened in a
+new tab. Paying happens in a tab of its own — processors refuse to be framed —
+opened on the buyer's click so it is not blocked as a popup, while the frame
+waits on the order and says `paid` to the page around it when it lands.
+
+Only `/embed/` may be framed, by anyone. Everything else sends
+`frame-ancestors 'self'` (`src/framing.ts`), so nobody can lay our buttons
+under theirs. `embed.js` is cached for an hour, not a year: its address is in
+other people's HTML and a fix has to reach them.
 
 ## Rendering
 

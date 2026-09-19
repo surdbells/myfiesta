@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Api } from '../../core/api';
+import { EmbedMode, paymentFor } from '../../core/embed';
 import { Seo } from '../../core/seo';
 import { OrderStatus as OrderStatusModel } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
@@ -28,6 +29,7 @@ export class OrderStatus implements OnDestroy {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly seo = inject(Seo);
+  readonly embed = inject(EmbedMode);
 
   readonly order = signal<OrderStatusModel | null>(null);
   readonly notFound = signal(false);
@@ -47,9 +49,21 @@ export class OrderStatus implements OnDestroy {
    */
   private static readonly MAX_ATTEMPTS = 20;
 
+  /**
+   * Inside a frame, the buyer is paying in another tab and may take a while
+   * over it — finding a card, a bank's own check. Ten minutes, then the same
+   * honest "it will arrive by email".
+   */
+  private static readonly MAX_ATTEMPTS_FRAMED = 200;
+
+  /** Where to pay, if the tab we opened never did. */
+  payment: string | null = null;
+
   constructor() {
     this.seo.forPrivatePage('Your order');
-    this.poll(this.route.snapshot.paramMap.get('reference')!);
+    const reference = this.route.snapshot.paramMap.get('reference')!;
+    this.payment = this.embed.active() ? paymentFor(reference) : null;
+    this.poll(reference);
   }
 
   private poll(reference: string): void {
@@ -57,9 +71,17 @@ export class OrderStatus implements OnDestroy {
       next: (order) => {
         this.order.set(order);
 
-        if (order.status === 'pending' && this.attempts < OrderStatus.MAX_ATTEMPTS) {
+        // The page around the frame may want to say thank you, or count a
+        // sale. What it is told is what the buyer can see anyway.
+        if (order.status === 'paid') {
+          this.embed.tell({ type: 'paid', event: order.event.slug, tickets: order.ticket_count });
+        }
+
+        const limit = this.embed.active() ? OrderStatus.MAX_ATTEMPTS_FRAMED : OrderStatus.MAX_ATTEMPTS;
+
+        if (order.status === 'pending' && this.attempts < limit) {
           this.attempts++;
-          this.stillWaiting.set(this.attempts > 2);
+          this.stillWaiting.set(this.attempts > (this.embed.active() ? 40 : 2));
           this.timer = setTimeout(() => this.poll(reference), 3000);
         }
       },

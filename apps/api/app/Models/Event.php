@@ -17,7 +17,29 @@ class Event extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
+    /**
+     * Words the public site already answers at its root.
+     *
+     * Event pages live at myfiesta.ca/{slug}, and the site's own pages sit
+     * above that wildcard — so an event titled "Help" was given the slug
+     * `help` and could never be reached: the help page answered instead. A
+     * reserved word is treated as taken and gets a suffix like any collision.
+     * Keep in step with the top-level routes in apps/web.
+     */
+    public const RESERVED_SLUGS = [
+        'events', 'help', 'terms', 'privacy', 'contact', 'order', 'tickets',
+        'register', 'sign-in', 'login', 'o', 'embed', 'embed-js',
+        'robots-txt', 'sitemap-xml',
+    ];
+
     protected $guarded = ['id'];
+
+    /** Whether a slug is free to give a new event. */
+    public static function slugIsTaken(string $slug, bool $withTrashed = false): bool
+    {
+        return in_array($slug, self::RESERVED_SLUGS, true)
+            || ($withTrashed ? self::withTrashed() : self::query())->where('slug', $slug)->exists();
+    }
 
     protected function casts(): array
     {

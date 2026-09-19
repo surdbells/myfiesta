@@ -89,6 +89,26 @@ export const routes: Routes = [
     path: 'tickets',
     loadComponent: () => import('./features/tickets/find-tickets').then((m) => m.FindTickets),
   },
+  /*
+   * The buying steps, inside somebody else's page.
+   *
+   * The same components as the ordinary flow; EmbedMode reads the prefix and
+   * changes what is around them. Everything framed lives under /embed/, which
+   * is how the server knows these are the only paths another site may frame.
+   * The order page first, or its reference would be read as an event slug.
+   */
+  {
+    path: 'embed/order/:reference',
+    loadComponent: () => import('./features/orders/order-status').then((m) => m.OrderStatus),
+  },
+  {
+    path: 'embed/:slug/checkout',
+    loadComponent: () => import('./features/checkout/checkout').then((m) => m.Checkout),
+  },
+  {
+    path: 'embed/:slug',
+    loadComponent: () => import('./features/checkout/ticket-select').then((m) => m.TicketSelect),
+  },
   {
     /*
      * An organizer's own page.

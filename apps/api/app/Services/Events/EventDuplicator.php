@@ -240,7 +240,7 @@ class EventDuplicator
         $slug = $base;
         $n = 2;
 
-        while (Event::withTrashed()->where('slug', $slug)->exists()) {
+        while (Event::slugIsTaken($slug, withTrashed: true)) {
             $slug = $base.'-'.$n++;
         }
 

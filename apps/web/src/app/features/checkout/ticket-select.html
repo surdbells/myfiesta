@@ -5,13 +5,19 @@
   </section>
 } @else if (event(); as ev) {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-32 pt-8">
-    <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
-      <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
-      <span aria-hidden="true"> / </span>
-      <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
-      <span aria-hidden="true"> / </span>
-      <span class="font-medium text-text">Tickets</span>
-    </nav>
+    <!-- Inside somebody else's page there is no "Home" to go back to: the
+         page around the frame is theirs. The event is named instead. -->
+    @if (embed.active()) {
+      <p class="text-sm font-medium text-text-muted">{{ ev.title }}</p>
+    } @else {
+      <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
+        <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
+        <span aria-hidden="true"> / </span>
+        <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
+        <span aria-hidden="true"> / </span>
+        <span class="font-medium text-text">Tickets</span>
+      </nav>
+    }
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-6">
       <h1 class="text-3xl">Select tickets</h1>

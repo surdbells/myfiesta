@@ -65,6 +65,27 @@
       }
 
       @case ('pending') {
+        @if (embed.active()) {
+          <!-- Paying happens in its own tab. This frame waits for it, and
+               says so, with the way back if the tab never opened. -->
+          <h1 class="text-2xl text-primary">Finish paying in the new tab</h1>
+          <p class="lead max-w-[46ch] text-lg font-medium" role="status" aria-live="polite">
+            @if (stillWaiting()) {
+              Still waiting. If you have paid, your tickets will arrive by email — you can close this.
+            } @else {
+              This updates on its own once the payment goes through.
+            }
+          </p>
+          @if (payment) {
+            <a
+              class="cta inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface-raised px-6 text-sm font-semibold text-text no-underline hover:bg-surface-hover"
+              [href]="payment"
+              target="_blank"
+              rel="noopener"
+              >No tab? Open the payment page</a
+            >
+          }
+        } @else {
         <h1 class="text-2xl text-primary">Confirming your payment</h1>
         <p class="lead max-w-[46ch] text-lg font-medium" role="status" aria-live="polite">
           @if (stillWaiting()) {
@@ -74,6 +95,7 @@
             One moment.
           }
         </p>
+        }
         <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm">
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
@@ -87,7 +109,7 @@
         <p class="lead text-lg font-medium">Nothing has been charged.</p>
         <a
           class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
-          [href]="'/' + o.event.slug"
+          [href]="(embed.active() ? '/embed/' : '/') + o.event.slug"
           >Try again</a
         >
       }
@@ -97,7 +119,7 @@
         <p class="lead text-lg font-medium">Nothing has been charged.</p>
         <a
           class="cta mt-2 inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-primary px-6 text-sm font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
-          [href]="'/' + o.event.slug"
+          [href]="(embed.active() ? '/embed/' : '/') + o.event.slug"
           >Back to the event</a
         >
       }

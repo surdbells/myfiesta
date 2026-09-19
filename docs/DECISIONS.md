@@ -346,6 +346,24 @@ shape, and neither carries a ticket code: an integration is an export by
 another name, and codes have never been in an export. Only an owner can create
 either, and creating or removing one is in the audit trail.
 
+**Selling from somebody else's page, without their page touching the card.**
+The embedded checkout is our own buying steps in a frame, not a second
+checkout: one set of rules about prices, questions and holds, tested once.
+Paying happens in a tab of its own on the processor's page — they refuse to be
+framed, and a card form inside a frame on a site we do not control is the
+shape of every card-skimming attack, so a buyer should not be taught to trust
+one. The tab is opened on the buyer's own click, before the order is placed,
+because a tab opened when the order comes back is a popup the browser blocks.
+
+**Only the embed may be framed.** Nothing said whether the site could be framed
+before, which meant anybody could put the checkout under an invisible layer of
+their own. Now every page answers `frame-ancestors 'self'` except `/embed/`,
+which any site may frame — the organizer's site is wherever it is, and asking
+them to register a domain first is a step most would not take. What the frame
+says to the page around it is the height and, when an order is paid, the event
+and the number of tickets: nothing the buyer could not see on screen, so it
+can go to any origin.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,

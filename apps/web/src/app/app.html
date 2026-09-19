@@ -6,6 +6,7 @@
   so space-5 is gap-6 and space-6 is gap-8 here.
 -->
 
+@if (!embed.active()) {
 <!-- Present but hidden until focused: keyboard users should not have to tab
      through the header on every page to reach the content. -->
 <a
@@ -142,11 +143,23 @@
     </nav>
   }
 </header>
+}
 
 <main id="main">
   <router-outlet />
 </main>
 
+@if (embed.active()) {
+  <!--
+    Inside somebody else's page: who is selling, and the terms that apply,
+    in a line. The links leave the frame — the page around it is theirs.
+  -->
+  <footer class="embed-footer flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-6 pb-6 pt-2 text-xs text-text-subtle">
+    <span>Tickets by <a class="font-semibold text-text-muted no-underline hover:underline" href="/" target="_blank" rel="noopener">myFiesta</a></span>
+    <a class="text-text-subtle hover:text-text" routerLink="/terms" target="_blank">Terms</a>
+    <a class="text-text-subtle hover:text-text" routerLink="/privacy" target="_blank">Privacy</a>
+  </footer>
+} @else {
 <!--
   These are not decoration. Stripe and Paystack both require published terms and
   a privacy policy before an account goes live, and CASL and the NDPA both
@@ -191,3 +204,4 @@
     &copy; 2026 myFiesta. All rights reserved.
   </p>
 </footer>
+}
