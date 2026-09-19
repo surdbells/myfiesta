@@ -889,7 +889,16 @@ export interface OrganizationOrder {
   event: { id: string; title: string } | null;
   total: Money;
   refunded: Money;
+  /**
+   * Facts about this buyer worth knowing before the night, never a score.
+   *
+   * Empty on almost every order. The server decides what counts; the console
+   * only says it in words.
+   */
+  signals: OrderSignal[];
 }
+
+export type OrderSignal = 'previous_chargeback' | 'many_orders' | 'disputed';
 
 export interface OrganizationOrderPage {
   data: OrganizationOrder[];

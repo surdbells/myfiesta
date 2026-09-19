@@ -18,10 +18,26 @@ import { Download, Search } from 'lucide-angular';
 import { Subject, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from '../../core/api';
-import { EventOption, Money, OrganizationOrder } from '../../core/api.types';
+import { EventOption, Money, OrderSignal, OrganizationOrder } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
 import { saveFile, today } from '../../core/download';
+
+/** What each signal means, in the words an organizer would use. */
+const SIGNALS: Record<OrderSignal, { label: string; hint: string }> = {
+  disputed: {
+    label: 'Charged back',
+    hint: 'This buyer told their bank the charge was wrong. Their tickets stop working if the bank agrees.',
+  },
+  previous_chargeback: {
+    label: 'Chargeback before',
+    hint: 'This address won a chargeback against you once. Worth a look before the night.',
+  },
+  many_orders: {
+    label: 'Several orders today',
+    hint: 'More than four orders from this address in a day — usually somebody buying for a group.',
+  },
+};
 
 /**
  * Every order the organization has taken.
@@ -54,6 +70,8 @@ import { saveFile, today } from '../../core/download';
   templateUrl: './orders.html',
 })
 export class Orders {
+  readonly signals = SIGNALS;
+
   protected readonly searchIcon = Search;
   protected readonly downloadIcon = Download;
 

@@ -141,6 +141,13 @@ class StripeGateway implements PaymentGateway
             'checkout.session.expired' => PaymentEvent::EXPIRED,
             'charge.refunded' => PaymentEvent::REFUNDED,
             'charge.dispute.created' => PaymentEvent::DISPUTED,
+            // 'warning_closed' is a card network dropping an enquiry before it
+            // became a dispute, which is the organizer keeping the money.
+            'charge.dispute.closed' => match ($object['status'] ?? '') {
+                'lost' => PaymentEvent::DISPUTE_LOST,
+                'won', 'warning_closed' => PaymentEvent::DISPUTE_WON,
+                default => null,
+            },
             'payment_intent.payment_failed' => PaymentEvent::FAILED,
             default => null,
         };
@@ -149,13 +156,20 @@ class StripeGateway implements PaymentGateway
             return null;
         }
 
+        // A dispute's object is the dispute, and it names the payment it is
+        // about. Everything else is the thing itself.
+        $reference = str_starts_with($type, 'dispute') || $type === PaymentEvent::DISPUTED
+            ? ($object['payment_intent'] ?? $object['charge'] ?? $object['id'] ?? '')
+            : ($object['id'] ?? '');
+
         return new PaymentEvent(
             type: $type,
-            reference: $object['id'] ?? '',
+            reference: $reference,
             amountMinorUnits: (int) ($object['amount_total'] ?? $object['amount'] ?? 0),
             currency: strtoupper($object['currency'] ?? ''),
             eventId: $event['id'] ?? '',
             raw: $event,
+            paymentReference: $object['payment_intent'] ?? null,
         );
     }
 
@@ -164,7 +178,9 @@ class StripeGateway implements PaymentGateway
         $response = Http::withToken($this->secretKey)
             ->asForm()
             ->post('https://api.stripe.com/v1/refunds', array_filter([
-                'payment_intent' => $order->gateway_reference,
+                // The payment, not the checkout session the order was made
+                // against: Stripe refuses a session id here.
+                'payment_intent' => $order->gateway_payment_reference ?? $order->gateway_reference,
                 'amount' => $amountMinorUnits,
                 'reason' => $reason,
             ]));

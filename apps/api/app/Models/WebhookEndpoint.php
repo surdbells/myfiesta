@@ -19,7 +19,7 @@ class WebhookEndpoint extends Model
     use HasUuids;
 
     /** What can be subscribed to. Each is emitted from exactly one place. */
-    public const EVENTS = ['order.paid', 'order.refunded', 'ticket.checked_in'];
+    public const EVENTS = ['order.paid', 'order.refunded', 'ticket.checked_in', 'order.disputed'];
 
     /**
      * How many failures in a row before we stop knocking.

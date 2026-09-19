@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\ProcessedWebhook;
 use App\Services\Checkout\Fulfiller;
+use App\Services\Disputes\DisputeService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +28,7 @@ class PaymentWebhookController extends Controller
     public function __construct(
         private readonly PaymentGatewayRegistry $gateways,
         private readonly Fulfiller $fulfiller,
+        private readonly DisputeService $disputes,
     ) {}
 
     public function __invoke(Request $request, string $gateway): Response
@@ -53,7 +55,12 @@ class PaymentWebhookController extends Controller
             return response()->noContent(200);
         }
 
-        $order = Order::where('gateway_reference', $event->reference)->first();
+        // Either identifier: the session the order was created against, or
+        // the payment that session produced, which is what a dispute names.
+        $order = Order::query()
+            ->where('gateway_reference', $event->reference)
+            ->orWhere('gateway_payment_reference', $event->reference)
+            ->first();
 
         if ($order === null) {
             Log::warning('Webhook for an unknown order.', [
@@ -81,9 +88,9 @@ class PaymentWebhookController extends Controller
                 'status' => 'refunded',
                 'refunded_at' => now(),
             ]),
-            PaymentEvent::DISPUTED => Log::alert('Payment disputed.', [
-                'order' => $order->reference,
-            ]),
+            PaymentEvent::DISPUTED => $this->disputes->opened($order, $event),
+            PaymentEvent::DISPUTE_LOST => $this->disputes->closed($order, $event, lost: true),
+            PaymentEvent::DISPUTE_WON => $this->disputes->closed($order, $event, lost: false),
             default => null,
         };
     }
@@ -101,6 +108,13 @@ class PaymentWebhookController extends Controller
             ]);
 
             return;
+        }
+
+        // Kept before fulfilment, because everything the processor says
+        // afterwards — a refund, a dispute — is about this and not about the
+        // checkout session the order was created against.
+        if ($event->paymentReference !== null && $order->gateway_payment_reference === null) {
+            $order->forceFill(['gateway_payment_reference' => $event->paymentReference])->save();
         }
 
         $this->fulfiller->fulfil($order);

@@ -97,6 +97,11 @@ class PaystackGateway implements PaymentGateway
             'charge.failed' => PaymentEvent::FAILED,
             'refund.processed' => PaymentEvent::REFUNDED,
             'charge.dispute.create' => PaymentEvent::DISPUTED,
+            // Paystack resolves a dispute one way or the other; accepting the
+            // merchant's side is the organizer keeping the money.
+            'charge.dispute.resolve' => ($data['resolution'] ?? '') === 'merchant-accepted'
+                ? PaymentEvent::DISPUTE_LOST
+                : PaymentEvent::DISPUTE_WON,
             default => null,
         };
 

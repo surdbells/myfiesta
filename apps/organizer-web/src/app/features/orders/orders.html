@@ -151,6 +151,19 @@
                   <span class="grid min-w-0 gap-0.5">
                     <span class="truncate font-medium">{{ order.buyer_name }}</span>
                     <span class="truncate text-xs text-text-muted">{{ order.buyer_email }}</span>
+                    <!-- Said in words, with what it means on hover: a badge
+                         nobody can explain is a reason to refuse somebody. -->
+                    @if (order.signals.length > 0) {
+                      <span class="mt-0.5 flex flex-wrap gap-1">
+                        @for (signal of order.signals; track signal) {
+                          <span
+                            class="rounded-full bg-[color-mix(in_srgb,var(--warning)_16%,transparent)] px-2 py-0.5 text-xs font-medium text-warning"
+                            [title]="signals[signal].hint"
+                            >{{ signals[signal].label }}</span
+                          >
+                        }
+                      </span>
+                    }
                   </span>
                 </td>
 

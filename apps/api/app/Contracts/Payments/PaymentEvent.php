@@ -21,6 +21,11 @@ final readonly class PaymentEvent
 
     public const DISPUTED = 'disputed';
 
+    /** The processor decided a dispute. Lost means the money is gone. */
+    public const DISPUTE_WON = 'dispute_won';
+
+    public const DISPUTE_LOST = 'dispute_lost';
+
     public function __construct(
         /** One of the constants above. */
         public string $type,
@@ -43,7 +48,23 @@ final readonly class PaymentEvent
         public string $eventId,
 
         public array $raw = [],
+
+        /**
+         * What the processor calls the payment itself, when it says.
+         *
+         * An order is created against a checkout session; a dispute, and a
+         * refund, are about the payment that session produced. They are
+         * different identifiers, so the second one is kept the first time it
+         * is seen — otherwise a dispute arrives naming a payment nothing here
+         * has ever heard of.
+         */
+        public ?string $paymentReference = null,
     ) {}
+
+    public function isDispute(): bool
+    {
+        return in_array($this->type, [self::DISPUTED, self::DISPUTE_WON, self::DISPUTE_LOST], true);
+    }
 
     public function isPaid(): bool
     {

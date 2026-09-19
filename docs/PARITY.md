@@ -210,11 +210,28 @@ with the step to take first.
 Staff see the queue and anything past its thirty days in the admin panel, which
 should always be empty: requests are carried out the moment they are proved.
 
-### 17. Chargebacks and fraud — **M**
+### 17. Chargebacks and fraud — **done, 19 September 2026**
 
-`ProcessedWebhook` handles the gateway's messages; a dispute has no home in the
-admin panel, and nothing flags the patterns — many orders on one card, one
-address across many accounts — that precede one.
+A dispute used to arrive, get written to the log, and stop there. It is now a
+record against the order: staff see the queue and the date it has to be
+answered by, the organizer sees it on the order, and anybody listening for
+`order.disputed` hears about it.
+
+Opening one changes nothing else — a claim is not a verdict, and voiding a
+ticket on one would turn a bank's paperwork into somebody being turned away.
+Losing one writes a negative `chargeback` entry to the ledger and voids the
+tickets it paid for. It is never counted as a refund: that is the organizer's
+own decision, and this is a bank's.
+
+The fraud half is two facts on the order list rather than a score — this
+address won a chargeback before, or has placed several orders today — because
+a number out of a hundred invites refusing somebody on a hunch the platform
+made up.
+
+Building it found two bugs in the payment plumbing, both from orders knowing
+only the checkout session: a Stripe dispute names the payment, so it could
+never have been matched to an order, and refunds were sending that session id
+to Stripe as a payment intent.
 
 ### 18. More than one language — **L**
 
@@ -239,8 +256,10 @@ analytics an organizer can act on (13).
 
 **Done:** data requests (16).
 
-**Next:** chargebacks (17), then SMS (12) — which needs a provider account in
-each market before it can send anything — and resale (5).
+**Done:** chargebacks and fraud (17).
+
+**Next:** SMS (12) — which needs a provider account in each market before it
+can send anything — and resale (5).
 
 **In parallel, whenever the credentials land:** wallet passes (6), push (7).
 Neither needs design work — only keys — so they should be picked up the week

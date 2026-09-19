@@ -7,10 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
+use App\Services\Disputes\RiskSignals;
 use App\Support\Csv;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -46,6 +48,9 @@ class OrderController extends Controller
             ->paginate($filters['per_page'] ?? 25)
             ->withQueryString();
 
+        // Worked out for the page in two queries rather than per row.
+        $signals = app(RiskSignals::class)->forOrders($orders->getCollection());
+
         return response()->json([
             'data' => $orders->getCollection()->map(fn (Order $order) => [
                 'id' => $order->id,
@@ -63,6 +68,9 @@ class OrderController extends Controller
                     'amount' => (int) $order->refunded_amount,
                     'currency' => $order->currency,
                 ],
+                // Facts about this buyer worth knowing before the night, not a
+                // score. Absent on most orders.
+                'signals' => $signals[$order->id] ?? [],
             ])->values(),
             'meta' => [
                 'total' => $orders->total(),
@@ -203,7 +211,7 @@ class OrderController extends Controller
      * and Lagos nights has two sets of money, and adding them produces a
      * number that is true of nothing.
      *
-     * @param  \Illuminate\Support\Collection<int, Order>  $orders
+     * @param  Collection<int, Order>  $orders
      * @return array<string, mixed>|null
      */
     private function summary($orders): ?array

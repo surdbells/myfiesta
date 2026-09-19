@@ -427,6 +427,32 @@ exists to catch misuse. The person is shown the list, table by table.
 the request along with the person would leave nothing to show for it but their
 absence, which is the opposite of what a regulator asks for.
 
+**A chargeback is not a refund, and is never counted as one.** A refund is the
+organizer deciding to give money back; a chargeback is a bank taking it. They
+land in different places on purpose: a refund has its own record and its own
+ledger type, a lost dispute writes a `chargeback` entry, and the order's status
+is left alone so nothing downstream can quietly add the two together. An
+organizer who cannot tell them apart cannot tell whether their refund policy
+is working or their buyers are being defrauded.
+
+**A dispute does not void a ticket; losing one does.** Plenty are withdrawn or
+decided for the organizer, and turning somebody away at a door on an unproven
+claim is worse than the money being at risk for a fortnight. Once it is lost,
+the ticket stops working — a charged-back ticket that still opens a door is
+the whole of ticket fraud in one step, with the organizer paying for the
+drinks as well.
+
+**The order keeps the payment's own identifier, not just the checkout
+session's.** They are different things at both processors, and everything that
+happens after the payment — a dispute, a refund — is named by the second one.
+Without it a dispute arrives about a payment nothing here has heard of, and a
+refund is sent to Stripe with a session id where a payment intent belongs.
+
+**Fraud signals are facts, not a score.** "This address won a chargeback
+against you in June" is something an organizer can check and act on. A number
+out of a hundred is something they refuse a stranger over, built from
+behaviour we would have to follow people around to collect.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,
