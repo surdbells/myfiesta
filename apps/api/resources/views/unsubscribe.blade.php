@@ -69,34 +69,45 @@
   </head>
   <body>
     <main>
+      @php($marketing = ($kind ?? 'reminders') === 'marketing')
+      @php($query = $marketing ? ['kind' => 'marketing'] : [])
       @if ($state === 'confirm')
-        <h1>Stop event reminders?</h1>
-        <p>
-          You will still get emails about tickets you buy and orders you place —
-          those are not marketing, and turning them off would leave you without
-          your ticket.
-        </p>
-        <form method="post" action="{{ route('unsubscribe.confirm', $token) }}">
+        @if ($marketing)
+          <h1>Stop news from organizers?</h1>
+          <p>
+            No more announcements from organizers you follow, and no more offers
+            about their events. Reminders about tickets you have bought, and the
+            tickets themselves, still arrive.
+          </p>
+        @else
+          <h1>Stop event reminders?</h1>
+          <p>
+            You will still get emails about tickets you buy and orders you place —
+            those are not marketing, and turning them off would leave you without
+            your ticket.
+          </p>
+        @endif
+        <form method="post" action="{{ route('unsubscribe.confirm', [$token, ...$query]) }}">
           @csrf
-          <button type="submit">Stop reminders</button>
+          <button type="submit">{{ $marketing ? 'Stop them' : 'Stop reminders' }}</button>
         </form>
       @elseif ($state === 'done')
         <h1>Done</h1>
-        <p>You will not get any more event reminders from us.</p>
-        <form method="post" action="{{ route('unsubscribe.resubscribe', $token) }}">
+        <p>{{ $marketing ? 'You will not get any more news or offers from organizers on myFiesta.' : 'You will not get any more event reminders from us.' }}</p>
+        <form method="post" action="{{ route('unsubscribe.resubscribe', [$token, ...$query]) }}">
           @csrf
           <button class="quiet" type="submit">Actually, turn them back on</button>
         </form>
       @elseif ($state === 'already')
         <h1>Already off</h1>
-        <p>Event reminders are already turned off for this address.</p>
-        <form method="post" action="{{ route('unsubscribe.resubscribe', $token) }}">
+        <p>{{ $marketing ? 'News and offers from organizers are already turned off for this address.' : 'Event reminders are already turned off for this address.' }}</p>
+        <form method="post" action="{{ route('unsubscribe.resubscribe', [$token, ...$query]) }}">
           @csrf
           <button class="quiet" type="submit">Turn them back on</button>
         </form>
       @elseif ($state === 'resubscribed')
         <h1>Turned back on</h1>
-        <p>You will get reminders about events you have tickets to.</p>
+        <p>{{ $marketing ? 'You will hear from organizers you follow, and about their events.' : 'You will get reminders about events you have tickets to.' }}</p>
       @else
         {{-- Deliberately vague. Saying "no such address" would turn this page
              into a way to test whether an address is on the platform. --}}

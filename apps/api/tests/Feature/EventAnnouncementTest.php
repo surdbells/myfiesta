@@ -121,6 +121,47 @@ class EventAnnouncementTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    public function test_the_unsubscribe_button_in_an_announcement_stops_announcements(): void
+    {
+        $this->follower('ada@example.com');
+        $this->publish()->assertOk();
+
+        $mail = null;
+        Mail::assertQueued(EventAnnouncedMail::class, function (EventAnnouncedMail $m) use (&$mail) {
+            $mail = $m;
+
+            return true;
+        });
+
+        // What Gmail posts when somebody presses its unsubscribe button: the
+        // address from the header, nothing else. This used to switch off
+        // reminders and leave announcements running.
+        preg_match('/^<(.+)>$/', $mail->headers()->text['List-Unsubscribe'], $m);
+        $this->post($m[1])->assertOk();
+
+        $preference = EmailPreference::forEmail('ada@example.com');
+        $this->assertFalse($preference->wantsMarketing());
+        // And nothing they did not ask to stop.
+        $this->assertTrue($preference->wantsReminders());
+    }
+
+    public function test_the_marketing_page_says_what_it_stops_and_changes_nothing_on_its_own(): void
+    {
+        $preference = EmailPreference::forEmail('ada@example.com');
+
+        $this->get(route('unsubscribe', [$preference->token, 'kind' => 'marketing']))
+            ->assertOk()
+            ->assertSee('Stop news from organizers?', false);
+
+        $this->assertTrue($preference->fresh()->wantsMarketing());
+
+        $this->post(route('unsubscribe.confirm', [$preference->token, 'kind' => 'marketing']))->assertOk();
+        $this->assertFalse($preference->fresh()->wantsMarketing());
+
+        $this->post(route('unsubscribe.resubscribe', [$preference->token, 'kind' => 'marketing']))->assertOk();
+        $this->assertTrue($preference->fresh()->wantsMarketing());
+    }
+
     public function test_an_invitation_event_is_never_announced(): void
     {
         $this->follower('ada@example.com');

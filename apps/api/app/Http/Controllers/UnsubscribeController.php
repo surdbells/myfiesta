@@ -17,6 +17,13 @@ use Illuminate\Http\Response;
  * on its own, so a link sitting in forwarded mail or a corporate scanner leaks
  * nothing about who it belongs to, and the worst somebody can do with a stolen
  * one is stop emails the owner can turn back on.
+ *
+ * Two kinds of mail, stopped separately, named by `?kind=` on the link that
+ * came in the email. Reminders are about a night somebody bought for;
+ * marketing is everything they did not — an organizer they follow announcing
+ * something, a campaign. Until this said which, every link stopped reminders,
+ * so a follower pressing unsubscribe on an announcement lost the reminder for
+ * the ticket they had and kept getting the announcements.
  */
 class UnsubscribeController extends Controller
 {
@@ -39,9 +46,12 @@ class UnsubscribeController extends Controller
             ], 404);
         }
 
+        $kind = $this->kind($request);
+
         return response()->view('unsubscribe', [
-            'state' => $preference->wantsReminders() ? 'confirm' : 'already',
+            'state' => $preference->{$kind['wants']}() ? 'confirm' : 'already',
             'token' => $token,
+            'kind' => $kind['name'],
         ]);
     }
 
@@ -65,13 +75,16 @@ class UnsubscribeController extends Controller
             ], 404);
         }
 
-        if ($preference->wantsReminders()) {
-            $preference->update(['reminders_opted_out_at' => now()]);
+        $kind = $this->kind($request);
+
+        if ($preference->{$kind['wants']}()) {
+            $preference->update([$kind['column'] => now()]);
         }
 
         return response()->view('unsubscribe', [
             'state' => 'done',
             'token' => $token,
+            'kind' => $kind['name'],
         ]);
     }
 
@@ -80,11 +93,30 @@ class UnsubscribeController extends Controller
     {
         $preference = EmailPreference::where('token', $token)->firstOrFail();
 
-        $preference->update(['reminders_opted_out_at' => null]);
+        $kind = $this->kind($request);
+
+        $preference->update([$kind['column'] => null]);
 
         return response()->view('unsubscribe', [
             'state' => 'resubscribed',
             'token' => $token,
+            'kind' => $kind['name'],
         ]);
+    }
+
+    /**
+     * Which mail the link was for.
+     *
+     * Anything unrecognised is reminders, which is what every link meant
+     * before there were two kinds: an old email's link keeps doing what it
+     * said it would.
+     *
+     * @return array{name: string, column: string, wants: string}
+     */
+    private function kind(Request $request): array
+    {
+        return $request->query('kind') === 'marketing'
+            ? ['name' => 'marketing', 'column' => 'marketing_opted_out_at', 'wants' => 'wantsMarketing']
+            : ['name' => 'reminders', 'column' => 'reminders_opted_out_at', 'wants' => 'wantsReminders'];
     }
 }

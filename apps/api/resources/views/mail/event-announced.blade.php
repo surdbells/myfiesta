@@ -18,6 +18,7 @@ Have a look
 
 <x-slot:subcopy>
 You are getting this because you follow {{ $organizer->name }}.
-[Stop following them]({{ $stopUrl }}) and this is the last one.
+[Stop following them]({{ $stopUrl }}) and this is the last one, or
+[stop news from every organizer]({{ $unsubscribeUrl }}).
 </x-slot:subcopy>
 </x-mail::message>

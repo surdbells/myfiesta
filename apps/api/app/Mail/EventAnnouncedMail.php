@@ -2,8 +2,10 @@
 
 namespace App\Mail;
 
+use App\Models\EmailPreference;
 use App\Models\Event;
 use App\Models\OrganizationFollow;
+use App\Support\RichText;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -11,8 +13,6 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
-use App\Models\EmailPreference;
-use App\Support\RichText;
 use Illuminate\Support\Str;
 
 /**
@@ -52,7 +52,9 @@ class EventAnnouncedMail extends Mailable implements ShouldQueue
         $preference = EmailPreference::forEmail($this->email);
 
         return new Headers(text: [
-            'List-Unsubscribe' => '<'.route('unsubscribe', $preference->token).'>',
+            // Marketing, not reminders: the button in somebody's inbox has to
+            // stop the thing it is next to.
+            'List-Unsubscribe' => '<'.route('unsubscribe', [$preference->token, 'kind' => 'marketing']).'>',
             'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
         ]);
     }
@@ -76,6 +78,7 @@ class EventAnnouncedMail extends Mailable implements ShouldQueue
                 'blurb' => Str::limit(RichText::toText($this->event->description), 220),
                 'url' => rtrim(config('app.public_url'), '/').'/'.$this->event->slug,
                 'stopUrl' => route('follows.leave', ['token' => $this->follow->token]),
+                'unsubscribeUrl' => route('unsubscribe', [EmailPreference::forEmail($this->email)->token, 'kind' => 'marketing']),
             ],
         );
     }
