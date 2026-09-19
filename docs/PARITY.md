@@ -23,13 +23,13 @@ to act on.
 
 | | |
 | --- | --- |
-| Selling | add-ons sold beside a ticket — tables, bottles, merchandise; questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches |
-| Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
+| Selling | add-ons sold beside a ticket — tables, bottles, merchandise; questions at checkout, asked once or of each person; tiers with their own prices, quantities, per-order limits, sales windows and ladders (`opens_after_id`); group tickets that admit several; inventory holds during checkout; waitlists; presale access codes; discount and promoter codes with batches; the same checkout embedded in an organizer's own website |
+| Money | Stripe and Paystack, guest checkout, quotes before commitment, tax rates, gateway fees recorded per order, refunds, chargebacks answered and accounted for separately, a ledger, settlements, payout details behind KYC, payout requests with staff approval |
 | The door | scanning by camera or code, selling to walk-ups and reconciling the till, a saved list and a queue that work with no signal, scoped door passes for staff phones, guest lists, ticket transfers |
-| Attendees | tickets on the phone that work offline, transfers, saved events, following organizers, reminders, add to calendar |
-| Organizers | dashboard, sales and orders, refunds, email to ticket holders, roles and permissions, multiple organizations, recurring series, cloning, images, their own brand and their own public page |
-| Platform | admin panel, audit trail, access logging on sensitive data, tax rates, cancellations with refunds |
-| Reach | server-rendered pages that unfurl, structured data, sitemap, promoter attribution through `?ref=`, announcements to followers |
+| Attendees | tickets on the phone that work offline, transfers, giving a ticket back at what was paid for it, saved events, following organizers, reminders by email and text, add to calendar, asking for their data or to be forgotten |
+| Organizers | dashboard, sales and orders, refunds, email to ticket holders, campaigns to people who have not bought yet, what each one sold, conversion and turnout against their own last night, webhooks and read-only API keys, roles and permissions, multiple organizations, recurring series, cloning, images, their own brand and their own public page |
+| Platform | admin panel, audit trail, access logging on sensitive data, privacy requests answered on the spot, tax rates, cancellations with refunds |
+| Reach | server-rendered pages that unfurl, structured data, sitemap, promoter attribution through `?ref=`, announcements to followers, campaigns counted by what they actually sold |
 
 ---
 
