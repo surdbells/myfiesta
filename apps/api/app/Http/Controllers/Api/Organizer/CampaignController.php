@@ -109,10 +109,20 @@ class CampaignController extends Controller
         ]);
     }
 
-    /** The events this organization's campaigns have actually pointed at. */
+    /**
+     * The events this organization's campaigns have actually pointed at.
+     *
+     * Scoped twice on purpose. Reaching them through this organization's own
+     * campaigns should already be enough, and is — but it relies on nothing
+     * ever moving an event between organizations, and this list is titles
+     * going out over the wire. The second clause costs nothing and means a
+     * transfer, a merge or a repair script cannot turn this into somebody
+     * else's calendar.
+     */
     private function writtenAbout(Organization $organization): array
     {
         return Event::query()
+            ->where('organization_id', $organization->id)
             ->whereIn('id', Campaign::query()
                 ->where('organization_id', $organization->id)
                 ->whereNotNull('event_id')

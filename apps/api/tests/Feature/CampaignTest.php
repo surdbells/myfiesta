@@ -517,6 +517,30 @@ class CampaignTest extends TestCase
         $this->getJson("/api/organizer/campaigns?event_id={$theirEvent->id}")->assertOk()->assertJsonCount(0, 'data');
     }
 
+    public function test_a_night_that_changed_hands_drops_off_the_filter_rather_than_being_named(): void
+    {
+        $other = Organization::create(['name' => 'Elsewhere', 'slug' => 'elsewhere']);
+
+        Campaign::create([
+            'organization_id' => $this->org->id,
+            'audience' => 'followers',
+            'event_id' => $this->next->id,
+            'subject' => 'Come to Afro Fest',
+            'body' => 'y',
+            'status' => 'sent',
+        ]);
+
+        // The campaign stays ours; the night it was about does not. Reaching
+        // the list through our own campaigns alone would go on printing a
+        // title that is now somebody else's to publish.
+        $this->next->update(['organization_id' => $other->id]);
+
+        $body = $this->getJson('/api/organizer/campaigns')->assertOk()->json();
+
+        $this->assertSame([], $body['written_about']);
+        $this->assertSame(['Come to Afro Fest'], collect($body['data'])->pluck('subject')->all());
+    }
+
     public function test_a_status_that_is_not_one_is_refused_rather_than_ignored(): void
     {
         $this->getJson('/api/organizer/campaigns?status=posted')

@@ -31,6 +31,9 @@ use Illuminate\Validation\Rule;
  */
 class EventController extends Controller
 {
+    /** An order that stands: it was paid, and not all of it came back. */
+    private const LIVE_ORDERS = ['paid', 'partially_refunded'];
+
     public function __construct(private readonly Auditor $auditor) {}
 
     /**
@@ -41,9 +44,6 @@ class EventController extends Controller
      * two run together, upcoming first — kept for any caller that pages
      * through everything.
      */
-    /** An order that stands: it was paid, and not all of it came back. */
-    private const LIVE_ORDERS = ['paid', 'partially_refunded'];
-
     public function index(Request $request): JsonResponse
     {
         $request->validate(['when' => ['sometimes', 'in:upcoming,past']]);
