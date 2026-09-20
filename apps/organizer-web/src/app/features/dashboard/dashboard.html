@@ -75,41 +75,41 @@
         </span>
         <div class="grid gap-1">
           <p class="stat__label m-0 text-sm text-text-muted">Owed to you</p>
-          <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(money.balance) }}</p>
+          <p class="stat__figure figure m-0 text-2xl text-primary-text">{{ cash(money.balance) }}</p>
           <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
         </div>
       </div>
 
-      <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+      <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
         <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
           <ui-icon [icon]="soldIcon" size="sm" />
         </span>
         <div class="grid gap-1">
           <p class="stat__label m-0 text-sm text-text-muted">Sold, last 7 days</p>
-          <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(money.sold_7d) }}</p>
+          <p class="stat__figure figure m-0 text-2xl">{{ cash(money.sold_7d) }}</p>
           <p class="stat__note m-0 text-xs text-text-subtle">{{ money.orders_7d }} {{ money.orders_7d === 1 ? 'order' : 'orders' }}</p>
         </div>
       </div>
     }
 
-    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
       <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
         <ui-icon [icon]="ticketIcon" size="sm" />
       </span>
       <div class="grid gap-1">
         <p class="stat__label m-0 text-sm text-text-muted">Tickets out</p>
-        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.tickets_upcoming }}</p>
+        <p class="stat__figure figure m-0 text-2xl">{{ data.selling.tickets_upcoming }}</p>
         <p class="stat__note m-0 text-xs text-text-subtle">Across {{ data.selling.upcoming_events }} upcoming events</p>
       </div>
     </div>
 
-    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6">
+    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
       <span class="grid h-10 w-10 place-items-center rounded-lg bg-surface-inset text-text-muted">
         <ui-icon [icon]="draftIcon" size="sm" />
       </span>
       <div class="grid gap-1">
         <p class="stat__label m-0 text-sm text-text-muted">Drafts</p>
-        <p class="stat__figure m-0 text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ data.selling.draft_events }}</p>
+        <p class="stat__figure figure m-0 text-2xl">{{ data.selling.draft_events }}</p>
         <p class="stat__note m-0 text-xs text-text-subtle">Not visible to anybody</p>
       </div>
     </div>
