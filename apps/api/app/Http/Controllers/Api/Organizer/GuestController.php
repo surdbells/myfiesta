@@ -149,6 +149,9 @@ class GuestController extends Controller
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'in:valid,checked_in'],
+            // One tier at a time, which is how a door with a VIP list and a
+            // general queue actually works.
+            'ticket_type_id' => ['nullable', 'uuid'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
 
@@ -158,6 +161,10 @@ class GuestController extends Controller
             ->when(
                 $filters['status'] ?? null,
                 fn ($q, $status) => $q->where('status', $status),
+            )
+            ->when(
+                $filters['ticket_type_id'] ?? null,
+                fn ($q, $id) => $q->where('ticket_type_id', $id),
             )
             ->when($filters['q'] ?? null, function ($q, $term) {
                 // Names get typed at a door under time pressure, so matching is

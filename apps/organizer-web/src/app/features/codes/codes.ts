@@ -2,7 +2,21 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, debounceTime } from 'rxjs';
-import { ToastStore, UiBadge, UiButton, UiEmpty, UiErrorState, UiIcon, UiPageHeader, UiPagination, UiSelect, UiSkeleton, type SelectOption } from '@myfiesta/ui';
+import {
+  ToastStore,
+  UiBadge,
+  UiButton,
+  UiEmpty,
+  UiErrorState,
+  UiIcon,
+  UiPageHeader,
+  UiPagination,
+  UiSelect,
+  UiSkeleton,
+  type SelectOption,
+  UiFilterBar,
+  type FilterChip,
+} from '@myfiesta/ui';
 import { Plus, Search, X } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { EventOption, OrganizationCode, PageMeta } from '../../core/api.types';
@@ -28,7 +42,7 @@ const ALL_EVENTS = 'all-events';
  */
 @Component({
   selector: 'app-codes',
-  imports: [FormsModule, RouterLink, UiPageHeader, UiButton, UiBadge, UiSelect, UiIcon, UiEmpty, UiErrorState, UiSkeleton, UiPagination, EventCodes],
+  imports: [FormsModule, RouterLink, UiPageHeader, UiButton, UiBadge, UiSelect, UiIcon, UiEmpty, UiErrorState, UiSkeleton, UiPagination, EventCodes, UiFilterBar],
   templateUrl: './codes.html',
 })
 export class Codes {
@@ -55,7 +69,38 @@ export class Codes {
   readonly creating = signal(false);
   readonly createFor = signal<string | null>(null);
 
-  readonly filtered = computed(() => this.query().trim() !== '' || this.eventFilter() !== null);
+  readonly filtered = computed(() => this.chips().length > 0);
+
+  /** What is on, in the words it was chosen by. */
+  readonly chips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+
+    if (this.query().trim()) chips.push({ key: 'q', label: 'Search', value: this.query().trim() });
+
+    if (this.eventFilter()) {
+      const event = this.events().find((option) => option.id === this.eventFilter());
+      chips.push({ key: 'event', label: 'Event', value: event?.title ?? 'One event' });
+    }
+
+    return chips;
+  });
+
+  readonly summary = computed(() => {
+    const meta = this.meta();
+    if (!meta) return null;
+
+    const noun = meta.total === 1 ? 'code' : 'codes';
+    const shown = Math.min(meta.per_page, this.codes().length);
+
+    return meta.total > shown
+      ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}`
+      : `${meta.total.toLocaleString()} ${noun}`;
+  });
+
+  remove(key: string): void {
+    if (key === 'q') this.search('');
+    if (key === 'event') this.filterByEvent('');
+  }
 
   readonly filterOptions = computed<SelectOption[]>(() => [
     { value: '', label: 'All codes' },

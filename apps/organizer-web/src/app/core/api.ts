@@ -604,9 +604,16 @@ export class Api {
     return this.http.get(`${this.base}/api/organizer/orders/export`, { params, responseType: 'blob' });
   }
 
-  guests(eventId: string, search?: string, page = 1): Observable<GuestPage> {
+  guests(
+    eventId: string,
+    search?: string,
+    page = 1,
+    filters: { status?: string; ticket_type_id?: string } = {},
+  ): Observable<GuestPage> {
     let params = new HttpParams().set('page', page);
     if (search) params = params.set('q', search);
+    if (filters.status) params = params.set('status', filters.status);
+    if (filters.ticket_type_id) params = params.set('ticket_type_id', filters.ticket_type_id);
 
     return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
       params,

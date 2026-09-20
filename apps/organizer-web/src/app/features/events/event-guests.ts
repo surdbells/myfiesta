@@ -1,5 +1,14 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ToastStore, UiButton, UiIcon, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
+import {
+  ToastStore,
+  UiButton,
+  UiIcon,
+  UiPagination,
+  UiSelect,
+  type SelectOption,
+  UiFilterBar,
+  type FilterChip,
+} from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
 import { saveFile, today } from '../../core/download';
 import { FormsModule } from '@angular/forms';
@@ -19,7 +28,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, UiButton, UiIcon, UiPagination, UiSelect],
+  imports: [FormsModule, UiButton, UiIcon, UiPagination, UiSelect, UiFilterBar],
   templateUrl: './event-guests.html',
 })
 export class EventGuests {
@@ -65,8 +74,23 @@ export class EventGuests {
   readonly notice = signal<string | null>(null);
 
   readonly search = signal('');
+  /** Everyone, or only the half of the room that matters at this moment. */
+  readonly status = signal('');
+  readonly tier = signal('');
+
+  readonly statusOptions: SelectOption[] = [
+    { value: '', label: 'Everyone' },
+    { value: 'checked_in', label: 'Arrived' },
+    { value: 'valid', label: 'Not arrived yet' },
+  ];
 
   readonly ticketTypes = signal<TicketType[]>([]);
+
+  /** For filtering, which needs an "any" row the issue form does not. */
+  readonly tierOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Any tier' },
+    ...this.ticketTypes().map((type) => ({ value: type.id, label: type.name })),
+  ]);
 
   readonly ticketTypeOptions = computed<SelectOption[]>(() =>
     this.ticketTypes().map((type) => ({
@@ -107,21 +131,74 @@ export class EventGuests {
 
     const search = this.search().trim() || undefined;
 
-    this.api.guests(this.eventId, search, this.page()).subscribe({
-      next: (page) => {
-        this.guests.set(page.data);
-        this.meta.set(page.meta);
-        // The whole list's size, for "12 of 80 arrived". A search narrows the
-        // rows, not the room — taking its count here read as 12 of 3.
-        if (!search) this.total.set(page.meta.total);
-        this.arrived.set(page.meta.checked_in);
-        this.loading.set(false);
-      },
-      error: (response) => {
-        this.loading.set(false);
-        this.error.set(messageFor(response, 'Could not load the guest list.'));
-      },
-    });
+    this.api
+      .guests(this.eventId, search, this.page(), { status: this.status(), ticket_type_id: this.tier() })
+      .subscribe({
+        next: (page) => {
+          this.guests.set(page.data);
+          this.meta.set(page.meta);
+          // The whole list's size, for "12 of 80 arrived". A filter narrows
+          // the rows, not the room — taking its count here read as 12 of 3.
+          if (!search && !this.status() && !this.tier()) this.total.set(page.meta.total);
+          this.arrived.set(page.meta.checked_in);
+          this.loading.set(false);
+        },
+        error: (response) => {
+          this.loading.set(false);
+          this.error.set(messageFor(response, 'Could not load the guest list.'));
+        },
+      });
+  }
+
+  /** Any change to the terms starts again at the first page. */
+  refine(): void {
+    this.page.set(1);
+    this.load();
+  }
+
+  readonly chips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+
+    if (this.search().trim()) chips.push({ key: 'q', label: 'Search', value: this.search().trim() });
+
+    if (this.status()) {
+      const option = this.statusOptions.find((o) => o.value === this.status());
+      chips.push({ key: 'status', label: 'Showing', value: option?.label ?? this.status() });
+    }
+
+    if (this.tier()) {
+      const type = this.ticketTypes().find((t) => t.id === this.tier());
+      chips.push({ key: 'tier', label: 'Tier', value: type?.name ?? 'One tier' });
+    }
+
+    return chips;
+  });
+
+  readonly summary = computed(() => {
+    const meta = this.meta();
+    if (!meta) return null;
+
+    const noun = meta.total === 1 ? 'guest' : 'guests';
+    const shown = Math.min(meta.per_page, this.guests().length);
+
+    return meta.total > shown
+      ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}`
+      : `${meta.total.toLocaleString()} ${noun}`;
+  });
+
+  remove(key: string): void {
+    if (key === 'q') this.search.set('');
+    if (key === 'status') this.status.set('');
+    if (key === 'tier') this.tier.set('');
+
+    this.refine();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.status.set('');
+    this.tier.set('');
+    this.refine();
   }
 
   /** Another page of the list. */

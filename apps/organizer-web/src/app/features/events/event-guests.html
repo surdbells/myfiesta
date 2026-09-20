@@ -112,19 +112,42 @@
   </form>
 }
 
-<form class="search mb-4 flex gap-2" (ngSubmit)="runSearch()">
-  <label for="q" class="sr-only">Search guests</label>
-  <input
-    id="q"
-    class="flex-1"
-    name="q"
-    type="search"
-    placeholder="Search by name or email"
-    [ngModel]="search()"
-    (ngModelChange)="search.set($event)"
+<!--
+  The door's own filter. At a door the question is never "who is coming" — it
+  is "is this person on the list", and then "who has not arrived yet".
+-->
+<ui-filter-bar
+  class="mb-4 block"
+  searchPlaceholder="Search by name or email"
+  searchLabel="Search guests"
+  [search]="search()"
+  (searchChange)="search.set($event); refine()"
+  [chips]="chips()"
+  [summary]="summary()"
+  (removed)="remove($event)"
+  (clearedAll)="clearFilters()"
+>
+  <ui-select
+    class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+    name="guestStatus"
+    ariaLabel="Who to show"
+    [options]="statusOptions"
+    [ngModel]="status()"
+    (ngModelChange)="status.set($event); refine()"
   />
-  <button uiButton variant="secondary" type="submit">Search</button>
-</form>
+
+  @if (ticketTypes().length > 1) {
+    <ui-select
+      class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+      name="guestTier"
+      ariaLabel="Ticket type"
+      placeholder="Any tier"
+      [options]="tierOptions()"
+      [ngModel]="tier()"
+      (ngModelChange)="tier.set($event); refine()"
+    />
+  }
+</ui-filter-bar>
 
 @if (loading()) {
   <p class="muted">Loading…</p>

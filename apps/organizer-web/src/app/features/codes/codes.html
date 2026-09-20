@@ -51,20 +51,17 @@
   </section>
 }
 
-<form class="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-raised p-4" (ngSubmit)="load()">
-  <div class="flex h-11 min-w-0 flex-[1_1_18rem] items-center gap-2 rounded-md border border-field-border bg-surface px-3">
-    <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
-    <input
-      class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
-      name="q"
-      type="search"
-      placeholder="Code, label or promoter"
-      aria-label="Search codes"
-      [ngModel]="query()"
-      (ngModelChange)="search($event)"
-    />
-  </div>
-
+<ui-filter-bar
+  class="mb-6 block"
+  searchPlaceholder="Code, label or promoter"
+  searchLabel="Search codes"
+  [search]="query()"
+  (searchChange)="search($event)"
+  [chips]="chips()"
+  [summary]="summary()"
+  (removed)="remove($event)"
+  (clearedAll)="clear()"
+>
   <ui-select
     class="flex-[0_1_16rem] max-sm:flex-[1_1_100%]"
     name="event"
@@ -74,17 +71,7 @@
     [ngModel]="eventFilter() ?? ''"
     (ngModelChange)="filterByEvent($event)"
   />
-
-  @if (filtered()) {
-    <button
-      class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
-      type="button"
-      (click)="clear()"
-    >
-      Clear
-    </button>
-  }
-</form>
+</ui-filter-bar>
 
 @if (loading() && codes().length === 0) {
   <div class="grid gap-2">
