@@ -14,7 +14,7 @@
   </div>
 
   @if (formOpen()) {
-    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="create()">
+    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="create()">
       @if (error(); as message) {
         <p class="rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
       }

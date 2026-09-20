@@ -1,7 +1,7 @@
 @if (loading()) {
   <div class="grid gap-3">
     @for (n of [0, 1]; track n) {
-      <div class="block min-h-[4.5rem] rounded-lg border border-border bg-surface-raised px-6 py-4"><ui-skeleton height="2.5rem" /></div>
+      <div class="block min-h-[4.5rem] rounded-lg border border-border bg-surface-raised px-6 py-4 shadow-(--shadow-card)"><ui-skeleton height="2.5rem" /></div>
     }
   </div>
 } @else if (failed()) {
@@ -11,7 +11,7 @@
     (retried)="load()"
   />
 } @else {
-  <section class="mb-6 flex items-start justify-between gap-8 rounded-lg border border-border bg-surface-raised p-6 max-[720px]:flex-wrap max-[720px]:gap-4">
+  <section class="mb-6 flex items-start justify-between gap-8 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card) max-[720px]:flex-wrap max-[720px]:gap-4">
     <div class="max-w-[52ch]">
       <h2 class="text-base font-semibold">What the checkout asks</h2>
       <p class="mt-1 text-sm text-text-muted">

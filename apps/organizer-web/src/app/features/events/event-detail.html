@@ -53,16 +53,16 @@
 
   <!-- Money is only fetched, and only shown, for roles the API would serve. -->
   @if (summary(); as totals) {
-    <section class="totals mt-6 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border">
+    <section class="totals mt-6 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border shadow-(--shadow-card)">
       <div class="flex flex-col gap-1 bg-surface-raised p-4">
-        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Gross</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.gross) }}</span>
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Gross</span><span class="figure text-lg">{{ money(totals.gross) }}</span>
       </div>
       <div class="flex flex-col gap-1 bg-surface-raised p-4">
         <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Discounts</span
-        ><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.discounts) }}</span>
+        ><span class="figure text-lg">{{ money(totals.discounts) }}</span>
       </div>
       <div class="flex flex-col gap-1 bg-surface-raised p-4">
-        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Tax</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.tax) }}</span>
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Tax</span><span class="figure text-lg">{{ money(totals.tax) }}</span>
       </div>
       <div class="aside flex flex-col gap-1 border-l border-dashed border-border-strong bg-surface-raised p-4 text-text-muted">
         <!--
@@ -72,10 +72,10 @@
           the thing it is not.
         -->
         <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Service charge, paid by buyers</span
-        ><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.service_charge) }}</span>
+        ><span class="figure text-lg">{{ money(totals.service_charge) }}</span>
       </div>
       <div class="net flex flex-col gap-1 bg-surface-raised p-4">
-        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Owed to you</span><span class="figure text-lg font-semibold tabular-nums">{{ money(totals.net) }}</span>
+        <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Owed to you</span><span class="figure text-lg">{{ money(totals.net) }}</span>
       </div>
     </section>
 

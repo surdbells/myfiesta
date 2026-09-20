@@ -8,7 +8,7 @@
     <app-event-insights [insights]="r.insights" />
 
     <!-- ------------------------------------------------------------ by day -->
-    <div class="rounded-xl border border-border bg-surface-raised p-6">
+    <div class="rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
       <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <h3 class="text-base font-semibold">Tickets sold per day</h3>
         @if (pace(); as p) {
@@ -59,7 +59,7 @@
     </div>
 
     <!-- ------------------------------------------------------ by ticket type -->
-    <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+    <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
       <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
         <h3 class="text-base font-semibold">By ticket</h3>
         <p class="text-sm text-text-muted tabular-nums">
@@ -141,7 +141,7 @@
       thing; per till after that, because a night with two doors has two tins.
     -->
     @if (r.door.tickets > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
         <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">At the door</h3>
           <p class="text-sm text-text-muted tabular-nums">
@@ -185,7 +185,7 @@
       read from would make both numbers wrong.
     -->
     @if (r.add_ons.length > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
         <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">Sold with a ticket</h3>
           <p class="text-sm text-text-muted">Extras admit nobody, so they are counted apart from the room.</p>
@@ -230,7 +230,7 @@
 
     <!-- ------------------------------------------------------------ by code -->
     @if (r.codes.length > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
         <header class="px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">By code and promoter link</h3>
         </header>

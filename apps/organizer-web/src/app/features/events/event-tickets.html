@@ -1,7 +1,7 @@
 @if (loading()) {
   <div class="tiers m-0 grid list-none gap-3 p-0">
     @for (n of [0, 1, 2]; track n) {
-      <div class="tier block min-h-[5rem] rounded-lg border border-border bg-surface-raised px-6 py-4"><ui-skeleton height="3rem" /></div>
+      <div class="tier block min-h-[5rem] rounded-lg border border-border bg-surface-raised px-6 py-4 shadow-(--shadow-card)"><ui-skeleton height="3rem" /></div>
     }
   </div>
 } @else if (failed()) {
@@ -17,10 +17,10 @@
     checking whether to open another release is asking about the total.
   -->
   @if (types().length > 0) {
-    <section class="summary mb-6 flex items-start gap-12 rounded-lg border border-border bg-surface-raised p-6 max-[720px]:flex-wrap max-[720px]:gap-6">
+    <section class="summary mb-6 flex items-start gap-12 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card) max-[720px]:flex-wrap max-[720px]:gap-6">
       <div class="summary__figure">
         <p class="summary__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</p>
-        <p class="summary__value text-2xl font-semibold tracking-[-0.02em] tabular-nums">
+        <p class="summary__value figure text-2xl">
           {{ totalSold() }}
           @if (totalCapacity() !== null) {
             <span class="summary__of text-base font-normal text-text-muted">of {{ totalCapacity() }}</span>
@@ -31,7 +31,7 @@
       @if (faceValue(); as value) {
         <div class="summary__figure">
           <p class="summary__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">At face value</p>
-          <p class="summary__value text-2xl font-semibold tracking-[-0.02em] tabular-nums">{{ cash(value) }}</p>
+          <p class="summary__value figure text-2xl">{{ cash(value) }}</p>
           <!-- Said out loud, because it is not the payout and somebody will
                otherwise reconcile against it. -->
           <p class="summary__note mt-1 text-xs text-text-subtle">Before discounts and refunds</p>
@@ -75,7 +75,7 @@
             }
 
             <p class="tier__facts mt-2 flex flex-wrap gap-4 text-sm text-text-subtle tabular-nums">
-              <span class="font-medium text-text">{{ cash(type.price) }}</span>
+              <span class="figure text-text">{{ cash(type.price) }}</span>
               @if (type.admits > 1) {
                 <span>Admits {{ type.admits }}</span>
               }

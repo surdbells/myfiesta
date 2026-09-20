@@ -36,10 +36,10 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
     <div class="grid gap-4">
       <!-- The headline four. -->
-      <dl class="m-0 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-px overflow-hidden rounded-xl border border-border bg-border">
+      <dl class="m-0 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-px overflow-hidden rounded-xl border border-border bg-border shadow-(--shadow-card)">
         <div class="bg-surface-raised px-5 py-4">
           <dt class="text-xs font-medium uppercase tracking-[0.06em] text-text-muted">Looked</dt>
-          <dd class="m-0 mt-1 text-2xl font-semibold tabular-nums">{{ (s.views + s.embed_views).toLocaleString() }}</dd>
+          <dd class="figure m-0 mt-1 text-2xl">{{ (s.views + s.embed_views).toLocaleString() }}</dd>
           <p class="mt-1 text-xs text-text-muted">
             @if (s.embed_views > 0) {
               {{ s.embed_views.toLocaleString() }} on your own site
@@ -51,7 +51,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
         <div class="bg-surface-raised px-5 py-4">
           <dt class="text-xs font-medium uppercase tracking-[0.06em] text-text-muted">Bought</dt>
-          <dd class="m-0 mt-1 text-2xl font-semibold tabular-nums">{{ percent(s.conversion) }}</dd>
+          <dd class="figure m-0 mt-1 text-2xl">{{ percent(s.conversion) }}</dd>
           <p class="mt-1 text-xs text-text-muted">
             @if (s.conversion !== null) {
               {{ perThousand(s.conversion) }} of every 1,000 who looked
@@ -63,7 +63,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
         <div class="bg-surface-raised px-5 py-4">
           <dt class="text-xs font-medium uppercase tracking-[0.06em] text-text-muted">Came</dt>
-          <dd class="m-0 mt-1 text-2xl font-semibold tabular-nums">{{ s.attendance !== null ? percent(s.attendance) : '—' }}</dd>
+          <dd class="figure m-0 mt-1 text-2xl">{{ s.attendance !== null ? percent(s.attendance) : '—' }}</dd>
           <p class="mt-1 text-xs text-text-muted">
             @if (s.attendance !== null) {
               {{ s.arrived.toLocaleString() }} of {{ s.people.toLocaleString() }} people through the door
@@ -75,7 +75,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
         <div class="bg-surface-raised px-5 py-4">
           <dt class="text-xs font-medium uppercase tracking-[0.06em] text-text-muted">Against last time</dt>
-          <dd class="m-0 mt-1 text-2xl font-semibold tabular-nums">{{ versus() ?? '—' }}</dd>
+          <dd class="figure m-0 mt-1 text-2xl">{{ versus() ?? '—' }}</dd>
           <p class="mt-1 text-xs text-text-muted">
             @if (byNowLastTime(); as then) {
               {{ then.tickets }} sold by this point before {{ prev!.title }}
@@ -90,7 +90,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
       <!-- Pace: this night against the last, lined up by days to go. -->
       @if (insights().pace.this.length > 1 || (insights().pace.previous?.length ?? 0) > 1) {
-        <div class="rounded-xl border border-border bg-surface-raised p-6">
+        <div class="rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
           <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h3 class="text-base font-semibold">Pace</h3>
             <p class="flex flex-wrap items-center gap-x-4 text-xs text-text-muted">

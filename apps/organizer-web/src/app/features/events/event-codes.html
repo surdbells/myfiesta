@@ -18,7 +18,7 @@
 }
 
 @if (session.canMessage()) {
-  <form class="new mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
+  <form class="new mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
     <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
       <div class="field min-w-0">
         <label for="code">Code</label>

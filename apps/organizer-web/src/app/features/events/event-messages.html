@@ -16,7 +16,7 @@
 }
 
 @if (session.canMessage()) {
-  <form class="compose grid max-w-[640px] gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
+  <form class="compose grid max-w-[640px] gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
     <div class="field">
       <label for="subject">Subject</label>
       <input
