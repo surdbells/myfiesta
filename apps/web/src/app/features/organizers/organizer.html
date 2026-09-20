@@ -14,9 +14,16 @@
       <span class="font-medium text-text">{{ org.name }}</span>
     </nav>
 
-    <!-- Who they are. The same block an event page carries under "Organized
-         by", given the room it deserves when the page is about them. -->
-    <header class="flex items-start gap-6 max-sm:gap-4">
+    <!--
+      Who they are. The same block an event page carries under "Organized by",
+      given the room it deserves when the page is about them.
+
+      On the wash the event page uses, because this is the top of somebody's
+      page and a name with a circle beside it on a flat ground reads as a row
+      that lost its table. The wash is built from the theme's own tokens, so it
+      follows into dark mode rather than becoming a bright band.
+    -->
+    <header class="hero flex items-start gap-6 max-sm:gap-4">
       @if (org.logo_url) {
         <img
           class="h-20 w-20 shrink-0 rounded-full bg-surface-inset object-cover max-sm:h-16 max-sm:w-16"
