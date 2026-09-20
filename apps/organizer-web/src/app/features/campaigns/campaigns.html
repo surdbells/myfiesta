@@ -15,7 +15,7 @@
   <ui-error-state title="Could not load your campaigns" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
 } @else if (page(); as all) {
   <div class="grid max-w-[52rem] gap-10">
-    <form class="grid gap-5 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="submit()">
+    <form class="grid gap-5 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" (ngSubmit)="submit()">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-base font-semibold">{{ editing() ? 'Change this campaign' : 'New campaign' }}</h2>
         @if (editing()) {
@@ -57,7 +57,7 @@
       <div class="grid gap-1 rounded-md bg-surface-inset px-4 py-3 text-sm" aria-live="polite">
         @if (reach(); as r) {
           <p>
-            <strong class="text-lg tabular-nums">{{ r.reachable }}</strong>
+            <strong class="figure text-lg">{{ r.reachable }}</strong>
             {{ r.reachable === 1 ? 'person' : 'people' }} would get this now.
           </p>
           @if (r.all > r.reachable) {

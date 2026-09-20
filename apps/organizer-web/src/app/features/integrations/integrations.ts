@@ -64,6 +64,25 @@ export class IntegrationsScreen {
   readonly openHistory = signal<string | null>(null);
   readonly history = signal<WebhookDelivery[] | null>(null);
   readonly historyFailed = signal(false);
+
+  /**
+   * Nobody opens a delivery log to read the ones that worked.
+   *
+   * The whole list stays the default, because "nothing here" is only
+   * reassuring when you can see what it is nothing out of — but one tick
+   * gets to the twelve that failed among two hundred that did not.
+   */
+  readonly onlyTrouble = signal(false);
+
+  readonly deliveries = computed(() => {
+    const all = this.history();
+    if (!all) return null;
+
+    return this.onlyTrouble() ? all.filter((d) => d.status !== 'succeeded') : all;
+  });
+
+  /** For the count beside the tick, which is the reason to tick it. */
+  readonly troubled = computed(() => (this.history() ?? []).filter((d) => d.status !== 'succeeded').length);
   readonly busyEndpoint = signal<string | null>(null);
 
   readonly removing = signal<WebhookEndpoint | null>(null);
@@ -182,6 +201,7 @@ export class IntegrationsScreen {
     this.openHistory.set(endpoint.id);
     this.history.set(null);
     this.historyFailed.set(false);
+    this.onlyTrouble.set(false);
 
     this.api.webhookDeliveries(endpoint.id).subscribe({
       next: (deliveries) => this.openHistory() === endpoint.id && this.history.set(deliveries),

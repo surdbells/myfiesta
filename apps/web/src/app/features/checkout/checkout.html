@@ -21,7 +21,7 @@
 
     <div class="mt-8 grid grid-cols-[minmax(0,1fr)_400px] items-start gap-8 max-[900px]:grid-cols-1">
       <!-- --------------------------------------------------- attendee -->
-      <form class="rounded-xl border border-border bg-surface-raised p-8 max-sm:p-5" (ngSubmit)="placeOrder()">
+      <form class="rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-sm:p-5" (ngSubmit)="placeOrder()">
         <h2 class="border-b border-border pb-3 text-xl">Attendee details</h2>
 
         <div class="mt-6 grid grid-cols-2 gap-4 max-sm:grid-cols-1">
@@ -178,8 +178,13 @@
       </form>
 
       <!-- ----------------------------------------------------- summary -->
-      <aside class="grid content-start gap-6 max-[900px]:order-first">
-        <div class="rounded-xl border border-border bg-surface-raised p-6">
+      <!--
+        The summary sticks. On a long form the total and the button scrolled
+        away while the buyer was typing, and what is being paid should be
+        readable at the moment it is agreed to.
+      -->
+      <aside class="sticky top-6 grid content-start gap-6 self-start max-[900px]:static max-[900px]:order-first">
+        <div class="rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-overlay)">
           @if (ev.poster_url) {
             <div class="relative mb-5 overflow-hidden rounded-lg">
               <img class="aspect-video w-full bg-surface-inset object-cover" [src]="ev.poster_url" alt="" />
@@ -275,7 +280,7 @@
               }
 
               <dt class="mt-2 border-t border-border pt-3 text-lg font-semibold text-text">Total</dt>
-              <dd class="m-0 mt-2 border-t border-border pt-3 text-right text-lg font-semibold text-text tabular-nums">{{ formatMoney(q.total) }}</dd>
+              <dd class="figure m-0 mt-2 border-t border-border pt-3 text-right text-xl text-text">{{ formatMoney(q.total) }}</dd>
             </dl>
 
             <button

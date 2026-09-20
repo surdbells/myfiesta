@@ -4,7 +4,7 @@
 />
 
 @if (loading()) {
-  <div class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 max-[560px]:flex-col max-[560px]:gap-6"><ui-skeleton height="4rem" /></div>
+  <div class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 shadow-(--shadow-raised) max-[560px]:flex-col max-[560px]:gap-6"><ui-skeleton height="4rem" /></div>
 } @else if (refused()) {
   <!--
     Not an error state. The server is saying this account may not see the
@@ -25,16 +25,16 @@
   />
 } @else if (statement(); as statement) {
   <!-- ------------------------------------------------------------- balance -->
-  <section class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 max-[560px]:flex-col max-[560px]:gap-6">
+  <section class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 shadow-(--shadow-raised) max-[560px]:flex-col max-[560px]:gap-6">
     <div class="lead__figure">
       <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Owed to you</p>
-      <p class="lead__amount text-3xl font-bold tracking-[-0.02em] text-primary-text tabular-nums">{{ cash(statement.balance) }}</p>
+      <p class="lead__amount figure text-4xl text-primary-text">{{ cash(statement.balance) }}</p>
       <p class="lead__note mt-1 text-xs text-text-subtle">Ask to be paid whenever you like</p>
     </div>
 
     <div class="lead__figure lead__figure--quiet">
       <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sent so far</p>
-      <p class="lead__amount text-xl font-semibold tracking-[-0.02em] text-text tabular-nums">{{ cash(statement.settled) }}</p>
+      <p class="lead__amount figure text-xl text-text">{{ cash(statement.settled) }}</p>
     </div>
   </section>
 
@@ -74,7 +74,7 @@
       }
     </div>
   } @else if (canAsk()) {
-    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="ask()">
+    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="ask()">
       <div class="grid gap-1">
         <h2 class="text-base font-semibold">Ask to be paid</h2>
         <p class="text-sm text-text-muted">Up to {{ cash(statement.balance) }}, sent to {{ destinationSummary() }}. We will email you when it goes out.</p>
@@ -223,7 +223,7 @@
     <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Where it goes</h2>
 
     @if (destination(); as where) {
-      <div class="dest flex items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 max-[560px]:flex-wrap">
+      <div class="dest flex items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card) max-[560px]:flex-wrap">
         <ui-icon
           class="dest__mark text-text-subtle"
           [icon]="where.rail === 'interac' ? interacIcon : bankIcon"

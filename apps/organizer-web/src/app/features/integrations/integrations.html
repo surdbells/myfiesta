@@ -98,10 +98,27 @@
                 <div class="border-t border-border pt-3">
                   @if (historyFailed()) {
                     <p class="text-sm text-text-muted">The history could not be loaded.</p>
-                  } @else if (history(); as deliveries) {
-                    @if (deliveries.length === 0) {
+                  } @else if (deliveries(); as deliveries) {
+                    @if (history()!.length === 0) {
                       <p class="text-sm text-text-muted">Nothing has been sent here yet. Send a test to see one arrive.</p>
                     } @else {
+                      <!--
+                        The one question a delivery log is opened with. Only
+                        offered when there is trouble to see: a tick that can
+                        only ever empty the table is a control that lies.
+                      -->
+                      @if (troubled() > 0) {
+                        <label class="mb-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
+                          <input
+                            class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
+                            type="checkbox"
+                            [checked]="onlyTrouble()"
+                            (change)="onlyTrouble.set(!onlyTrouble())"
+                          />
+                          Only the {{ troubled() }} that did not get through
+                        </label>
+                      }
+
                       <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm tabular-nums">
                           <thead class="text-xs text-text-muted">
