@@ -38,6 +38,11 @@ export class EventList {
 
   protected readonly searchIcon = Search;
   protected readonly whenIcon = CalendarDays;
+
+  /** Stands in for a poster nobody has uploaded yet. */
+  initial(event: { title: string }): string {
+    return event.title.trim().charAt(0).toUpperCase() || '?';
+  }
   protected readonly whereIcon = MapPin;
 
   readonly events = signal<EventSummary[]>([]);

@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { UiSelect, type SelectOption } from '@myfiesta/ui';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { AddOn, EventDetail, Quote, TicketType } from '../../core/api.types';
+import { AddOn, EventDetail, Money, Quote, TicketType } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, viewedOnce } from '../../core/embed';
 import { formatMoney } from '../../core/money';
@@ -41,6 +41,78 @@ export class TicketSelect {
   readonly slug = this.route.snapshot.paramMap.get('slug')!;
 
   readonly hasSelection = computed(() => this.store.count() > 0);
+
+  // --- what the rail beside the tiers says -----------------------------------
+
+  /** "Sat 3 Oct, 6:00 p.m." in the venue's zone, not the buyer's. */
+  when(): string {
+    const event = this.event();
+    if (!event) return '';
+
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: event.timezone,
+    }).format(new Date(event.starts_at));
+  }
+
+  /** The letter that stands in for a poster nobody has uploaded yet. */
+  initial(): string {
+    return (this.event()?.title ?? '').trim().charAt(0).toUpperCase() || '?';
+  }
+
+  /** The room, and the city it is in when the room does not say so. */
+  where(): string {
+    const event = this.event();
+    if (!event) return '';
+
+    const venue = event.venue?.name;
+
+    return venue && venue !== event.city ? `${venue}, ${event.city}` : (venue ?? event.city);
+  }
+
+  /**
+   * The basket, named.
+   *
+   * The bar at the bottom could only ever say "4 tickets", which is the one
+   * thing a buyer already knows. Four of which tier, and how the subtotal is
+   * made of them, is the question the rail answers — and it is the last
+   * chance to catch two Early Birds that were meant to be two General.
+   */
+/**
+   * A line's own total.
+   *
+   * Minor units multiplied by a whole number, so there is nothing to round
+   * and nothing to drift: two Early Birds at 4000 are 8000, and the sum of
+   * these lines is the server's subtotal to the cent. What is charged is
+   * still only ever the server's figure — these say what the rows add up to.
+   */
+  private lineTotal(price: Money, quantity: number): Money {
+    return { amount: price.amount * quantity, currency: price.currency };
+  }
+
+  readonly chosen = computed(() => {
+    const tiers = this.tiers();
+    const addOns = this.addOns();
+    const times = (price: Money, quantity: number) => this.lineTotal(price, quantity);
+
+    const tickets = this.store.lines().flatMap((line) => {
+      const tier = tiers.find((t) => t.id === line.ticket_type_id);
+
+      return tier ? [{ id: tier.id, name: tier.name, quantity: line.quantity, total: times(tier.price, line.quantity) }] : [];
+    });
+
+    const extras = this.store.addOnLines().flatMap((line) => {
+      const addOn = addOns.find((a) => a.id === line.add_on_id);
+
+      return addOn ? [{ id: addOn.id, name: addOn.name, quantity: line.quantity, total: times(addOn.price, line.quantity) }] : [];
+    });
+
+    return [...tickets, ...extras];
+  });
 
   /** The presale code field: closed until asked for, since most buyers have none. */
   readonly accessOpen = signal(false);

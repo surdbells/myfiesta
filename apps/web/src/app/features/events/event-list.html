@@ -12,7 +12,7 @@
   <div class="mt-8 grid grid-cols-[16.5rem_minmax(0,1fr)] items-start gap-8 max-[860px]:grid-cols-1">
     <!-- ------------------------------------------------------------ filters -->
     <aside
-      class="filters grid gap-6 rounded-xl border border-border bg-surface-raised p-6 max-[860px]:gap-0 max-[860px]:p-4"
+      class="filters sticky top-6 grid gap-6 self-start rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card) max-[860px]:static max-[860px]:gap-0 max-[860px]:p-4"
       aria-label="Filters"
     >
       <div class="flex items-center justify-between gap-3">
@@ -163,7 +163,7 @@
     <!-- ----------------------------------------------------------- results -->
     <div class="min-w-0">
       <form
-        class="toolbar flex items-center gap-4 rounded-xl border border-border bg-surface-raised p-3"
+        class="toolbar flex items-center gap-4 rounded-xl border border-border bg-surface-raised p-3 shadow-(--shadow-card)"
         (ngSubmit)="search()"
       >
         <div class="relative min-w-0 flex-1">
@@ -217,10 +217,19 @@
                       loading="lazy"
                     />
                   } @else {
+                    <!--
+                      No poster. The pale wash that used to sit here read as a
+                      tile that had not finished loading — on a grid where half
+                      the events have artwork and half do not, the ones without
+                      looked broken rather than plain. A lit panel with the
+                      night's initial in it is a deliberate-looking thing.
+                    -->
                     <div
-                      class="aspect-video w-full bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_14%,var(--surface-inset)),color-mix(in_srgb,var(--accent)_12%,var(--surface-inset)))]"
+                      class="grid aspect-video w-full place-items-center bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_45%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]"
                       aria-hidden="true"
-                    ></div>
+                    >
+                      <span class="figure text-4xl text-[color-mix(in_srgb,var(--color-neutral-0)_70%,transparent)]">{{ initial(event) }}</span>
+                    </div>
                   }
                   @if (event.category) {
                     <!-- Its own light chip on the photograph, so it reads on a
@@ -253,7 +262,7 @@
                       >Sold out</span
                     >
                   } @else {
-                    <span class="shrink-0 font-semibold text-primary-text tabular-nums">
+                    <span class="figure shrink-0 text-primary-text">
                       {{ formatFrom(event.from_price, event.currency) }}
                     </span>
                   }
