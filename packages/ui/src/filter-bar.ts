@@ -1,4 +1,16 @@
-import { Component, booleanAttribute, computed, input, model, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  booleanAttribute,
+  computed,
+  inject,
+  input,
+  model,
+  output,
+  viewChild,
+} from '@angular/core';
 import { UiIcon } from './icon';
 import { Search, X } from 'lucide-angular';
 
@@ -38,6 +50,7 @@ export interface FilterChip {
           <label class="search">
             <ui-icon class="search__icon" [icon]="searchIcon" size="sm" />
             <input
+              #searchBox
               type="search"
               [attr.aria-label]="searchLabel()"
               [placeholder]="searchPlaceholder()"
@@ -58,19 +71,19 @@ export interface FilterChip {
       @if (chips().length > 0 || summary()) {
         <div class="state">
           @if (chips().length > 0) {
-            <ul class="chips">
+            <ul #chipList class="chips">
               @for (chip of chips(); track chip.key) {
                 <li>
                   <span class="chip__label">{{ chip.label }}</span>
                   <span class="chip__value">{{ chip.value }}</span>
-                  <button type="button" [attr.aria-label]="'Remove ' + chip.label + ' filter'" (click)="removed.emit(chip.key)">
+                  <button type="button" [attr.aria-label]="'Remove ' + chip.label + ' filter'" (click)="drop(chip.key, $index)">
                     <ui-icon [icon]="clearIcon" size="sm" />
                   </button>
                 </li>
               }
             </ul>
 
-            <button class="clear" type="button" (click)="clearedAll.emit()">Clear all</button>
+            <button class="clear" type="button" (click)="dropAll()">Clear all</button>
           }
 
           @if (summary(); as text) {
@@ -245,4 +258,43 @@ export class UiFilterBar {
 
   /** Whether anything is on, for a host that wants to say so elsewhere. */
   readonly active = computed(() => this.chips().length > 0);
+
+  private readonly injector = inject(Injector);
+  private readonly chipList = viewChild<ElementRef<HTMLUListElement>>('chipList');
+  private readonly searchBox = viewChild<ElementRef<HTMLInputElement>>('searchBox');
+
+  /**
+   * Take one filter off, and leave focus somewhere.
+   *
+   * The button that was pressed is gone the moment the host re-renders, and
+   * a removed button takes focus to <body> with it — so somebody clearing
+   * three filters by keyboard is thrown to the top of the page twice. Focus
+   * lands on the chip that took this one's place, or the last one if this was
+   * the last, or the search box when the row empties.
+   */
+  drop(key: string, index: number): void {
+    this.removed.emit(key);
+    this.settle(index);
+  }
+
+  dropAll(): void {
+    this.clearedAll.emit();
+    this.settle(0);
+  }
+
+  private settle(index: number): void {
+    afterNextRender(
+      () => {
+        const buttons = Array.from(this.chipList()?.nativeElement.querySelectorAll('button') ?? []);
+
+        if (buttons.length > 0) {
+          (buttons[Math.min(index, buttons.length - 1)] as HTMLButtonElement).focus();
+          return;
+        }
+
+        this.searchBox()?.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
+  }
 }

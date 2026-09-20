@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, input, model, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, input, model, signal, viewChild } from '@angular/core';
 import { UiIcon } from './icon';
 import { CalendarDays, ChevronDown } from 'lucide-angular';
 
@@ -34,10 +34,17 @@ interface Preset {
   imports: [UiIcon],
   host: {
     '(document:click)': 'outside($event)',
-    '(document:keydown.escape)': 'open.set(false)',
+    '(document:keydown.escape)': 'dismiss()',
   },
   template: `
-    <button class="trigger" type="button" [attr.aria-expanded]="open()" (click)="open.set(!open())">
+    <button
+      #trigger
+      class="trigger"
+      type="button"
+      aria-haspopup="dialog"
+      [attr.aria-expanded]="open()"
+      (click)="open.set(!open())"
+    >
       <ui-icon [icon]="calendarIcon" size="sm" />
       <span class="trigger__label">{{ label() }}</span>
       <ui-icon class="trigger__chevron" [icon]="chevronIcon" size="sm" />
@@ -168,6 +175,8 @@ interface Preset {
 export class UiDateRange {
   private readonly host = inject(ElementRef<HTMLElement>);
 
+  private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
+
   readonly value = model<DateRange>({ from: null, to: null });
 
   /** What this range is about — "Paid", "Created". Shown when nothing is set. */
@@ -218,7 +227,22 @@ export class UiDateRange {
 
   choose(preset: Preset): void {
     this.value.set(preset.days === null ? { from: null, to: null } : { from: this.daysAgo(preset.days), to: this.today });
+    this.dismiss();
+  }
+
+  /**
+   * Close, and put focus back where it came from.
+   *
+   * The panel is removed from the page when it closes, so whatever was
+   * focused inside it goes with it and the browser drops focus on <body>.
+   * For anybody navigating by keyboard that is the top of the document: they
+   * pick a date range and are thrown back to the site header.
+   */
+  dismiss(): void {
+    if (!this.open()) return;
+
     this.open.set(false);
+    this.trigger().nativeElement.focus();
   }
 
   edit(end: 'from' | 'to', raw: string): void {

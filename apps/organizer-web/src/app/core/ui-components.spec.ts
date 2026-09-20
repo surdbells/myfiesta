@@ -301,8 +301,8 @@ describe('UiSortHeader', () => {
       searchLabel="Search orders"
       [chips]="chips()"
       [summary]="summary()"
-      (removed)="removed.set($event)"
-      (clearedAll)="cleared.set(cleared() + 1)"
+      (removed)="take($event)"
+      (clearedAll)="takeAll()"
     />
   `,
 })
@@ -311,6 +311,17 @@ class FilterBarHost {
   readonly summary = signal<string | null>(null);
   readonly removed = signal<string | null>(null);
   readonly cleared = signal(0);
+
+  /** What a real host does: take the filter off and re-render without it. */
+  take(key: string): void {
+    this.removed.set(key);
+    this.chips.update((chips) => chips.filter((chip) => chip.key !== key));
+  }
+
+  takeAll(): void {
+    this.cleared.update((n) => n + 1);
+    this.chips.set([]);
+  }
 }
 
 /**
@@ -376,6 +387,63 @@ describe('UiFilterBar', () => {
 
     element.querySelector<HTMLButtonElement>('.clear')!.click();
     expect(fixture.componentInstance.cleared()).toBe(1);
+  });
+
+  /*
+   * Where focus goes when the thing you pressed disappears.
+   *
+   * A remove button takes focus to <body> with it, so clearing three filters
+   * by keyboard throws you to the top of the page twice. None of this is
+   * visible to anybody using a mouse, which is exactly why it rots.
+   */
+  it('leaves focus on the chip that took the place of the one removed', async () => {
+    const { fixture, element } = mount(both);
+
+    const [first] = Array.from(element.querySelectorAll<HTMLButtonElement>('.chips button'));
+    first.focus();
+    first.click();
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(element.querySelector('.chips button'));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Remove Status filter');
+  });
+
+  it('falls back to the last chip when the one removed was last', async () => {
+    const { fixture, element } = mount(both);
+
+    const buttons = Array.from(element.querySelectorAll<HTMLButtonElement>('.chips button'));
+    buttons[1].focus();
+    buttons[1].click();
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Remove Event filter');
+  });
+
+  it('falls back to the search box when the last filter comes off', async () => {
+    const { fixture, element } = mount([{ key: 'status', label: 'Status', value: 'Paid' }]);
+
+    element.querySelector<HTMLButtonElement>('.chips button')!.click();
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(element.querySelector('input[type="search"]'));
+  });
+
+  it('does the same when everything is cleared at once', async () => {
+    const { fixture, element } = mount(both);
+
+    element.querySelector<HTMLButtonElement>('.clear')!.click();
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.cleared()).toBe(1);
+    expect(document.activeElement).toBe(element.querySelector('input[type="search"]'));
   });
 
   it('announces the count rather than only drawing it', () => {
@@ -462,6 +530,35 @@ describe('UiDateRange', () => {
     view.fixture.detectChanges();
 
     expect(view.element.querySelector('.panel')).toBeNull();
+  });
+
+  it('says what its button opens, not only that it is open', () => {
+    const view = mount();
+    const trigger = view.element.querySelector('button')!;
+
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    view.open();
+    expect(view.element.querySelector('button')!.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('hands focus back to its own button when the panel closes', () => {
+    const view = mount();
+    view.open();
+
+    // Taking a preset, the ordinary way out.
+    view.element.querySelector<HTMLButtonElement>('.presets button')!.click();
+    view.fixture.detectChanges();
+    expect(document.activeElement).toBe(view.element.querySelector('button'));
+
+    // And Escape, the way out for anybody who changed their mind.
+    view.open();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    view.fixture.detectChanges();
+
+    expect(view.element.querySelector('.panel')).toBeNull();
+    expect(document.activeElement).toBe(view.element.querySelector('button'));
   });
 
   it('will not call an arbitrary week "Last 7 days"', () => {
