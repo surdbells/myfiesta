@@ -1,7 +1,7 @@
 <ui-page-header title="Your account" subtitle="How you appear to your team, and how you sign in." />
 
 <div class="grid max-w-[40rem] gap-8">
-  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="saveName()">
+  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="saveName()">
     <h2 class="text-base font-semibold">Profile</h2>
 
     <ui-field label="Your name" hint="Shown to your team, and next to the invitations and door passes you make." [error]="nameError()" required>
@@ -25,7 +25,7 @@
     </div>
   </form>
 
-  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6" (ngSubmit)="changePassword()">
+  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="changePassword()">
     <header class="grid gap-1">
       <h2 class="text-base font-semibold">Password</h2>
       <p class="text-pretty text-sm text-text-muted">

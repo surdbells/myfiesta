@@ -36,7 +36,7 @@
     it: scanned straight off this screen, shared to a chat, or copied.
   -->
   @if (fresh(); as pass) {
-    <div class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-6 rounded-lg border border-border bg-surface-raised p-5 max-sm:grid-cols-1 max-sm:gap-4" role="status">
+    <div class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-6 rounded-lg border border-border bg-surface-raised p-5 shadow-(--shadow-card) max-sm:grid-cols-1 max-sm:gap-4" role="status">
       <img class="block h-40 w-40 rounded-md max-sm:mx-auto" [src]="pass.qr" [alt]="'QR code for the ' + pass.label + ' door pass'" width="160" height="160" />
       <div class="grid min-w-0 gap-3">
         <div>
