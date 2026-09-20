@@ -488,6 +488,64 @@ people's change of heart. Keeping their fee would charge them for the
 privilege of not going. The platform earns its fee from whoever takes the
 place instead.
 
+## Look
+
+**Depth, type and radii are tokens, and nothing else may own them.** Every
+colour, corner and shadow comes from `packages/tokens/tokens.json`, built to
+`tokens.css` and `tailwind.css` and held by `npm run check`: contrast is
+asserted for both themes, and no component may paint with a colour of its own.
+The phone app had kept two shadows of its own in raw rgb with its own dark
+overrides, and they had already drifted from the console's — a card on a phone
+and a card in the console were lit by two files that had to be remembered
+together. That is the failure the token layer exists to prevent, so the app
+defines none.
+
+**A theme is emitted three times, not twice.** `:root` carries light,
+`@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`
+carries dark, and `:root[data-theme="dark"]` carries it again for an explicit
+choice. A viewer who has never touched a theme switch sees the unstamped
+document, so a colour defined only inside a `[data-theme]` block never applies
+to most people and renders one theme's text on the other theme's ground.
+
+**Corners are small.** 2/4/6/10/14, with the full pill kept for chips and
+avatars. A 16px corner on a card and a 24px corner on a sheet read as a
+consumer app from 2019, and the radius scale is the single change that dates a
+product fastest. Tailwind's own scale is cleared, so a template asking for
+`rounded-2xl` gets no rounding at all rather than a silent fallback — a
+mistake that is visible instead of quiet.
+
+**Panels lift; rows do not.** A form, a summary, a thing being read or written
+gets a shadow. A row in a list does not, because twenty shadows in a column is
+a grey page and the depth stops meaning anything. Borders separate rows;
+shadows separate objects.
+
+**Money is set in the display face.** `.figure` — display family, tight
+tracking, tabular figures — so the same sum is the same shape in the dashboard,
+the event list, the payouts balance and a buyer's order summary. A price set in
+the body face at semibold is a number that happens to be bold; this is a number
+meant to be read across a room.
+
+**Type is two faces with jobs.** Clash Display for headings and figures,
+General Sans for everything read as words, both self-hosted from
+`packages/tokens/fonts` under the ITF Free Font Licence. No CDN: a font that
+arrives over somebody else's network is a font that sometimes does not arrive,
+and the fallback is the moment the product looks unfinished.
+
+**Every table filters the same way and says what it is filtering.**
+`ui-filter-bar` carries the search box, the controls a screen adds, the chips
+for what is currently applied and one sentence of summary. The chips are the
+point: a table narrowed by terms the reader cannot see is a table that appears
+to be missing rows. A filter is offered only when there is enough to filter and
+only for values that exist — a control that can only ever empty the table, or
+that offers a status nothing holds, is a control that lies.
+
+**A stand-in for a missing poster is a designed thing, not a gap.** Plenty of
+organizers publish before their artwork is ready. A pale wash where the image
+goes reads as an image that failed to load, and on a grid where half the events
+have posters the other half look like bugs. The stand-in is a lit brand panel
+with the night's initial in it, and it is the same panel everywhere one is
+needed.
+
 ## Still open
 
 - **Merchant of record for tax** — determines who remits. An accountant's call,
