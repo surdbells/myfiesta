@@ -22,7 +22,7 @@ import { formatMoney } from '../core/money';
       <!-- The listing row: poster left, the facts in the middle, the price
            and the button holding the end. -->
       <article
-        class="evt group relative h-full min-w-0 rounded-xl border border-border bg-surface-raised p-4 transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong"
+        class="evt group relative h-full min-w-0 rounded-xl border border-border bg-surface-raised p-4 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       >
         <a
           class="evt__link grid grid-cols-[14rem_minmax(0,1fr)_auto] items-center gap-6 text-inherit no-underline max-sm:grid-cols-1"
@@ -38,7 +38,14 @@ import { formatMoney } from '../core/money';
                 decoding="async"
               />
             } @else {
-              <span class="block aspect-video w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]" aria-hidden="true"></span>
+              <!-- The same lit panel the tall card uses, so one event does
+                   not get two different stand-ins depending on the rail. -->
+              <span
+                class="grid aspect-video w-full place-items-center bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]"
+                aria-hidden="true"
+              >
+                <span class="figure text-4xl text-[rgba(255,255,255,0.92)]">{{ initial() }}</span>
+              </span>
             }
           </span>
 
@@ -57,7 +64,7 @@ import { formatMoney } from '../core/money';
           </span>
 
           <span class="grid justify-items-end gap-3 max-sm:justify-items-start">
-            <span class="evt__price text-lg font-semibold text-text tabular-nums" [class.text-text-subtle]="event().is_sold_out">{{ price() }}</span>
+            <span class="evt__price figure text-lg text-text" [class.text-text-subtle]="event().is_sold_out">{{ price() }}</span>
             @if (!event().is_sold_out) {
               <!-- An affordance, not a second destination: the whole card is
                    the link, and this is where the eye expects the action. -->
@@ -87,7 +94,7 @@ import { formatMoney } from '../core/money';
                 class="evt__fallback relative grid aspect-[4/3] w-full place-items-center overflow-hidden bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))] after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:bg-[linear-gradient(90deg,var(--color-gold-400),transparent_70%)] after:content-['']"
                 aria-hidden="true"
               >
-                <span class="text-[3rem] font-bold tracking-[-0.02em] text-[rgba(255,255,255,0.92)]">{{ initial() }}</span>
+                <span class="figure text-[3rem] text-[rgba(255,255,255,0.92)]">{{ initial() }}</span>
               </span>
             }
 
