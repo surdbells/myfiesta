@@ -20,6 +20,15 @@ class Campaign extends Model
 
     public const AUDIENCES = ['followers', 'past_attendees', 'abandoned'];
 
+    /**
+     * Every state, in the order a campaign moves through them.
+     *
+     * Written down because the filter offers them and the console labels
+     * them, and a list of statuses that lives only in a validation rule and
+     * a TypeScript union is two lists that will disagree.
+     */
+    public const STATUSES = ['draft', 'scheduled', 'sending', 'sent', 'cancelled'];
+
     /** Editable, and cancellable, until the sending starts. */
     public const OPEN = ['draft', 'scheduled'];
 

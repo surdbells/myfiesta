@@ -397,6 +397,116 @@ class CampaignTest extends TestCase
         $this->postJson("/api/organizer/campaigns/{$id}/cancel")->assertStatus(422);
     }
 
+    // --- finding one among many ---------------------------------------------------
+
+    /** Four campaigns across two lists, two events and four statuses. */
+    private function spread(): void
+    {
+        $rows = [
+            ['We are back on the 14th', 'draft', 'followers', $this->next->id],
+            ['Last chance for Afro Fest', 'sent', 'followers', $this->next->id],
+            ['Thank you for coming', 'sent', 'past_attendees', $this->last->id],
+            ['Doors at nine', 'cancelled', 'past_attendees', null],
+        ];
+
+        foreach ($rows as [$subject, $status, $audience, $eventId]) {
+            Campaign::create([
+                'organization_id' => $this->org->id,
+                'audience' => $audience,
+                'event_id' => $eventId,
+                'subject' => $subject,
+                'body' => 'y',
+                'status' => $status,
+            ]);
+        }
+    }
+
+    public function test_the_list_narrows_by_status_list_event_and_subject(): void
+    {
+        $this->spread();
+
+        $subjects = fn (array $query) => collect($this->getJson('/api/organizer/campaigns?'.http_build_query($query))
+            ->assertOk()
+            ->json('data'))
+            ->pluck('subject')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(['We are back on the 14th'], $subjects(['status' => 'draft']));
+        $this->assertSame(['Doors at nine', 'Thank you for coming'], $subjects(['audience' => 'past_attendees']));
+        $this->assertSame(
+            ['Last chance for Afro Fest', 'We are back on the 14th'],
+            $subjects(['event_id' => $this->next->id]),
+        );
+
+        // The subject search is what somebody half-remembers, in any case.
+        $this->assertSame(['We are back on the 14th'], $subjects(['q' => 'back on the']));
+        $this->assertSame(['Last chance for Afro Fest'], $subjects(['q' => 'AFRO']));
+
+        // And they narrow together rather than replacing each other.
+        $this->assertSame(
+            ['Last chance for Afro Fest'],
+            $subjects(['status' => 'sent', 'event_id' => $this->next->id]),
+        );
+    }
+
+    public function test_a_wildcard_typed_into_the_search_is_a_character_and_not_a_pattern(): void
+    {
+        $this->spread();
+
+        // Without escaping, '%' matches everything and the filter silently
+        // stops filtering — the failure nobody notices.
+        $this->getJson('/api/organizer/campaigns?q=%25')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/organizer/campaigns?q=_oors')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/organizer/campaigns?q=Doors')->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_the_filter_is_offered_the_statuses_and_the_nights_that_exist(): void
+    {
+        $this->spread();
+
+        $body = $this->getJson('/api/organizer/campaigns')->assertOk()->json();
+
+        $this->assertSame(
+            ['draft' => 1, 'scheduled' => 0, 'sending' => 0, 'sent' => 2, 'cancelled' => 1],
+            collect($body['statuses'])->pluck('campaigns', 'value')->all(),
+        );
+
+        // A night that has already happened is still worth finding a campaign
+        // about, so this list is not the one a new campaign may point at.
+        $this->assertEqualsCanonicalizing(
+            [$this->next->id, $this->last->id],
+            collect($body['written_about'])->pluck('id')->all(),
+        );
+        $this->assertSame([$this->next->id], collect($body['events'])->pluck('id')->all());
+    }
+
+    public function test_another_organizations_campaigns_are_not_reachable_through_the_filter(): void
+    {
+        $other = Organization::create(['name' => 'Elsewhere', 'slug' => 'elsewhere']);
+        $theirEvent = $this->event('theirs', now()->addMonth(), $other);
+
+        Campaign::create([
+            'organization_id' => $other->id,
+            'audience' => 'followers',
+            'event_id' => $theirEvent->id,
+            'subject' => 'Their secret night',
+            'body' => 'y',
+            'status' => 'sent',
+        ]);
+
+        $this->getJson('/api/organizer/campaigns?q=secret')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("/api/organizer/campaigns?event_id={$theirEvent->id}")->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_a_status_that_is_not_one_is_refused_rather_than_ignored(): void
+    {
+        $this->getJson('/api/organizer/campaigns?status=posted')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
+
     // --- who may ------------------------------------------------------------------
 
     public function test_marketing_can_run_campaigns_and_finance_and_door_cannot(): void

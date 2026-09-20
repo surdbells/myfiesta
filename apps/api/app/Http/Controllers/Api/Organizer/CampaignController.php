@@ -41,11 +41,38 @@ class CampaignController extends Controller
     {
         $organization = $this->organization($request);
 
+        /*
+         * Filtered, because this list only grows.
+         *
+         * An organization that writes weekly has two hundred of these inside
+         * a year, and the questions asked of the list are always the same
+         * three: what is still to go out, what went out for this event, and
+         * where is the one that started "We're back on the". Searching by
+         * subject is a LIKE on a column the organizer typed themselves —
+         * there is nothing to index here that would not cost more to keep.
+         */
+        $filters = $request->validate([
+            'status' => ['nullable', Rule::in(Campaign::STATUSES)],
+            'audience' => ['nullable', Rule::in(array_keys(Audiences::LABELS))],
+            'event_id' => ['nullable', 'uuid'],
+            'q' => ['nullable', 'string', 'max:150'],
+        ]);
+
         $page = Campaign::query()
             ->where('organization_id', $organization->id)
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['audience'] ?? null, fn ($query, $audience) => $query->where('audience', $audience))
+            // An event the organizer cannot see is simply an empty page, not
+            // an error: the organization scope above already decides that.
+            ->when($filters['event_id'] ?? null, fn ($query, $id) => $query->where('event_id', $id))
+            ->when(
+                trim((string) ($filters['q'] ?? '')) !== '' ? trim($filters['q']) : null,
+                fn ($query, $term) => $query->where('subject', 'ilike', '%'.str_replace(['%', '_'], ['\%', '\_'], $term).'%'),
+            )
             ->with('event:id,title,slug,starts_at,currency')
             ->orderByDesc('created_at')
-            ->paginate(Paging::perPage($request, 20));
+            ->paginate(Paging::perPage($request, 20))
+            ->withQueryString();
 
         $results = $this->results($page->getCollection()->pluck('ref')->all());
 
@@ -57,6 +84,13 @@ class CampaignController extends Controller
             'audiences' => collect(Audiences::LABELS)
                 ->map(fn (string $label, string $key) => ['value' => $key, 'label' => $label, 'needs_event' => $key === 'abandoned'])
                 ->values(),
+            // Every status, so the filter can offer the ones that exist
+            // rather than a fixed list with dead entries in it.
+            'statuses' => $this->statusCounts($organization),
+            // Different list, deliberately: a campaign that sold a night in
+            // March is still worth finding in June, and that night is long
+            // gone from the list above.
+            'written_about' => $this->writtenAbout($organization),
             // What a campaign can point at: nights still to come and on sale.
             'events' => Event::query()
                 ->where('organization_id', $organization->id)
@@ -72,6 +106,47 @@ class CampaignController extends Controller
                 ])
                 ->values(),
         ]);
+    }
+
+    /** The events this organization's campaigns have actually pointed at. */
+    private function writtenAbout(Organization $organization): array
+    {
+        return Event::query()
+            ->whereIn('id', Campaign::query()
+                ->where('organization_id', $organization->id)
+                ->whereNotNull('event_id')
+                ->distinct()
+                ->select('event_id'))
+            ->orderByDesc('starts_at')
+            ->get(['id', 'title', 'starts_at'])
+            ->map(fn (Event $event) => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'starts_at' => $event->starts_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * What each status holds, for the filter's own labels.
+     *
+     * Counted across the whole organization rather than the page, because a
+     * filter that says "Draft 3" when the current page happens to show one
+     * is worse than saying nothing.
+     */
+    private function statusCounts(Organization $organization): array
+    {
+        $counts = Campaign::query()
+            ->where('organization_id', $organization->id)
+            ->groupBy('status')
+            ->selectRaw('status, count(*) as campaigns')
+            ->pluck('campaigns', 'status');
+
+        return collect(Campaign::STATUSES)
+            ->map(fn (string $status) => ['value' => $status, 'campaigns' => (int) ($counts[$status] ?? 0)])
+            ->values()
+            ->all();
     }
 
     /** How many a list holds, and how many would be written to right now. */

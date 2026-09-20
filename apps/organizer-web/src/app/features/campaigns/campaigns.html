@@ -116,8 +116,60 @@
     <section class="grid gap-3" aria-labelledby="campaigns-heading">
       <h2 id="campaigns-heading" class="text-base font-semibold">What you have sent</h2>
 
+<!--
+        Offered once there is more than a glance's worth. A filter over four
+        campaigns is chrome; over two hundred it is the only way anybody
+        finds the one they meant. Tied to a page boundary it would have
+        stayed hidden at nineteen, which is well past a glance.
+      -->
+      @if (all.meta.total > 5 || anyFilter()) {
+        <ui-filter-bar
+          searchPlaceholder="Search by subject"
+          searchLabel="Search campaigns"
+          [search]="search()"
+          (searchChange)="searchFor($event)"
+          [chips]="chips()"
+          [summary]="summary()"
+          (removed)="remove($event)"
+          (clearedAll)="clearFilters()"
+        >
+          <ui-select
+            class="flex-[0_1_11rem] max-sm:flex-[1_1_100%]"
+            name="campaignStatus"
+            ariaLabel="Status"
+            [options]="statusOptions()"
+            [ngModel]="status()"
+            (ngModelChange)="status.set($event); refine()"
+          />
+
+          <ui-select
+            class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+            name="campaignAudience"
+            ariaLabel="Who it went to"
+            [options]="audienceFilterOptions()"
+            [ngModel]="audienceFilter()"
+            (ngModelChange)="audienceFilter.set($event); refine()"
+          />
+
+          @if (aboutOptions().length > 1) {
+            <ui-select
+              class="flex-[0_1_14rem] max-sm:flex-[1_1_100%]"
+              name="campaignAbout"
+              ariaLabel="Which event it was about"
+              [options]="aboutOptions()"
+              [ngModel]="aboutEvent()"
+              (ngModelChange)="aboutEvent.set($event); refine()"
+            />
+          }
+        </ui-filter-bar>
+      }
+
       @if (all.data.length === 0) {
-        <p class="text-sm text-text-muted">Nothing yet. What each one sells shows up here.</p>
+        @if (anyFilter()) {
+          <p class="text-sm text-text-muted">Nothing matches that. Clear a term to widen it.</p>
+        } @else {
+          <p class="text-sm text-text-muted">Nothing yet. What each one sells shows up here.</p>
+        }
       } @else {
         <ul class="m-0 grid list-none gap-2 p-0">
           @for (campaign of all.data; track campaign.id) {

@@ -12,8 +12,10 @@ import {
   UiErrorState,
   UiPageHeader,
   UiPagination,
+  UiFilterBar,
   UiSelect,
   UiSkeleton,
+  type FilterChip,
   type SelectOption,
 } from '@myfiesta/ui';
 import { Api } from '../../core/api';
@@ -44,6 +46,7 @@ type When = CampaignDraft['send'];
     UiEmpty,
     UiErrorState,
     UiPagination,
+    UiFilterBar,
     UiSelect,
     UiSkeleton,
   ],
@@ -77,6 +80,111 @@ export class Campaigns {
 
   readonly cancelling = signal<Campaign | null>(null);
   readonly cancellingBusy = signal(false);
+
+  // --- narrowing the list ----------------------------------------------------
+  //
+  // An organization that writes weekly has two hundred of these inside a
+  // year. The three questions asked of the list are always the same: what is
+  // still to go out, what went out for this night, and where is the one that
+  // started "We're back on the".
+  readonly search = signal('');
+  readonly status = signal('');
+  readonly audienceFilter = signal('');
+  readonly aboutEvent = signal('');
+
+  /** Only the statuses this organization actually has, with their counts. */
+  readonly statusOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Any status' },
+    ...(this.page()?.statuses ?? [])
+      .filter((row) => row.campaigns > 0)
+      .map((row) => ({ value: row.value, label: this.statusLabel(row.value), hint: String(row.campaigns) })),
+  ]);
+
+  readonly audienceFilterOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Any list' },
+    ...this.audiences().map((a) => ({ value: a.value, label: a.label })),
+  ]);
+
+  readonly aboutOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Any event' },
+    ...(this.page()?.written_about ?? []).map((e) => ({
+      value: e.id,
+      label: e.title,
+      hint: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(e.starts_at)),
+    })),
+  ]);
+
+  readonly anyFilter = computed(
+    () => !!(this.search().trim() || this.status() || this.audienceFilter() || this.aboutEvent()),
+  );
+
+  readonly chips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    const term = this.search().trim();
+
+    if (term) chips.push({ key: 'q', label: 'Subject', value: term });
+
+    if (this.status()) {
+      chips.push({ key: 'status', label: 'Status', value: this.statusLabel(this.status() as CampaignStatus) });
+    }
+
+    if (this.audienceFilter()) {
+      const list = this.audiences().find((a) => a.value === this.audienceFilter());
+      chips.push({ key: 'audience', label: 'List', value: list?.label ?? this.audienceFilter() });
+    }
+
+    if (this.aboutEvent()) {
+      const event = (this.page()?.written_about ?? []).find((e) => e.id === this.aboutEvent());
+      chips.push({ key: 'event', label: 'About', value: event?.title ?? 'One event' });
+    }
+
+    return chips;
+  });
+
+  readonly summary = computed(() => {
+    const meta = this.page()?.meta;
+    if (!meta) return null;
+
+    const noun = meta.total === 1 ? 'campaign' : 'campaigns';
+    const shown = this.page()?.data.length ?? 0;
+
+    return meta.total > shown
+      ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}`
+      : `${meta.total.toLocaleString()} ${noun}`;
+  });
+
+  /** Any change to the terms starts again at the first page. */
+  refine(): void {
+    this.pageNumber.set(1);
+    this.load();
+  }
+
+  /** Typing waits for a pause; a select does not. */
+  searchFor(term: string): void {
+    this.search.set(term);
+
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.refine(), 300);
+  }
+
+  remove(key: string): void {
+    if (key === 'q') this.search.set('');
+    if (key === 'status') this.status.set('');
+    if (key === 'audience') this.audienceFilter.set('');
+    if (key === 'event') this.aboutEvent.set('');
+
+    this.refine();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.status.set('');
+    this.audienceFilter.set('');
+    this.aboutEvent.set('');
+    this.refine();
+  }
+
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly audiences = computed(() => this.page()?.audiences ?? []);
 
@@ -127,23 +235,33 @@ export class Campaigns {
       this.reachTimer = setTimeout(() => this.countReach(audience, eventId), 250);
     });
 
-    inject(DestroyRef).onDestroy(() => this.reachTimer && clearTimeout(this.reachTimer));
+    inject(DestroyRef).onDestroy(() => {
+      if (this.reachTimer) clearTimeout(this.reachTimer);
+      if (this.searchTimer) clearTimeout(this.searchTimer);
+    });
   }
 
   load(): void {
     this.loading.set(true);
     this.failed.set(false);
 
-    this.api.campaigns(this.pageNumber()).subscribe({
-      next: (page) => {
-        this.page.set(page);
-        this.loading.set(false);
-      },
-      error: (response: HttpErrorResponse) => {
-        response?.status === 403 ? this.refused.set(true) : this.failed.set(true);
-        this.loading.set(false);
-      },
-    });
+    this.api
+      .campaigns(this.pageNumber(), {
+        status: this.status(),
+        audience: this.audienceFilter(),
+        event_id: this.aboutEvent(),
+        q: this.search().trim(),
+      })
+      .subscribe({
+        next: (page) => {
+          this.page.set(page);
+          this.loading.set(false);
+        },
+        error: (response: HttpErrorResponse) => {
+          response?.status === 403 ? this.refused.set(true) : this.failed.set(true);
+          this.loading.set(false);
+        },
+      });
   }
 
   goTo(page: number): void {

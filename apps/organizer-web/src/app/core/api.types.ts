@@ -83,7 +83,19 @@ export interface Campaign {
 
 export interface CampaignPage extends Page<Campaign> {
   audiences: { value: CampaignAudience; label: string; needs_event: boolean }[];
+  /** What a new campaign may point at: nights still to come and on sale. */
   events: { id: string; title: string; starts_at: string }[];
+  /** How many campaigns each status holds, across the organization. */
+  statuses: { value: CampaignStatus; campaigns: number }[];
+  /** What past campaigns pointed at, which outlives the list above. */
+  written_about: { id: string; title: string; starts_at: string }[];
+}
+
+export interface CampaignFilters {
+  status?: string;
+  audience?: string;
+  event_id?: string;
+  q?: string;
 }
 
 export interface CampaignDraft {
