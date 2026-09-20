@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use Carbon\Carbon;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Disputes\RiskSignals;
@@ -159,6 +160,11 @@ class OrderController extends Controller
             'q' => ['nullable', 'string', 'max:120'],
             'event_id' => ['nullable', 'uuid'],
             'status' => ['nullable', 'in:paid,partially_refunded,refunded,pending,failed,cancelled'],
+            // When it happened, as whole days. An organizer asking about
+            // Friday is not asking about 00:00:00Z, and both ends are
+            // inclusive because that is what a person means by "to the 14th".
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
     }
@@ -184,6 +190,22 @@ class OrderController extends Controller
             ->when(
                 $filters['status'] ?? null,
                 fn ($q, $status) => $q->where('status', $status),
+            )
+            /*
+             * Dated by when the money arrived, falling back to when the order
+             * was placed.
+             *
+             * Not paid_at alone: a pending order has none, and filtering it
+             * out of a date range is how an organizer misses the one payment
+             * stuck confirming — which is the order they were looking for.
+             */
+            ->when(
+                $filters['from'] ?? null,
+                fn ($q, $from) => $q->whereRaw('coalesce(paid_at, created_at) >= ?', [Carbon::parse($from)->startOfDay()]),
+            )
+            ->when(
+                $filters['to'] ?? null,
+                fn ($q, $to) => $q->whereRaw('coalesce(paid_at, created_at) <= ?', [Carbon::parse($to)->endOfDay()]),
             )
             ->when($filters['q'] ?? null, function ($q, $term) {
                 // Three ways in, because support is handed whichever one the

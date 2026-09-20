@@ -1,39 +1,74 @@
-/* Poppins, self-hosted.
+/* The two faces this product is set in, self-hosted.
  *
- * The live platform links these from Google Fonts, which makes every page load
- * a render-blocking request to a third party — and in both launch markets it is
- * a disclosure of the reader's IP address to somebody they did not choose.
- * Self-hosting removes both. Latin subset only, four weights, ~22KB total.
+ * Linking them from a font service makes every page load a render-blocking
+ * request to a third party — and in both launch markets it is a disclosure of
+ * the reader's IP address to somebody they did not choose. Self-hosting removes
+ * both, and it is the only way the phone app has type at all: a Capacitor shell
+ * on a venue's dead wifi cannot fetch a stylesheet from anywhere.
  *
- * font-display: swap so text is readable immediately in the fallback and
+ * Clash Display for headings and prices, General Sans for everything else.
+ * Both are Fontshare's, free for commercial use under the ITF Free Font
+ * Licence, and the pairing is the point: a display face with enough character
+ * to carry a poster over a UI face that stays quiet at 13px in a table of
+ * three hundred orders. Poppins did both jobs and was interesting at neither
+ * size.
+ *
+ * Seven files, latin subset, ~135KB in total — about a third of one poster.
+ *
+ * font-display: swap, so text is readable immediately in the fallback and
  * reflows once, rather than being invisible while the font arrives on a bad
  * connection outside a venue.
  */
+
+/* --- General Sans: the interface ------------------------------------------ */
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'General Sans';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./poppins-400.woff2') format('woff2');
+  src: url('./general-sans-400.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'General Sans';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('./poppins-500.woff2') format('woff2');
+  src: url('./general-sans-500.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'General Sans';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('./poppins-600.woff2') format('woff2');
+  src: url('./general-sans-600.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Poppins';
+  font-family: 'General Sans';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('./poppins-700.woff2') format('woff2');
+  src: url('./general-sans-700.woff2') format('woff2');
+}
+
+/* --- Clash Display: headings, prices, the numbers that matter -------------- */
+@font-face {
+  font-family: 'Clash Display';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./clash-display-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Clash Display';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./clash-display-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Clash Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./clash-display-700.woff2') format('woff2');
 }

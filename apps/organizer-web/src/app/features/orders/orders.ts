@@ -12,6 +12,10 @@ import {
   UiPagination,
   UiSelect,
   UiSkeleton,
+  UiDateRange,
+  UiFilterBar,
+  type DateRange,
+  type FilterChip,
   type SelectOption,
 } from '@myfiesta/ui';
 import { Download, Search } from 'lucide-angular';
@@ -66,6 +70,8 @@ const SIGNALS: Record<OrderSignal, { label: string; hint: string }> = {
     UiPagination,
     UiSelect,
     UiSkeleton,
+    UiFilterBar,
+    UiDateRange,
   ],
   templateUrl: './orders.html',
 })
@@ -83,7 +89,7 @@ export class Orders {
 
   readonly orders = signal<OrganizationOrder[]>([]);
   readonly meta = signal<{ total: number; per_page: number; current_page: number } | null>(null);
-  readonly summary = signal<{ gross: Money; refunded: Money; net: Money } | null>(null);
+  readonly takings = signal<{ gross: Money; refunded: Money; net: Money } | null>(null);
 
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -93,6 +99,8 @@ export class Orders {
   readonly query = signal('');
   readonly eventId = signal('');
   readonly status = signal('');
+  /** When it happened. Both ends inclusive, and either may be open. */
+  readonly range = signal<DateRange>({ from: null, to: null });
   readonly page = signal(1);
 
   /** The filter's options, so somebody can narrow to one night. */
@@ -116,7 +124,71 @@ export class Orders {
     { value: 'pending', label: 'Confirming' },
   ];
 
-  readonly filtered = computed(() => !!this.query() || !!this.eventId() || !!this.status());
+  readonly filtered = computed(() => this.chips().length > 0);
+
+  /**
+   * What is on, as chips.
+   *
+   * Each one carries the label it was chosen by rather than the field name:
+   * somebody removing "Event: Afro Fest" is not thinking about event_id.
+   */
+  readonly chips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    const { from, to } = this.range();
+
+    if (this.query()) chips.push({ key: 'q', label: 'Search', value: this.query() });
+
+    if (this.eventId()) {
+      const event = this.events().find((option) => option.id === this.eventId());
+      chips.push({ key: 'event', label: 'Event', value: event?.title ?? 'One event' });
+    }
+
+    if (this.status()) {
+      const status = this.statusOptions.find((option) => option.value === this.status());
+      chips.push({ key: 'status', label: 'Status', value: status?.label ?? this.status() });
+    }
+
+    if (from || to) {
+      const day = (value: string | null) =>
+        value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date(value)) : null;
+
+      chips.push({
+        key: 'range',
+        label: 'When',
+        value: from && to ? `${day(from)} – ${day(to)}` : from ? `From ${day(from)}` : `Until ${day(to)}`,
+      });
+    }
+
+    return chips;
+  });
+
+  /**
+   * What is on screen against what the filter matches.
+   *
+   * Said always, because a filtered table that reads like an unfiltered one is
+   * how somebody takes a week's takings for the year's.
+   */
+  readonly summary = computed(() => {
+    const meta = this.meta();
+    if (!meta) return null;
+
+    const noun = meta.total === 1 ? 'order' : 'orders';
+    const shown = Math.min(meta.per_page, this.orders().length);
+
+    return meta.total > shown
+      ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}`
+      : `${meta.total.toLocaleString()} ${noun}`;
+  });
+
+  /** Take one filter off, by the key its chip carries. */
+  remove(key: string): void {
+    if (key === 'q') this.query.set('');
+    if (key === 'event') this.eventId.set('');
+    if (key === 'status') this.status.set('');
+    if (key === 'range') this.range.set({ from: null, to: null });
+
+    this.refine();
+  }
 
   private readonly requests = new Subject<void>();
 
@@ -128,13 +200,15 @@ export class Orders {
         debounceTime(250),
         // Serialised on the query, not the void: two searches in flight can
         // land out of order and leave the slower one's rows on screen.
-        map(() => JSON.stringify([this.query(), this.eventId(), this.status(), this.page()])),
+        map(() => JSON.stringify([this.query(), this.eventId(), this.status(), this.range(), this.page()])),
         distinctUntilChanged(),
         switchMap(() =>
           this.api.organizationOrders({
             q: this.query(),
             event_id: this.eventId(),
             status: this.status(),
+            from: this.range().from ?? '',
+            to: this.range().to ?? '',
             page: this.page(),
           }),
         ),
@@ -144,7 +218,7 @@ export class Orders {
         next: (result) => {
           this.orders.set(result.data);
           this.meta.set(result.meta);
-          this.summary.set(result.meta.summary);
+          this.takings.set(result.meta.summary);
           this.loading.set(false);
         },
         error: (response) => {
@@ -193,7 +267,13 @@ export class Orders {
     this.exporting.set(true);
 
     this.api
-      .exportOrders({ q: this.query(), event_id: this.eventId(), status: this.status() })
+      .exportOrders({
+        q: this.query(),
+        event_id: this.eventId(),
+        status: this.status(),
+        from: this.range().from ?? '',
+        to: this.range().to ?? '',
+      })
       .subscribe({
         next: (file) => {
           this.exporting.set(false);
@@ -210,6 +290,7 @@ export class Orders {
     this.query.set('');
     this.eventId.set('');
     this.status.set('');
+    this.range.set({ from: null, to: null });
     this.refine();
   }
 

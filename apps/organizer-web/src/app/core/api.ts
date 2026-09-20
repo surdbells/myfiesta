@@ -303,6 +303,9 @@ export class Api {
     q?: string;
     event_id?: string;
     status?: string;
+    /** Both ends inclusive, as yyyy-mm-dd. */
+    from?: string;
+    to?: string;
     page?: number;
   }): Observable<OrganizationOrderPage> {
     let params = new HttpParams();
@@ -591,7 +594,7 @@ export class Api {
   }
 
   /** Every order the filter matches — not only the page on screen — as a CSV. */
-  exportOrders(query: { q?: string; event_id?: string; status?: string }): Observable<Blob> {
+  exportOrders(query: { q?: string; event_id?: string; status?: string; from?: string; to?: string }): Observable<Blob> {
     let params = new HttpParams();
 
     for (const [key, value] of Object.entries(query)) {

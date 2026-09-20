@@ -25,27 +25,22 @@
   </ui-empty>
 } @else {
   <!--
-    One row of controls. The search box takes the room because it is the one
-    somebody uses; the two selects are qualifiers beside it.
-  -->
-  <form
-    class="filters mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-raised p-4"
-    (ngSubmit)="refine()"
-  >
-    <div class="flex h-11 min-w-0 flex-[1_1_18rem] items-center gap-2 rounded-md border border-field-border bg-surface px-3">
-      <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
-      <input
-        id="q"
-        class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
-        name="q"
-        type="search"
-        placeholder="Reference, name or email"
-        aria-label="Search orders"
-        [ngModel]="query()"
-        (ngModelChange)="query.set($event); refine()"
-      />
-    </div>
+    The controls, and underneath them what is currently on.
 
+    The chips are the part that matters: three filters deep, a table that looks
+    identical to an unfiltered one is how a week's takings get read as a year's.
+  -->
+  <ui-filter-bar
+    class="mb-6 block"
+    searchPlaceholder="Reference, name or email"
+    searchLabel="Search orders"
+    [search]="query()"
+    (searchChange)="query.set($event); refine()"
+    [chips]="chips()"
+    [summary]="summary()"
+    (removed)="remove($event)"
+    (clearedAll)="clear()"
+  >
     <ui-select
       class="flex-[0_1_14rem] max-sm:flex-[1_1_100%]"
       name="event"
@@ -65,16 +60,8 @@
       (ngModelChange)="status.set($event); refine()"
     />
 
-    @if (filtered()) {
-      <button
-        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
-        type="button"
-        (click)="clear()"
-      >
-        Clear
-      </button>
-    }
-  </form>
+    <ui-date-range noun="Any time" ariaLabel="Filter by when the order happened" [value]="range()" (valueChange)="range.set($event); refine()" />
+  </ui-filter-bar>
 
   @if (loading()) {
     <div class="grid gap-2">
@@ -105,7 +92,7 @@
       means something other than the rows under it is worse than no figure,
       and it is withheld entirely when the page spans two currencies.
     -->
-    @if (summary(); as totals) {
+    @if (takings(); as totals) {
       <div class="mb-4 flex flex-wrap items-baseline gap-x-8 gap-y-2 rounded-xl border border-border bg-surface-inset px-6 py-4">
         <p class="text-sm text-text-muted">
           On this page
