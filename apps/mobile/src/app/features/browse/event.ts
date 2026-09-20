@@ -147,7 +147,7 @@ import { SessionStore } from '../../core/session';
                     </div>
 
                     <div class="tier__price">
-                      <span class="amount">{{ tier.price.amount === 0 ? 'Free' : money(tier.price) }}</span>
+                      <span class="amount figure">{{ tier.price.amount === 0 ? 'Free' : money(tier.price) }}</span>
                       @if (tier.sold_out) {
                         <mf-badge>Sold out</mf-badge>
                       } @else if (tier.waiting) {
@@ -245,7 +245,7 @@ import { SessionStore } from '../../core/session';
               <button mfButton size="lg" variant="secondary" (click)="waitlist.set(true)">Waitlist</button>
             } @else {
               <div class="buy__text">
-                <span class="amount">{{ from(night) }}</span>
+                <span class="amount figure">{{ from(night) }}</span>
                 <span class="subtle">Checkout opens in your browser</span>
               </div>
               <button mfButton size="lg" label="Opening…" [loading]="opening()" (click)="buy(night)">Get tickets</button>
