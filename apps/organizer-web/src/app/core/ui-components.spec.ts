@@ -1,7 +1,17 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
-import { UiField, UiPagination, UiSelect, UiSortHeader, type Sort } from '@myfiesta/ui';
+import {
+  UiDateRange,
+  UiField,
+  UiFilterBar,
+  UiPagination,
+  UiSelect,
+  UiSortHeader,
+  type DateRange,
+  type FilterChip,
+  type Sort,
+} from '@myfiesta/ui';
 
 /**
  * The component library's contracts, tested where they are invisible.
@@ -281,5 +291,197 @@ describe('UiSortHeader', () => {
       column: 'created_at',
       direction: 'asc',
     });
+  });
+});
+
+@Component({
+  imports: [UiFilterBar],
+  template: `
+    <ui-filter-bar
+      searchLabel="Search orders"
+      [chips]="chips()"
+      [summary]="summary()"
+      (removed)="removed.set($event)"
+      (clearedAll)="cleared.set(cleared() + 1)"
+    />
+  `,
+})
+class FilterBarHost {
+  readonly chips = signal<FilterChip[]>([]);
+  readonly summary = signal<string | null>(null);
+  readonly removed = signal<string | null>(null);
+  readonly cleared = signal(0);
+}
+
+/**
+ * The filter bar's job is the half nobody looks at.
+ *
+ * A filtered table that looks exactly like an unfiltered one is how somebody
+ * exports four hundred rows believing they exported everything, or reads a
+ * week of takings as a year of them. The chips and the count are what stop
+ * that, so they are what is tested — not the search box, which is visibly
+ * there or visibly not.
+ */
+describe('UiFilterBar', () => {
+  function mount(chips: FilterChip[], summary: string | null = null) {
+    const fixture = TestBed.createComponent(FilterBarHost);
+    fixture.componentInstance.chips.set(chips);
+    fixture.componentInstance.summary.set(summary);
+    fixture.detectChanges();
+
+    return { fixture, element: fixture.nativeElement as HTMLElement };
+  }
+
+  const both: FilterChip[] = [
+    { key: 'event', label: 'Event', value: 'Afro Fest' },
+    { key: 'status', label: 'Status', value: 'Paid' },
+  ];
+
+  it('says nothing at all when nothing is filtered', () => {
+    const { element } = mount([]);
+
+    expect(element.querySelector('.state')).toBeNull();
+    expect(element.textContent).not.toContain('Clear all');
+  });
+
+  it('names every filter that is on, and what it is set to', () => {
+    // Read per chip rather than from the bar's text: the gap between a label
+    // and its value is drawn by CSS, so the two run together in textContent
+    // and "EventAfro Fest" would pass a looser assertion.
+    const said = Array.from(mount(both).element.querySelectorAll('.chips li')).map((chip) => [
+      chip.querySelector('.chip__label')?.textContent?.trim(),
+      chip.querySelector('.chip__value')?.textContent?.trim(),
+    ]);
+
+    expect(said).toEqual([
+      ['Event', 'Afro Fest'],
+      ['Status', 'Paid'],
+    ]);
+  });
+
+  it('gives each chip a remove button a screen reader can tell apart', () => {
+    const labels = Array.from(mount(both).element.querySelectorAll('.chips button')).map((button) =>
+      button.getAttribute('aria-label'),
+    );
+
+    expect(labels).toEqual(['Remove Event filter', 'Remove Status filter']);
+  });
+
+  it('removes one filter by itself, and all of them together', () => {
+    const { fixture, element } = mount(both);
+
+    const [, second] = Array.from(element.querySelectorAll<HTMLButtonElement>('.chips button'));
+    second.click();
+    expect(fixture.componentInstance.removed()).toBe('status');
+
+    element.querySelector<HTMLButtonElement>('.clear')!.click();
+    expect(fixture.componentInstance.cleared()).toBe(1);
+  });
+
+  it('announces the count rather than only drawing it', () => {
+    const { element } = mount(both, 'Showing 12 of 340 orders');
+    const summary = element.querySelector('.summary');
+
+    expect(summary?.textContent).toContain('Showing 12 of 340 orders');
+    expect(summary?.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('shows the count even when no chip is on, because that is the honest total', () => {
+    const { element } = mount([], '340 orders');
+
+    expect(element.querySelector('.summary')?.textContent).toContain('340 orders');
+    expect(element.textContent).not.toContain('Clear all');
+  });
+});
+
+@Component({
+  imports: [UiDateRange],
+  template: `<ui-date-range [value]="value()" (valueChange)="value.set($event)" />`,
+})
+class DateRangeHost {
+  readonly value = signal<DateRange>({ from: null, to: null });
+}
+
+/**
+ * A range that reads back as what was chosen.
+ *
+ * The button is the only thing on screen once the panel closes, so if it says
+ * "Any time" while a range is set, the table below it is narrowed by something
+ * invisible. Matching the presets is the part that gets this wrong: it has to
+ * refuse to claim "Last 7 days" for a range that merely happens to be seven
+ * days long somewhere in the past.
+ */
+describe('UiDateRange', () => {
+  function mount() {
+    const fixture = TestBed.createComponent(DateRangeHost);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+
+    return {
+      fixture,
+      element,
+      label: () => element.querySelector('button')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      open: () => {
+        element.querySelector<HTMLButtonElement>('button')!.click();
+        fixture.detectChanges();
+      },
+      set: (value: DateRange) => {
+        fixture.componentInstance.value.set(value);
+        fixture.detectChanges();
+      },
+    };
+  }
+
+  it('reads as the noun until something is chosen', () => {
+    expect(mount().label()).toContain('Any time');
+  });
+
+  it('sets a real pair of dates when a preset is picked, ending today', () => {
+    const view = mount();
+    view.open();
+
+    Array.from(view.element.querySelectorAll<HTMLButtonElement>('.presets button'))
+      .find((button) => button.textContent?.includes('Last 7 days'))!
+      .click();
+    view.fixture.detectChanges();
+
+    const { from, to } = view.fixture.componentInstance.value();
+
+    expect(to).toBe(new Date().toISOString().slice(0, 10));
+    expect((Date.parse(to!) - Date.parse(from!)) / 86_400_000).toBe(6);
+    expect(view.label()).toContain('Last 7 days');
+  });
+
+  it('closes the panel once a preset is taken', () => {
+    const view = mount();
+    view.open();
+    expect(view.element.querySelector('.panel')).not.toBeNull();
+
+    view.element.querySelector<HTMLButtonElement>('.presets button')!.click();
+    view.fixture.detectChanges();
+
+    expect(view.element.querySelector('.panel')).toBeNull();
+  });
+
+  it('will not call an arbitrary week "Last 7 days"', () => {
+    const view = mount();
+
+    // Seven days long, but ending in the past. Claiming the preset here would
+    // put the wrong words under a table showing something else.
+    view.set({ from: '2026-02-01', to: '2026-02-07' });
+
+    expect(view.label()).not.toContain('Last 7 days');
+    expect(view.label()).toContain('Feb');
+  });
+
+  it('says which end is open when only one is set', () => {
+    const view = mount();
+
+    view.set({ from: '2026-02-01', to: null });
+    expect(view.label()).toContain('From');
+
+    view.set({ from: null, to: '2026-02-07' });
+    expect(view.label()).toContain('Until');
   });
 });
