@@ -38,11 +38,35 @@
         </div>
       </div>
     } @else {
-      <!-- No poster: the words carry the page, laid out as a plain header. -->
-      <header class="grid justify-items-start gap-2 min-[900px]:col-start-1">
-        <h1>{{ ev.title }}</h1>
-        <p class="text-lg font-medium text-primary-text">{{ when() }}</p>
-        <p class="text-text">{{ ev.venue?.name ?? ev.city }}</p>
+      <!--
+        No poster, and still a place rather than a paragraph.
+
+        Plenty of organizers publish before their artwork is ready, and the
+        page a shared link opened into was three lines of text on a white
+        ground — which reads as a night nobody has put anything into. The wash
+        is built from the theme's own tokens rather than a painted gradient, so
+        it follows into dark mode instead of becoming a bright band.
+      -->
+      <header class="hero mb-8 grid justify-items-start gap-3 min-[900px]:col-span-full">
+        @if (ev.category) {
+          <span class="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-primary-soft-text">
+            {{ ev.category }}
+          </span>
+        }
+
+        <h1 class="text-balance text-[clamp(2rem,4.4vw,3.25rem)] leading-[1.08]">{{ ev.title }}</h1>
+
+        <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg text-text-muted max-sm:text-base">
+          <span class="font-medium text-primary-text">{{ when() }}</span>
+          <span aria-hidden="true">·</span>
+          <span>{{ ev.venue?.name ?? ev.city }}</span>
+        </p>
+
+        @if (ev.from_price) {
+          <p class="mt-1 text-sm text-text-muted">
+            From <span class="figure text-lg text-text">{{ startingFrom() }}</span>
+          </p>
+        }
       </header>
     }
 
