@@ -455,11 +455,28 @@ class CampaignTest extends TestCase
     {
         $this->spread();
 
+        Campaign::create([
+            'organization_id' => $this->org->id,
+            'audience' => 'followers',
+            'subject' => 'Either/or \\ both',
+            'body' => 'y',
+            'status' => 'draft',
+        ]);
+
+        $count = fn (string $term) => $this->getJson('/api/organizer/campaigns?'.http_build_query(['q' => $term]))
+            ->assertOk()
+            ->json('meta.total');
+
         // Without escaping, '%' matches everything and the filter silently
         // stops filtering — the failure nobody notices.
-        $this->getJson('/api/organizer/campaigns?q=%25')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/organizer/campaigns?q=_oors')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/organizer/campaigns?q=Doors')->assertOk()->assertJsonCount(1, 'data');
+        $this->assertSame(0, $count('%'));
+        $this->assertSame(0, $count('_oors'));
+        $this->assertSame(1, $count('Doors'));
+
+        // And the backslash goes first, or escaping the other two leaves
+        // backslashes behind that are then read as escapes themselves.
+        $this->assertSame(1, $count('\\'));
+        $this->assertSame(0, $count('\\%'));
     }
 
     public function test_the_filter_is_offered_the_statuses_and_the_nights_that_exist(): void

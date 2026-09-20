@@ -44,7 +44,7 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
                     <h3>{{ event.title }}</h3>
                     <p class="where subtle">{{ event.city }}</p>
                   </div>
-                  <span class="price">{{ price(event) }}</span>
+                  <span class="price figure">{{ price(event) }}</span>
                 </div>
               </mf-card>
             </li>

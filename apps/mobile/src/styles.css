@@ -86,6 +86,19 @@ p {
   margin: 0;
 }
 
+/*
+ * Headings take the display face, the same as the web apps.
+ *
+ * They had been inheriting the body face, so the phone and the browser were
+ * setting the same words in two different typefaces — close enough at a
+ * glance to pass and wrong enough to look like two products side by side.
+ */
+h1,
+h2,
+h3 {
+  font-family: var(--font-family-display);
+}
+
 h1 {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
@@ -104,9 +117,25 @@ h3 {
   font-weight: var(--font-weight-semibold);
 }
 
-/* Money, counts, codes: digits that do not jump as they change. */
+/* Digits that do not jump as they change: a code, a count inline in a line. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A figure meant to be read rather than scanned: the takings, the number
+ * through the door, a price.
+ *
+ * The same rule as .figure in packages/ui, deliberately — a sum should be the
+ * same shape whether somebody is looking at it on a phone in a doorway or in
+ * the console the next morning. Screens set their own size and weight on top;
+ * this only decides the face.
+ */
+.figure {
+  font-family: var(--font-family-display);
+  letter-spacing: var(--font-tracking-tight);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--font-leading-tight);
 }
 
 .muted {

@@ -9,6 +9,7 @@ use App\Models\Event;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Support\Paging;
+use App\Support\Search;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -56,7 +57,7 @@ class CodeController extends Controller
                 fn ($query) => $query->where('event_id', $filters['event_id']),
             )
             ->when(filled($filters['q'] ?? null), function ($query) use ($filters) {
-                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($filters['q'])).'%';
+                $like = Search::contains($filters['q']);
 
                 $query->where(fn ($inner) => $inner
                     ->where('code', 'ilike', $like)

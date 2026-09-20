@@ -13,6 +13,7 @@ use App\Services\Audit\Auditor;
 use App\Services\Campaigns\Audiences;
 use App\Services\Campaigns\CampaignSender;
 use App\Support\Paging;
+use App\Support\Search;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -66,8 +67,8 @@ class CampaignController extends Controller
             // an error: the organization scope above already decides that.
             ->when($filters['event_id'] ?? null, fn ($query, $id) => $query->where('event_id', $id))
             ->when(
-                trim((string) ($filters['q'] ?? '')) !== '' ? trim($filters['q']) : null,
-                fn ($query, $term) => $query->where('subject', 'ilike', '%'.str_replace(['%', '_'], ['\%', '\_'], $term).'%'),
+                filled($filters['q'] ?? null),
+                fn ($query) => $query->where('subject', 'ilike', Search::contains($filters['q'])),
             )
             ->with('event:id,title,slug,starts_at,currency')
             ->orderByDesc('created_at')

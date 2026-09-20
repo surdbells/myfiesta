@@ -106,7 +106,7 @@ import {
                     <h3>{{ event.title }}</h3>
                     <p class="subtle">{{ event.city }}</p>
                   </div>
-                  <span class="price">{{ price(event) }}</span>
+                  <span class="price figure">{{ price(event) }}</span>
                 </div>
               </mf-card>
             </li>

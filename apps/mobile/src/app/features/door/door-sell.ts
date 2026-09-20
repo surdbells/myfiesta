@@ -40,7 +40,7 @@ import { MfBadge, MfButton, MfCard, MfField, MfSegmented, MfSheet, ToastStore, t
       @if (sold(); as sale) {
         <!-- Done. The code is here because this phone is about to scan it. -->
         <mf-card>
-          <p class="done">Sold · {{ money(sale.total) }}</p>
+          <p class="done figure">Sold · {{ money(sale.total) }}</p>
           <p class="subtle">{{ methodLabel(sale.method) }} · {{ sale.reference }}</p>
 
           @if (sale.emailed) {
@@ -140,7 +140,7 @@ import { MfBadge, MfButton, MfCard, MfField, MfSegmented, MfSheet, ToastStore, t
           <!-- The number said out loud, priced by the server. A phone adding
                up tiers itself lands a cent out on the tax often enough, and a
                cent is somebody holding coins while a screen disagrees. -->
-          <p class="total" aria-live="polite">
+          <p class="total figure" aria-live="polite">
             @if (total(); as amount) {
               {{ money(amount) }}
             } @else {

@@ -79,7 +79,7 @@ import {
                     <p class="when">{{ when(event) }}</p>
                     <h2>{{ event.title }}</h2>
                     <p class="where subtle">{{ event.city }}</p>
-                    <p class="price">{{ price(event) }}</p>
+                    <p class="price figure">{{ price(event) }}</p>
                   </div>
                 </article>
               }
@@ -123,7 +123,7 @@ import {
                           <h3>{{ event.title }}</h3>
                           <p class="where subtle">{{ event.city }}</p>
                         </div>
-                        <span class="price">{{ price(event) }}</span>
+                        <span class="price figure">{{ price(event) }}</span>
                       </div>
                     </mf-card>
                   </li>
