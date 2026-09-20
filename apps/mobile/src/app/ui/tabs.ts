@@ -37,8 +37,15 @@ import { SessionStore } from '../core/session';
       display: grid;
       grid-auto-flow: column;
       grid-auto-columns: 1fr;
-      border-top: 1px solid var(--border-subtle);
+      border-top: 1px solid var(--border);
+      /*
+       * Translucent over whatever is scrolling underneath, which is what
+       * separates a bar that belongs to the phone from one drawn on the page.
+       * The solid colour is the fallback where a browser has no blur.
+       */
       background: var(--surface);
+      background: color-mix(in srgb, var(--surface) 82%, transparent);
+      backdrop-filter: blur(16px) saturate(1.6);
       padding-bottom: var(--mf-safe-bottom);
     }
 
@@ -54,8 +61,25 @@ import { SessionStore } from '../core/session';
       font-weight: var(--font-weight-medium);
     }
 
+    .tab {
+      position: relative;
+      transition: color var(--motion-fast) var(--motion-ease);
+    }
+
     .tab.on {
       color: var(--primary-text);
+    }
+
+    /* Which one you are on, said twice: colour, and a mark colour alone
+       cannot be mistaken for. */
+    .tab.on::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      width: 18px;
+      height: 2px;
+      border-radius: var(--radius-full);
+      background: var(--primary);
     }
 
     /*

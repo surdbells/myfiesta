@@ -76,9 +76,17 @@ let nextId = 0;
       padding: 0 var(--space-4);
       border-radius: var(--radius-lg);
       background: var(--surface-inset);
-      /* Inset rather than a border: the box has to read as a container the
-         text sits inside, not as a line drawn near it. */
-      box-shadow: inset 0 0 0 1px transparent;
+      /*
+       * Inset rather than a border: the box has to read as a container the
+       * text sits inside, not as a line drawn near it.
+       *
+       * The hairline is not decoration. A fill alone is a 4% difference from
+       * the page, which is nothing on a phone held at arm's length outside a
+       * venue — the field disappeared and people tapped the label.
+       */
+      box-shadow:
+        inset 0 0 0 1px var(--border),
+        inset 0 1px 2px rgb(0 0 0 / 0.04);
       transition:
         box-shadow 120ms ease,
         background-color 120ms ease;
@@ -86,7 +94,9 @@ let nextId = 0;
 
     .box.focused {
       background: var(--surface-raised);
-      box-shadow: inset 0 0 0 2px var(--primary);
+      box-shadow:
+        inset 0 0 0 2px var(--primary),
+        var(--focus-ring);
     }
 
     .box.invalid {

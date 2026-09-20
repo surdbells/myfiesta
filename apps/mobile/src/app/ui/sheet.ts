@@ -119,7 +119,7 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       padding-bottom: var(--mf-safe-bottom);
       background: var(--surface-raised);
       border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-      box-shadow: var(--mf-shadow-sheet);
+      box-shadow: var(--shadow-floating);
       transform: translateY(100%);
       transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
       outline: none;

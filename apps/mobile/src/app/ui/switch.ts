@@ -95,7 +95,7 @@ import { Component, booleanAttribute, input, output } from '@angular/core';
       background: var(--surface);
       /* A hairline as well as a shadow: in dark the thumb and the unlit track
          are both dark, and a shadow alone leaves nothing to see. */
-      box-shadow: var(--mf-shadow-raised), inset 0 0 0 1px var(--border);
+      box-shadow: var(--shadow-card), inset 0 0 0 1px var(--border);
       transition: transform 140ms ease;
     }
 

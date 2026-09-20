@@ -32,19 +32,18 @@
   /* One height for every tappable thing: 48px is the smallest comfortable target. */
   --mf-tap: 48px;
 
-  --mf-shadow-sheet: 0 -8px 40px rgb(0 0 0 / 0.28);
-  --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.35);
-  }
-}
-
-:root[data-theme='dark'] {
-  --mf-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.35);
-}
+/*
+ * Depth comes from the tokens now, not from here.
+ *
+ * This app kept its own two shadows, written as raw rgb, with its own dark
+ * variants underneath — so a card on a phone and a card in the console were
+ * lit differently by two files that had to be remembered together. They had
+ * already drifted. --shadow-raised, --shadow-overlay and --shadow-floating
+ * are the same three steps the web apps use and they carry their own dark
+ * mode, which is the whole point of a token.
+ */
 
 * {
   box-sizing: border-box;

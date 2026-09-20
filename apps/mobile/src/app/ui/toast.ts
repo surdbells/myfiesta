@@ -60,7 +60,7 @@ export class ToastStore {
       color: var(--surface);
       font-size: var(--font-size-sm);
       line-height: var(--font-leading-snug);
-      box-shadow: var(--mf-shadow-sheet);
+      box-shadow: var(--shadow-floating);
       pointer-events: auto;
       animation: mf-toast-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
     }

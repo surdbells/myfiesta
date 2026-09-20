@@ -11,7 +11,7 @@ import { Component, booleanAttribute, input } from '@angular/core';
       padding: var(--space-5);
       border-radius: var(--radius-lg);
       background: var(--surface-raised);
-      box-shadow: var(--mf-shadow-raised);
+      box-shadow: var(--shadow-raised);
     }
 
     /* For rows in a long list, where twenty shadows is a grey page. */
