@@ -17,6 +17,7 @@ use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -40,15 +41,57 @@ class EventController extends Controller
      * two run together, upcoming first — kept for any caller that pages
      * through everything.
      */
+    /** An order that stands: it was paid, and not all of it came back. */
+    private const LIVE_ORDERS = ['paid', 'partially_refunded'];
+
     public function index(Request $request): JsonResponse
     {
         $request->validate(['when' => ['sometimes', 'in:upcoming,past']]);
 
+        /*
+         * Enough to judge a night by, without opening it.
+         *
+         * The list used to carry a title, a date and a count of tickets, which
+         * is the same information a calendar has. What an organizer is
+         * actually asking when they open this screen is which of these needs
+         * them today — the one that is half sold with a week to go, the one
+         * that has not sold since Tuesday, the one whose room is full. So the
+         * row carries what sold, what it earned, how much of the room is
+         * gone, how many looked, and when the last ticket went.
+         *
+         * All of it as aggregates on the one query. A per-row lookup would be
+         * six more queries for an organizer with thirty events, on the screen
+         * they open first.
+         */
         $query = Event::query()
             ->whereIn('organization_id', $this->organizationIds($request))
             ->withCount([
                 'tickets as tickets_issued' => fn ($q) => $q->whereIn('status', ['valid', 'checked_in']),
                 'tickets as checked_in' => fn ($q) => $q->where('status', 'checked_in'),
+                'orders as orders_count' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS),
+                // A tier with no limit makes the whole room unlimited, and a
+                // capacity bar drawn without knowing that is a lie.
+                'ticketTypes as unlimited_tiers' => fn ($q) => $q->whereNull('quantity_available'),
+            ])
+            ->withSum(
+                ['orders as revenue_amount' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
+                'net_revenue_amount',
+            )
+            ->withSum('ticketTypes as capacity', 'quantity_available')
+            // When the last one sold. "Nothing since Tuesday" is the signal an
+            // organizer acts on, and it is invisible in a total.
+            ->withMax(
+                ['orders as last_sale_at' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
+                'paid_at',
+            )
+            // The poster, at thumbnail size. A list of nights is a list of
+            // posters in an organizer's head, and a row of text is slower to
+            // find the right one in than a picture they chose themselves.
+            ->with(['banner'])
+            ->addSelect([
+                'views' => DB::table('event_views')
+                    ->selectRaw('coalesce(sum(views + embed_views), 0)')
+                    ->whereColumn('event_views.event_id', 'events.id'),
             ]);
 
         match ($request->query('when')) {
@@ -75,6 +118,15 @@ class EventController extends Controller
                 'currency' => $e->currency,
                 'tickets_issued' => $e->tickets_issued,
                 'checked_in' => $e->checked_in,
+                'orders' => (int) $e->orders_count,
+                // Null where any tier is unlimited: there is no proportion of
+                // an unlimited room, and drawing one full or empty is worse
+                // than drawing none.
+                'capacity' => $e->unlimited_tiers > 0 ? null : (int) $e->capacity,
+                'revenue' => ['amount' => (int) $e->revenue_amount, 'currency' => $e->currency],
+                'views' => (int) $e->views,
+                'last_sale_at' => $e->last_sale_at ? Carbon::parse($e->last_sale_at)->toIso8601String() : null,
+                'poster_url' => $e->banner?->renditionUrl('thumb'),
             ])->values(),
             'meta' => Paging::meta($events),
         ]);

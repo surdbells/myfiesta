@@ -178,6 +178,17 @@ export interface OrganizerEvent {
   currency: 'CAD' | 'NGN';
   tickets_issued: number;
   checked_in: number;
+  orders: number;
+  /** Null where a tier is unlimited: there is no proportion of an open room. */
+  capacity: number | null;
+  /** What the organizer earned: after their own discounts, net of tax. */
+  revenue: Money;
+  /** Page views, counted once a visit. Absent for anything before they were. */
+  views: number;
+  /** When the last ticket sold. Null if none has. */
+  last_sale_at: string | null;
+  /** The poster at thumbnail size, if one was uploaded. */
+  poster_url: string | null;
 }
 
 /**

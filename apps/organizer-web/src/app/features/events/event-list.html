@@ -46,25 +46,90 @@
               broken rather than as designed.
             -->
             <a
-              class="row grid gap-1 rounded-lg border border-border bg-surface-raised p-4 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong hover:bg-surface-hover"
+              class="row card card--lift grid gap-3 p-4 text-inherit no-underline"
               [routerLink]="['/events', event.id]"
             >
-              <span class="row__title flex flex-wrap items-center gap-3 font-medium">
-                {{ event.title }}
-                <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
-              </span>
+              <span class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <span class="flex min-w-0 items-start gap-3">
+                  <!--
+                    The poster they chose, small. An organizer finds the right
+                    night in a list of pictures faster than in a list of
+                    titles, and a night without one still lines up because the
+                    placeholder holds the same space.
+                  -->
+                  @if (event.poster_url; as poster) {
+                    <img class="h-14 w-14 shrink-0 rounded-md object-cover" [src]="poster" alt="" width="56" height="56" loading="lazy" />
+                  } @else {
+                    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-surface-inset text-sm font-semibold text-text-subtle" aria-hidden="true">
+                      {{ event.title.charAt(0).toUpperCase() }}
+                    </span>
+                  }
 
-              <span class="row__meta text-sm text-text-muted">
-                <!-- In the event's own zone. A Lagos event at 10pm should say
-                     10pm to somebody reading in Toronto. -->
-                {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
-              </span>
+                <span class="grid min-w-0 gap-1">
+                  <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
+                    {{ event.title }}
+                    @if (event.status !== 'published') {
+                      <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
+                    }
+                    @if (event.kind === 'invitation') {
+                      <ui-badge tone="brand">Invitation</ui-badge>
+                    }
+                  </span>
 
-              <span class="row__stats mt-1 flex gap-4 text-sm text-text-subtle tabular-nums max-[560px]:flex-wrap max-[560px]:gap-3">
-                <span>{{ event.tickets_issued }} issued</span>
-                @if (arrivalRate(event); as rate) {
-                  <span>{{ rate }}% arrived</span>
+                  <span class="row__meta text-sm text-text-muted">
+                    <!-- In the event's own zone. A Lagos event at 10pm should
+                         say 10pm to somebody reading in Toronto. -->
+                    {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
+                  </span>
+                  </span>
+                </span>
+
+                <!-- How long there is left to do something about it. -->
+                @if (countdown(event); as left) {
+                  <span class="shrink-0 rounded-full bg-surface-inset px-3 py-1 text-xs font-medium text-text-muted">{{ left }}</span>
                 }
+              </span>
+
+              <!--
+                The numbers, in the order the question is asked: how much of
+                the room has gone, what it earned, and — for a night still
+                selling — whether anybody is still buying.
+              -->
+              <span class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-3 border-t border-border-subtle pt-3">
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Sold</span>
+                  <span class="figure text-lg">
+                    {{ event.tickets_issued }}@if (event.capacity) {<span class="text-sm font-normal text-text-subtle"> / {{ event.capacity }}</span>}
+                  </span>
+                  @if (sold(event); as portion) {
+                    <span class="mt-0.5 block h-1 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+                      <span class="block h-full rounded-full" [class]="portion >= 1 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
+                    </span>
+                  }
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
+                  <span class="figure text-lg">{{ cash(event.revenue) }}</span>
+                  <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Looked</span>
+                  <span class="figure text-lg">{{ event.views ? event.views.toLocaleString() : '—' }}</span>
+                  @if (conversion(event); as rate) {
+                    <span class="text-xs text-text-muted">{{ percent(rate) }} bought</span>
+                  }
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Pace</span>
+                  @if (lastSale(event); as line) {
+                    <span class="text-sm font-medium" [class]="stalled(event) ? 'text-warning' : 'text-text'">{{ line }}</span>
+                  } @else {
+                    <span class="text-sm text-text-subtle">Nothing sold yet</span>
+                  }
+                </span>
               </span>
             </a>
           </li>
@@ -95,18 +160,88 @@
         @for (event of past(); track event.id) {
           <li>
             <a
-              class="row grid gap-1 rounded-lg border border-border bg-transparent p-4 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong hover:bg-surface-hover"
+              class="row card card--lift grid gap-3 p-4 text-inherit no-underline"
               [routerLink]="['/events', event.id]"
             >
-              <span class="row__title flex flex-wrap items-center gap-3 font-medium">{{ event.title }}</span>
-              <span class="row__meta text-sm text-text-muted">
-                {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
-              </span>
-              <span class="row__stats mt-1 flex gap-4 text-sm text-text-subtle tabular-nums max-[560px]:flex-wrap max-[560px]:gap-3">
-                <span>{{ event.tickets_issued }} issued</span>
+              <span class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <span class="flex min-w-0 items-start gap-3">
+                  <!--
+                    The poster they chose, small. An organizer finds the right
+                    night in a list of pictures faster than in a list of
+                    titles, and a night without one still lines up because the
+                    placeholder holds the same space.
+                  -->
+                  @if (event.poster_url; as poster) {
+                    <img class="h-14 w-14 shrink-0 rounded-md object-cover" [src]="poster" alt="" width="56" height="56" loading="lazy" />
+                  } @else {
+                    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-surface-inset text-sm font-semibold text-text-subtle" aria-hidden="true">
+                      {{ event.title.charAt(0).toUpperCase() }}
+                    </span>
+                  }
+
+                <span class="grid min-w-0 gap-1">
+                  <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
+                    {{ event.title }}
+                    @if (event.status !== 'published') {
+                      <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
+                    }
+                    @if (event.kind === 'invitation') {
+                      <ui-badge tone="brand">Invitation</ui-badge>
+                    }
+                  </span>
+
+                  <span class="row__meta text-sm text-text-muted">
+                    <!-- In the event's own zone. A Lagos event at 10pm should
+                         say 10pm to somebody reading in Toronto. -->
+                    {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
+                  </span>
+                  </span>
+                </span>
+
                 @if (arrivalRate(event); as rate) {
-                  <span>{{ rate }}% arrived</span>
+                  <span class="shrink-0 rounded-full bg-surface-inset px-3 py-1 text-xs font-medium text-text-muted">{{ rate }}% turned up</span>
                 }
+              </span>
+
+              <!--
+                The numbers, in the order the question is asked: how much of
+                the room has gone, what it earned, and — for a night still
+                selling — whether anybody is still buying.
+              -->
+              <span class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-3 border-t border-border-subtle pt-3">
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Sold</span>
+                  <span class="figure text-lg">
+                    {{ event.tickets_issued }}@if (event.capacity) {<span class="text-sm font-normal text-text-subtle"> / {{ event.capacity }}</span>}
+                  </span>
+                  @if (sold(event); as portion) {
+                    <span class="mt-0.5 block h-1 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+                      <span class="block h-full rounded-full" [class]="portion >= 1 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
+                    </span>
+                  }
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
+                  <span class="figure text-lg">{{ cash(event.revenue) }}</span>
+                  <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Came</span>
+                  <span class="figure text-lg">{{ event.checked_in }}</span>
+                  @if (arrivalRate(event); as rate) {
+                    <span class="text-xs text-text-muted">{{ rate }}% of those holding one</span>
+                  }
+                </span>
+
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Looked</span>
+                  <span class="figure text-lg">{{ event.views ? event.views.toLocaleString() : '—' }}</span>
+                  @if (conversion(event); as rate) {
+                    <span class="text-xs text-text-muted">{{ percent(rate) }} bought</span>
+                  }
+                </span>
               </span>
             </a>
           </li>
