@@ -110,6 +110,22 @@ export class SessionStore {
     await this.save({ ...session, organizations, activeOrganization: active });
   }
 
+  /**
+   * Ask the server again what this account may do. After a role changes or an
+   * organization is renamed, so the phone stops offering what would now be
+   * refused — and starts offering what would not.
+   */
+  async sync(): Promise<void> {
+    if (this.scope() !== 'organizer') return;
+
+    try {
+      const { organizations } = await this.api.me();
+      await this.refreshMemberships(organizations);
+    } catch {
+      // Not worth interrupting anybody for: the next sign-in brings it anyway.
+    }
+  }
+
   async restore(): Promise<void> {
     try {
       const { value } = await Preferences.get({ key: KEY });

@@ -9,6 +9,13 @@ import { Routes } from '@angular/router';
 export const MANAGE_ROUTES: Routes = [
   { path: '', loadComponent: () => import('./hub').then((m) => m.ManageHub) },
   { path: 'events', loadComponent: () => import('./events').then((m) => m.ManageEvents) },
+  { path: 'orders', loadComponent: () => import('./org-orders').then((m) => m.OrgOrders) },
+  { path: 'codes', loadComponent: () => import('./org-codes').then((m) => m.OrgCodes) },
+  { path: 'campaigns', loadComponent: () => import('./org-campaigns').then((m) => m.OrgCampaigns) },
+  { path: 'payouts', loadComponent: () => import('./org-payouts').then((m) => m.OrgPayouts) },
+  { path: 'team', loadComponent: () => import('./org-team').then((m) => m.OrgTeam) },
+  { path: 'brand', loadComponent: () => import('./org-brand').then((m) => m.OrgBrand) },
+  { path: 'integrations', loadComponent: () => import('./org-integrations').then((m) => m.OrgIntegrations) },
   // Before events/:id, or "new" is read as an event id.
   { path: 'events/new', loadComponent: () => import('./event-create').then((m) => m.EventCreate) },
   { path: 'events/:id', loadComponent: () => import('./event-hub').then((m) => m.EventHub) },

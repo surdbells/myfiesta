@@ -402,6 +402,14 @@ export class Api {
     }
   }
 
+  /**
+   * Who is signed in, and the organizations they belong to — with what they
+   * may do in each, as the server resolves it rather than as the phone guesses.
+   */
+  me(): Promise<{ name: string; email: string; organizations: { id: string; name: string; role: string; permissions: string[] }[] }> {
+    return this.send('GET', '/api/auth/me');
+  }
+
   // --- attendee -------------------------------------------------------------
 
   async tickets(): Promise<Ticket[]> {

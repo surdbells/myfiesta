@@ -37,6 +37,7 @@ export interface MfOption {
     },
   ],
   template: `
+    @if (!bare()) {
     <button
       class="trigger"
       type="button"
@@ -55,6 +56,7 @@ export interface MfOption {
       </span>
       <span class="chevron" aria-hidden="true"></span>
     </button>
+    }
 
     <mf-sheet
       [open]="open()"
@@ -261,6 +263,12 @@ export class MfSelect implements ControlValueAccessor {
   readonly searchPlaceholder = input('Type to search');
   readonly ariaLabel = input<string | null>(null);
   readonly disabled = input(false, { transform: booleanAttribute });
+
+  /**
+   * Only the sheet, opened with show() — for a choice asked in the middle of
+   * something else ("which event is this for?") rather than a field on a form.
+   */
+  readonly bare = input(false, { transform: booleanAttribute });
 
   /** Below this many options, searching costs more than it saves. */
   readonly searchAfter = input(7);

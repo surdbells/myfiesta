@@ -452,6 +452,8 @@ const BLANK_BATCH: BatchDraft = {
 })
 export class EventCodes implements OnInit {
   readonly id = input.required<string>();
+  /** "code" to open a new code's form straight away, from the organization's list. */
+  readonly make = input<string | undefined>(undefined);
 
   private readonly organizer = inject(Organizer);
   private readonly discover = inject(Discover);
@@ -484,6 +486,8 @@ export class EventCodes implements OnInit {
 
   protected readonly plusIcon = Plus;
   protected readonly moreIcon = MoreHorizontal;
+
+  private opened = false;
 
   protected readonly currency = computed(() => this.event()?.currency ?? 'CAD');
 
@@ -554,6 +558,11 @@ export class EventCodes implements OnInit {
       this.codes.set(codes.data);
       this.meta.set(codes.meta);
       this.batches.set(batches);
+
+      if (this.make() === 'code' && !this.opened) {
+        this.opened = true;
+        this.startCode();
+      }
     } catch (error) {
       this.error.set(messageOf(error));
     } finally {

@@ -253,6 +253,8 @@ import { EventContext } from './event-context';
 })
 export class EventOrders implements OnInit {
   readonly id = input.required<string>();
+  /** A reference to find straight away, from the organization's order list. */
+  readonly q = input<string | undefined>(undefined);
 
   private readonly organizer = inject(Organizer);
   private readonly session = inject(SessionStore);
@@ -305,6 +307,7 @@ export class EventOrders implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.q()) this.query.set(this.q()!);
     this.event.set(this.context.peek(this.id()));
     void this.context.get(this.id()).then((e) => this.event.set(e)).catch(() => undefined);
     void this.reload();
