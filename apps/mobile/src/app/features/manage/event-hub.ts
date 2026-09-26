@@ -27,14 +27,14 @@ import {
   Users,
   XCircle,
 } from 'lucide-angular';
-import type { EventSummary, OrganizerEventDetail } from '@myfiesta/api-types';
+import type { EventSummary, OrganizerEventDetail, Series, SeriesOccurrence } from '@myfiesta/api-types';
 import { isoToZonedWallClock, zonedWallClockToIso } from '@myfiesta/shared/zoned-time';
 import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
 import { Discover } from '../../core/discovery';
 import { formatMoney } from '../../core/money';
 import { messageOf } from '../../core/errors';
-import { longEventTime } from '../../core/event-time';
+import { longEventTime, shortEventTime } from '../../core/event-time';
 import { until } from '../../core/when';
 import { EventContext } from './event-context';
 import {
@@ -189,6 +189,34 @@ import {
               <mf-row label="Reminders" sub="Emails before the doors open" [icon]="reminderIcon" [link]="here('reminders')" />
             }
           </mf-list>
+
+          @if (series(); as s) {
+            @if (s.status === 'ended') {
+              <mf-list class="block" heading="Repeats" footer="This night no longer repeats. Dates already made are kept." />
+            } @else {
+              <mf-list class="block" heading="Repeats" [footer]="seriesFooter(s)">
+                @for (date of upcoming(); track date.id) {
+                  <mf-row
+                    [label]="occurrenceDate(date.starts_at)"
+                    [sub]="date.id === id() ? 'This one' : date.moved ? 'Moved from its usual date' : null"
+                    [icon]="dateIcon"
+                    [action]="date.id !== id()"
+                    [chevron]="date.id !== id()"
+                    (pressed)="occurrence(date)"
+                  >
+                    @if (date.status !== 'published') {
+                      <mf-badge>{{ date.status === 'draft' ? 'Draft' : date.status }}</mf-badge>
+                    }
+                  </mf-row>
+                } @empty {
+                  <mf-row label="No dates left in this series" [chevron]="false" />
+                }
+                @if (session.can('events.edit')) {
+                  <mf-row label="Stop repeating" sub="Dates people have bought tickets for are kept" [icon]="stopIcon" danger action (pressed)="stopRepeating()" />
+                }
+              </mf-list>
+            }
+          }
         </div>
       } @else if (error(); as message) {
         <div class="content">
@@ -354,6 +382,10 @@ export class EventHub implements OnInit {
 
   protected readonly event = signal<OrganizerEventDetail | null>(null);
   protected readonly summary = signal<EventSummary | null>(null);
+  protected readonly series = signal<Series | null>(null);
+
+  /** Dates still to come. A residency's past nights are not a schedule. */
+  protected readonly upcoming = computed(() => (this.series()?.occurrences ?? []).filter((o) => new Date(o.starts_at).getTime() > Date.now()));
   protected readonly loading = signal(true);
   protected readonly working = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -378,6 +410,8 @@ export class EventHub implements OnInit {
   protected readonly reminderIcon = Bell;
   protected readonly scanIcon = ScanLine;
   protected readonly shareIcon = Share2;
+  protected readonly dateIcon = CalendarClock;
+  protected readonly stopIcon = XCircle;
 
   protected readonly cash = formatMoney;
 
@@ -411,10 +445,86 @@ export class EventHub implements OnInit {
 
       this.event.set(event);
       this.summary.set(summary);
+      void this.loadSeries();
     } catch (error) {
       this.error.set(messageOf(error));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private async loadSeries(): Promise<void> {
+    try {
+      this.series.set((await this.organizer.series(this.id())).series);
+    } catch {
+      this.series.set(null);
+    }
+  }
+
+  /** A date in the event's own zone, which is the venue's. */
+  protected occurrenceDate(iso: string): string {
+    return shortEventTime(iso, this.event()?.timezone ?? 'UTC');
+  }
+
+  protected seriesFooter(s: Series): string {
+    const skipped = s.skipped.length;
+    const made = `${this.upcoming().length} to come${s.past_count ? `, ${s.past_count} already happened` : ''}.`;
+
+    return skipped ? `${made} ${skipped} skipped — they will not come back.` : made;
+  }
+
+  protected async occurrence(date: SeriesOccurrence): Promise<void> {
+    const chosen = await this.dialogs.menu({
+      title: this.occurrenceDate(date.starts_at),
+      subtitle: date.title,
+      actions: [
+        { key: 'open', label: 'Open this date', icon: CalendarClock },
+        ...(this.session.can('events.edit') ? [{ key: 'skip', label: 'Skip this date', icon: XCircle, danger: true, hint: 'It is taken out and will not come back' }] : []),
+      ],
+    });
+
+    if (chosen === 'open') {
+      void this.router.navigate(['/manage/events', date.id]);
+      return;
+    }
+
+    if (chosen !== 'skip') return;
+
+    const reason = await this.dialogs.prompt({
+      title: 'Skip this date?',
+      message: 'Anybody holding a ticket for it is told. Give them a reason if there is one.',
+      label: 'Reason',
+      placeholder: 'The venue is closed that week',
+      confirm: 'Skip it',
+    });
+
+    if (reason === null) return;
+
+    try {
+      const { message } = await this.organizer.skipOccurrence(this.id(), date.id, reason.trim() || undefined);
+      this.toasts.show(message, 'success');
+      await this.loadSeries();
+    } catch (error) {
+      this.toasts.show(messageOf(error, 'That date could not be taken out.'), 'danger');
+    }
+  }
+
+  protected async stopRepeating(): Promise<void> {
+    const sure = await this.dialogs.confirm({
+      title: 'Stop repeating?',
+      message: 'No more dates are made. Dates people have already bought tickets for are kept.',
+      confirm: 'Stop repeating',
+      danger: true,
+    });
+
+    if (!sure) return;
+
+    try {
+      const { message } = await this.organizer.stopRepeating(this.id());
+      this.toasts.show(message, 'success');
+      await this.loadSeries();
+    } catch (error) {
+      this.toasts.show(messageOf(error, 'That series could not be stopped.'), 'danger');
     }
   }
 
@@ -456,7 +566,8 @@ export class EventHub implements OnInit {
     if (ev.status === 'published') items.push({ key: 'view', label: 'See the public page', icon: ExternalLink });
     if (this.session.can('events.create')) {
       items.push({ key: 'duplicate', label: 'Duplicate', icon: Copy, hint: 'A new night with the same tickets' });
-      if (!cancelled) items.push({ key: 'repeat', label: 'Repeat', icon: Repeat, hint: 'Weekly, fortnightly or monthly' });
+      // Once it repeats, its dates are managed under Repeats rather than started again.
+      if (!cancelled && !this.series()) items.push({ key: 'repeat', label: 'Repeat', icon: Repeat, hint: 'Weekly, fortnightly or monthly' });
     }
     if (this.session.can('door.scan') && !cancelled) items.push({ key: 'scan', label: 'Scan tickets', icon: ScanLine });
     if (this.session.can('events.cancel') && !cancelled) {
@@ -597,6 +708,7 @@ export class EventHub implements OnInit {
       const count = Number.parseInt(how, 10);
       const result = await this.organizer.repeat(ev.id, frequency as 'weekly' | 'fortnightly' | 'monthly', Number.isFinite(count) && count > 0 ? count : undefined);
       this.toasts.show(`${result.created} ${result.created === 1 ? 'night' : 'nights'} made as drafts.`, 'success');
+      await this.loadSeries();
     }, false);
   }
 
