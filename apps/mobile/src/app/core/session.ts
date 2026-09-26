@@ -103,6 +103,23 @@ export class SessionStore {
   }
 
   /**
+   * The name and address as the server has them now.
+   *
+   * The address changes from a link that is often opened somewhere else —
+   * the laptop, a mail app — and without this the phone would go on saying
+   * "signed in as" the old one until somebody signed out. Never for a door
+   * pass, whose name is the label it was given for the night.
+   */
+  async identify(name: string, email: string | null): Promise<void> {
+    const session = this.state();
+
+    if (!session || session.scope === 'door') return;
+    if (session.name === name && session.email === email) return;
+
+    await this.save({ ...session, name, email });
+  }
+
+  /**
    * Take in a fresh list of memberships — after accepting an invitation, or
    * when the phone has been away long enough for a role to change.
    */

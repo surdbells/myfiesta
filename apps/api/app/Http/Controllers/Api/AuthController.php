@@ -115,6 +115,12 @@ class AuthController extends Controller
         return response()->json([
             'name' => $user->name,
             'email' => $user->email,
+            // The rest of what the profile form edits. Without them a form
+            // opened on a phone showed the number box empty, so saving it as
+            // it looked either kept a number nobody could see or, once empty
+            // was taken to mean "none", quietly threw it away.
+            'phone' => $user->phone,
+            'timezone' => $user->timezone,
             'organizations' => $user->organizations->map(fn ($o) => [
                 'id' => $o->id,
                 'name' => $o->name,

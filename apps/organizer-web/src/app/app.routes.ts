@@ -16,6 +16,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/reset-password').then((m) => m.ResetPassword),
   },
   {
+    // The link sent to a new email address, carrying its token in the query.
+    // Open to anyone holding it: it is usually opened where nobody is signed in.
+    path: 'confirm-email',
+    loadComponent: () => import('./features/auth/confirm-email').then((m) => m.ConfirmEmail),
+  },
+  {
     // Where an invitation email lands. Open to anyone holding the link; the
     // page itself works out whether to sign in, sign up or just accept.
     path: 'join/:token',

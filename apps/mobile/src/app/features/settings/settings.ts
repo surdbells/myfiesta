@@ -24,7 +24,8 @@ import {
  *
  * Short on purpose: a phone settings page that goes on for a page and a half
  * is one nobody reads. What an organization configures lives under Manage;
- * this is the person — their name, their password, how the app looks.
+ * this is the person — their name, their address, their password, how the app
+ * looks.
  */
 @Component({
   selector: 'mf-settings',
@@ -39,7 +40,8 @@ import {
         }
         @if (!session.locked()) {
           <div class="account-actions">
-            <button mfButton size="sm" variant="secondary" (click)="editDetails()">Your details</button>
+            <button mfButton size="sm" variant="secondary" [loading]="loadingDetails()" (click)="editDetails()">Your details</button>
+            <button mfButton size="sm" variant="secondary" (click)="startEmail()">Change email</button>
             <button mfButton size="sm" variant="secondary" (click)="startPassword()">Change password</button>
           </div>
         }
@@ -113,7 +115,7 @@ import {
       <p class="version subtle">myFiesta {{ version }}</p>
     </mf-screen>
 
-    <mf-sheet [open]="detailsOpen()" heading="Your details" subheading="Your email cannot be changed here yet — a new address has to be confirmed first." closable (closed)="detailsOpen.set(false)">
+    <mf-sheet [open]="detailsOpen()" heading="Your details" subheading="To sign in with a different email address, use Change email." closable (closed)="detailsOpen.set(false)">
       <div class="form">
         <mf-field label="Name" [error]="err('name')">
           <input autocomplete="name" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" />
@@ -125,6 +127,44 @@ import {
       <ng-container sheetFooter>
         <button mfButton variant="secondary" (click)="detailsOpen.set(false)">Cancel</button>
         <button mfButton [loading]="saving()" [disabled]="!name().trim()" (click)="saveDetails()">Save</button>
+      </ng-container>
+    </mf-sheet>
+
+    <mf-sheet
+      [open]="emailOpen()"
+      heading="Change email"
+      subheading="We send a link to the new address. Nothing changes until it is opened — until then, sign in as you do now."
+      closable
+      (closed)="closeEmail()"
+    >
+      @if (emailSent(); as message) {
+        <p class="sent">{{ message }}</p>
+      } @else {
+        <div class="form">
+          <mf-field label="New email address" [error]="err('email') ?? (sameEmail() ? 'That is the address you already use.' : null)">
+            <input
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="off"
+              spellcheck="false"
+              maxlength="190"
+              [value]="newEmail()"
+              (input)="newEmail.set($any($event.target).value)"
+            />
+          </mf-field>
+          <mf-field label="Current password" hint="So a phone left unlocked is not enough to move your account." [error]="err('current_password')">
+            <input type="password" autocomplete="current-password" [value]="emailPassword()" (input)="emailPassword.set($any($event.target).value)" />
+          </mf-field>
+        </div>
+      }
+      <ng-container sheetFooter>
+        @if (emailSent()) {
+          <button mfButton (click)="closeEmail()">Done</button>
+        } @else {
+          <button mfButton variant="secondary" (click)="closeEmail()">Cancel</button>
+          <button mfButton [loading]="saving()" [disabled]="!emailReady()" (click)="saveEmail()">Send the link</button>
+        }
       </ng-container>
     </mf-sheet>
 
@@ -168,6 +208,11 @@ import {
     .form {
       display: grid;
       gap: var(--space-4);
+    }
+
+    .sent {
+      overflow-wrap: anywhere;
+      color: var(--text);
     }
 
     .label {
@@ -234,12 +279,33 @@ export class Settings {
 
   readonly detailsOpen = signal(false);
   readonly passwordOpen = signal(false);
+  readonly emailOpen = signal(false);
+  readonly loadingDetails = signal(false);
   readonly name = signal('');
   readonly phone = signal('');
   readonly current = signal('');
   readonly next = signal('');
+  readonly newEmail = signal('');
+  readonly emailPassword = signal('');
+  readonly emailSent = signal<string | null>(null);
   readonly saving = signal(false);
   readonly errors = signal<Record<string, string>>({});
+
+  /**
+   * The number the server had when the form opened, or null for none.
+   *
+   * What makes an emptied box mean "take it off" rather than "leave it": a
+   * number nobody could see used to survive every save, and one that was never
+   * loaded must not be wiped by a save that simply did not know about it.
+   */
+  private readonly phoneOnFile = signal<string | null>(null);
+
+  constructor() {
+    // The address shown up top can change from a link opened on another
+    // device, so it is asked for rather than taken from when this phone
+    // signed in. Quietly: without signal, what the phone remembers will do.
+    if (this.session.signedIn() && !this.session.locked()) void this.load();
+  }
 
   /** The server's rule, said while typing — the same words the join screen uses. */
   readonly passwordHint = computed(() => {
@@ -252,6 +318,17 @@ export class Settings {
 
   readonly passwordReady = computed(
     () => !this.saving() && this.current() !== '' && this.next().length >= 10 && /[a-zA-Z]/.test(this.next()) && /\d/.test(this.next()),
+  );
+
+  /** The one refusal that can be seen from here, said before it is sent. */
+  readonly sameEmail = computed(() => {
+    const typed = this.newEmail().trim().toLowerCase();
+
+    return typed !== '' && typed === (this.session.session()?.email ?? '').toLowerCase();
+  });
+
+  readonly emailReady = computed(
+    () => !this.saving() && this.newEmail().trim().includes('@') && !this.sameEmail() && this.emailPassword() !== '',
   );
   readonly busy = signal(false);
 
@@ -302,9 +379,34 @@ export class Settings {
     return this.errors()[field] ?? null;
   }
 
-  editDetails(): void {
-    this.name.set(this.session.session()?.name ?? '');
-    this.phone.set('');
+  /** What the server holds about this person now, or null when it could not be asked. */
+  private async load(): Promise<{ name: string; email: string; phone: string | null } | null> {
+    try {
+      const me = await this.api.me();
+      await this.session.identify(me.name, me.email);
+
+      return me;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Opens with what is on file, phone number included — asked for first, so
+   * the form never opens empty and then fills in under somebody's thumb.
+   */
+  async editDetails(): Promise<void> {
+    if (this.loadingDetails()) return;
+
+    this.loadingDetails.set(true);
+    const me = await this.load();
+    this.loadingDetails.set(false);
+
+    this.name.set(me?.name ?? this.session.session()?.name ?? '');
+    this.phone.set(me?.phone ?? '');
+    // Unknown when the server could not be asked. Then an empty box is left
+    // alone on save rather than taken as "no number".
+    this.phoneOnFile.set(me ? me.phone : null);
     this.errors.set({});
     this.detailsOpen.set(true);
   }
@@ -313,11 +415,53 @@ export class Settings {
     this.saving.set(true);
     this.errors.set({});
 
+    const phone = this.phone().trim();
+    const body: { name: string; phone?: string | null } = { name: this.name().trim() };
+
+    if (phone !== '') body.phone = phone;
+    // Emptied a box that had a number in it: take the number off.
+    else if (this.phoneOnFile()) body.phone = null;
+
     try {
-      const saved = await this.api.updateProfile({ name: this.name().trim(), ...(this.phone().trim() ? { phone: this.phone().trim() } : {}) });
+      const saved = await this.api.updateProfile(body);
       await this.session.rename(saved.name);
+      this.phoneOnFile.set(saved.phone);
       this.detailsOpen.set(false);
       this.toasts.show('Saved.', 'success');
+    } catch (error) {
+      this.errors.set(fieldErrors(error));
+      if (!Object.keys(this.errors()).length) this.toasts.show(messageOf(error), 'danger');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  startEmail(): void {
+    this.newEmail.set('');
+    this.emailPassword.set('');
+    this.emailSent.set(null);
+    this.errors.set({});
+    this.emailOpen.set(true);
+  }
+
+  /** The password typed here does not outlive the sheet. */
+  closeEmail(): void {
+    this.emailOpen.set(false);
+    this.emailPassword.set('');
+  }
+
+  async saveEmail(): Promise<void> {
+    if (!this.emailReady()) return;
+
+    this.saving.set(true);
+    this.errors.set({});
+
+    try {
+      const { message } = await this.api.requestEmailChange(this.newEmail().trim(), this.emailPassword());
+      this.emailPassword.set('');
+      // Said in the sheet rather than a toast: which inbox to go and look in
+      // is worth more than three seconds on screen.
+      this.emailSent.set(message);
     } catch (error) {
       this.errors.set(fieldErrors(error));
       if (!Object.keys(this.errors()).length) this.toasts.show(messageOf(error), 'danger');

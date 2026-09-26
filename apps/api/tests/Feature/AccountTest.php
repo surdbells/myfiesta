@@ -249,6 +249,53 @@ class AccountTest extends TestCase
             ->assertJsonPath('timezone', 'Africa/Lagos');
     }
 
+    public function test_who_am_i_includes_what_the_profile_form_edits(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Ada Okafor',
+            'email' => 'ada@example.com',
+            'phone' => '+234 801 234 5678',
+            'timezone' => 'Africa/Lagos',
+        ]);
+        Sanctum::actingAs($user, [TokenAbility::Attendee->value]);
+
+        // Without the number, the phone's details form opened with the box
+        // empty — and saving it as it looked threw the number away.
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('name', 'Ada Okafor')
+            ->assertJsonPath('email', 'ada@example.com')
+            ->assertJsonPath('phone', '+234 801 234 5678')
+            ->assertJsonPath('timezone', 'Africa/Lagos')
+            ->assertJsonPath('organizations', []);
+    }
+
+    public function test_a_phone_number_can_be_taken_off_the_account(): void
+    {
+        $user = User::factory()->create(['phone' => '+1 416 555 0100']);
+        Sanctum::actingAs($user, [TokenAbility::Attendee->value]);
+
+        // Emptying the box sends null, and null means "none", not "unchanged".
+        $this->patchJson('/api/auth/profile', ['phone' => null])
+            ->assertOk()
+            ->assertJsonPath('phone', null);
+
+        $this->assertNull($user->fresh()->phone);
+        $this->getJson('/api/auth/me')->assertJsonPath('phone', null);
+    }
+
+    public function test_a_profile_saved_without_a_phone_keeps_the_one_it_has(): void
+    {
+        $user = User::factory()->create(['name' => 'Ada', 'phone' => '+1 416 555 0100']);
+        Sanctum::actingAs($user, [TokenAbility::Attendee->value]);
+
+        // Only a field that is sent changes. Renaming yourself must not cost
+        // you the number the team reaches you on.
+        $this->patchJson('/api/auth/profile', ['name' => 'Ada Okafor'])->assertOk();
+
+        $this->assertSame('+1 416 555 0100', $user->fresh()->phone);
+    }
+
     public function test_the_email_address_cannot_be_changed_from_the_profile(): void
     {
         $user = User::factory()->create(['email' => 'ada@example.com']);

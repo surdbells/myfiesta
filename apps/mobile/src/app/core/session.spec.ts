@@ -101,4 +101,37 @@ describe('SessionStore', () => {
     // sign-in screen.
     expect(stale.signedIn()).toBe(false);
   });
+
+  it('takes in an address changed from somewhere else, and keeps it after a restart', async () => {
+    await session.startFromLogin({
+      token: 'tok',
+      abilities: ['attendee'],
+      user: { name: 'Ada Okoro', email: 'ada@example.test' },
+      organizations: [],
+    });
+
+    // The link to the new address was opened on the laptop.
+    await session.identify('Ada Okoro', 'ada@new.example.test');
+    expect(session.session()?.email).toBe('ada@new.example.test');
+
+    TestBed.resetTestingModule();
+    const restored = TestBed.inject(SessionStore);
+    await restored.restore();
+    expect(restored.session()?.email).toBe('ada@new.example.test');
+    expect(restored.session()?.token).toBe('tok');
+  });
+
+  it('never renames a door pass after the account that made it', async () => {
+    await session.startFromDoorPass({
+      token: 'door-tok',
+      label: 'Front gate',
+      expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      event: { id: 'evt-1', title: 'Afro Fest' },
+    });
+
+    await session.identify('Ada Okoro', 'ada@example.test');
+
+    expect(session.session()?.name).toBe('Front gate');
+    expect(session.session()?.email).toBeNull();
+  });
 });

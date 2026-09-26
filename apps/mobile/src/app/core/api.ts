@@ -379,18 +379,36 @@ export class Api {
   /**
    * Who is signed in, and the organizations they belong to — with what they
    * may do in each, as the server resolves it rather than as the phone guesses.
+   * Also the phone number, so the details form opens showing the one on file.
    */
-  me(): Promise<{ name: string; email: string; organizations: { id: string; name: string; role: string; permissions: string[] }[] }> {
+  me(): Promise<{
+    name: string;
+    email: string;
+    phone: string | null;
+    timezone: string | null;
+    organizations: { id: string; name: string; role: string; permissions: string[] }[];
+  }> {
     return this.send('GET', '/api/auth/me');
   }
 
   /**
-   * A name and a phone number. Not the email: changing the address an account
-   * is reached at has to be confirmed at the new address, and the server
-   * refuses it here for that reason.
+   * A name and a phone number. Null takes the number off. Not the email:
+   * changing the address an account is reached at has to be confirmed at the
+   * new address first — requestEmailChange() is that.
    */
   updateProfile(body: { name?: string; phone?: string | null }): Promise<{ name: string; email: string; phone: string | null }> {
     return this.send('PATCH', '/api/auth/profile', { body });
+  }
+
+  /**
+   * Ask to move the account to a new address. A link goes there, and nothing
+   * changes until it is opened. The answer is the same whether or not the
+   * address already has an account, and this passes it on as it comes.
+   */
+  requestEmailChange(email: string, current: string): Promise<{ message: string }> {
+    return this.send('POST', '/api/auth/email', {
+      body: { email, current_password: current },
+    });
   }
 
   /** Signs every other device out; this one stays. */

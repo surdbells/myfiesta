@@ -155,6 +155,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   );
 };
 
+/** The signed-in person, as GET /api/auth/me has them: what the account page edits, and their memberships. */
+export interface Account {
+  name: string;
+  email: string;
+  phone: string | null;
+  timezone: string | null;
+  organizations: Session['organizations'];
+}
+
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -229,6 +238,30 @@ export class Api {
     password_confirmation: string;
   }): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.base}/api/auth/password`, body);
+  }
+
+  /**
+   * Who is signed in, as the server has them now.
+   *
+   * The session holds what signing in said, which goes stale when the address
+   * is changed from a link opened on another device.
+   */
+  me(): Observable<Account> {
+    return this.http.get<Account>(`${this.base}/api/auth/me`);
+  }
+
+  /**
+   * Ask to move the account to a new address. Nothing changes until the link
+   * sent there is opened, and the answer is the same whether or not that
+   * address already has an account — so this does not say either.
+   */
+  requestEmailChange(body: { email: string; current_password: string }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/api/auth/email`, body);
+  }
+
+  /** From the emailed link. Works once; every other device is signed out. */
+  confirmEmailChange(token: string): Observable<{ message: string; email: string }> {
+    return this.http.post<{ message: string; email: string }>(`${this.base}/api/auth/email/confirm`, { token });
   }
 
   // --- the team -------------------------------------------------------------

@@ -192,6 +192,10 @@ Route::post('/door-passes/{secret}/claim', [DoorPassController::class, 'claim'])
 Route::post('/auth/forgot-password', [AccountController::class, 'forgotPassword'])->middleware('throttle:10,1');
 Route::post('/auth/reset-password', [AccountController::class, 'resetPassword'])->middleware('throttle:10,1');
 
+// The link sent to a new email address. Like a reset link, it is the
+// credential, and it is usually opened somewhere nobody is signed in.
+Route::post('/auth/email/confirm', [AccountController::class, 'confirmEmailChange'])->middleware('throttle:10,1');
+
 // Signing out is open to every token, a door pass included: ending a shift
 // should throw the pass away rather than leave it live on the phone.
 Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
@@ -200,6 +204,8 @@ Route::middleware(['auth:sanctum', 'token.scope:account'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::patch('/auth/profile', [AccountController::class, 'updateProfile']);
     Route::post('/auth/password', [AccountController::class, 'changePassword']);
+    // Asks, never changes: the move happens when the new address opens its link.
+    Route::post('/auth/email', [AccountController::class, 'requestEmailChange'])->middleware('throttle:10,1');
 });
 
 /*

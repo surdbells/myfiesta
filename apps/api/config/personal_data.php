@@ -42,6 +42,14 @@ return [
             'key' => 'user_id',
         ],
 
+        // A new address somebody asked to move to and has not confirmed. Its
+        // link works for an hour at most, and it means nothing once the
+        // account is gone.
+        'email_changes' => [
+            'strategy' => 'delete',
+            'key' => 'user_id',
+        ],
+
         'organization_user' => [
             'strategy' => 'delete',
             'key' => 'user_id',

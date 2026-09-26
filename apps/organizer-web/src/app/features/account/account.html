@@ -8,20 +8,68 @@
       <input id="name" name="name" autocomplete="name" maxlength="120" required [ngModel]="name()" (ngModelChange)="name.set($event)" />
     </ui-field>
 
-    <ui-field label="Email" hint="The address you sign in with, and where invitations and password resets go. It can’t be changed here.">
+    <div>
+      <button uiButton type="submit" [loading]="savingName()" [disabled]="savingName() || !nameChanged()">Save name</button>
+    </div>
+  </form>
+
+  <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="requestEmail()">
+    <header class="grid gap-1">
+      <h2 class="text-base font-semibold">Email</h2>
+      <p class="text-pretty text-sm text-text-muted">
+        You sign in with <strong class="font-medium text-text">{{ session.user()?.email }}</strong>, and it’s where
+        invitations and password resets go. To use a different address, we send a link to it. Nothing changes until
+        that link is opened — until then, keep signing in as you do now.
+      </p>
+    </header>
+
+    @if (emailSent(); as message) {
+      <ui-alert tone="success">{{ message }}</ui-alert>
+    }
+    @if (emailError(); as message) {
+      <ui-alert tone="danger">{{ message }}</ui-alert>
+    }
+
+    <!-- For password managers: which account the password below belongs to. -->
+    <input type="hidden" name="username" autocomplete="username" [value]="session.user()?.email ?? ''" />
+
+    <ui-field
+      label="New email address"
+      [error]="newEmailError() ?? (sameEmail() ? 'That is the address you already use.' : null)"
+      required
+    >
       <input
-        id="email"
-        name="email"
+        id="new-email"
+        name="newEmail"
         type="email"
-        class="bg-surface-sunken text-text-muted"
-        autocomplete="username"
-        readonly
-        [value]="session.user()?.email ?? ''"
+        inputmode="email"
+        autocomplete="email"
+        maxlength="190"
+        required
+        [ngModel]="newEmail()"
+        (ngModelChange)="newEmail.set($event); newEmailError.set(null); emailSent.set(null)"
+      />
+    </ui-field>
+
+    <ui-field
+      label="Current password"
+      hint="So that a laptop left signed in isn’t enough to move your account."
+      [error]="emailPasswordError()"
+      required
+    >
+      <input
+        id="email-current"
+        name="emailCurrent"
+        type="password"
+        autocomplete="current-password"
+        required
+        [ngModel]="emailPassword()"
+        (ngModelChange)="emailPassword.set($event); emailPasswordError.set(null)"
       />
     </ui-field>
 
     <div>
-      <button uiButton type="submit" [loading]="savingName()" [disabled]="savingName() || !nameChanged()">Save name</button>
+      <button uiButton type="submit" [loading]="requesting()" [disabled]="requesting() || !canRequestEmail()">Send the link</button>
     </div>
   </form>
 

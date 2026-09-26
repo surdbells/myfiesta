@@ -1,0 +1,48 @@
+<main class="shell grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
+  @if (!usable()) {
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+      <header class="card__head mb-1 grid gap-1">
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">That link is incomplete</h1>
+        <p class="sub text-pretty text-sm text-text-muted">
+          Some email apps cut long links in half. Open it from the message rather than copying it out, or ask for a
+          new one from your account.
+        </p>
+      </header>
+      <a uiButton variant="secondary" routerLink="/account">Go to your account</a>
+    </div>
+  } @else if (done(); as result) {
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+      <header class="card__head mb-1 grid gap-1">
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">Email address changed</h1>
+        <p class="sub text-pretty text-sm text-text-muted [overflow-wrap:anywhere]">{{ result.message }} Sign in with the new address from now on.</p>
+      </header>
+      @if (session.signedIn()) {
+        <a uiButton variant="secondary" routerLink="/account">Back to your account</a>
+      } @else {
+        <a uiButton variant="secondary" routerLink="/sign-in">Sign in</a>
+      }
+    </div>
+  } @else {
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+      <header class="card__head mb-1 grid gap-1">
+        <h1 class="text-2xl font-semibold tracking-[-0.02em]">Use this email address?</h1>
+        <p class="sub text-pretty text-sm text-text-muted">
+          Your account moves to the address this link was sent to. You sign in with it from then on, and every other
+          phone and browser signed in to the account is signed out.
+        </p>
+      </header>
+
+      @if (error(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+
+      <button uiButton type="button" size="lg" [block]="true" [loading]="busy()" [disabled]="busy()" (click)="confirm()">
+        @if (busy()) { Moving your account… } @else { Yes, use this address }
+      </button>
+
+      @if (error()) {
+        <a uiButton variant="ghost" routerLink="/account">Go to your account</a>
+      }
+    </div>
+  }
+</main>
