@@ -43,7 +43,8 @@ export class ToastStore {
       position: fixed;
       left: 0;
       right: 0;
-      bottom: calc(var(--mf-safe-bottom) + var(--space-5));
+      bottom: calc(var(--mf-safe-bottom) + var(--mf-toast-lift) + var(--space-3));
+      transition: bottom 220ms var(--mf-ease-out);
       z-index: 200;
       display: grid;
       justify-items: center;

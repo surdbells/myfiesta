@@ -30,7 +30,7 @@ import { Chrome } from './core/chrome';
       }
     </div>
 
-    <mf-toasts />
+    <mf-toasts [style.--mf-toast-lift.px]="toastLift()" />
     <mf-dialog-host />
   `,
   styles: `
@@ -89,6 +89,21 @@ export class App {
     if (this.session.locked()) return false;
 
     return !/^\/(sign-in|join|forgotten-password|door|door-pass|ui|tickets\/.)/.test(this.nav.url());
+  });
+
+  /**
+   * How far above the home indicator a toast sits: over the keyboard when it
+   * is up, over the bottom bar when it shows, and over a screen's Save bar —
+   * a "Saved." that covers the button just pressed reads as the button gone.
+   */
+  protected readonly toastLift = computed(() => {
+    const footer = this.chrome.footerHeight();
+
+    if (this.chrome.keyboard()) return this.chrome.keyboardHeight() + footer;
+
+    const bar = this.showTabs() && !this.chrome.barHidden() && !this.chrome.barTucked() ? 64 : 0;
+
+    return bar + footer;
   });
 
   readonly tabs = computed(() => [

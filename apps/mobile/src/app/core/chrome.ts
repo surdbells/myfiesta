@@ -32,6 +32,17 @@ export class Chrome {
    */
   readonly task = signal(false);
 
+  /**
+   * The open screen's pinned footer — a Save bar — by the screen that owns it.
+   *
+   * Owned so that during a transition, when the old screen and the new one
+   * are both on the stage, the old one leaving cannot zero what the new one
+   * just reported.
+   */
+  private readonly footer = signal<{ owner: object; height: number } | null>(null);
+
+  readonly footerHeight = computed(() => this.footer()?.height ?? 0);
+
   /** Bumped when the tab already open is tapped again: that screen goes to its top. */
   readonly scrollTopRequested = signal(0);
 
@@ -48,6 +59,14 @@ export class Chrome {
 
   constructor() {
     this.watchKeyboard();
+  }
+
+  setFooter(owner: object, height: number): void {
+    this.footer.set({ owner, height });
+  }
+
+  clearFooter(owner: object): void {
+    if (this.footer()?.owner === owner) this.footer.set(null);
   }
 
   setBadge(link: string, count: number): void {

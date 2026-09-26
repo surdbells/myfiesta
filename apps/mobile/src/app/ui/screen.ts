@@ -530,7 +530,10 @@ export class MfScreen {
       const footer = this.body().nativeElement.parentElement?.querySelector<HTMLElement>('.footer');
 
       if (footer) {
-        const measure = () => this.body().nativeElement.style.setProperty('--mf-footer-h', `${footer.offsetHeight}px`);
+        const measure = () => {
+          this.body().nativeElement.style.setProperty('--mf-footer-h', `${footer.offsetHeight}px`);
+          this.chrome.setFooter(this, footer.offsetHeight);
+        };
         new ResizeObserver(measure).observe(footer);
         measure();
       }
@@ -542,6 +545,7 @@ export class MfScreen {
 
     destroyRef.onDestroy(() => {
       this.nav.releaseBack(this);
+      this.chrome.clearFooter(this);
       if (this.task()) this.chrome.task.set(false);
       if (this.key) this.nav.rememberScroll(this.key, this.body().nativeElement.scrollTop);
     });

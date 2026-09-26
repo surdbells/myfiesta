@@ -442,6 +442,42 @@ class ReminderTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_reminder_turned_off_by_mistake_can_be_put_back(): void
+    {
+        $this->asOrganizer();
+
+        $id = $this->postJson("/api/organizer/events/{$this->event->id}/reminders", ['offset_minutes' => 120])
+            ->assertCreated()
+            ->json('id');
+
+        $this->deleteJson("/api/organizer/events/{$this->event->id}/reminders/{$id}")->assertOk();
+
+        // The same moment again brings the same reminder back, rather than
+        // being refused as a duplicate of one nobody will ever receive.
+        $this->postJson("/api/organizer/events/{$this->event->id}/reminders", ['offset_minutes' => 120])
+            ->assertCreated()
+            ->assertJsonPath('id', $id)
+            ->assertJsonPath('status', 'scheduled');
+
+        $this->assertSame(1, $this->event->reminders()->count());
+    }
+
+    public function test_a_turned_off_reminder_whose_moment_has_passed_stays_off(): void
+    {
+        $reminder = $this->event->reminders()->create([
+            'offset_minutes' => 60 * 24 * 30,
+            'status' => 'cancelled',
+        ]);
+
+        $this->asOrganizer();
+
+        $this->postJson("/api/organizer/events/{$this->event->id}/reminders", ['offset_minutes' => 60 * 24 * 30])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'That moment has already passed for this event.');
+
+        $this->assertSame('cancelled', $reminder->fresh()->status);
+    }
+
     public function test_a_sent_reminder_cannot_be_turned_off_afterwards(): void
     {
         $reminder = $this->event->reminders()->create([

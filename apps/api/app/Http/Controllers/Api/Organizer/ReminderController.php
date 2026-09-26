@@ -51,7 +51,9 @@ class ReminderController extends Controller
             ], 422);
         }
 
-        if ($event->reminders()->where('offset_minutes', $data['offset_minutes'])->exists()) {
+        $existing = $event->reminders()->where('offset_minutes', $data['offset_minutes'])->first();
+
+        if ($existing && $existing->status !== 'cancelled') {
             return response()->json([
                 'message' => 'There is already a reminder at that point.',
             ], 422);
@@ -64,6 +66,16 @@ class ReminderController extends Controller
             return response()->json([
                 'message' => 'That moment has already passed for this event.',
             ], 422);
+        }
+
+        if ($existing) {
+            // Turned off earlier, and wanted back. The same row rather than a
+            // new one: it is the same moment, and one reminder per moment is
+            // what the unique index holds to. Refusing instead would make a
+            // mistaken "turn off" permanent.
+            $existing->update(['status' => 'scheduled']);
+
+            return response()->json($this->present($existing->fresh()), 201);
         }
 
         $reminder = $event->reminders()->create([
