@@ -21,6 +21,7 @@ import { Api } from '../../core/api';
 import { EventWaitlist } from './event-waitlist';
 import { Money, TicketType } from '../../core/api.types';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
+import { describeZone, isoToZonedWallClock, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 
 /** A ticket type as the form holds it, before it becomes an API body. */
 interface TicketDraft {
@@ -102,6 +103,14 @@ export class EventTickets {
 
   readonly types = signal<TicketType[]>([]);
 
+  /**
+   * The zone sale windows are typed and read in: the event's, not the
+   * browser's. An organizer in Lagos opening a Toronto night's tier at "10am"
+   * means 10am in Toronto — the time on every poster for it.
+   */
+  readonly timezone = signal<string | null>(null);
+  readonly zoneName = computed(() => describeZone(this.zone()));
+
   private readonly waitlist = viewChild(EventWaitlist);
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -118,6 +127,15 @@ export class EventTickets {
 
   constructor() {
     this.load();
+
+    this.api.event(this.eventId).subscribe({
+      next: (event) => this.timezone.set(event.timezone),
+      error: () => undefined,
+    });
+  }
+
+  private zone(): string {
+    return this.timezone() ?? localZone();
   }
 
   load(): void {
@@ -331,8 +349,8 @@ export class EventTickets {
       // put the tier on sale with nothing behind it.
       quantity_available: this.optionalNumber(draft.quantity),
       max_per_order: this.optionalNumber(draft.maxPerOrder),
-      sales_start_at: draft.salesStart ? new Date(draft.salesStart).toISOString() : null,
-      sales_end_at: draft.salesEnd ? new Date(draft.salesEnd).toISOString() : null,
+      sales_start_at: draft.salesStart ? zonedWallClockToIso(draft.salesStart, this.zone()) : null,
+      sales_end_at: draft.salesEnd ? zonedWallClockToIso(draft.salesEnd, this.zone()) : null,
       opens_after_id: draft.opensAfter || null,
       status: draft.status,
     };
@@ -457,7 +475,7 @@ export class EventTickets {
     if (!type.sales_start_at && !type.sales_end_at) return null;
 
     const on = (iso: string) =>
-      new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' }).format(new Date(iso));
+      new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', timeZone: this.zone() }).format(new Date(iso));
 
     if (type.sales_start_at && type.sales_end_at) {
       return `${on(type.sales_start_at)} – ${on(type.sales_end_at)}`;
@@ -467,18 +485,11 @@ export class EventTickets {
   }
 
   /**
-   * An ISO instant, as `datetime-local` wants it.
-   *
-   * That control has no timezone and reads whatever it is given as local, so
-   * the value has to be shifted into the browser's offset before it goes in
-   * and back out again on save.
+   * An ISO instant, as `datetime-local` wants it: the wall clock at the
+   * event, since that control has no zone of its own and the save reads it
+   * back in the event's.
    */
   private toLocalInput(iso: string | null | undefined): string {
-    if (!iso) return '';
-
-    const date = new Date(iso);
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-
-    return local.toISOString().slice(0, 16);
+    return iso ? (isoToZonedWallClock(iso, this.zone()) ?? '') : '';
   }
 }

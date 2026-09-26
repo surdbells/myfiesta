@@ -255,6 +255,7 @@
         <p class="help text-xs text-text-muted">After this it stops working. Nothing already bought changes.</p>
       </div>
     </div>
+    <p class="help -mt-2 text-xs text-text-muted">Times are {{ zoneName() }}, where the event is.</p>
 
     <div class="actions flex items-center gap-4">
       <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim() || needsUnlock()">
@@ -391,6 +392,7 @@
   [eventId]="eventId"
   [eventSlug]="event()?.slug ?? null"
   [currency]="currency()"
+  [timezone]="event()?.timezone ?? null"
   [ticketTypes]="ticketTypes()"
   [canManage]="session.canMessage()"
 />

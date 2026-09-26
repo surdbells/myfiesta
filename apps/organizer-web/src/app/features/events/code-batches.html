@@ -119,6 +119,7 @@
           <input id="batchEnds" name="batchEnds" type="datetime-local" [ngModel]="form().ends_at" (ngModelChange)="form.set({ ...form(), ends_at: $event })" />
         </div>
       </div>
+      <p class="help -mt-2 text-xs text-text-muted">Times are {{ zoneName() }}, where the event is.</p>
 
       <div class="flex items-center gap-4">
         <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !canCreate()">

@@ -7,6 +7,7 @@ import { CodeBatch, TicketType } from '../../core/api.types';
 import { saveFile } from '../../core/download';
 import { messageFor } from '../../core/errors';
 import { toMinorUnits } from '../../core/money';
+import { describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 
 /**
  * Single-use codes, made in bulk and handed out as a spreadsheet.
@@ -28,6 +29,8 @@ export class CodeBatches implements OnInit {
   readonly eventId = input.required<string>();
   readonly eventSlug = input<string | null>(null);
   readonly currency = input('CAD');
+  /** The event's zone: a batch's window is its wall clock, not the browser's. */
+  readonly timezone = input<string | null>(null);
   readonly ticketTypes = input<TicketType[]>([]);
   readonly canManage = input(false);
 
@@ -109,8 +112,8 @@ export class CodeBatches implements OnInit {
               : toMinorUnits(f.discount_value)
             : null,
         unlock_ticket_type_ids: f.purpose === 'access' ? f.unlock_ticket_type_ids : [],
-        starts_at: f.starts_at ? new Date(f.starts_at).toISOString() : null,
-        ends_at: f.ends_at ? new Date(f.ends_at).toISOString() : null,
+        starts_at: f.starts_at ? zonedWallClockToIso(f.starts_at, this.zone()) : null,
+        ends_at: f.ends_at ? zonedWallClockToIso(f.ends_at, this.zone()) : null,
       })
       .subscribe({
         next: (batch) => {
@@ -160,6 +163,12 @@ export class CodeBatches implements OnInit {
         this.toasts.show(messageFor(response, 'Those codes could not be turned off.'), 'danger');
       },
     });
+  }
+
+  readonly zoneName = computed(() => describeZone(this.zone()));
+
+  private zone(): string {
+    return this.timezone() ?? localZone();
   }
 
   unused(batch: CodeBatch): number {

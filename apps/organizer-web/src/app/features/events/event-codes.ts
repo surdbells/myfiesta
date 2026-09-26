@@ -9,6 +9,7 @@ import { Api } from '../../core/api';
 import { CodeSales, OrganizerEventDetail, PageMeta, PromoCode, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { formatMoney, toMinorUnits } from '../../core/money';
+import { describeZone, isoToZonedWallClock, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 import { SessionStore } from '../../core/session';
 
 /**
@@ -133,6 +134,10 @@ export class EventCodes implements OnInit {
   }
 
   readonly currency = computed(() => this.event()?.currency ?? 'CAD');
+
+  /** Code windows are the event's wall clock, like every other time about it. */
+  readonly zone = computed(() => this.event()?.timezone ?? localZone());
+  readonly zoneName = computed(() => describeZone(this.zone()));
 
   constructor() {
     // Absent on the Discount codes screen, which passes the event in instead.
@@ -313,8 +318,8 @@ export class EventCodes implements OnInit {
         min_quantity: this.discounts() && form.min_quantity ? Number(form.min_quantity) : null,
         ticket_type_ids: this.discounts() ? form.ticket_type_ids : [],
         unlock_ticket_type_ids: form.unlock_ticket_type_ids,
-        starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
-        ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+        starts_at: form.starts_at ? zonedWallClockToIso(form.starts_at, this.zone()) : null,
+        ends_at: form.ends_at ? zonedWallClockToIso(form.ends_at, this.zone()) : null,
         event_scoped: true,
       })
       .subscribe({
@@ -365,8 +370,8 @@ export class EventCodes implements OnInit {
       ...(editing.event_scoped
         ? { ticket_type_ids: this.discounts() ? form.ticket_type_ids : [], unlock_ticket_type_ids: form.unlock_ticket_type_ids }
         : {}),
-      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
-      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+      starts_at: form.starts_at ? zonedWallClockToIso(form.starts_at, this.zone()) : null,
+      ends_at: form.ends_at ? zonedWallClockToIso(form.ends_at, this.zone()) : null,
     };
 
     this.api.updateCode(this.eventId, editing.id, body).subscribe({
@@ -446,21 +451,12 @@ export class EventCodes implements OnInit {
   }
 
   /**
-   * An instant as a datetime-local control wants it.
-   *
-   * Local, not UTC: the control has no zone, so handing it an ISO string
-   * shows the wrong time to everybody east or west of Greenwich.
+   * An instant as a datetime-local control wants it: the wall clock at the
+   * event. The control has no zone, and the save reads it back in the
+   * event's, so both ends have to agree on which clock it is.
    */
   private toLocalInput(iso: string | null): string {
-    if (!iso) return '';
-
-    const at = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    return (
-      `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}` +
-      `T${pad(at.getHours())}:${pad(at.getMinutes())}`
-    );
+    return iso ? (isoToZonedWallClock(iso, this.zone()) ?? '') : '';
   }
 
   /** "Until Fri, 12 Sep" — the fact an organizer is scanning for. */
@@ -472,6 +468,7 @@ export class EventCodes implements OnInit {
         month: 'short',
         hour: 'numeric',
         minute: '2-digit',
+        timeZone: this.zone(),
       }).format(new Date(iso));
 
     if (code.starts_at && code.ends_at) return `${when(code.starts_at)} → ${when(code.ends_at)}`;
