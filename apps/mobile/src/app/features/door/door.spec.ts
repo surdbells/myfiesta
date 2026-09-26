@@ -1,0 +1,394 @@
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@capacitor/haptics', () => ({
+  Haptics: { impact: vi.fn(async () => undefined), notification: vi.fn(async () => undefined) },
+  ImpactStyle: { Light: 'LIGHT' },
+  NotificationType: { Error: 'ERROR' },
+}));
+
+import { Haptics } from '@capacitor/haptics';
+import { Api, ScanResult } from '../../core/api';
+import { Scanner } from '../../core/scanner';
+import { SessionStore } from '../../core/session';
+import { Door } from './door';
+
+const admitted: ScanResult = {
+  result: 'accepted',
+  accepted: true,
+  admitted: 1,
+  remaining: 0,
+  message: 'Admitted.',
+  ticket: { holder_name: 'Ada Okoro', type: 'General', admits: 1, admitted_count: 1 },
+};
+
+/** One scan as the phone sent it. */
+interface Sent {
+  code: string;
+  party: number | null;
+  clientId: string | undefined;
+}
+
+/**
+ * The phone's door, and what its camera sends.
+ *
+ * It used to act on any QR code in view, and to ignore the same one for four
+ * seconds from the first sighting only: a long code read with no signal was
+ * queued and then held every scan behind it, and a ticket held up through a
+ * slow answer was sent twice. It had no "How many" either, so a table's
+ * ticket let everyone in at once. It reads by the console's rules now, out of
+ * `@myfiesta/door`.
+ */
+describe('The door, on a phone', () => {
+  let sent: Sent[];
+  let answer: () => Promise<ScanResult>;
+  let seen: ((code: string) => void) | null;
+
+  /** The camera, reduced to what it hands the door: every code it sees, as often as it sees it. */
+  const camera = {
+    running: signal(false),
+    refusal: signal(null),
+    engine: signal('webview'),
+    supported: async () => true,
+    start: async (onCode: (code: string) => void) => {
+      seen = onCode;
+      camera.running.set(true);
+    },
+    stop: async () => {
+      camera.running.set(false);
+    },
+  };
+
+  beforeEach(() => {
+    sent = [];
+    seen = null;
+    answer = async () => admitted;
+    camera.running.set(false);
+    vi.mocked(Haptics.notification).mockClear();
+
+    // The screen measures its header; jsdom has nothing to measure with.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
+        {
+          provide: SessionStore,
+          useValue: {
+            session: signal({ eventId: 'evt_1', eventTitle: 'Friday Night' }),
+            locked: signal(false),
+            clear: async () => undefined,
+            signOut: async () => undefined,
+          },
+        },
+        { provide: Scanner, useValue: camera },
+        {
+          provide: Api,
+          useValue: {
+            scan: async (_event: string, code: string, party: number | null, clientId?: string) => {
+              sent.push({ code, party, clientId });
+
+              return answer();
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function open() {
+    const fixture = TestBed.createComponent(Door);
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    return fixture;
+  }
+
+  /** Typed into "How many" the way a person types it, through the number box Angular reads. */
+  function typeParty(fixture: Awaited<ReturnType<typeof open>>, typed: string): void {
+    const box = partyBox(fixture);
+
+    box.value = typed;
+    box.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function partyBox(fixture: Awaited<ReturnType<typeof open>>): HTMLInputElement {
+    return fixture.nativeElement.querySelector('input[name="party"]');
+  }
+
+  /** The camera held on one code, five times a second, for `ms`. */
+  async function holdUp(code: string, ms: number): Promise<void> {
+    for (let held = 0; held < ms; held += 200) {
+      seen!(code);
+      await vi.advanceTimersByTimeAsync(200);
+    }
+  }
+
+  describe('what the camera reads', () => {
+    it('sends nothing for a QR code that is not a ticket’s, and says what it saw', async () => {
+      vi.useFakeTimers();
+      const fixture = await open();
+
+      await fixture.componentInstance.startCamera();
+
+      // A payment link on the guest's screen, longer than any ticket code:
+      // queued with no signal, it would have held every scan behind it.
+      await holdUp(`https://example.com/pay?ref=${'x'.repeat(40)}`, 2000);
+      fixture.detectChanges();
+
+      const page: HTMLElement = fixture.nativeElement;
+
+      expect(sent).toEqual([]);
+      expect(fixture.componentInstance.code()).toBe('');
+      expect(page.textContent).toContain('That QR code is not a ticket.');
+      expect(page.textContent).not.toContain('Do not admit');
+
+      // Gone once it is out of view.
+      await vi.advanceTimersByTimeAsync(3000);
+      fixture.detectChanges();
+
+      expect(page.textContent).not.toContain('That QR code is not a ticket.');
+    });
+
+    it('says nothing about a code behind a ticket that is being read', async () => {
+      vi.useFakeTimers();
+      const fixture = await open();
+
+      await fixture.componentInstance.startCamera();
+
+      for (let held = 0; held < 2000; held += 200) {
+        seen!('WFY7-F77K4EJW');
+        seen!('https://example.com/poster');
+        await vi.advanceTimersByTimeAsync(200);
+      }
+
+      fixture.detectChanges();
+
+      expect(sent.map((scan) => scan.code)).toEqual(['WFY7-F77K4EJW']);
+      expect(fixture.nativeElement.textContent).not.toContain('That QR code is not a ticket.');
+    });
+
+    it('checks a ticket held up for ten seconds in once, with its party, when the answer is slow', async () => {
+      vi.useFakeTimers();
+
+      // A venue wifi taking its time.
+      answer = () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve({ ...admitted, admitted: 2, remaining: 2, message: 'Admitted 2. 2 still to come.' }),
+            4500,
+          ),
+        );
+
+      const fixture = await open();
+
+      // Two of a table of four going in now.
+      typeParty(fixture, '2');
+      await fixture.componentInstance.startCamera();
+
+      // Held up through the slow answer and the ID check, well past the four
+      // seconds a ticket has to be out of sight before it is read again.
+      await holdUp('wfy7-f77k4ejw', 10_000);
+      fixture.detectChanges();
+
+      // A second scan would have gone with the number cleared, which lets in
+      // everyone still outside.
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ code: 'WFY7-F77K4EJW', party: 2 });
+      expect(fixture.nativeElement.textContent).toContain('2 of the party still outside');
+      // Cleared once decided: it belonged to that ticket.
+      expect(fixture.componentInstance.party()).toBe('');
+    });
+
+    it('reads a different ticket straight after, at once', async () => {
+      vi.useFakeTimers();
+      const fixture = await open();
+
+      await fixture.componentInstance.startCamera();
+      await holdUp('WFY7-F77K4EJW', 1000);
+
+      expect(sent.map((scan) => scan.code)).toEqual(['WFY7-F77K4EJW']);
+
+      seen!('MFST-9K2L4XQ7');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(sent.map((scan) => scan.code)).toEqual(['WFY7-F77K4EJW', 'MFST-9K2L4XQ7']);
+    });
+
+    it('sends each scan with its own id, for the server to know it again if it is also queued', async () => {
+      const fixture = await open();
+
+      fixture.componentInstance.code.set('WFY7-F77K4EJW');
+      await fixture.componentInstance.submit();
+
+      expect(sent[0].clientId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    });
+  });
+
+  describe('a typed code', () => {
+    it('is not sent when no ticket could have it', async () => {
+      const fixture = await open();
+      const door = fixture.componentInstance;
+
+      door.code.set('https://example.com/pay?ref=1234567890abcdefghijklmnop');
+      await door.submit();
+      fixture.detectChanges();
+
+      expect(sent).toEqual([]);
+      expect(fixture.nativeElement.textContent).toContain('That is not a ticket code.');
+    });
+
+    it('is sent as the server reads it', async () => {
+      const fixture = await open();
+
+      fixture.componentInstance.code.set('  wfy7-f77k4ejw ');
+      await fixture.componentInstance.submit();
+
+      expect(sent).toMatchObject([{ code: 'WFY7-F77K4EJW', party: null }]);
+    });
+  });
+
+  describe('how many', () => {
+    const refused = 'How many has to be a whole number from 1 to 50.';
+
+    it('refuses a number that is not a whole number of people, rather than sending or deciding it', async () => {
+      for (const typed of ['1.5', '0', '51']) {
+        const fixture = await open();
+        const door = fixture.componentInstance;
+
+        door.code.set('WFY7-F77K4EJW');
+        typeParty(fixture, typed);
+        await door.submit();
+        fixture.detectChanges();
+
+        // Offline, 1.5 would have been decided and queued, and the server
+        // would then have refused every sync with it in.
+        expect(sent, typed).toEqual([]);
+        expect(fixture.nativeElement.textContent, typed).toContain(refused);
+        // Left where it was, to be put right and sent.
+        expect(door.code(), typed).toBe('WFY7-F77K4EJW');
+
+        fixture.destroy();
+      }
+    });
+
+    it('refuses it for a ticket the camera read as well, and sends once it is put right', async () => {
+      vi.useFakeTimers();
+      const fixture = await open();
+      const door = fixture.componentInstance;
+
+      typeParty(fixture, '1.5');
+      await door.startCamera();
+      await holdUp('WFY7-F77K4EJW', 1000);
+      fixture.detectChanges();
+
+      expect(sent).toEqual([]);
+      expect(fixture.nativeElement.textContent).toContain(refused);
+
+      typeParty(fixture, '1');
+
+      expect(fixture.nativeElement.textContent).not.toContain(refused);
+
+      await door.submit();
+
+      expect(sent).toMatchObject([{ code: 'WFY7-F77K4EJW', party: 1 }]);
+    });
+
+    it('takes digits only as they are typed, with a keypad of numbers and whole steps', async () => {
+      const box = partyBox(await open());
+
+      expect(box.type).toBe('number');
+      expect(box.getAttribute('inputmode')).toBe('numeric');
+      expect(box.getAttribute('step')).toBe('1');
+
+      const press = (key: string) => {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true });
+
+        box.dispatchEvent(event);
+
+        return event.defaultPrevented;
+      };
+
+      expect(press('.')).toBe(true);
+      expect(press('-')).toBe(true);
+      expect(press('e')).toBe(true);
+      expect(press('4')).toBe(false);
+      expect(press('Backspace')).toBe(false);
+    });
+  });
+
+  /**
+   * A scan refused before it is sent. The last guest's verdict used to stay up
+   * through it, and nothing buzzed: a door holding a table's ticket to the
+   * camera saw the previous guest's green "Let them in", and the only sign of
+   * the refusal was small print under a box further down.
+   */
+  describe('a scan that goes nowhere', () => {
+    async function afterAGuestWasLetIn() {
+      const fixture = await open();
+      const page: HTMLElement = fixture.nativeElement;
+
+      fixture.componentInstance.code.set('WFY7-F77K4EJW');
+      await fixture.componentInstance.submit();
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('Let them in');
+
+      return { fixture, door: fixture.componentInstance, page };
+    }
+
+    it('takes the last verdict down and buzzes, for a ticket the camera read with a number that cannot be', async () => {
+      vi.useFakeTimers();
+      const { fixture, door, page } = await afterAGuestWasLetIn();
+
+      // More than one scan can let in, typed for a table held up next.
+      typeParty(fixture, '60');
+      await door.startCamera();
+      await holdUp('MFST-9K2L4XQ7', 1000);
+      fixture.detectChanges();
+
+      expect(sent).toHaveLength(1);
+      expect(page.textContent).not.toContain('Let them in');
+      expect(page.textContent).toContain('How many has to be a whole number from 1 to 50.');
+      // Once, however long it is held up.
+      expect(Haptics.notification).toHaveBeenCalledTimes(1);
+      // The guest before is still in the list, just no longer the verdict.
+      expect(page.querySelector('.recent')?.textContent).toContain('WFY7-F77K4EJW');
+    });
+
+    it('takes it down for a typed code no ticket could have, and puts up the next real answer', async () => {
+      const { fixture, door, page } = await afterAGuestWasLetIn();
+
+      door.code.set('https://example.com/pay?ref=1234');
+      await door.submit();
+      fixture.detectChanges();
+
+      expect(page.textContent).not.toContain('Let them in');
+      expect(page.textContent).toContain('That is not a ticket code.');
+      expect(Haptics.notification).toHaveBeenCalledTimes(1);
+
+      door.code.set('MFST-9K2L4XQ7');
+      await door.submit();
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('Let them in');
+      expect(page.querySelector('.recent')?.textContent).toContain('WFY7-F77K4EJW');
+    });
+  });
+});

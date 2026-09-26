@@ -2,6 +2,7 @@ import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild }
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { RepeatReads, partyKey, partySize, scanId, ticketCode, unrecordedAdmission } from '@myfiesta/door';
 import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
@@ -62,6 +63,10 @@ interface Outcome {
           <video #preview class="preview" [class.hidden]="nativePreview()" muted playsinline autoplay></video>
           <div class="reticle" aria-hidden="true"></div>
 
+          @if (scanning() && notATicket()) {
+            <p class="not-a-ticket" role="status">That QR code is not a ticket. Ask to see the ticket itself.</p>
+          }
+
           @if (scanning()) {
             <button mfButton class="stop" variant="secondary" size="sm" (click)="stopCamera()">
               Stop the camera
@@ -107,6 +112,24 @@ interface Outcome {
               <p class="why">{{ clash.message }}</p>
             }
             <button mfButton variant="secondary" size="sm" (click)="dismissConflicts()">Got it</button>
+          </div>
+        }
+
+        @if (unrecorded().length > 0) {
+          <!-- People let in offline on a scan the server could not take. The
+               scan can never be sent, so this phone is the only record that
+               they went in: kept on it until somebody taps Got it. -->
+          <div class="clash" role="alert">
+            <p>
+              <strong>
+                {{ unrecorded().length === 1 ? 'A scan' : unrecorded().length + ' scans' }}
+                made offline could not be recorded
+              </strong>
+            </p>
+            @for (scan of unrecorded(); track scan.client_id) {
+              <p class="why">{{ unrecordedMessage(scan) }}</p>
+            }
+            <button mfButton variant="secondary" size="sm" (click)="dismissUnrecorded()">Got it</button>
           </div>
         }
 
@@ -180,6 +203,30 @@ interface Outcome {
               placeholder="WFY7-F77K4EJW"
               [ngModel]="code()"
               (ngModelChange)="code.set($event)"
+            />
+          </mf-field>
+
+          <!-- For a table arriving in two groups. Whole people only: step 1
+               and a numeric keypad, and the keys a number box allows that no
+               party needs are kept out as they are typed. -->
+          <mf-field
+            label="How many"
+            hint="Leave blank for an ordinary ticket. For a table arriving in two groups, how many are going in now."
+            [error]="partyError()"
+          >
+            <input
+              #partyBox
+              name="party"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="50"
+              step="1"
+              enterkeyhint="go"
+              placeholder="All"
+              [ngModel]="party()"
+              (ngModelChange)="party.set($event); partyError.set(null)"
+              (keydown)="wholeNumbersOnly($event)"
             />
           </mf-field>
 
@@ -277,6 +324,21 @@ interface Outcome {
       left: 50%;
       bottom: var(--space-3);
       transform: translateX(-50%);
+    }
+
+    .not-a-ticket {
+      position: absolute;
+      top: var(--space-3);
+      left: var(--space-3);
+      right: var(--space-3);
+      margin: 0;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      background: rgb(0 0 0 / 0.72);
+      color: #fff;
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+      text-align: center;
     }
 
     .scan {
@@ -459,6 +521,16 @@ export class Door implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly outcomes = signal<Outcome[]>([]);
 
+  /**
+   * "How many": blank, or the number Angular reads out of the box. Blank lets
+   * in everyone still outstanding on the ticket — see `partySize`.
+   */
+  readonly party = signal<string | number | null>('');
+  readonly partyError = signal<string | null>(null);
+
+  /** The "How many" box, asked whether the browser could read what was typed into it. */
+  private readonly partyBox = viewChild<ElementRef<HTMLInputElement>>('partyBox');
+
   readonly locked = computed(() => this.session.locked());
 
   /** A door pass names its event; an organizer arrives with one in the address. */
@@ -470,8 +542,23 @@ export class Door implements OnDestroy {
     () => this.session.session()?.eventTitle ?? this.route.snapshot.queryParamMap.get('title'),
   );
 
-  readonly last = computed(() => this.outcomes()[0] ?? null);
-  readonly recent = computed(() => this.outcomes().slice(1, 6));
+  /**
+   * Whether the verdict on screen answers the last scan tried.
+   *
+   * Taken down when a scan goes nowhere — refused before it is sent, or
+   * failed — as the console's is. Left up, the last guest's green "Let them
+   * in" reads as the answer for the ticket held up now, and the only sign that
+   * nothing was sent is a line of small print under a box further down.
+   */
+  private readonly verdictStands = signal(true);
+
+  readonly last = computed(() => (this.verdictStands() ? (this.outcomes()[0] ?? null) : null));
+  /** The scans before the verdict's, and that one too once its verdict is down. */
+  readonly recent = computed(() => {
+    const from = this.last() ? 1 : 0;
+
+    return this.outcomes().slice(from, from + 5);
+  });
   readonly scanned = computed(() => this.outcomes().length);
   readonly admitted = computed(() =>
     this.outcomes().reduce((total, outcome) => total + outcome.result.admitted, 0),
@@ -487,6 +574,8 @@ export class Door implements OnDestroy {
   readonly waiting = this.offline.pendingCount;
   readonly listUpdatedAt = this.offline.listUpdatedAt;
   readonly conflicts = this.offline.conflicts;
+  readonly unrecorded = this.offline.unrecorded;
+  readonly unrecordedMessage = unrecordedAdmission;
 
   // --- the camera ------------------------------------------------------------
 
@@ -500,8 +589,15 @@ export class Door implements OnDestroy {
    */
   readonly nativePreview = computed(() => this.scanner.engine() === 'mlkit');
 
-  /** The last code the camera read, so one ticket held up is one request. */
-  private lastRead = { code: '', at: 0 };
+  /** What the camera has already acted on, so one ticket held up is one scan. */
+  private readonly reads = new RepeatReads();
+
+  /** Whether the camera has just been shown a QR code that is not a ticket's. */
+  readonly notATicket = signal(false);
+
+  /** When the camera last saw a ticket's code, so a poster behind one is not mistaken for what was held up. */
+  private ticketSeenAt = -Infinity;
+  private notATicketTimer: ReturnType<typeof setTimeout> | undefined;
 
   readonly cameraNote = computed(() => {
     if (this.cameraReady() === false && this.scanner.refusal() === null) {
@@ -548,40 +644,79 @@ export class Door implements OnDestroy {
   }
 
   async startCamera(): Promise<void> {
-    await this.scanner.start((code) => void this.read(code), this.preview()?.nativeElement);
+    await this.scanner.start((code) => this.read(code), this.preview()?.nativeElement);
   }
 
   dismissConflicts(): void {
     this.offline.dismissConflicts();
   }
 
+  dismissUnrecorded(): void {
+    void this.offline.dismissUnrecorded();
+  }
+
   async stopCamera(): Promise<void> {
     await this.scanner.stop();
+    this.notATicket.set(false);
   }
 
   /**
    * A code the camera saw.
    *
-   * The same ticket is read many times a second while it is in frame, and a
-   * scan is not free: it admits somebody. So a code is acted on once, and the
-   * same one is ignored for a few seconds afterwards — long enough for the
-   * guest to walk through and the next to step up.
+   * Only a ticket's, and only once while it is held up, by the same rules as
+   * the console's door, out of `@myfiesta/door`. This door used to act on any
+   * QR in view — offline, one too long for the server was queued, and the
+   * server then refused every sync with it in, so nothing else scanned without
+   * signal got through. And it ignored the same code for four seconds from the
+   * first sighting only: a ticket held up through a slow answer was sent again,
+   * with the party size already cleared, which on a table's ticket lets in
+   * everyone still outside. See `ticketCode` and `RepeatReads`.
    */
-  private async read(code: string): Promise<void> {
+  private read(raw: string): void {
+    const code = ticketCode(raw);
     const now = Date.now();
 
-    if (this.busy()) return;
-    if (code === this.lastRead.code && now - this.lastRead.at < 4000) return;
+    if (!code) {
+      this.sawSomethingElse(now);
 
-    this.lastRead = { code, at: now };
+      return;
+    }
+
+    this.ticketSeenAt = now;
+    this.notATicket.set(false);
+
+    if (!this.reads.take(code, this.busy(), now)) return;
+
     this.code.set(code);
+    void this.submit().finally(() => this.reads.answered(code));
+  }
 
-    await this.submit();
+  /**
+   * A QR code the camera read that is not a ticket's.
+   *
+   * Not a scan — nothing is sent and nothing buzzes — but said over the
+   * preview for a few seconds: a door holding up a guest's payment code or the
+   * event's own poster otherwise stares at a camera that does nothing and
+   * learns nothing. Not while a ticket is in view as well, when the other code
+   * is only something behind it.
+   */
+  private sawSomethingElse(now: number): void {
+    if (now - this.ticketSeenAt < 2000) return;
+
+    this.notATicket.set(true);
+    clearTimeout(this.notATicketTimer);
+    this.notATicketTimer = setTimeout(() => this.notATicket.set(false), 3000);
+  }
+
+  /** Keeps "How many" to digits as they are typed; what is pasted is checked on the way out. */
+  wholeNumbersOnly(event: KeyboardEvent): void {
+    if (!partyKey(event.key, event.ctrlKey || event.metaKey)) event.preventDefault();
   }
 
   ngOnDestroy(): void {
     this.timers.forEach(clearInterval);
     this.timers = [];
+    clearTimeout(this.notATicketTimer);
 
     // Leaving the screen with the camera running is a phone that stays warm in
     // somebody's pocket all night, and on the native path a page that has lost
@@ -619,24 +754,57 @@ export class Door implements OnDestroy {
   }
 
   async submit(): Promise<void> {
-    const code = this.code().trim().toUpperCase();
     const eventId = this.eventId();
 
-    if (!code || !eventId || this.busy()) return;
+    if (!this.code().trim() || !eventId || this.busy()) return;
+
+    // Checked before it goes anywhere, typed or read: a code no ticket could
+    // have, queued while offline, would hold every scan behind it.
+    const code = ticketCode(this.code());
+
+    if (!code) {
+      this.verdictStands.set(false);
+      this.error.set('That is not a ticket code. Ticket codes are letters and numbers, like WFY7-F77K4EJW.');
+      await this.buzz(false);
+
+      return;
+    }
+
+    // And the number, before anything is sent or decided: offline, a party of
+    // 1.5 would be decided like any other, then refused with its whole batch.
+    // A box the browser could not read reports itself empty, which would let
+    // the whole table in, so it is refused as what it is instead. Buzzed like
+    // any refusal: a camera held up to a table's ticket otherwise does
+    // nothing that anybody looking at the guest would notice.
+    const size = partySize(this.partyBox()?.nativeElement.validity?.badInput ? NaN : this.party());
+
+    if (!size.ok) {
+      this.verdictStands.set(false);
+      this.error.set(null);
+      this.partyError.set(size.message);
+      await this.buzz(false);
+
+      return;
+    }
+
+    const party = size.party;
+    // The scan's own id, the same online and queued: see `Api.scan`.
+    const clientId = scanId();
 
     this.busy.set(true);
     this.error.set(null);
+    this.partyError.set(null);
 
     try {
       let result: ScanResult;
 
       try {
-        result = await this.api.scan(eventId, code);
+        result = await this.api.scan(eventId, code, party, clientId);
         this.offline.connectionLost.set(false);
 
         // Counted on the phone too, so losing signal a minute from now does
         // not make it think a ticket it just admitted is still unused.
-        if (result.accepted) await this.offline.admitLocally(code, null, result.ticket?.admitted_count);
+        if (result.accepted) await this.offline.admitLocally(code, party, result.ticket?.admitted_count);
 
         // Anything waiting goes now that the server is answering.
         if (this.offline.pendingCount() > 0) void this.offline.sync(eventId);
@@ -646,11 +814,15 @@ export class Door implements OnDestroy {
         if (!this.offline.lostConnection(error) || !this.offline.supported) throw error;
 
         this.offline.connectionLost.set(true);
-        result = await this.offline.decideAndQueue(eventId, code, null);
+        result = await this.offline.decideAndQueue(eventId, code, party, clientId);
       }
 
       this.outcomes.update((all) => [{ id: this.next++, at: new Date(), code, result }, ...all].slice(0, 40));
+      this.verdictStands.set(true);
       this.code.set('');
+      // The number belongs to one ticket. Carried over, the next guest's
+      // ticket would be scanned with somebody else's party size.
+      this.party.set('');
 
       await this.buzz(result.accepted);
     } catch (error) {
@@ -665,6 +837,7 @@ export class Door implements OnDestroy {
         return;
       }
 
+      this.verdictStands.set(false);
       this.error.set(message);
       await this.buzz(false);
     } finally {

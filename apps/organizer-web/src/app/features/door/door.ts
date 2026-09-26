@@ -6,8 +6,12 @@ import {
   PageCamera,
   RepeatReads,
   canScanInPage,
+  conflictsIn,
   fetchDecoderAhead,
+  partyKey,
+  partySize,
   ticketCode,
+  unrecordedAdmission,
 } from '@myfiesta/door';
 import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
@@ -193,6 +197,8 @@ export class Door implements OnDestroy {
       this.listUpdatedAt.set(new Date(saved.generated_at));
     }
 
+    // Kept on the phone, not only on this screen: see `unrecorded`.
+    this.unrecorded.set(await this.offline.unrecordedAdmissions(this.eventId).catch(() => []));
     await this.updatePending();
 
     // Scans still waiting means this phone was offline when it last scanned.
@@ -245,6 +251,11 @@ export class Door implements OnDestroy {
    * Oldest first, in batches, and removed from the phone only once the server
    * has answered — a sync whose response is lost is simply sent again, and
    * the scan ids make that harmless.
+   *
+   * What the door got wrong is read out of the answer by `conflictsIn`, which
+   * also compares a scan that reached the server online and was queued when
+   * its answer did not come back: the server answers that one without
+   * comparing.
    */
   async sync(): Promise<boolean> {
     if (!this.offlineSupported) return true;
@@ -276,8 +287,10 @@ export class Door implements OnDestroy {
 
         await this.offline.forget(result.data.map((row) => row.client_id));
 
-        if (result.conflicts.length > 0) {
-          this.conflicts.update((all) => [...all, ...result.conflicts]);
+        const conflicts = conflictsIn(batch, result);
+
+        if (conflicts.length > 0) {
+          this.conflicts.update((all) => [...all, ...conflicts]);
         }
       }
 
@@ -296,36 +309,53 @@ export class Door implements OnDestroy {
   }
 
   /**
-   * Take off the queue the scans the server says it can never accept.
+   * Stop sending the scans the server says it can never accept.
    *
-   * The server refuses a batch whole if one scan in it does not validate. So a
-   * single scan it will never take — a code longer than any ticket's, typed or
-   * read before this door checked codes, or a party of 80 — would hold every
-   * scan behind it on this phone all night, and the ticket list would never
-   * refresh while they waited. Only the code or the party gets a scan dropped:
-   * those are what a person typed or a camera read. Anything else the server
-   * finds wrong is this app's mistake, and the scans stay queued until the app
-   * is fixed rather than being thrown away with it. The rest go with the next
-   * sync.
+   * The server refuses a batch whole if one scan in it does not validate, so a
+   * single scan it will never take — a code longer than any ticket's, or a
+   * party of 80 — would hold every scan behind it on this phone all night.
+   * Which ones may go is decided in `@myfiesta/door`, the same for the phone
+   * app: only those whose code or party the server named. The rest go with
+   * the next sync. The ones that let somebody in stay on the phone, unsent,
+   * and are said on the door (`unrecorded`).
    */
   private async dropUnsendable(batch: OfflineScan[], error: unknown): Promise<void> {
     if (!(error instanceof HttpErrorResponse) || error.status !== 422) return;
 
     const body = error.error as { errors?: Record<string, unknown> } | null;
-    const unsendable = new Set<string>();
+    const admissions = await this.offline.dropUnsendable(batch, body?.errors);
+    const kept = new Set(admissions.map((scan) => scan.client_id));
 
-    for (const field of Object.keys(body?.errors ?? {})) {
-      const position = /^scans\.(\d+)\.(?:code|party)$/.exec(field)?.[1];
-      const scan = position === undefined ? undefined : batch[Number(position)];
-
-      if (scan) unsendable.add(scan.client_id);
+    if (admissions.length > 0) {
+      this.unrecorded.update((all) => [...all.filter((scan) => !kept.has(scan.client_id)), ...admissions]);
     }
-
-    if (unsendable.size > 0) await this.offline.forget([...unsendable]);
   }
+
+  /**
+   * People let in offline on scans the server could not take.
+   *
+   * Never sent again, because they never can be as they are — but nobody else
+   * knows those people went in, and the ticket still reads as unused. Said on
+   * the door until somebody dismisses it, and kept on the phone until then
+   * too: this screen does not outlive a reload, a tab the browser discarded in
+   * the background, or somebody leaving the door screen, and the admission
+   * would be on nobody's record at all. Read back when the door opens again.
+   */
+  readonly unrecorded = signal<OfflineScan[]>([]);
+
+  readonly unrecordedMessage = unrecordedAdmission;
 
   dismissConflicts(): void {
     this.conflicts.set([]);
+  }
+
+  /** Read by door staff: off the screen, and off the phone. */
+  dismissUnrecorded(): void {
+    const read = this.unrecorded().map((scan) => scan.client_id);
+
+    this.unrecorded.set([]);
+
+    if (read.length > 0) void this.offline.forget(read).catch(() => undefined);
   }
 
   private async updatePending(): Promise<void> {
@@ -437,11 +467,21 @@ export class Door implements OnDestroy {
    * is recognised as the same scan rather than a second person.
    */
   private async send(code: string): Promise<void> {
+    const size = this.partyTyped();
+
+    // Said before anything is sent or decided, camera or typed: offline, a
+    // party of 1.5 would be decided, and then hold the queue it sits in.
+    if (!size.ok) {
+      this.outcome.set(null);
+      this.error.set(size.message);
+
+      return;
+    }
+
     this.busy.set(true);
     this.error.set(null);
 
-    const partyNumber = Number(this.party());
-    const party = partyNumber > 0 ? partyNumber : null;
+    const party = size.party;
     const clientId = scanId();
 
     let outcome: ScanResult;
@@ -507,6 +547,23 @@ export class Door implements OnDestroy {
     // would silently admit four people on the next single ticket.
     this.code.set('');
     this.party.set('');
+  }
+
+  /** The "How many" box, asked whether the browser could read what was typed into it. */
+  private readonly partyBox = viewChild<ElementRef<HTMLInputElement>>('partyBox');
+
+  /**
+   * "How many", as a scan sends it — see `partySize`. A box the browser could
+   * not read reports itself empty, which would let the whole table in, so it
+   * is refused as what it is instead.
+   */
+  private partyTyped() {
+    return partySize(this.partyBox()?.nativeElement.validity?.badInput ? NaN : this.party());
+  }
+
+  /** Keeps the box to digits as they are typed; what is pasted is checked on the way out. */
+  wholeNumbersOnly(event: KeyboardEvent): void {
+    if (!partyKey(event.key, event.ctrlKey || event.metaKey)) event.preventDefault();
   }
 
   // --- the camera ---------------------------------------------------------

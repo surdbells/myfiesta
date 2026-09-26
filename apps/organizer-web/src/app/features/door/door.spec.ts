@@ -3,7 +3,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { zxingWasmUrl } from '@myfiesta/door';
+import { DoorOfflineStore, zxingWasmUrl } from '@myfiesta/door';
+import { memoryIndexedDB } from '../../../../../../packages/door/src/testing/memory-indexeddb';
 import { API_BASE_URL } from '../../core/api';
 import { OfflineScan, ScanResult } from '../../core/api.types';
 import { DoorOffline } from '../../core/door-offline';
@@ -11,6 +12,7 @@ import { Door } from './door';
 
 const SCAN = 'http://api.test/api/events/evt_1/scan';
 const SYNC = 'http://api.test/api/events/evt_1/scans/sync';
+const LIST = 'http://api.test/api/events/evt_1/door-list';
 
 const admitted: ScanResult = {
   result: 'admitted',
@@ -237,6 +239,87 @@ describe('Door', () => {
     expect(fixture.nativeElement.textContent).toContain('That is not a ticket code.');
   });
 
+  describe('how many', () => {
+    const refused = 'How many has to be a whole number from 1 to 50.';
+
+    /** Typed into the box the way a person types it, through the number box Angular reads. */
+    async function typeParty(fixture: ReturnType<typeof render>, typed: string) {
+      await fixture.whenStable();
+
+      const box: HTMLInputElement = fixture.nativeElement.querySelector('input#party');
+
+      box.value = typed;
+      box.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('refuses a number that is not a whole number of people, rather than sending or deciding it', async () => {
+      for (const typed of ['1.5', '0', '51']) {
+        const fixture = render();
+        const door = fixture.componentInstance;
+
+        door.code.set('WFY7-F77K4EJW');
+        await typeParty(fixture, typed);
+        door.submit();
+        fixture.detectChanges();
+
+        // Offline, 1.5 would have been decided and queued; 0 went as blank,
+        // which lets the whole table in.
+        expect(backend.match(SCAN), typed).toHaveLength(0);
+        expect(fixture.nativeElement.textContent, typed).toContain(refused);
+        // Left where it was, to be put right and sent.
+        expect(door.code(), typed).toBe('WFY7-F77K4EJW');
+
+        fixture.destroy();
+      }
+    });
+
+    it('sends a whole number typed into the box', async () => {
+      const fixture = render();
+      const door = fixture.componentInstance;
+
+      door.code.set('WFY7-F77K4EJW');
+      await typeParty(fixture, '3');
+      door.submit();
+
+      expect(backend.expectOne(SCAN).request.body.party).toBe(3);
+    });
+
+    it('refuses it for a ticket the camera read as well', async () => {
+      const fixture = await scanningWith(
+        vi.fn(async () => [{ rawValue: 'WFY7-F77K4EJW' }]),
+        (door) => door.party.set('1.5'),
+      );
+
+      await vi.advanceTimersByTimeAsync(2000);
+      fixture.detectChanges();
+
+      expect(backend.match(SCAN)).toHaveLength(0);
+      expect(fixture.nativeElement.textContent).toContain(refused);
+    });
+
+    it('takes digits only as they are typed, with a keypad of numbers and whole steps', () => {
+      const box: HTMLInputElement = render().nativeElement.querySelector('input#party');
+
+      expect(box.getAttribute('inputmode')).toBe('numeric');
+      expect(box.getAttribute('step')).toBe('1');
+
+      const press = (key: string) => {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true });
+
+        box.dispatchEvent(event);
+
+        return event.defaultPrevented;
+      };
+
+      expect(press('.')).toBe(true);
+      expect(press('-')).toBe(true);
+      expect(press('e')).toBe(true);
+      expect(press('4')).toBe(false);
+      expect(press('Backspace')).toBe(false);
+    });
+  });
+
   it('says the camera was refused, and leaves the code box', async () => {
     engineReading();
     giveCamera(async () => {
@@ -337,6 +420,135 @@ describe('Door', () => {
       await vi.advanceTimersByTimeAsync(15_000);
       refuse('scans.0.client_id');
       await vi.advanceTimersByTimeAsync(0);
+    });
+
+    describe('one that let somebody in and can never be sent', () => {
+      // Two of a table let in before this door checked the number, written down as one and a half.
+      const halfAPerson: OfflineScan = {
+        ...good,
+        client_id: '3c2b1a0f-9e8d-4c6b-8a5f-4e3d2c1b0a9f',
+        code: 'MFST-9K2L4XQ7',
+        party: 1.5,
+        scanned_at: '2026-09-26T21:02:00Z',
+      };
+
+      /**
+       * This phone's IndexedDB, in memory, rather than the store's methods
+       * mocked: what matters here is what is still on the phone once the
+       * screen has gone.
+       */
+      beforeEach(() => {
+        const db = memoryIndexedDB();
+
+        vi.stubGlobal('indexedDB', db.indexedDB);
+        vi.stubGlobal('IDBKeyRange', db.IDBKeyRange);
+      });
+
+      function onThisPhone<T extends DoorOfflineStore>(store: T): T {
+        Object.defineProperty(store, 'supported', { value: true });
+
+        return store;
+      }
+
+      it('says so, rather than losing them quietly', async () => {
+        vi.useFakeTimers();
+        const store = onThisPhone(TestBed.inject(DoorOffline));
+
+        await store.enqueue(good);
+        await store.enqueue(halfAPerson);
+
+        const fixture = render();
+
+        await vi.advanceTimersByTimeAsync(0);
+        refuse('scans.1.party');
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+
+        // Not sent again, and not holding up what can be.
+        expect(await store.pending('evt_1')).toEqual([good]);
+
+        const page: HTMLElement = fixture.nativeElement;
+
+        expect(page.textContent).toContain('A scan made offline could not be recorded');
+        expect(page.textContent).toContain('MFST-9K2L4XQ7 was let in with no signal');
+
+        buttonNamed(page, 'Dismiss')?.click();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+
+        expect(page.textContent).not.toContain('could not be recorded');
+        // Read, so off the phone too.
+        expect(await store.unrecordedAdmissions('evt_1')).toEqual([]);
+      });
+
+      it('still says so when the door screen is opened again, until somebody has read it', async () => {
+        vi.useFakeTimers();
+
+        // The last time the door was open: the server could not take it, and
+        // the tab was reloaded before anybody looked.
+        const earlier = onThisPhone(new DoorOfflineStore());
+
+        await earlier.enqueue(halfAPerson);
+        await earlier.dropUnsendable([halfAPerson], { 'scans.0.party': ['Not valid.'] });
+
+        onThisPhone(TestBed.inject(DoorOffline));
+
+        const fixture = render();
+
+        await vi.advanceTimersByTimeAsync(0);
+        // Nothing waiting to be sent, so the list is fetched; there is no signal for it.
+        backend.expectOne(LIST).error(new ProgressEvent('error'));
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+
+        const page: HTMLElement = fixture.nativeElement;
+
+        expect(page.textContent).toContain('A scan made offline could not be recorded');
+        expect(page.textContent).toContain('MFST-9K2L4XQ7 was let in with no signal');
+
+        buttonNamed(page, 'Dismiss')?.click();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(await onThisPhone(new DoorOfflineStore()).unrecordedAdmissions('evt_1')).toEqual([]);
+      });
+    });
+
+    it('says so when the server had already turned away a ticket this door then let in', async () => {
+      vi.useFakeTimers();
+      queueOnThisPhone([good]);
+
+      const fixture = render();
+
+      await vi.advanceTimersByTimeAsync(0);
+      // The scan reached the server before the signal went, and was refused —
+      // used at another door since this phone fetched its list — but the
+      // answer never came back, so this door let the guest in from its list
+      // and queued the scan under the same id.
+      backend.expectOne(SYNC).flush({
+        data: [
+          {
+            ...admitted,
+            result: 'duplicate',
+            accepted: false,
+            admitted: 0,
+            message: 'Already recorded.',
+            offline_result: null,
+            conflict: null,
+            client_id: good.client_id,
+          },
+        ],
+        conflicts: [],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      backend.expectOne(LIST).error(new ProgressEvent('error'));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      const page: HTMLElement = fixture.nativeElement;
+
+      expect(page.textContent).toContain('While offline, this door got 1 wrong');
+      expect(page.textContent).toContain('Ada Okoro');
+      expect(page.textContent).toContain('was let in, but the ticket was already used or not valid.');
     });
   });
 

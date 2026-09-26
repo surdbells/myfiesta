@@ -92,6 +92,33 @@
 }
 
 <!--
+  People let in offline on a scan the server could not take. The scan can never
+  be sent, so this phone is the only record that they went in: kept on it
+  until somebody dismisses this.
+-->
+@if (unrecorded().length > 0) {
+  <section class="mb-6 rounded-lg border border-danger bg-surface-raised p-4" role="alert">
+    <header class="flex flex-wrap items-baseline justify-between gap-3">
+      <h2 class="text-base font-semibold text-danger">
+        {{ unrecorded().length === 1 ? 'A scan' : unrecorded().length + ' scans' }} made offline could not be recorded
+      </h2>
+      <button
+        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+        type="button"
+        (click)="dismissUnrecorded()"
+      >
+        Dismiss
+      </button>
+    </header>
+    <ul class="m-0 mt-3 grid list-none gap-2 p-0 text-sm">
+      @for (scan of unrecorded(); track scan.client_id) {
+        <li>{{ unrecordedMessage(scan) }}</li>
+      }
+    </ul>
+  </section>
+}
+
+<!--
   The verdict panel is first and fills the width, because at a door in the dark
   this is the only thing anybody looks at. Everything below is for the
   conversation that follows a refusal.
@@ -201,16 +228,21 @@
 
   <div class="field min-w-0 flex-[0_0_8rem]">
     <label for="party">How many</label>
+    <!-- Whole people only: step 1 and a numeric keypad, and the keys a number
+         box allows that no party needs are kept out as they are typed. -->
     <input
+      #partyBox
       id="party"
       name="party"
       type="number"
       inputmode="numeric"
       min="1"
       max="50"
+      step="1"
       placeholder="All"
       [ngModel]="party()"
       (ngModelChange)="party.set($event)"
+      (keydown)="wholeNumbersOnly($event)"
       aria-describedby="party-hint"
     />
   </div>
@@ -226,7 +258,8 @@
 
 <p id="party-hint" class="help mt-3 max-w-[60ch] text-xs text-text-muted">
   Leave the number blank for an ordinary ticket. For a table arriving in two
-  groups, put in how many are going in now — the rest stay outstanding.
+  groups, put in how many are going in now, from 1 to 50 — the rest stay
+  outstanding.
 </p>
 
 <section class="camera-block mt-12 max-sm:data-[works=true]:order-first max-sm:data-[works=true]:mt-0 max-sm:data-[works=true]:mb-6" aria-labelledby="camera-heading" [attr.data-works]="cameraSupported">

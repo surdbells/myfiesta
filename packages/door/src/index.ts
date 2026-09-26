@@ -18,6 +18,9 @@ export {
   zxingWasmUrl,
 } from './camera';
 export { RepeatReads, SAME_TICKET_AGAIN_AFTER_MS, ticketCode } from './reads';
+export { MOST_AT_ONCE, partyKey, partySize } from './party';
+export { conflictsIn, unrecordedAdmission, unsendableScans } from './sync';
+export type { PartySize } from './party';
 export type { CameraRefusal, CodeDetector, OpenedDetector, PageCameraEvents } from './camera';
 export type {
   DoorList,

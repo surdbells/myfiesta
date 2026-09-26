@@ -447,8 +447,18 @@ export class Api {
     return this.send('POST', `/api/door-passes/${encodeURIComponent(secret)}/claim`);
   }
 
-  scan(eventId: string, code: string, token?: string): Promise<ScanResult> {
-    return this.send('POST', `/api/events/${eventId}/scan`, { body: { code }, token });
+  /**
+   * One scan at the door.
+   *
+   * `party` is how many of a table go in now; null lets in everyone still
+   * outstanding. `clientId` is the scan's own id, so a request that times out
+   * and is then queued offline is still one scan when both reach the server.
+   */
+  scan(eventId: string, code: string, party: number | null = null, clientId?: string, token?: string): Promise<ScanResult> {
+    return this.send('POST', `/api/events/${eventId}/scan`, {
+      body: { code, ...(party === null ? {} : { party }), ...(clientId ? { client_id: clientId } : {}) },
+      token,
+    });
   }
 
   /**
