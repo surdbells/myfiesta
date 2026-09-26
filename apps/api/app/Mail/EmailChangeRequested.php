@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Mail\Concerns\KeepsTypedTextPlain;
+use App\Mail\Concerns\RepliesReachSupport;
 use App\Models\EmailChange;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -25,10 +26,13 @@ use Illuminate\Mail\Mailables\Envelope;
  * The new address in it, and the name, were typed by whoever is signed in —
  * the person it is warning about, if it was not the owner. KeepsTypedTextPlain
  * is what stops either of them turning into a link beside that advice.
+ *
+ * Somebody frightened by this will reply to it whatever it says, so a reply
+ * goes to the support inbox (RepliesReachSupport).
  */
 class EmailChangeRequested extends Mailable
 {
-    use KeepsTypedTextPlain, Queueable;
+    use KeepsTypedTextPlain, Queueable, RepliesReachSupport;
 
     public function __construct(
         public readonly User $user,
@@ -37,7 +41,10 @@ class EmailChangeRequested extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Somebody asked to change your email address');
+        return new Envelope(
+            replyTo: $this->supportReplyTo(),
+            subject: 'Somebody asked to change your email address',
+        );
     }
 
     public function content(): Content

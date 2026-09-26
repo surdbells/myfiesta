@@ -16,6 +16,16 @@ use App\Models\User;
  * Policies exist so that "does this person act for this organization?" has
  * exactly one answer, written once, rather than being re-implemented per
  * endpoint and getting it wrong somewhere.
+ *
+ * Money is not decided here. viewFinancials and manageFinancials used to be —
+ * Owner and Finance, both of them — but nothing called either: PayoutController
+ * asks the Permission enum itself. So when money was split into seeing it
+ * (money.view, which managers hold too), asking for it (payouts.request) and
+ * choosing where it goes (payouts.destination, owners only), those two went on
+ * answering the old question and their tests went on passing. One word for
+ * three permissions cannot be brought into line with them, only made into a
+ * second copy that drifts again, so they are gone. Ask hasPermissionIn, as
+ * every organization-level screen does.
  */
 class OrganizationPolicy
 {
@@ -37,21 +47,5 @@ class OrganizationPolicy
     public function delete(User $user, Organization $organization): bool
     {
         return $user->hasRoleIn($organization, Role::Owner);
-    }
-
-    /**
-     * Banking details and identity documents.
-     *
-     * Deliberately narrower than update: a manager runs events without ever
-     * needing to see where the money lands.
-     */
-    public function viewFinancials(User $user, Organization $organization): bool
-    {
-        return $user->hasRoleIn($organization, Role::Owner, Role::Finance);
-    }
-
-    public function manageFinancials(User $user, Organization $organization): bool
-    {
-        return $user->hasRoleIn($organization, Role::Owner, Role::Finance);
     }
 }

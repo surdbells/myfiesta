@@ -68,6 +68,21 @@ Capacitor app reports (`https://localhost` on Android, `capacitor://localhost`
 on iOS). An origin missing there is a browser refusing every request with an
 error that says nothing about why.
 
+## Where replies go
+
+`MAIL_SUPPORT_ADDRESS` is an inbox a person reads. The security emails — an
+account moved to a new address, an organization's payouts pointed somewhere
+new — tell somebody who did not do it to reply straight away, because by then a
+reset link may go to the wrong person. This is the Reply-To on those emails.
+
+Left unset, replies go to `MAIL_FROM_ADDRESS` instead. That is at least an
+inbox, but it is chosen for deliverability: in `.env.production.example` it is
+the address tickets are sent from, and in `apps/api/.env.example` a
+placeholder. Set `MAIL_SUPPORT_ADDRESS` in `.env.production` — or make sure
+somebody reads the from address — before anybody real signs up; a reply to a
+warning about a stolen account that lands nowhere is worse than no advice at
+all.
+
 ## A release
 
 1. Build the three images from the repository root.

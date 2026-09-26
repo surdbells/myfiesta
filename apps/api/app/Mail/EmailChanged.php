@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Mail\Concerns\KeepsTypedTextPlain;
+use App\Mail\Concerns\RepliesReachSupport;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -15,7 +16,8 @@ use Illuminate\Mail\Mailables\Envelope;
  * The last word this address gets about signing in to the account, so it has
  * to be enough on its own. If the change was not theirs, a reset link is no
  * help any more — it would go to the new address — so it tells them to reply,
- * which reaches a person.
+ * which reaches a person: the Reply-To is the support inbox
+ * (RepliesReachSupport), not whatever the from address happens to be.
  *
  * The old address is passed in rather than read from the account, which by now
  * holds the new one. Both addresses and the name were typed by whoever holds
@@ -24,7 +26,7 @@ use Illuminate\Mail\Mailables\Envelope;
  */
 class EmailChanged extends Mailable
 {
-    use KeepsTypedTextPlain, Queueable;
+    use KeepsTypedTextPlain, Queueable, RepliesReachSupport;
 
     public function __construct(
         public readonly User $user,
@@ -33,7 +35,10 @@ class EmailChanged extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your email address has been changed');
+        return new Envelope(
+            replyTo: $this->supportReplyTo(),
+            subject: 'Your email address has been changed',
+        );
     }
 
     public function content(): Content

@@ -120,4 +120,24 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Where a reply reaches a person
+    |--------------------------------------------------------------------------
+    |
+    | The security emails — an address being moved, payouts being pointed
+    | somewhere new — tell somebody who did not do it to reply straight away.
+    | This is where that reply goes: an inbox a person reads, set as the
+    | Reply-To on those emails.
+    |
+    | Left unset, replies go to the from address above (App\Mail\Concerns\
+    | RepliesReachSupport falls back to it), so the instruction still reaches
+    | an inbox. That only helps if somebody reads that one too.
+    |
+    */
+
+    'support' => [
+        'address' => env('MAIL_SUPPORT_ADDRESS'),
+    ],
+
 ];

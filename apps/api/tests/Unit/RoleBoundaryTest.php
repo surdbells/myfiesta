@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Enums\Permission;
 use App\Enums\Role;
 use App\Models\Event;
 use App\Models\Organization;
@@ -85,10 +86,12 @@ class RoleBoundaryTest extends TestCase
     {
         [$user, $organization] = $this->memberWithRole(Role::Door);
 
+        // The permissions the payouts endpoints check, asked the way they ask.
         $this->assertFalse(
-            (new OrganizationPolicy)->viewFinancials($user, $organization),
-            'Door staff reached banking details.'
+            $user->hasPermissionIn($organization, Permission::MoneyView),
+            'Door staff reached the payouts screen, and the banking details on it.'
         );
+        $this->assertFalse($user->hasPermissionIn($organization, Permission::PayoutsDestination));
     }
 
     public function test_door_staff_cannot_edit_the_event(): void
@@ -105,23 +108,35 @@ class RoleBoundaryTest extends TestCase
         $this->assertFalse($user->isStaffOf($organization));
     }
 
-    public function test_a_manager_runs_events_but_cannot_see_banking(): void
+    /**
+     * A manager sees the money — and, masked, where it goes — but cannot move it.
+     *
+     * This used to assert that a manager could not see banking details at all,
+     * against a policy method nothing called. The payouts screen has shown
+     * managers the masked destination since money.view was theirs; the line
+     * that matters is that they cannot point it anywhere else.
+     */
+    public function test_a_manager_runs_events_but_cannot_redirect_payouts(): void
     {
         [$user, $organization, $event] = $this->memberWithRole(Role::Manager);
 
         $this->assertTrue((new EventPolicy)->update($user, $event));
         $this->assertTrue((new EventPolicy)->viewGuests($user, $event));
+        $this->assertTrue($user->hasPermissionIn($organization, Permission::MoneyView));
         $this->assertFalse(
-            (new OrganizationPolicy)->viewFinancials($user, $organization),
-            'A manager reached banking details. Running events must not imply seeing where the money lands.'
+            $user->hasPermissionIn($organization, Permission::PayoutsDestination),
+            'A manager could redirect payouts. Running events must not imply choosing where the money lands.'
         );
+        $this->assertFalse($user->hasPermissionIn($organization, Permission::PayoutsRequest));
     }
 
-    public function test_finance_sees_money_but_cannot_edit_events(): void
+    public function test_finance_sees_money_and_asks_for_it_but_cannot_redirect_it_or_edit_events(): void
     {
         [$user, $organization, $event] = $this->memberWithRole(Role::Finance);
 
-        $this->assertTrue((new OrganizationPolicy)->viewFinancials($user, $organization));
+        $this->assertTrue($user->hasPermissionIn($organization, Permission::MoneyView));
+        $this->assertTrue($user->hasPermissionIn($organization, Permission::PayoutsRequest));
+        $this->assertFalse($user->hasPermissionIn($organization, Permission::PayoutsDestination));
         $this->assertTrue((new EventPolicy)->viewSales($user, $event));
         $this->assertFalse((new EventPolicy)->update($user, $event));
     }
@@ -159,7 +174,8 @@ class RoleBoundaryTest extends TestCase
         $this->assertFalse((new EventPolicy)->update($stranger, $event));
         $this->assertFalse((new EventPolicy)->scan($stranger, $event));
         $this->assertFalse((new EventPolicy)->viewGuests($stranger, $event));
-        $this->assertFalse((new OrganizationPolicy)->viewFinancials($stranger, $organization));
+        $this->assertFalse($stranger->hasPermissionIn($organization, Permission::MoneyView));
+        $this->assertFalse($stranger->hasPermissionIn($organization, Permission::PayoutsDestination));
     }
 
     public function test_a_role_in_one_organization_grants_nothing_in_another(): void

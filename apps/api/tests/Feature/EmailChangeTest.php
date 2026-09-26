@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -94,10 +95,13 @@ class EmailChangeTest extends TestCase
         return $this->postJson('/api/auth/email/confirm', ['token' => $token]);
     }
 
-    /** The words are all there to read, and none of them can be clicked. */
+    /**
+     * The words are all there to read, and none of them can be clicked — or
+     * fetched, since an image loads from the sender's server when opened.
+     */
     private function readsAsText(string $html): bool
     {
-        return str_contains($html, 'evil.example') && ! preg_match('/<a\b[^>]*evil\.example/', $html);
+        return str_contains($html, 'evil.example') && ! preg_match('/<(a|img)\b[^>]*evil\.example/', $html);
     }
 
     private function night(string $kind = 'ticketed'): Event
@@ -219,12 +223,31 @@ class EmailChangeTest extends TestCase
         });
     }
 
-    public function test_what_the_asker_typed_never_becomes_a_link_in_the_warnings(): void
+    /**
+     * How a link can be started: the bracket itself, the bracket behind a
+     * backslash of the typist's own — which Markdown reads as a plain
+     * backslash and then a link, once the bracket has been escaped — and an
+     * image, which loads from their server the moment the email is opened.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function linkOpeners(): array
+    {
+        return [
+            'a bracket' => ['['],
+            'a backslash before the bracket' => ['\\['],
+            'an image' => ['!['],
+            'an image behind a backslash' => ['!\\['],
+        ];
+    }
+
+    #[DataProvider('linkOpeners')]
+    public function test_what_the_asker_typed_never_becomes_a_link_in_the_warnings(string $open): void
     {
         // Both accepted as they are: a name is any text, and an address may
         // put nearly anything in quotes before the @.
-        $this->user->update(['name' => '[Your tickets are on hold](https://evil.example/name)']);
-        $address = '"[cancel it here](https://evil.example/address)"@example.com';
+        $this->user->update(['name' => $open.'Your tickets are on hold](https://evil.example/name)']);
+        $address = '"'.$open.'cancel it here](https://evil.example/address)"@example.com';
 
         $this->ask($address)->assertStatus(202);
 
@@ -530,6 +553,47 @@ class EmailChangeTest extends TestCase
     }
 
     // --- when it was not them ---------------------------------------------------
+
+    /**
+     * "Reply to this email" reaches a person.
+     *
+     * The email to the old address tells somebody whose account was moved to
+     * reply, because a reset link would now go to the thief. Every one of these
+     * names the support inbox as where a reply goes.
+     */
+    public function test_a_reply_to_any_of_these_reaches_the_support_inbox(): void
+    {
+        config(['mail.support.address' => 'help@myfiesta.test']);
+
+        User::factory()->create(['email' => 'taken@example.com']);
+
+        $this->ask('taken@example.com');
+        $this->ask('new@example.com');
+        $this->open($this->linkSentTo('new@example.com'))->assertOk();
+
+        foreach ([EmailChangeRequested::class, EmailChangeAddressInUse::class, EmailChangeConfirm::class, EmailChanged::class] as $mailable) {
+            Mail::assertSent($mailable, fn ($mail) => $mail->hasReplyTo('help@myfiesta.test'));
+        }
+
+        // The one that says so, says so to an address that is read.
+        Mail::assertSent(EmailChanged::class, fn ($mail) => str_contains($mail->render(), 'reply to this email'));
+    }
+
+    public function test_without_a_support_inbox_a_reply_goes_to_the_from_address(): void
+    {
+        config(['mail.support.address' => null, 'mail.from.address' => 'hello@myfiesta.test']);
+
+        User::factory()->create(['email' => 'taken@example.com']);
+
+        $this->ask('taken@example.com');
+        $this->ask('new@example.com');
+        $this->open($this->linkSentTo('new@example.com'))->assertOk();
+
+        // Not the ideal inbox, but one that exists.
+        foreach ([EmailChangeRequested::class, EmailChangeAddressInUse::class, EmailChangeConfirm::class, EmailChanged::class] as $mailable) {
+            Mail::assertSent($mailable, fn ($mail) => $mail->hasReplyTo('hello@myfiesta.test'));
+        }
+    }
 
     public function test_a_new_password_cancels_a_change_that_is_waiting(): void
     {

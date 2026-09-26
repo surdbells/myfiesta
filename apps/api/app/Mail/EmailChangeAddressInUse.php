@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RepliesReachSupport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -19,14 +20,20 @@ use Illuminate\Mail\Mailables\Envelope;
  * Carries no link that could complete anything. A change is still left
  * waiting, so that nothing else can tell this case apart, but its token is sent
  * nowhere — this email included.
+ *
+ * A reply goes to the support inbox (RepliesReachSupport), like the other
+ * emails about an address being moved.
  */
 class EmailChangeAddressInUse extends Mailable
 {
-    use Queueable;
+    use Queueable, RepliesReachSupport;
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Somebody tried to use this address on myFiesta');
+        return new Envelope(
+            replyTo: $this->supportReplyTo(),
+            subject: 'Somebody tried to use this address on myFiesta',
+        );
     }
 
     public function content(): Content

@@ -4,6 +4,7 @@ namespace App\Mail\Concerns;
 
 use Closure;
 use Illuminate\Mail\Markdown;
+use Illuminate\Support\EncodedHtmlString;
 
 /**
  * Whatever somebody typed stays words on the page, never a link.
@@ -16,11 +17,22 @@ use Illuminate\Mail\Markdown;
  * account is being moved, that link would sit beside the real advice, written
  * by the very person the email is warning them about.
  *
- * Laravel can escape the bracket that starts a link, but only as one switch
- * for every mail at once, and turning it on everywhere changes how an
- * organizer's own message to their guests reads. So it is on only while one of
- * these renders, and left as it was found afterwards — if somebody does turn it
- * on everywhere later, this must not be what turns it back off.
+ * So while one of these renders, every value is escaped for HTML as usual and
+ * then for Markdown: a backslash before each square bracket, so it cannot open
+ * a link or an image, and a second backslash before each one that was typed.
+ * Without that second part, "\[Cancel](https://…)" comes out as
+ * "\\[Cancel](https://…)", which Markdown reads as a plain backslash followed
+ * by a working link.
+ *
+ * Laravel has a switch that escapes the bracket, but not the backslash, and
+ * while it is on it puts its own escaping in place of this one. It is also one
+ * switch for every mail at once, and turning it on everywhere changes how an
+ * organizer's own message to their guests reads. So it is off only while one
+ * of these renders, and left as it was found afterwards — if somebody does turn
+ * it on everywhere later, this must not be what turns it back off.
+ *
+ * Only the HTML part. The plain-text part is never read as Markdown, so it
+ * keeps the usual escaping and a typed backslash shows once.
  */
 trait KeepsTypedTextPlain
 {
@@ -31,15 +43,29 @@ trait KeepsTypedTextPlain
         return function ($data) use ($render) {
             $wasOn = Closure::bind(fn () => static::$withSecuredEncoding, null, Markdown::class)();
 
-            Markdown::withSecuredEncoding();
+            Markdown::withoutSecuredEncoding();
+            EncodedHtmlString::encodeUsing(self::plainInMarkdown(...));
 
             try {
                 return $render($data);
             } finally {
-                if (! $wasOn) {
-                    Markdown::withoutSecuredEncoding();
+                EncodedHtmlString::flushState();
+
+                if ($wasOn) {
+                    Markdown::withSecuredEncoding();
                 }
             }
         };
+    }
+
+    /**
+     * One value, as text that Markdown will leave as text.
+     *
+     * The typed backslashes are doubled before the brackets get theirs, so the
+     * ones added here are not doubled as well.
+     */
+    private static function plainInMarkdown(mixed $value, bool $doubleEncode = true): string
+    {
+        return str_replace(['\\', '['], ['\\\\', '\\['], e($value, $doubleEncode));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RepliesReachSupport;
 use App\Models\EmailChange;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -28,10 +29,13 @@ use Illuminate\Mail\Mailables\Envelope;
  *
  * The link opens the console, like a password reset. The API serves no pages,
  * and the console is where the reset-password screen already lives.
+ *
+ * Whoever gets this without asking may well reply "this was not me", so a
+ * reply goes to the support inbox (RepliesReachSupport).
  */
 class EmailChangeConfirm extends Mailable
 {
-    use Queueable;
+    use Queueable, RepliesReachSupport;
 
     public function __construct(
         public readonly string $token,
@@ -39,7 +43,10 @@ class EmailChangeConfirm extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Confirm your new email address');
+        return new Envelope(
+            replyTo: $this->supportReplyTo(),
+            subject: 'Confirm your new email address',
+        );
     }
 
     public function content(): Content

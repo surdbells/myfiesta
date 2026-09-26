@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Api\Organizer;
 
 use App\Enums\Permission;
+use App\Enums\Role;
 use App\Http\Controllers\Controller;
+use App\Mail\PayoutDestinationChanged;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
 use App\Models\SensitiveDataAccess;
 use App\Models\Settlement;
+use App\Models\User;
 use App\Services\Audit\Auditor;
 use App\Services\Payouts\PayoutRequestRefused;
 use App\Services\Payouts\PayoutRequests;
@@ -17,6 +20,7 @@ use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * What an organizer is owed, what has been paid, and where to send it.
@@ -332,6 +336,10 @@ class PayoutController extends Controller
             ? ['rail' => $detail->rail, 'last_four' => $detail->account_last_four]
             : null;
 
+        // The same, in words, for the owners' email — which can say the bank's
+        // name, as the audit log does not.
+        $previously = $detail->exists ? PayoutDestinationChanged::describe($detail) : null;
+
         $wasVerified = $detail->exists && $detail->verified_at !== null;
 
         $detail->fill($data + [
@@ -391,7 +399,49 @@ class PayoutController extends Controller
             $request->ip(),
         );
 
+        // The same test the record above makes, so the owners are told about
+        // exactly the saves the log calls a change — and not about somebody
+        // opening the form and saving what was already there.
+        if ($before === null || $moved) {
+            $this->tellOwners($organization, $request->user(), $detail, $previously);
+        }
+
         return response()->json($this->destination($organization));
+    }
+
+    /**
+     * Email everybody who decides where the money goes that it now goes
+     * somewhere else.
+     *
+     * The audit log records a redirect; nobody reads it until a payout has
+     * already gone astray. An owner's account is exactly what somebody would
+     * take over to redirect the money, and an organization can have several
+     * owners, so every one of them hears — including whoever made the change,
+     * since if it was not them this is how they learn their account is in use.
+     *
+     * Chosen by the permission rather than by naming the role, so whoever may
+     * change the destination is always whoever is told it changed.
+     */
+    private function tellOwners(Organization $organization, User $by, OrganizationPayoutDetail $detail, ?string $previously): void
+    {
+        $roles = array_values(array_map(
+            fn (Role $role) => $role->value,
+            array_filter(
+                Role::cases(),
+                fn (Role $role) => in_array(Permission::PayoutsDestination, Permission::forRole($role), true),
+            ),
+        ));
+
+        $destination = PayoutDestinationChanged::describe($detail);
+        $at = $detail->updated_at ?? now();
+        $zone = $this->zone($organization);
+
+        $organization->members()
+            ->wherePivotIn('role', $roles)
+            ->get()
+            ->each(fn (User $owner) => Mail::to($owner->email)->queue(
+                new PayoutDestinationChanged($owner, $by, $organization, $destination, $previously, $at, $zone),
+            ));
     }
 
     /**
@@ -430,5 +480,22 @@ class PayoutController extends Controller
             ->groupBy('currency')
             ->orderByDesc('n')
             ->value('currency') ?? 'CAD');
+    }
+
+    /**
+     * The zone most of the organization's nights are in.
+     *
+     * An organization has no zone of its own. Its events each do, and the one
+     * most of them share is where its people are — the zone to write a time in
+     * for an owner who has not picked one.
+     */
+    private function zone(Organization $organization): string
+    {
+        return (string) (DB::table('events')
+            ->where('organization_id', $organization->id)
+            ->select('timezone', DB::raw('count(*) as n'))
+            ->groupBy('timezone')
+            ->orderByDesc('n')
+            ->value('timezone') ?? config('app.timezone'));
     }
 }
