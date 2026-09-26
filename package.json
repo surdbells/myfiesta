@@ -8,6 +8,7 @@
     "apps/mobile",
     "packages/tokens",
     "packages/door",
+    "packages/api-types",
     "packages/ui"
   ],
   "scripts": {

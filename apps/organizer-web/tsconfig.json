@@ -8,6 +8,7 @@
     // stale-artifact failure mode.
     "paths": {
       "@myfiesta/door": ["../../packages/door/src/index.ts"],
+      "@myfiesta/api-types": ["../../packages/api-types/src/index.ts"],
       "@myfiesta/ui": ["../../packages/ui/src/index.ts"]
     },
     "strict": true,

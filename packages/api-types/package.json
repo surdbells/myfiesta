@@ -1,0 +1,11 @@
+{
+  "name": "@myfiesta/api-types",
+  "private": true,
+  "version": "0.0.0",
+  "description": "What the organizer API returns, written down once. Shared by the console and the phone app.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "_comment": "Types only, compiled as source by whichever app imports it. The console and the phone read the same endpoints, and two hand-written ideas of one response are two ideas that drift. Replaced by the generated client once the organizer paths are in packages/contract."
+}
