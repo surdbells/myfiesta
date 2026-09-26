@@ -15,6 +15,16 @@ const SOURCES: Record<InsightSource, { label: string; hint: string }> = {
 };
 
 /**
+ * What the ledger lines do not account for: money that reached the organizer
+ * another way — at the door, in a payout already sent — or went back in a
+ * dispute. Negative when it has already left what is owed. Shown as one line
+ * so the column adds up to the figure at the bottom.
+ */
+export function unaccounted(s: EventSummary): number {
+  return s.net.amount - (s.gross.amount - s.discounts.amount - s.tax.amount - s.refunds.amount);
+}
+
+/**
  * How the night is doing: the money first, then what sold, then where the
  * buyers came from.
  *
@@ -403,13 +413,8 @@ export class EventSales implements OnInit {
     }
   }
 
-  /**
-   * What the lines above do not account for: money that reached the
-   * organizer another way — at the door, in a payout already sent — or went
-   * back in a dispute. Said as one line so the column adds up.
-   */
   protected settled(s: EventSummary): string | null {
-    const rest = s.net.amount - (s.gross.amount - s.discounts.amount - s.tax.amount - s.refunds.amount);
+    const rest = unaccounted(s);
     if (rest === 0) return null;
 
     const amount = formatMoney({ amount: Math.abs(rest), currency: s.currency });

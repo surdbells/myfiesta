@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
-import type { OrganizerEventDetail, PageMeta, SoldOrder } from '@myfiesta/api-types';
+import type { Money, OrganizerEventDetail, PageMeta, SoldOrder } from '@myfiesta/api-types';
 import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
 import { formatMoney } from '../../core/money';
@@ -20,6 +20,23 @@ import {
   ToastStore,
 } from '../../ui';
 import { EventContext } from './event-context';
+
+/**
+ * What refunding some of an order's tickets comes to.
+ *
+ * Exact when it is all of them — the server refunds what is left on the
+ * order. Otherwise an even share, and marked as not exact: the server weighs
+ * each ticket by what was paid for it, so a table and a general admission on
+ * the same order are not worth the same.
+ */
+export function refundEstimate(order: SoldOrder, picked: number): { amount: Money; exact: boolean } {
+  const refundable = order.tickets.filter((t) => t.refundable).length;
+
+  if (picked <= 0 || refundable === 0) return { amount: { amount: 0, currency: order.currency }, exact: true };
+  if (picked >= refundable) return { amount: order.refundable, exact: true };
+
+  return { amount: { amount: Math.round((order.refundable.amount * picked) / refundable), currency: order.currency }, exact: false };
+}
 
 /**
  * Who bought what, and giving it back.
@@ -278,28 +295,17 @@ export class EventOrders implements OnInit {
   protected readonly since = ago;
   protected readonly canRefund = computed(() => this.session.can('refunds.process'));
 
-  /**
-   * What the picked tickets come to. Exact when it is all of them; otherwise
-   * an even share, and said to be one — the server weighs each ticket by what
-   * was paid for it, so a table and a general admission are not worth the same.
-   */
+  private readonly estimate = computed(() => {
+    const order = this.open();
+    return order ? refundEstimate(order, this.picked().length) : null;
+  });
+
   protected readonly refundAmount = computed(() => {
-    const order = this.open();
-    if (!order) return '';
-
-    const refundable = this.refundable(order);
-    const picked = this.picked().length;
-
-    if (picked === 0 || refundable.length === 0) return formatMoney({ ...order.refundable, amount: 0 });
-    if (picked === refundable.length) return formatMoney(order.refundable);
-
-    return formatMoney({ amount: Math.round((order.refundable.amount * picked) / refundable.length), currency: order.currency });
+    const e = this.estimate();
+    return e ? formatMoney(e.amount) : '';
   });
 
-  protected readonly refundExact = computed(() => {
-    const order = this.open();
-    return !!order && this.picked().length === this.refundable(order).length;
-  });
+  protected readonly refundExact = computed(() => this.estimate()?.exact ?? false);
 
   protected hasMore(): boolean {
     const m = this.meta();

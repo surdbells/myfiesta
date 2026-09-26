@@ -228,3 +228,35 @@ describe('MfSelect from the keyboard', () => {
     expect(document.activeElement).toBe(search);
   });
 });
+
+@Component({
+  imports: [MfSelect],
+  template: `<mf-select #picker bare heading="Which event is it for?" [options]="options" (valueChange)="chosen.set($event)" />`,
+})
+class BareHost {
+  readonly options = CITIES;
+  readonly chosen = signal<string | null>(null);
+}
+
+describe('A bare select', () => {
+  it('has no field of its own, and opens when asked', async () => {
+    const fixture = TestBed.createComponent(BareHost);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    const root: HTMLElement = fixture.nativeElement;
+
+    // A choice asked in the middle of something else: no trigger on the page.
+    expect(root.querySelector('.trigger')).toBeNull();
+    expect(root.querySelectorAll('.option').length).toBe(0);
+
+    const select = fixture.debugElement.children[0].componentInstance as MfSelect;
+    select.show();
+    await fixture.whenStable();
+
+    root.querySelectorAll<HTMLButtonElement>('.option')[5].click();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.chosen()).toBe('lagos');
+  });
+});
