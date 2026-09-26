@@ -36,6 +36,7 @@ import { formatMoney } from '../../core/money';
 import { messageOf } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
 import { until } from '../../core/when';
+import { EventContext } from './event-context';
 import {
   Dialogs,
   MfBadge,
@@ -347,6 +348,7 @@ export class EventHub implements OnInit {
   private readonly router = inject(Router);
   private readonly organizer = inject(Organizer);
   private readonly discover = inject(Discover);
+  private readonly context = inject(EventContext);
   private readonly dialogs = inject(Dialogs);
   private readonly toasts = inject(ToastStore);
 
@@ -403,7 +405,7 @@ export class EventHub implements OnInit {
 
     try {
       const [event, summary] = await Promise.all([
-        this.organizer.event(this.id()),
+        this.context.get(this.id(), true),
         this.session.can('money.view') ? this.organizer.summary(this.id()).catch(() => null) : Promise.resolve(null),
       ]);
 

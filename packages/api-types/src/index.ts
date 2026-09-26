@@ -443,7 +443,8 @@ export interface GivenAnswer {
 export interface Guest {
   id: string;
   name: string;
-  email: string;
+  /** Null for somebody sold a ticket at the door. */
+  email: string | null;
   ticket_type: string | null;
   checked_in: boolean;
   checked_in_at: string | null;
@@ -648,7 +649,8 @@ export interface SoldOrder {
   id: string;
   reference: string;
   buyer_name: string;
-  buyer_email: string;
+  /** Null for a sale at the door, where nobody was asked for one. */
+  buyer_email: string | null;
   status: 'paid' | 'partially_refunded' | 'refunded';
   paid_at: string | null;
   currency: Money['currency'];
@@ -917,7 +919,8 @@ export interface OrganizationOrder {
   id: string;
   reference: string;
   buyer_name: string;
-  buyer_email: string;
+  /** Null for a sale at the door, where nobody was asked for one. */
+  buyer_email: string | null;
   status: 'paid' | 'partially_refunded' | 'refunded' | 'pending';
   paid_at: string | null;
   tickets_count: number;

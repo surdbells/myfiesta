@@ -40,7 +40,10 @@
           <div>
             <p class="who font-semibold">{{ order.buyer_name }}</p>
             <p class="meta mt-[2px] text-sm text-text-muted tabular-nums">
-              {{ order.buyer_email }} · <code>{{ order.reference }}</code> ·
+              @if (order.buyer_email) {
+                {{ order.buyer_email }} ·
+              }
+              <code>{{ order.reference }}</code> ·
               {{ when(order.paid_at) }}
             </p>
           </div>
