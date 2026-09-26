@@ -10,7 +10,10 @@ import {
   viewChild,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
+import { X } from 'lucide-angular';
 import { SheetStack } from './sheet-stack';
+import { Chrome } from '../core/chrome';
+import { MfIconButton } from './icon-button';
 
 /**
  * Whether a control is really there to be tabbed to.
@@ -29,25 +32,35 @@ function visible(element: HTMLElement): boolean {
 const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /** Why a sheet closed. */
-export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
+export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
 
 /**
- * A bottom sheet: this app's dialog, its menu and its picker.
+ * A bottom sheet: this app's dialog, its menu, its picker and its short form.
  *
  * Everything that would be a modal on a desktop arrives from the bottom here,
- * because that is the half of a phone a thumb reaches. It can be dragged down
- * to dismiss, follows the finger while dragging, and springs back when the
- * drag was not far enough — a sheet that only closes by button is one people
- * fight with.
+ * because that is the half of a phone a thumb reaches.
  *
- * Not ion-modal: its sheet mode brings iOS card chrome and a backdrop tuned to
- * Ionic's palette, and neither takes our tokens without a fight.
+ * **Floating** by default: inset from the edges and rounded all the way round,
+ * sitting on its own shadow above the page rather than bolted to the bottom of
+ * the glass. It reads as a thing that has arrived and will leave — which is
+ * what a sheet is — and it clears the rounded corners of a modern phone
+ * instead of being cropped by them. `docked` puts it back against the edge for
+ * the rare sheet that needs every pixel of height.
+ *
+ * It follows the finger when dragged and springs back if the drag was not far
+ * enough, and a quick flick down closes it however short the flick — a sheet
+ * that only closes by button, or only on a long drag, is one people fight.
+ *
+ * Actions go in the footer (`sheetFooter`), pinned below the scrolling body so
+ * Save is never scrolled out of reach, and the whole sheet rides above the
+ * keyboard — the WebView is told not to resize for it.
  *
  * Content is out of the DOM until the sheet opens, so a screen with six sheets
  * on it is not six hidden subtrees a screen reader has to be told to ignore.
  */
 @Component({
   selector: 'mf-sheet',
+  imports: [MfIconButton],
   template: `
     @if (mounted()) {
       <div class="scrim" [class.showing]="showing()" (click)="dismiss('backdrop')" aria-hidden="true"></div>
@@ -55,9 +68,11 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       <section
         #panel
         class="panel"
+        [class.docked]="docked()"
         [class.showing]="showing()"
         [style.transform]="dragging() ? 'translateY(' + dragged() + 'px)' : null"
         [style.transition]="dragging() ? 'none' : null"
+        [style.--mf-sheet-lift.px]="chrome.keyboardHeight()"
         role="dialog"
         aria-modal="true"
         [attr.aria-label]="heading()"
@@ -69,11 +84,18 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       >
         <div class="grip" aria-hidden="true"><span></span></div>
 
-        @if (heading()) {
+        @if (heading() || closable()) {
           <header class="head">
-            <h2>{{ heading() }}</h2>
-            @if (subheading()) {
-              <p class="sub">{{ subheading() }}</p>
+            <div class="titles">
+              @if (heading()) {
+                <h2>{{ heading() }}</h2>
+              }
+              @if (subheading()) {
+                <p class="sub">{{ subheading() }}</p>
+              }
+            </div>
+            @if (closable()) {
+              <button mfIconButton tone="tonal" size="sm" [icon]="closeIcon" label="Close" (click)="dismiss('close')"></button>
             }
           </header>
         }
@@ -81,6 +103,10 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
         <div class="body">
           <ng-content />
         </div>
+
+        <footer class="foot">
+          <ng-content select="[sheetFooter]" />
+        </footer>
       </section>
     }
   `,
@@ -98,9 +124,10 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       position: fixed;
       inset: 0;
       z-index: 100;
-      background: rgb(3 8 5 / 0.55);
+      background: rgb(3 8 5 / 0.5);
+      backdrop-filter: blur(2px);
       opacity: 0;
-      transition: opacity 220ms ease;
+      transition: opacity 240ms ease;
     }
 
     .scrim.showing {
@@ -110,18 +137,23 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
     .panel {
       position: fixed;
       z-index: 101;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      /* Floating: off every edge, rounded all round, above the keyboard. */
+      left: var(--space-2);
+      right: var(--space-2);
+      bottom: calc(var(--mf-safe-bottom) + var(--space-2) + var(--mf-sheet-lift));
       display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      max-height: min(92dvh, 46rem);
-      padding-bottom: var(--mf-safe-bottom);
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      max-height: calc(100dvh - var(--mf-safe-top) - var(--mf-safe-bottom) - var(--mf-sheet-lift) - var(--space-8));
+      overflow: hidden;
       background: var(--surface-raised);
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-      box-shadow: var(--shadow-floating);
-      transform: translateY(100%);
-      transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+      border-radius: var(--radius-xl);
+      box-shadow:
+        inset 0 0 0 1px var(--border-subtle),
+        var(--shadow-floating);
+      transform: translateY(calc(100% + var(--mf-safe-bottom) + var(--space-4)));
+      transition:
+        transform 340ms var(--mf-ease-out),
+        bottom 240ms var(--mf-ease-out);
       outline: none;
     }
 
@@ -129,27 +161,50 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       transform: translateY(0);
     }
 
+    .panel.docked {
+      left: 0;
+      right: 0;
+      bottom: var(--mf-sheet-lift);
+      padding-bottom: var(--mf-safe-bottom);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+
     .grip {
       display: grid;
       place-items: center;
-      padding: var(--space-3) 0 var(--space-2);
+      padding: var(--space-2) 0 var(--space-1);
       /* The chrome drags; the body below scrolls. */
       touch-action: none;
     }
 
     .grip span {
       display: block;
-      width: 2.5rem;
-      height: 4px;
+      width: 2.25rem;
+      height: 5px;
       border-radius: var(--radius-full);
       background: var(--border-strong);
+      opacity: 0.8;
     }
 
     .head {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-1) var(--space-3) var(--space-3) var(--space-5);
+      touch-action: none;
+    }
+
+    .titles {
+      flex: 1;
+      min-width: 0;
       display: grid;
       gap: var(--space-1);
-      padding: 0 var(--space-5) var(--space-3);
-      touch-action: none;
+      padding-top: var(--space-2);
+    }
+
+    h2 {
+      font-size: var(--font-size-lg);
+      line-height: 1.2;
     }
 
     .sub {
@@ -162,6 +217,22 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back';
       overscroll-behavior: contain;
       padding: 0 var(--space-5) var(--space-5);
     }
+
+    .foot:empty {
+      display: none;
+    }
+
+    .foot {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-5) var(--space-4);
+      border-top: 1px solid var(--border-subtle);
+      background: var(--surface-raised);
+    }
+
+    .foot > ::ng-deep * {
+      flex: 1;
+    }
   `,
 })
 export class MfSheet {
@@ -169,7 +240,16 @@ export class MfSheet {
   readonly heading = input<string | null>(null);
   readonly subheading = input<string | null>(null);
 
+  /** Against the bottom edge rather than floating, for a sheet that needs every pixel. */
+  readonly docked = input(false, { transform: booleanAttribute });
+
+  /** A close button in the header, for a sheet with no footer to leave by. */
+  readonly closable = input(false, { transform: booleanAttribute });
+
   readonly closed = output<SheetDismissal>();
+
+  protected readonly closeIcon = X;
+  protected readonly chrome = inject(Chrome);
 
   private readonly document = inject(DOCUMENT);
   private readonly stack = inject(SheetStack);
@@ -187,6 +267,8 @@ export class MfSheet {
   protected readonly dragging = signal(false);
   protected readonly dragged = signal(0);
 
+  /** The last few finger positions, for how fast the drag was going when it let go. */
+  private trail: { y: number; t: number }[] = [];
   private startY = 0;
   private readonly closer = () => this.dismiss('back');
 
@@ -232,7 +314,7 @@ export class MfSheet {
 
     // Kept mounted until it has slid away; unmounting first is a sheet that
     // vanishes rather than closes.
-    setTimeout(() => this.mounted.set(false), 260);
+    setTimeout(() => this.mounted.set(false), 340);
   }
 
   /**
@@ -294,10 +376,13 @@ export class MfSheet {
     const target = event.target as HTMLElement;
 
     // Dragging starts on the sheet's chrome, or at the top of its content.
-    // Starting it inside a scrolled list would steal the scroll.
+    // Starting it inside a scrolled list would steal the scroll; starting it
+    // on a control would steal the tap.
+    if (target.closest('input, textarea, select, button, a, [role="option"]')) return;
     if (target.closest('.body') && !this.atTop()) return;
 
     this.startY = event.clientY;
+    this.trail = [{ y: event.clientY, t: event.timeStamp }];
     this.dragging.set(true);
   }
 
@@ -306,7 +391,10 @@ export class MfSheet {
 
     const delta = event.clientY - this.startY;
 
-    // Upward drags resist rather than lift the sheet off the bottom edge.
+    this.trail.push({ y: event.clientY, t: event.timeStamp });
+    if (this.trail.length > 5) this.trail.shift();
+
+    // Upward drags resist rather than lift the sheet off its place.
     this.dragged.set(delta > 0 ? delta : delta / 6);
   }
 
@@ -317,10 +405,17 @@ export class MfSheet {
     this.dragging.set(false);
     this.dragged.set(0);
 
-    // A third of the way down closes it.
+    // How fast it was moving as it let go, in px per ms.
+    const first = this.trail[0];
+    const last = this.trail[this.trail.length - 1];
+    const velocity = first && last && last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0;
+
+    this.trail = [];
+
+    // A third of the way down closes it; so does a flick, however short.
     const height = this.panel()?.nativeElement.offsetHeight ?? 400;
 
-    if (travelled > height / 3) this.dismiss('drag');
+    if (travelled > height / 3 || (velocity > 0.55 && travelled > 24)) this.dismiss('drag');
   }
 
   private atTop(): boolean {

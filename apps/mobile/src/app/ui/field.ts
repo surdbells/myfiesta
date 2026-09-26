@@ -34,14 +34,30 @@ let nextId = 0;
       }
     </label>
 
-    <div class="box" [class.invalid]="!!error()" [class.focused]="focused()">
+    <div class="box" [class.invalid]="!!error()" [class.focused]="focused()" [class.tall]="tall()">
+      @if (prefix()) {
+        <span class="affix" aria-hidden="true">{{ prefix() }}</span>
+      }
       <ng-content />
+      @if (suffix()) {
+        <span class="affix" aria-hidden="true">{{ suffix() }}</span>
+      }
     </div>
 
-    @if (error()) {
-      <p class="error" role="alert">{{ error() }}</p>
-    } @else if (hint()) {
-      <p class="hint">{{ hint() }}</p>
+    @if (error() || hint() || limit()) {
+      <div class="foot">
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        } @else if (hint()) {
+          <p class="hint">{{ hint() }}</p>
+        }
+        @if (limit(); as max) {
+          <!-- Only once it matters: a counter from the first letter is a nag. -->
+          @if (count() > max * 0.7) {
+            <p class="count" [class.over]="count() > max" aria-live="polite">{{ count() }} / {{ max }}</p>
+          }
+        }
+      </div>
     }
   `,
   host: {
@@ -103,6 +119,49 @@ let nextId = 0;
       box-shadow: inset 0 0 0 2px var(--danger);
     }
 
+    /* A textarea: the box grows with it and the text starts at the top. */
+    .box.tall {
+      align-items: flex-start;
+    }
+
+    .box ::ng-deep textarea {
+      min-height: 6.5rem;
+      resize: none;
+      field-sizing: content;
+      line-height: var(--font-leading-normal);
+    }
+
+    /* What the number is in: CA$ before it, % after it. Part of the box,
+       not of the value, so it is never typed over or copied. */
+    .affix {
+      flex: none;
+      color: var(--text-muted);
+      font-weight: var(--font-weight-medium);
+      padding: 0 var(--space-1);
+    }
+
+    .foot {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-3);
+    }
+
+    .foot > :first-child {
+      flex: 1;
+    }
+
+    .count {
+      margin-left: auto;
+      font-size: var(--font-size-xs);
+      color: var(--text-subtle);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .count.over {
+      color: var(--danger-text);
+      font-weight: var(--font-weight-semibold);
+    }
+
     /* The control itself is projected, so it is styled from here. */
     .box ::ng-deep input,
     .box ::ng-deep textarea,
@@ -147,7 +206,20 @@ export class MfField {
   readonly error = input<string | null>(null);
   readonly optional = input(false, { transform: booleanAttribute });
 
+  /** Shown inside the box before the value: a currency, a "+". */
+  readonly prefix = input<string | null>(null);
+
+  /** Shown inside the box after it: a "%", a unit. */
+  readonly suffix = input<string | null>(null);
+
+  /** A character limit, counted once the text is most of the way there. */
+  readonly limit = input<number | null>(null);
+
+  /** How long the text is now, for the counter. The screen already has it. */
+  readonly count = input(0);
+
   protected readonly focused = signal(false);
+  protected readonly tall = signal(false);
 
   private readonly marked = contentChild<ElementRef<HTMLElement>>('control');
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -184,5 +256,6 @@ export class MfField {
     if (!element.id) element.id = this.generated;
 
     this.controlId.set(element.id);
+    this.tall.set(element.tagName === 'TEXTAREA');
   }
 }

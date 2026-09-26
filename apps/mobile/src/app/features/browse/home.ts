@@ -8,7 +8,6 @@ import { formatMoney } from '../../core/money';
 import {
   MfScreen,
   MfIconButton,
-  MfBadge,
   MfButton,
   MfCard,
   MfCarousel,
@@ -34,7 +33,7 @@ import {
  */
 @Component({
   selector: 'mf-home',
-  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfBadge, MfButton, MfEmpty, MfSkeleton, MfSelect],
+  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfButton, MfEmpty, MfSkeleton, MfSelect],
   template: `
     <mf-screen title="What’s on" [subtitle]="greeting()" large>
       <button mfIconButton screenActions tone="tonal" [icon]="searchIcon" label="Search events" (click)="go('/browse')"></button>

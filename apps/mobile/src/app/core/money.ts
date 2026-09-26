@@ -22,3 +22,36 @@ export function formatMoney(money: Money | null | undefined): string {
     currency: money.currency,
   }).format(money.amount / 100);
 }
+
+/** Just the symbol, the way this phone writes it: "$", "CA$", "₦". */
+export function currencySymbol(currency: string): string {
+  const part = new Intl.NumberFormat(undefined, { style: 'currency', currency })
+    .formatToParts(0)
+    .find((piece) => piece.type === 'currency');
+
+  return part?.value ?? currency;
+}
+
+/** Minor units as the decimal somebody types: 2500 → "25.00". */
+export function toMajor(amount: number | null): string {
+  return amount === null ? '' : (amount / 100).toFixed(2);
+}
+
+/**
+ * What somebody typed, as minor units.
+ *
+ * Forgiving about what a keyboard produces — "25", "25.5", "25,50" from a
+ * phone set to a comma locale, a pasted "$25.00" — and exact about the result:
+ * rounded to the cent here, once, rather than carried as a float that turns
+ * 19.99 into 1998.9999 somewhere downstream. Null for anything that is not a
+ * number at all.
+ */
+export function toMinor(typed: string): number | null {
+  const cleaned = typed.replace(/[^\d.,-]/g, '').replace(',', '.');
+
+  if (cleaned === '' || cleaned === '.' || cleaned === '-') return null;
+
+  const value = Number(cleaned);
+
+  return Number.isFinite(value) ? Math.round(value * 100) : null;
+}

@@ -2,7 +2,7 @@ import { Component, computed, effect, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { MfTabs, MfToasts, SheetStack } from './ui';
+import { MfDialogHost, MfTabs, MfToasts, SheetStack } from './ui';
 import { SessionStore } from './core/session';
 import { Navigation } from './core/navigation';
 import { Chrome } from './core/chrome';
@@ -18,7 +18,7 @@ import { Chrome } from './core/chrome';
  */
 @Component({
   selector: 'mf-root',
-  imports: [RouterOutlet, MfToasts, MfTabs],
+  imports: [RouterOutlet, MfToasts, MfTabs, MfDialogHost],
   template: `
     <div class="frame" [class.with-tabs]="showTabs() && !chrome.barHidden()">
       <main class="stage" (touchstart)="edgeStart($event)" (touchend)="edgeEnd($event)">
@@ -31,6 +31,7 @@ import { Chrome } from './core/chrome';
     </div>
 
     <mf-toasts />
+    <mf-dialog-host />
   `,
   styles: `
     :host {

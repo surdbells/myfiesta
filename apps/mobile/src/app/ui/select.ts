@@ -124,6 +124,11 @@ export interface MfOption {
       border: 0;
       border-radius: var(--radius-lg);
       background: var(--surface-inset);
+      /* The same hairline as mf-field: a form whose selects are flat and whose
+         inputs are outlined reads as two forms. */
+      box-shadow:
+        inset 0 0 0 1px var(--border),
+        inset 0 1px 2px rgb(0 0 0 / 0.04);
       color: var(--text);
       font-family: inherit;
       font-size: var(--font-size-base);
@@ -182,6 +187,11 @@ export interface MfOption {
       border: 0;
       border-radius: var(--radius-lg);
       background: var(--surface-inset);
+      /* The same hairline as mf-field: a form whose selects are flat and whose
+         inputs are outlined reads as two forms. */
+      box-shadow:
+        inset 0 0 0 1px var(--border),
+        inset 0 1px 2px rgb(0 0 0 / 0.04);
       color: var(--text);
       font-family: inherit;
       font-size: var(--font-size-base);
