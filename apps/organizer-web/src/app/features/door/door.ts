@@ -1,18 +1,33 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
+import {
+  CameraRefusal,
+  PageCamera,
+  RepeatReads,
+  canScanInPage,
+  fetchDecoderAhead,
+  ticketCode,
+} from '@myfiesta/door';
 import { UiButton } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
-import { ScanResult, SyncResult } from '../../core/api.types';
+import { OfflineScan, ScanResult, SyncResult } from '../../core/api.types';
 import { DoorOffline, scanId } from '../../core/door-offline';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
 import { DoorPassStore } from '../../core/door-pass';
 import { EventWorkspace } from '../events/event-workspace';
 import { DoorPasses } from './door-passes';
+
+/** Why the camera did not start, ending where every one of them ends: the code box. */
+const CAMERA_REFUSED: Record<CameraRefusal, string> = {
+  permission: 'The camera was refused. Type the code instead, or allow the camera for this site in the browser’s settings.',
+  'no-camera': 'No camera was found. Type the code instead — it works exactly the same.',
+  unavailable: 'The camera could not start. Type the code instead — it works exactly the same.',
+};
 
 /**
  * The door.
@@ -21,11 +36,14 @@ import { DoorPasses } from './door-passes';
  * and were tested; there was no screen to scan with, so none of it could be
  * used on a night.
  *
- * Two ways in, and the manual one is not a fallback for form's sake. Camera
- * scanning uses BarcodeDetector, which Chrome and Android have and Safari does
- * not — and a door with a flat battery, a cracked lens or a guest whose screen
- * will not brighten still has to work. Typing the code is the path that never
- * fails, so it is always visible rather than hidden behind "having trouble?".
+ * Two ways in, and the manual one is not a fallback for form's sake. The
+ * camera reads with the browser's own BarcodeDetector where it has one that
+ * reads QR codes, and with ZXing compiled to WebAssembly everywhere else —
+ * every iPhone, Firefox, Chrome on Windows — through the same camera the phone
+ * app uses on an iPhone. But a door with a flat battery, a cracked lens or a
+ * guest whose screen will not brighten still has to work. Typing the code is
+ * the path that never fails, so it is always visible rather than hidden behind
+ * "having trouble?".
  */
 @Component({
   selector: 'app-door',
@@ -151,6 +169,11 @@ export class Door implements OnDestroy {
     }
 
     void this.startOffline();
+
+    // The decoder, fetched while there is signal, for the same reason as the
+    // ticket list: the service worker keeps it only once it has been asked
+    // for, and a camera first started in the basement has nobody to ask.
+    if (this.cameraSupported) void fetchDecoderAhead();
   }
 
   /**
@@ -237,9 +260,11 @@ export class Door implements OnDestroy {
 
     this.syncing.set(true);
 
+    let batch: OfflineScan[] = [];
+
     try {
       for (let i = 0; i < pending.length; i += 200) {
-        const batch = pending.slice(i, i + 200);
+        batch = pending.slice(i, i + 200);
         const result = await firstValueFrom(
           this.api
             .syncScans(
@@ -261,12 +286,42 @@ export class Door implements OnDestroy {
       return true;
     } catch (error) {
       if (this.isConnectionFailure(error)) this.connectionLost.set(true);
+      else await this.dropUnsendable(batch, error).catch(() => undefined);
 
       return false;
     } finally {
       this.syncing.set(false);
       await this.updatePending();
     }
+  }
+
+  /**
+   * Take off the queue the scans the server says it can never accept.
+   *
+   * The server refuses a batch whole if one scan in it does not validate. So a
+   * single scan it will never take — a code longer than any ticket's, typed or
+   * read before this door checked codes, or a party of 80 — would hold every
+   * scan behind it on this phone all night, and the ticket list would never
+   * refresh while they waited. Only the code or the party gets a scan dropped:
+   * those are what a person typed or a camera read. Anything else the server
+   * finds wrong is this app's mistake, and the scans stay queued until the app
+   * is fixed rather than being thrown away with it. The rest go with the next
+   * sync.
+   */
+  private async dropUnsendable(batch: OfflineScan[], error: unknown): Promise<void> {
+    if (!(error instanceof HttpErrorResponse) || error.status !== 422) return;
+
+    const body = error.error as { errors?: Record<string, unknown> } | null;
+    const unsendable = new Set<string>();
+
+    for (const field of Object.keys(body?.errors ?? {})) {
+      const position = /^scans\.(\d+)\.(?:code|party)$/.exec(field)?.[1];
+      const scan = position === undefined ? undefined : batch[Number(position)];
+
+      if (scan) unsendable.add(scan.client_id);
+    }
+
+    if (unsendable.size > 0) await this.offline.forget([...unsendable]);
   }
 
   dismissConflicts(): void {
@@ -306,14 +361,35 @@ export class Door implements OnDestroy {
   readonly scannedHere = signal(0);
 
   readonly scanning = signal(false);
+  /** Between the tap and a live preview: the permission question, and on first use the decoder loading. */
+  readonly cameraStarting = signal(false);
   readonly cameraError = signal<string | null>(null);
 
-  private stream: MediaStream | null = null;
-  private detector: unknown = null;
-  private stopping = false;
+  private readonly camera = new PageCamera();
 
-  /** Whether this browser can read a QR without a library. */
-  readonly cameraSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+  /**
+   * The preview, which is in the page whether or not the camera is running:
+   * frames are read off this element, so a camera whose video is only created
+   * once it is running can never start. Folded away rather than removed.
+   */
+  private readonly preview = viewChild<ElementRef<HTMLVideoElement>>('preview');
+
+  /** What the camera has already acted on, so one ticket held up is one scan. */
+  private readonly reads = new RepeatReads();
+
+  /**
+   * Whether this browser can read a QR code with its camera: a camera it is
+   * allowed to ask for, and the engine's own detector or WebAssembly to decode
+   * with. Every current browser has the second, iPhones included.
+   */
+  readonly cameraSupported = canScanInPage();
+
+  /**
+   * Browsers only offer the camera over https, so a console opened over plain
+   * http — typed into a phone at a venue — has none to ask for. Said as that,
+   * because it is the one reason somebody at a door can do something about.
+   */
+  readonly cameraNeedsHttps = typeof window !== 'undefined' && !window.isSecureContext;
 
   /**
    * The colour and words the person on the door reacts to.
@@ -332,9 +408,20 @@ export class Door implements OnDestroy {
   });
 
   submit(): void {
-    const code = this.code().trim().toUpperCase();
+    if (!this.code().trim() || this.busy()) return;
 
-    if (!code || this.busy()) return;
+    // Checked before it goes anywhere, typed or not: a code no ticket could
+    // have, saved while offline, would hold every scan queued behind it.
+    const code = ticketCode(this.code());
+
+    if (!code) {
+      this.outcome.set(null);
+      this.error.set(
+        'That is not a ticket code. Ticket codes are letters and numbers, like WFY7-F77K4EJW.',
+      );
+
+      return;
+    }
 
     void this.send(code);
   }
@@ -424,79 +511,54 @@ export class Door implements OnDestroy {
 
   // --- the camera ---------------------------------------------------------
 
+  /**
+   * The camera inside the page, from `@myfiesta/door` — the same one the phone
+   * app reads with on an iPhone, which reads a few frames a second rather than
+   * sixty: a door phone runs for hours on one charge.
+   */
   async startCamera(): Promise<void> {
-    if (this.scanning() || !this.cameraSupported) return;
+    const video = this.preview()?.nativeElement;
+
+    if (this.scanning() || this.cameraStarting() || !this.cameraSupported || !video) return;
 
     this.cameraError.set(null);
+    this.cameraStarting.set(true);
 
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        // The back camera. Without this a phone opens the selfie camera and
-        // somebody has to hold the guest's ticket behind their own head.
-        video: { facingMode: { ideal: 'environment' } },
+      const refusal = await this.camera.start(video, (code) => this.read(code), {
+        onLive: () => this.scanning.set(true),
+        // The phone locked, or the tab went to the background: back to the
+        // button rather than a black frame that never reads.
+        onEnded: () => this.scanning.set(false),
       });
-    } catch {
-      this.cameraError.set(
-        'No camera permission. Type the code instead — it works exactly the same.',
-      );
 
-      return;
+      if (refusal) this.cameraError.set(CAMERA_REFUSED[refusal]);
+    } finally {
+      this.cameraStarting.set(false);
     }
-
-    const video = document.getElementById('door-camera') as HTMLVideoElement | null;
-
-    if (!video) return;
-
-    video.srcObject = this.stream;
-    await video.play().catch(() => undefined);
-
-    const Detector = (window as unknown as Record<string, new (o: object) => unknown>)[
-      'BarcodeDetector'
-    ];
-    this.detector = new Detector({ formats: ['qr_code'] });
-
-    this.scanning.set(true);
-    this.stopping = false;
-    void this.readLoop(video);
   }
 
   /**
-   * Read frames until something is found or the camera is stopped.
+   * A code the camera saw.
    *
-   * Polled on a timer rather than every animation frame: a door phone runs for
-   * hours on one charge, and decoding sixty frames a second drains a battery
-   * long before the queue is through.
+   * Only a ticket's, and only once while it is held up: the camera reads
+   * whatever is in front of it several times a second, and a scan admits
+   * somebody. A QR code that is not a ticket's is not a scan at all, and says
+   * nothing — it is usually a poster behind the guest. See `ticketCode` and
+   * `RepeatReads` for why each rule is what it is.
    */
-  private async readLoop(video: HTMLVideoElement): Promise<void> {
-    const detector = this.detector as { detect(source: unknown): Promise<{ rawValue: string }[]> };
+  private read(raw: string): void {
+    const code = ticketCode(raw);
 
-    while (!this.stopping) {
-      try {
-        const found = await detector.detect(video);
+    if (!code || !this.reads.take(code, this.busy())) return;
 
-        if (found.length > 0 && !this.busy()) {
-          const value = found[0].rawValue.trim().toUpperCase();
-
-          this.code.set(value);
-          void this.send(value);
-
-          // A pause after a hit, so one ticket held in front of the lens is not
-          // scanned six times while the door reads the result.
-          await new Promise((r) => setTimeout(r, 1800));
-        }
-      } catch {
-        // A dropped frame is not worth stopping for.
-      }
-
-      await new Promise((r) => setTimeout(r, 250));
-    }
+    this.code.set(code);
+    void this.send(code).finally(() => this.reads.answered(code));
   }
 
   stopCamera(): void {
-    this.stopping = true;
+    this.camera.stop();
     this.scanning.set(false);
-    this.stream?.getTracks().forEach((track) => track.stop());
-    this.stream = null;
   }
 
   ngOnDestroy(): void {

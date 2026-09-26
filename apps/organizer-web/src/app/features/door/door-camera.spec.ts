@@ -1,69 +1,30 @@
-import { TestBed } from '@angular/core/testing';
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import QRCode from 'qrcode';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  PageCamera,
+  READ_EVERY_MS,
+  canScanInPage,
+  fetchDecoderAhead,
+  openDetector,
+  zxingWasmUrl,
+} from '@myfiesta/door';
 
-/*
- * vi.mock factories are hoisted above everything else in the file, so the
- * state they close over has to be hoisted with them.
- */
-const fake = vi.hoisted(() => ({
-  native: false,
-  platform: 'web',
-  /** Whether ML Kit is linked into the native project, which on iOS it never is. */
-  linked: false,
-  scans: 0,
-}));
-
-vi.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: () => fake.native,
-    getPlatform: () => fake.platform,
-    isPluginAvailable: (name: string) => name === 'BarcodeScanner' && fake.linked,
-  },
-}));
-
-vi.mock('@capacitor-mlkit/barcode-scanning', () => ({
-  BarcodeFormat: { QrCode: 'QR_CODE' },
-  LensFacing: { Back: 'BACK' },
-  BarcodeScanner: {
-    // What an installed but unlinked plugin does when asked anything.
-    isSupported: async () => {
-      if (!fake.linked) throw new Error(`"BarcodeScanner" plugin is not implemented on ${fake.platform}`);
-
-      return { supported: true };
-    },
-    checkPermissions: async () => ({ camera: 'granted' }),
-    requestPermissions: async () => ({ camera: 'granted' }),
-    isGoogleBarcodeScannerModuleAvailable: async () => ({ available: true }),
-    installGoogleBarcodeScannerModule: async () => undefined,
-    addListener: async () => ({ remove: async () => undefined }),
-    startScan: async () => {
-      fake.scans++;
-    },
-    stopScan: async () => undefined,
-    removeAllListeners: async () => undefined,
-  },
-}));
-
-import { READ_EVERY_MS, openDetector, zxingWasmUrl } from '@myfiesta/door';
-import { Scanner } from './scanner';
-
-/** The door package, which this app compiles as source and whose camera an iPhone reads with. */
+/** The door package, which the console compiles as source and whose camera its door reads with. */
 const doorPackage = resolve(process.cwd(), '../../packages/door');
 
 /**
- * The .wasm this app ships: the very file the shared camera imports, found by
- * reading that import rather than by asking Node where the package is.
+ * The .wasm the console ships: the very file the shared camera imports, found
+ * by reading that import rather than by asking Node where the package is.
  *
  * The two can disagree. Node looks in the nearest node_modules first; the
  * import goes by path to the one at the root of the repository. They are the
  * same file only while npm keeps a single copy, and a spec that checked Node's
- * copy would stay green on the day it kept two — while every iPhone door
- * shipped the other one.
+ * copy would stay green on the day it kept two — while every iPhone at a door
+ * loaded the other one.
  */
 function shippedWasm(): string {
   const camera = resolve(doorPackage, 'src/camera.ts');
@@ -79,8 +40,9 @@ const wasmFile = shippedWasm();
 
 /**
  * The .wasm the ponyfill's own pinned dependency installed, wherever npm put
- * it: the copy that is the same release as the JavaScript the ponyfill carries.
- * Asked from the door package, which is where the import of the ponyfill is.
+ * it: the copy that is the same release as the JavaScript the ponyfill
+ * carries. Asked from the door package, which is where the ponyfill is
+ * imported.
  */
 function ponyfillsOwnWasm(): string {
   const ponyfill = createRequire(resolve(doorPackage, 'package.json')).resolve('barcode-detector/ponyfill');
@@ -123,22 +85,30 @@ function frameOf(code: string, scale = 4, quiet = 4): ImageData {
   return new ImageData(data, side, side);
 }
 
-/** A preview element that has frames, which jsdom's never does on its own. */
-function preview(): HTMLVideoElement {
+/** A preview element that has frames of the given size, which jsdom's never does on its own. */
+function preview(width = 1280, height = 720): HTMLVideoElement {
   const video = document.createElement('video');
 
   Object.defineProperty(video, 'readyState', { value: HTMLMediaElement.HAVE_ENOUGH_DATA });
+  Object.defineProperty(video, 'videoWidth', { value: width });
+  Object.defineProperty(video, 'videoHeight', { value: height });
   video.play = vi.fn(async () => undefined);
 
   return video;
 }
 
-/** A camera that is only a track that can be stopped. */
+/** A camera that is only a track that can be stopped — or be taken away. */
 function camera() {
-  const track = { stop: vi.fn(), addEventListener: vi.fn() };
+  const ended: (() => void)[] = [];
+  const track = {
+    stop: vi.fn(),
+    addEventListener: vi.fn((type: string, listener: () => void) => {
+      if (type === 'ended') ended.push(listener);
+    }),
+  };
   const stream = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
 
-  return { track, stream };
+  return { track, stream, end: () => ended.forEach((listener) => listener()) };
 }
 
 function giveCamera(getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>) {
@@ -158,15 +128,18 @@ function engineDetector(formats: string[], detect = vi.fn(async () => [] as { ra
 }
 
 /**
- * Reading a ticket with the camera.
+ * The camera the console's door reads with, from `@myfiesta/door`.
  *
- * Two things have to hold. On an iPhone, where the native scanner cannot be
- * linked, the camera inside the page has to actually read a code — so that is
- * tested with a real QR code through the real WebAssembly, not a stand-in.
- * And it has to do it with nothing from the network: a door is where the
- * signal goes, so every request the decoder makes is caught and checked.
+ * The console used to read only with the browser's own BarcodeDetector, which
+ * Safari does not have — so an iPhone opening the door screen could not scan
+ * at all. It now reads with the phone app's camera, ZXing compiled to
+ * WebAssembly standing in where the browser has no detector. So this is
+ * tested with a real QR code through the real WebAssembly, in the console's
+ * own build. And with nothing from the network except the console itself: a
+ * door is where the signal goes, so every request the decoder makes is caught
+ * and checked.
  */
-describe('Scanner', () => {
+describe('the camera at the door', () => {
   const requests: string[] = [];
 
   beforeAll(() => {
@@ -174,8 +147,8 @@ describe('Scanner', () => {
 
     vi.stubGlobal('ImageData', globalThis.ImageData ?? TestImageData);
 
-    // The only thing served is this app's own copy of ZXing, at the address
-    // the scanner asks for. Anything else — a CDN above all — fails.
+    // The only thing served is the console's own copy of ZXing, at the
+    // address the camera asks for. Anything else — a CDN above all — fails.
     vi.stubGlobal('fetch', async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
@@ -193,30 +166,24 @@ describe('Scanner', () => {
     vi.unstubAllGlobals();
   });
 
-  let scanner: Scanner;
+  let reader: PageCamera;
 
   beforeEach(() => {
-    fake.native = false;
-    fake.platform = 'web';
-    fake.linked = false;
-    fake.scans = 0;
-
     vi.stubGlobal('BarcodeDetector', undefined);
     Object.defineProperty(document, 'hidden', { value: false, configurable: true });
 
-    TestBed.resetTestingModule();
-    scanner = TestBed.inject(Scanner);
+    reader = new PageCamera();
   });
 
-  afterEach(async () => {
-    await scanner.stop();
+  afterEach(() => {
+    reader.stop();
     vi.useRealTimers();
+    vi.restoreAllMocks();
     delete (navigator as { mediaDevices?: unknown }).mediaDevices;
-    document.documentElement.classList.remove('scanning');
   });
 
   describe('the ponyfill, which is what an iPhone reads with', () => {
-    it('reads a real QR code, with ZXing loaded from this app and nowhere else', async () => {
+    it('reads a real QR code, with ZXing loaded from the console and nowhere else', async () => {
       const { detector, kind } = await openDetector();
 
       expect(kind).toBe('ponyfill');
@@ -252,8 +219,8 @@ describe('Scanner', () => {
 
     it('ships the copy the ponyfill installed for itself, not another one npm put beside it', () => {
       // If another app in the repository pulls a different ZXing, npm moves
-      // this app's copy down beside the ponyfill and puts the other one where
-      // the shared camera looks. This says which file to point it at instead.
+      // the ponyfill's copy down beside it and puts the other one where the
+      // shared camera looks. This says which file to point it at instead.
       expect(realpathSync.native(wasmFile)).toBe(realpathSync.native(ponyfillsOwnWasm()));
     });
   });
@@ -272,74 +239,87 @@ describe('Scanner', () => {
     });
   });
 
-  describe('which reader a phone gets', () => {
-    it('reads inside the page on an iPhone, where ML Kit is installed but never linked', async () => {
-      fake.native = true;
-      fake.platform = 'ios';
-      const { stream } = camera();
-      const getUserMedia = vi.fn(async () => stream);
+  describe('whether a door can use the camera at all', () => {
+    it('can on an iPhone: a camera to ask for, WebAssembly, and no BarcodeDetector', () => {
+      giveCamera(async () => camera().stream);
 
-      giveCamera(getUserMedia);
-
-      expect(await scanner.supported()).toBe(true);
-      expect(scanner.engine()).toBe('webview');
-
-      await scanner.start(() => undefined, preview());
-
-      expect(scanner.running()).toBe(true);
-      expect(getUserMedia).toHaveBeenCalledWith(
-        expect.objectContaining({ video: expect.objectContaining({ facingMode: { ideal: 'environment' } }) }),
-      );
-      expect(fake.scans).toBe(0);
-      // The page keeps its background: the camera is in it, not behind it.
-      expect(document.documentElement.classList.contains('scanning')).toBe(false);
+      expect(canScanInPage()).toBe(true);
     });
 
-    it('uses ML Kit on Android, where it is linked', async () => {
-      fake.native = true;
-      fake.platform = 'android';
-      fake.linked = true;
+    it('cannot where there is no camera to ask for, as over plain http', () => {
+      expect(canScanInPage()).toBe(false);
+    });
+  });
 
-      expect(await scanner.supported()).toBe(true);
-      expect(scanner.engine()).toBe('mlkit');
+  describe('the decoder, fetched while there is signal', () => {
+    it('comes from the console itself, on an engine that will need it', async () => {
+      requests.length = 0;
 
-      await scanner.start(() => undefined);
+      await fetchDecoderAhead();
 
-      expect(fake.scans).toBe(1);
-      expect(document.documentElement.classList.contains('scanning')).toBe(true);
-
-      await scanner.stop();
-
-      expect(document.documentElement.classList.contains('scanning')).toBe(false);
+      expect(requests).toEqual([zxingWasmUrl()]);
     });
 
-    it('says it cannot scan where there is no camera to ask for', async () => {
-      expect(await scanner.supported()).toBe(false);
+    it('is not fetched where the engine reads QR codes itself', async () => {
+      engineDetector(['qr_code']);
+      requests.length = 0;
 
-      await scanner.start(() => undefined, preview());
+      await fetchDecoderAhead();
 
-      expect(scanner.refusal()).toBe('unsupported');
-      expect(scanner.running()).toBe(false);
+      expect(requests).toEqual([]);
     });
   });
 
   describe('the camera inside the page', () => {
+    it('reads a ticket off the preview with ZXing, as an iPhone does', async () => {
+      const frame = frameOf('WFY7-F77K4EJW');
+      const { stream } = camera();
+      const seen: string[] = [];
+
+      // jsdom cannot draw a video. The canvas the frames go through hands back
+      // the ticket instead, which is everything after the lens.
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        drawImage: vi.fn(),
+        getImageData: () => frame,
+      } as unknown as CanvasRenderingContext2D);
+      giveCamera(async () => stream);
+
+      expect(await reader.start(preview(frame.width, frame.height), (code) => seen.push(code))).toBeNull();
+
+      await vi.waitFor(() => expect(seen[0]).toBe('WFY7-F77K4EJW'), { timeout: 5000 });
+    });
+
     it('reads a few times a second rather than every frame, and hands over what it reads', async () => {
       vi.useFakeTimers();
       const detect = engineDetector(['qr_code'], vi.fn(async () => [{ rawValue: 'WFY7-F77K4EJW' }]));
       const { stream } = camera();
       const seen: string[] = [];
+      const live = vi.fn();
 
       giveCamera(async () => stream);
 
-      await scanner.start((code) => seen.push(code), preview());
+      await reader.start(preview(), (code) => seen.push(code), { onLive: live });
       await vi.advanceTimersByTimeAsync(1000);
 
       const perSecond = 1000 / READ_EVERY_MS;
 
+      expect(live).toHaveBeenCalledOnce();
       expect(detect.mock.calls.length).toBeGreaterThanOrEqual(perSecond - 1);
       expect(detect.mock.calls.length).toBeLessThanOrEqual(perSecond + 1);
       expect(seen[0]).toBe('WFY7-F77K4EJW');
+    });
+
+    it('asks for the back camera', async () => {
+      engineDetector(['qr_code']);
+      const getUserMedia = vi.fn(async () => camera().stream);
+
+      giveCamera(getUserMedia);
+
+      await reader.start(preview(), () => undefined);
+
+      expect(getUserMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ video: expect.objectContaining({ facingMode: { ideal: 'environment' } }) }),
+      );
     });
 
     it('stops cleanly: the camera off, the preview empty, and no more reading', async () => {
@@ -350,9 +330,9 @@ describe('Scanner', () => {
 
       giveCamera(async () => stream);
 
-      await scanner.start(() => undefined, video);
+      await reader.start(video, () => undefined);
       await vi.advanceTimersByTimeAsync(READ_EVERY_MS * 2);
-      await scanner.stop();
+      reader.stop();
 
       const readsAtStop = detect.mock.calls.length;
 
@@ -360,26 +340,46 @@ describe('Scanner', () => {
 
       expect(track.stop).toHaveBeenCalled();
       expect(video.srcObject).toBeNull();
-      expect(scanner.running()).toBe(false);
       expect(detect.mock.calls.length).toBe(readsAtStop);
     });
 
     it('leaves no camera running when stopped while the permission question is still up', async () => {
       engineDetector(['qr_code']);
       const { track, stream } = camera();
+      const live = vi.fn();
       let answer!: (stream: MediaStream) => void;
 
       giveCamera(() => new Promise<MediaStream>((resolve) => (answer = resolve)));
 
-      const starting = scanner.start(() => undefined, preview());
+      const starting = reader.start(preview(), () => undefined, { onLive: live });
 
       await vi.waitFor(() => expect(answer).toBeDefined());
-      await scanner.stop();
+      reader.stop();
       answer(stream);
-      await starting;
 
+      expect(await starting).toBeNull();
       expect(track.stop).toHaveBeenCalled();
-      expect(scanner.running()).toBe(false);
+      expect(live).not.toHaveBeenCalled();
+    });
+
+    it('stops, and says so, when the camera is taken away', async () => {
+      vi.useFakeTimers();
+      const detect = engineDetector(['qr_code']);
+      const { track, stream, end } = camera();
+      const ended = vi.fn();
+
+      giveCamera(async () => stream);
+
+      await reader.start(preview(), () => undefined, { onEnded: ended });
+      end();
+
+      const readsAtEnd = detect.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(READ_EVERY_MS * 5);
+
+      expect(ended).toHaveBeenCalledOnce();
+      expect(track.stop).toHaveBeenCalled();
+      expect(detect.mock.calls.length).toBe(readsAtEnd);
     });
 
     it('tells a refused camera from a missing one', async () => {
@@ -387,17 +387,13 @@ describe('Scanner', () => {
         throw new DOMException('Permission denied', 'NotAllowedError');
       });
 
-      await scanner.start(() => undefined, preview());
-
-      expect(scanner.refusal()).toBe('permission');
+      expect(await reader.start(preview(), () => undefined)).toBe('permission');
 
       giveCamera(async () => {
         throw new DOMException('Requested device not found', 'NotFoundError');
       });
 
-      await scanner.start(() => undefined, preview());
-
-      expect(scanner.refusal()).toBe('no-camera');
+      expect(await reader.start(preview(), () => undefined)).toBe('no-camera');
     });
   });
 });

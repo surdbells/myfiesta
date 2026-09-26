@@ -2,24 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { BarcodeFormat, BarcodeScanner, LensFacing } from '@capacitor-mlkit/barcode-scanning';
-/*
- * The ZXing decoder the ponyfill runs, emitted into this app's own build and
- * imported here as nothing more than its address. Left to itself the library
- * fetches this file from jsDelivr, which is a door that cannot scan the moment
- * the venue's signal goes — and a door is exactly where the signal goes.
- *
- * Imported through the build rather than copied in by an asset rule because
- * Angular will not copy from outside this app's folder, and npm keeps the
- * package at the root of the repository. By path rather than by package name
- * because the development server hands package imports to Vite, which refuses
- * a .wasm outright; a path the build resolves itself works the same in
- * development, in tests and in a release. It is the copy the ponyfill's own
- * dependency installed, so the two are one release — the JavaScript and the
- * .wasm have to be. The spec finds the file by reading this import, hashes it
- * against the release the ponyfill was built for, and fails if npm ever puts
- * the ponyfill's own copy somewhere other than where this path points.
- */
-import zxingReaderWasm from '../../../../../node_modules/zxing-wasm/dist/reader/zxing_reader.wasm' with { loader: 'file' };
+import { PageCamera, canScanInPage } from '@myfiesta/door';
 
 /** Why the camera is not running, in words the door can act on. */
 export type ScannerRefusal =
@@ -38,153 +21,6 @@ export type ScannerRefusal =
  */
 export type ScannerEngine = 'mlkit' | 'webview' | null;
 
-/** How often the WebView path looks at a frame, at most. */
-export const READ_EVERY_MS = 200;
-
-/**
- * The longest side of the frame handed to the ponyfill. A camera delivering
- * 1280 across is sending more pixels than a ticket needs, and every one of
- * them is copied and converted in JavaScript before ZXing sees it.
- */
-const LONGEST_SIDE = 960;
-
-/** The part of BarcodeDetector the door uses. The engine's own and the ponyfill both have it. */
-export interface CodeDetector {
-  detect(source: HTMLVideoElement | ImageData): Promise<readonly { rawValue: string }[]>;
-}
-
-interface CodeDetectorClass {
-  new (options: { formats: string[] }): CodeDetector;
-  getSupportedFormats?(): Promise<readonly string[]>;
-}
-
-/** A detector, and whose it is — the two are fed differently. */
-export interface OpenedDetector {
-  detector: CodeDetector;
-  kind: 'engine' | 'ponyfill';
-}
-
-/** Where ZXing's WebAssembly is served from: this app's own files, never a CDN. */
-export function zxingWasmUrl(): string {
-  return new URL(zxingReaderWasm, document.baseURI).href;
-}
-
-let ponyfill: Promise<CodeDetectorClass> | null = null;
-
-/**
- * The ponyfill, loaded once and pointed at this app's own copy of ZXing.
- *
- * Loaded when a door first starts the camera rather than with the app: it is
- * a megabyte of WebAssembly that most people opening the app to show a ticket
- * never need. Once compiled it stays, so a door that stops for a sale and
- * starts again does not wait twice.
- *
- * A load that fails is forgotten rather than kept, so the next tap tries
- * again instead of replaying the same failure all night.
- */
-function loadPonyfill(): Promise<CodeDetectorClass> {
-  ponyfill ??= (async () => {
-    const { BarcodeDetector, prepareZXingModule, purgeZXingModule } = await import('barcode-detector/ponyfill');
-    const wasm = zxingWasmUrl();
-
-    try {
-      // Waited for here, not left to the first frame, so a decoder that cannot
-      // load is a refusal the door can say out loud rather than a camera that
-      // silently never reads anything.
-      await prepareZXingModule({
-        overrides: {
-          locateFile: (path: string, prefix: string) => (path.endsWith('.wasm') ? wasm : prefix + path),
-        },
-        fireImmediately: true,
-      });
-    } catch (error) {
-      purgeZXingModule();
-
-      throw error;
-    }
-
-    return BarcodeDetector as unknown as CodeDetectorClass;
-  })().catch((error: unknown) => {
-    ponyfill = null;
-
-    throw error;
-  });
-
-  return ponyfill;
-}
-
-/**
- * A detector for QR codes: the engine's own where it has one that reads them,
- * the ponyfill everywhere else.
- *
- * Chrome on Windows has a BarcodeDetector that supports no formats at all, so
- * having the class is not the question — reading `qr_code` is.
- */
-export async function openDetector(): Promise<OpenedDetector> {
-  const Engine = (globalThis as { BarcodeDetector?: CodeDetectorClass }).BarcodeDetector;
-
-  if (typeof Engine === 'function') {
-    try {
-      const formats = (await Engine.getSupportedFormats?.()) ?? [];
-
-      if (formats.includes('qr_code')) return { detector: new Engine({ formats: ['qr_code'] }), kind: 'engine' };
-    } catch {
-      // An engine that cannot say what it reads is treated as one that reads nothing.
-    }
-  }
-
-  const Ponyfill = await loadPonyfill();
-
-  return { detector: new Ponyfill({ formats: ['qr_code'] }), kind: 'ponyfill' };
-}
-
-/**
- * Frames off the preview, shrunk and handed over as pixels.
- *
- * Drawn into one canvas that is kept rather than a new one each time: given
- * the video itself, the ponyfill makes a fresh full-size canvas for every
- * frame, and on an older iPhone that is where the time goes.
- */
-function frameGrabber(video: HTMLVideoElement): () => ImageData | null {
-  const canvas = video.ownerDocument.createElement('canvas');
-  let context: CanvasRenderingContext2D | null = null;
-
-  return () => {
-    const { videoWidth, videoHeight } = video;
-
-    if (!videoWidth || !videoHeight) return null;
-
-    const scale = Math.min(1, LONGEST_SIDE / Math.max(videoWidth, videoHeight));
-    const width = Math.round(videoWidth * scale);
-    const height = Math.round(videoHeight * scale);
-
-    if (canvas.width !== width) canvas.width = width;
-    if (canvas.height !== height) canvas.height = height;
-
-    context ??= canvas.getContext('2d', { willReadFrequently: true });
-
-    if (!context) return null;
-
-    context.drawImage(video, 0, 0, width, height);
-
-    return context.getImageData(0, 0, width, height);
-  };
-}
-
-/** What a refused camera means for the door, from the name the browser gives it. */
-function refusalFor(error: unknown): ScannerRefusal {
-  switch ((error as { name?: string } | null)?.name) {
-    case 'NotAllowedError':
-    case 'SecurityError':
-      return 'permission';
-    case 'NotFoundError':
-    case 'OverconstrainedError':
-      return 'no-camera';
-    default:
-      return 'unavailable';
-  }
-}
-
 /**
  * Reading a ticket with the camera.
  *
@@ -200,6 +36,11 @@ function refusalFor(error: unknown): ScannerRefusal {
  *   ZXing compiled to WebAssembly standing in for the BarcodeDetector Safari
  *   does not have. Browsers take the same path, which is how a laptop in
  *   development scans at all.
+ *
+ * The camera inside the page is `PageCamera` from `@myfiesta/door`, the same
+ * one the console's door reads with — an iPhone scanning from the console and
+ * one scanning from this app are the same Safari, and deserve the same reader.
+ * Only ML Kit is this app's own.
  *
  * Which one a device gets is decided by what it has — whether the plugin is
  * actually linked — not by what it is called, so linking ML Kit on iOS one day
@@ -218,6 +59,7 @@ function refusalFor(error: unknown): ScannerRefusal {
 @Injectable({ providedIn: 'root' })
 export class Scanner {
   private readonly document = inject(DOCUMENT);
+  private readonly camera = new PageCamera();
 
   readonly running = signal(false);
   readonly refusal = signal<ScannerRefusal>(null);
@@ -228,7 +70,6 @@ export class Scanner {
   private starting = false;
   /** Bumped by every stop, so a start still waiting on the camera knows it has been called off. */
   private attempt = 0;
-  private stopWeb: (() => void) | null = null;
 
   /** Whether this device can read a code at all, before anything is asked of it. */
   async supported(): Promise<boolean> {
@@ -268,8 +109,7 @@ export class Scanner {
 
     if (this.engine() === 'mlkit') await this.stopNative();
 
-    this.stopWeb?.();
-    this.stopWeb = null;
+    this.camera.stop();
     this.running.set(false);
   }
 
@@ -296,12 +136,7 @@ export class Scanner {
       }
     }
 
-    const camera = typeof globalThis.navigator?.mediaDevices?.getUserMedia === 'function';
-    const decoder =
-      typeof (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector === 'function' ||
-      typeof globalThis.WebAssembly === 'object';
-
-    return camera && decoder ? 'webview' : null;
+    return canScanInPage() ? 'webview' : null;
   }
 
   // --- ML Kit, on Android ------------------------------------------------------
@@ -385,12 +220,10 @@ export class Scanner {
   // --- the camera inside the page: every iPhone, and any browser --------------
 
   /**
-   * getUserMedia into the preview, and a detector reading frames off it a few
-   * times a second.
-   *
-   * A few, not sixty: the door ignores a repeat for four seconds anyway, and a
-   * phone decoding every frame in WebAssembly is a phone too hot to hold by
-   * the end of the night.
+   * The shared camera, told what this app's door needs to hear: that the
+   * preview is live, and that iOS took the camera away when the app went to
+   * the background — after which the door goes back to its button rather than
+   * a black frame that never reads.
    */
   private async startWebView(onCode: (code: string) => void, attempt: number, video?: HTMLVideoElement): Promise<void> {
     if (!video) {
@@ -399,116 +232,11 @@ export class Scanner {
       return;
     }
 
-    // Asked for before the camera is, so the decoder's first load happens
-    // while the permission question is on screen rather than after it.
-    const opening = openDetector();
+    const refusal = await this.camera.start(video, onCode, {
+      onLive: () => this.running.set(true),
+      onEnded: () => void this.stop(),
+    });
 
-    opening.catch(() => undefined);
-
-    let stream: MediaStream;
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
-    } catch (error) {
-      if (attempt === this.attempt) this.refusal.set(refusalFor(error));
-
-      return;
-    }
-
-    const release = () => {
-      stream.getTracks().forEach((track) => track.stop());
-
-      if (video.srcObject === stream) video.srcObject = null;
-    };
-
-    // Stopped while the permission question was up: the camera light must not
-    // come on for a screen that has already gone.
-    if (attempt !== this.attempt) {
-      release();
-
-      return;
-    }
-
-    let opened: OpenedDetector;
-
-    try {
-      opened = await opening;
-    } catch {
-      release();
-
-      if (attempt === this.attempt) this.refusal.set('unavailable');
-
-      return;
-    }
-
-    if (attempt !== this.attempt) {
-      release();
-
-      return;
-    }
-
-    const grab = opened.kind === 'ponyfill' ? frameGrabber(video) : null;
-    let live = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const read = async () => {
-      const began = Date.now();
-
-      // Nothing to read in a frame that has not arrived, or on a screen nobody
-      // can see.
-      if (!this.document.hidden && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        try {
-          const source = grab ? grab() : video;
-          const found = source ? await opened.detector.detect(source) : [];
-
-          if (live) {
-            for (const code of found) {
-              if (code.rawValue) onCode(code.rawValue);
-            }
-          }
-        } catch {
-          // A frame that cannot be read is not a failure worth stopping for.
-        }
-      }
-
-      if (live) timer = setTimeout(() => void read(), Math.max(0, READ_EVERY_MS - (Date.now() - began)));
-    };
-
-    this.stopWeb = () => {
-      live = false;
-      clearTimeout(timer);
-      release();
-    };
-
-    // iOS ends the camera when the app goes to the background. The door goes
-    // back to its button rather than showing a black frame that never reads.
-    for (const track of stream.getVideoTracks()) {
-      track.addEventListener('ended', () => {
-        if (live) void this.stop();
-      });
-    }
-
-    // muted and playsinline, or iOS refuses to play it inline and Chrome
-    // blocks autoplay outright.
-    video.muted = true;
-    video.setAttribute('muted', '');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('autoplay', '');
-    video.srcObject = stream;
-
-    // Running before play() rather than after, so the preview unfolds as it
-    // starts: WebKit may hold back a video it thinks nobody can see.
-    this.running.set(true);
-
-    await video.play().catch(() => undefined);
-
-    if (live) void read();
+    if (refusal && attempt === this.attempt) this.refusal.set(refusal);
   }
 }

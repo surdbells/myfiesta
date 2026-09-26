@@ -12,6 +12,8 @@ So the decision lives here, once.
 src/types.ts    the shapes the API sends and the phone keeps
 src/rules.ts    what a door decides, and the hash that finds the ticket
 src/store.ts    IndexedDB: the saved list, and the queue of scans to send
+src/camera.ts   the camera inside the page, and the decoder it reads with
+src/reads.ts    which of the codes a camera reads the door acts on
 ```
 
 ## The rules
@@ -50,3 +52,48 @@ one night.
 
 The store is a plain class. Each app provides it to its own injector; this
 package stays free of any framework so that both can.
+
+## The camera
+
+`PageCamera` is the camera inside the page: `getUserMedia` for the rear camera
+into a `<video>` the screen already has, and a `BarcodeDetector` reading frames
+off it five times a second at most. The browser's own detector where it reads
+QR codes; everywhere else the `barcode-detector` ponyfill, which is ZXing
+compiled to WebAssembly — every Safari, so every iPhone, and Firefox, and Chrome
+on Windows, whose detector reads nothing.
+
+It is here rather than in either app because an iPhone at a door is the same
+Safari whichever app it opened. The console's door reads with it in any
+browser; the phone app reads with it on iPhone, where ML Kit cannot be linked,
+and keeps ML Kit for Android in its own `Scanner`.
+
+The `.wasm` is imported by path with `with { loader: 'file' }`, so each app's
+build copies it into its own output (`media/zxing_reader.wasm`) and the decoder
+loads it from the app's own origin. Left alone, the library fetches it from
+jsDelivr — and a door is where the signal goes. The console's service worker
+keeps `media/` only once it has been asked for, so its door fetches the file
+when the screen opens (`fetchDecoderAhead`) rather than when the camera first
+starts, which may be after the signal has gone.
+
+Tested in `apps/organizer-web` (`door-camera.spec.ts`, with a real QR code
+through the real WebAssembly) and through the phone's `Scanner` in
+`apps/mobile`. Both check that the file the build ships is the release the
+ponyfill was built against.
+
+## What the camera reads
+
+The camera hands over every code it sees, several times a second. The door acts
+on fewer:
+
+- `ticketCode` lets through only what is shaped like a ticket code — letters,
+  digits and dashes, 32 at most, which is all the API takes. A poster behind the
+  guest is not a scan, and nor is a code made to jam the door: a door with no
+  signal queues every scan, the server refuses a batch whole if one scan in it
+  does not validate, and one bad scan would hold the rest on the phone all night.
+- `RepeatReads` makes one ticket held up one scan. The same code is acted on
+  again only after it has been out of sight for four seconds, counted from the
+  last time it was seen and from the answer arriving — not from the first read,
+  which let a ticket held up through a slow answer or an ID check scan twice.
+
+Tested in `apps/organizer-web` (`door-reads.spec.ts`, and through the door
+screen in `door.spec.ts`).

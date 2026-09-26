@@ -26,8 +26,10 @@ jobs:
           filters: |
             api:        ['apps/api/**']
             web:        ['apps/web/**', 'packages/tokens/**']
-            organizer:  ['apps/organizer-web/**', 'packages/tokens/**']
-            mobile:     ['apps/mobile/**', 'packages/tokens/**']
+            # packages/door is compiled as source by both, and tested only
+            # through them: the camera, and what a door decides with no signal.
+            organizer:  ['apps/organizer-web/**', 'packages/tokens/**', 'packages/door/**']
+            mobile:     ['apps/mobile/**', 'packages/tokens/**', 'packages/door/**']
             contract:   ['packages/contract/**']
             tokens:     ['packages/tokens/**']
 

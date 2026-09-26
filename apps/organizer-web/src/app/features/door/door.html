@@ -234,22 +234,38 @@
 
 @if (!cameraSupported) {
   <p class="muted text-sm text-text-muted">
-    This browser cannot read a QR code. Chrome on Android can; on an iPhone,
-    type the code above instead.
+    @if (cameraNeedsHttps) {
+      The camera only works when the console is opened over https. Type the code above instead.
+    } @else {
+      This browser cannot use the camera. Type the code above instead.
+    }
   </p>
-} @else if (!scanning()) {
-  <button uiButton class="max-sm:w-full" variant="secondary" type="button" (click)="startCamera()">Use the camera</button>
-  @if (cameraError(); as message) {
-    <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">{{ message }}</p>
-  }
 } @else {
-  <div class="camera relative mb-3 max-w-[420px] overflow-hidden rounded-lg bg-black">
+  <!--
+    The preview stays in the page whether or not it is running: frames are
+    read off this element, so a camera that is only created once scanning
+    starts can never start. Folded away rather than removed when idle.
+  -->
+  <div
+    class="camera max-w-[420px] overflow-hidden rounded-lg bg-black"
+    [class]="scanning() ? 'relative mb-3' : 'pointer-events-none absolute h-px w-px opacity-0'"
+  >
     <!-- muted and playsinline, or iOS refuses to play it inline and Chrome
          blocks autoplay outright. -->
-    <video id="door-camera" class="block aspect-[4/3] w-full object-cover" muted playsinline></video>
+    <video #preview class="block aspect-[4/3] w-full object-cover" muted playsinline autoplay></video>
     <div class="reticle absolute inset-[22%_26%] rounded-md border-[3px] border-[rgba(255,255,255,0.85)] shadow-[0_0_0_100vmax_rgba(0,0,0,0.35)]" aria-hidden="true"></div>
   </div>
-  <button uiButton class="max-sm:w-full" variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
+
+  @if (scanning()) {
+    <button uiButton class="max-sm:w-full" variant="secondary" type="button" (click)="stopCamera()">Stop the camera</button>
+  } @else {
+    <button uiButton class="max-sm:w-full" variant="secondary" type="button" [loading]="cameraStarting()" [disabled]="cameraStarting()" (click)="startCamera()">
+      Use the camera
+    </button>
+    @if (cameraError(); as message) {
+      <p class="error mt-3 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">{{ message }}</p>
+    }
+  }
 }
 </section>
 </div>
