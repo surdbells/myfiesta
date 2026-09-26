@@ -91,6 +91,13 @@ class DoorController extends Controller
      * Safe to send twice. Every scan carries the id the phone gave it, and one
      * the server has already recorded comes back with its original result —
      * which is what lets a phone retry a sync whose response it never got.
+     *
+     * Except the first time a scan the server answered online arrives here.
+     * Its answer never reached the phone, which decided from its list instead,
+     * so what the door did is compared with what the server said and any
+     * disagreement is in `conflicts` like every other — a guest let in on a
+     * ticket the server had just refused is exactly what the organizer needs
+     * to hear about. Nobody is counted twice for it.
      */
     public function sync(Request $request, Event $event): JsonResponse
     {

@@ -68,6 +68,11 @@ class CheckInService
      * refused is recorded with the server's verdict and admits nobody, even if
      * the ticket turns out to have been fine: that guest was turned away, and
      * marking the ticket used would refuse them again when they come back.
+     *
+     * The same holds for a scan the server had already answered online, when
+     * that answer never reached the door and the scan came back in the queue:
+     * it is still one scan and one row, but what the door did with it is kept
+     * and compared all the same. See `reconcile`.
      */
     public function recordOffline(
         string $code,
@@ -114,7 +119,9 @@ class CheckInService
                 $earlier = TicketScan::query()->where('client_id', $clientId)->first();
 
                 if ($earlier) {
-                    return $this->replay($earlier, $ticket);
+                    return $offlineResult !== null && $this->awaitsDoorsAnswer($earlier, $eventId, $code)
+                        ? $this->reconcile($earlier, $ticket, $eventId, $scanner, $party, $offlineResult)
+                        : $this->replay($earlier, $ticket);
                 }
             }
 
@@ -123,29 +130,7 @@ class CheckInService
             $admitCount = $this->admitCount($outcome, $offlineResult);
 
             if ($admitCount > 0) {
-                $admitted = $ticket->admitted_count + $admitCount;
-
-                $ticket->update([
-                    'admitted_count' => $admitted,
-                    // Only spent once the last of the party is inside. Until
-                    // then it stays valid so the rest can still get in.
-                    'status' => $admitted >= $ticket->admits ? 'checked_in' : 'valid',
-                    'checked_in_at' => $ticket->checked_in_at ?? $scannedAt ?? now(),
-                    'checked_in_by' => $ticket->checked_in_by ?? $scanner?->id,
-                ]);
-
-                // Somebody walked in. For a live screen elsewhere — a bar
-                // that wants to know the room is filling, a promoter watching
-                // their list arrive. The person, never their code.
-                app(Webhooks::class)->emit(
-                    $ticket->event()->value('organization_id'),
-                    'ticket.checked_in',
-                    [
-                        ...app(Payloads::class)->attendee($ticket),
-                        'admitted_now' => $admitCount,
-                        'event_id' => $eventId,
-                    ],
-                );
+                $this->admit($ticket, $admitCount, $eventId, $scanner, $scannedAt);
             }
 
             $row = [
@@ -222,14 +207,216 @@ class CheckInService
         };
     }
 
+    /** Count people in against a ticket, and say so to anyone listening. */
+    private function admit(
+        Ticket $ticket,
+        int $count,
+        string $eventId,
+        ?User $scanner,
+        ?CarbonInterface $scannedAt,
+    ): void {
+        $admitted = $ticket->admitted_count + $count;
+
+        $ticket->update([
+            'admitted_count' => $admitted,
+            // Only spent once the last of the party is inside. Until then it
+            // stays valid so the rest can still get in.
+            'status' => $admitted >= $ticket->admits ? 'checked_in' : 'valid',
+            'checked_in_at' => $ticket->checked_in_at ?? $scannedAt ?? now(),
+            'checked_in_by' => $ticket->checked_in_by ?? $scanner?->id,
+        ]);
+
+        // Somebody walked in. For a live screen elsewhere — a bar that wants
+        // to know the room is filling, a promoter watching their list arrive.
+        // The person, never their code.
+        app(Webhooks::class)->emit(
+            $ticket->event()->value('organization_id'),
+            'ticket.checked_in',
+            [
+                ...app(Payloads::class)->attendee($ticket),
+                'admitted_now' => $count,
+                'event_id' => $eventId,
+            ],
+        );
+    }
+
+    /**
+     * Whether an offline scan is the queued copy of one the server decided
+     * online, and has not yet been told what the door did.
+     *
+     * The phone sends a scan, hears nothing back, decides from its saved list
+     * and queues the scan under the same id. When the request had in fact
+     * arrived, the server holds an answer nobody at the door ever saw. Only
+     * once, though: after the door's answer has been kept, the next copy is a
+     * sync sent again, and gets a plain replay.
+     *
+     * Same event and same code as well as the same id, because a copy is the
+     * same scan. Anything else is not a copy, and is answered the way it
+     * always was rather than being allowed to rewrite somebody else's row.
+     */
+    private function awaitsDoorsAnswer(TicketScan $earlier, string $eventId, string $code): bool
+    {
+        return $earlier->offline_result === null
+            && $earlier->event_id === $eventId
+            && $earlier->scanned_code === substr(strtoupper(trim($code)), 0, 32);
+    }
+
+    /**
+     * What the door did with a scan the server had already answered online.
+     *
+     * The door never saw the online answer, so what happened in the doorway is
+     * the door's decision. That is what is kept, on the row the scan already
+     * has, and judged by the same rules as any offline scan: a guest let in on
+     * a ticket the server refused is a conflict for the organizer, not a quiet
+     * "refused, nobody in".
+     *
+     * The door's decision is judged against the ticket as it stood without
+     * this scan's own online admission, as if the scan had only ever come
+     * through the sync. Then only people the door let in beyond what the
+     * online answer already counted are added, and only as far as the ticket
+     * allows, so nobody is counted twice.
+     *
+     * Nobody is taken back off, either. A door that turned away a guest the
+     * server had just let in is told so and the ticket keeps reading as used:
+     * that guest is owed an apology and a way in, which the door can give
+     * them, and an admission quietly withdrawn from the record is harder to
+     * reconcile afterwards than one that is flagged.
+     *
+     * Unless the door turned them away because it had already let somebody
+     * else in on that ticket with no signal. Then the door was right, and the
+     * place the server gave this scan is the one that somebody is standing
+     * in. See `spentOffline`.
+     */
+    private function reconcile(
+        TicketScan $earlier,
+        ?Ticket $ticket,
+        string $eventId,
+        ?User $scanner,
+        ?int $party,
+        string $offlineResult,
+    ): ScanOutcome {
+        $counted = (int) $earlier->admitted;
+        $doorAdmitted = $offlineResult === ScanOutcome::ACCEPTED;
+
+        $spent = ! $doorAdmitted && $counted > 0
+            ? $this->spentOffline($earlier, $ticket, $eventId, $party)
+            : null;
+
+        if ($spent !== null) {
+            // Recorded as the refusal it was, and not as a guest to fetch back
+            // in. The ticket keeps its count: those places are taken, by the
+            // people the door let in first, whose own scans carry the conflict.
+            $earlier->update([
+                'result' => $spent->result,
+                'admitted' => 0,
+                'offline_result' => $offlineResult,
+            ]);
+
+            $said = 'Turned away with no signal, and rightly: somebody else had already been let in on this ticket with no signal.';
+
+            return (new ScanOutcome(
+                $spent->result,
+                $spent->result === ScanOutcome::DUPLICATE
+                    ? "{$said} Nobody else goes in on it."
+                    : "{$said} {$spent->message}",
+                remaining: $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0,
+                applied: false,
+            ))->withTicket($ticket)->withOfflineResult($offlineResult);
+        }
+
+        // The same decision both ways — a retry, not a disagreement — or a
+        // refusal by the door, which adds nobody. Either way the door's answer
+        // is written beside the server's and the row speaks for itself: the
+        // second is a conflict by the ordinary rule, refused beside accepted.
+        if (! $doorAdmitted || ($counted > 0 && ($party === null || $party <= $counted))) {
+            $earlier->update(['offline_result' => $offlineResult]);
+
+            return $this->replay($earlier, $ticket);
+        }
+
+        $outcome = $this->decide($ticket, $eventId, $party, alreadyCounted: $counted);
+        $more = max(0, $this->admitCount($outcome, $offlineResult) - $counted);
+
+        if ($more > 0) {
+            $this->admit($ticket, $more, $eventId, $scanner, $earlier->scanned_at);
+        }
+
+        // The verdict on what the door did, rather than on what the online
+        // request asked, so the row reads exactly as an offline conflict does
+        // and every report that looks for those finds it.
+        $earlier->update([
+            'result' => $outcome->result,
+            'admitted' => $counted + $more,
+            'offline_result' => $offlineResult,
+        ]);
+
+        return (new ScanOutcome(
+            $outcome->result,
+            $outcome->message,
+            admitted: $counted + $more,
+            remaining: $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0,
+            applied: $counted + $more > 0,
+        ))->withTicket($ticket)->withOfflineResult($offlineResult);
+    }
+
+    /**
+     * Whether a door that turned away a scan the server had let in online did
+     * so because it had already let somebody else in on the ticket with no
+     * signal — and if so, what the server says of the ticket now.
+     *
+     * The phone marks a ticket used on its list the moment it lets somebody
+     * in with no signal. If signal comes back before that admission has been
+     * sent, the next person showing the same ticket — a screenshot passed down
+     * a line — goes to the server first. The server has not heard of the first
+     * guest and lets them in; the answer is lost; the list says used; the door
+     * turns them away. When the first admission arrives the ticket is already
+     * counted, so it is flagged. Telling the door the second guest "can come
+     * in" as well would put two people in on one ticket, with no scan saying
+     * so for the second.
+     *
+     * So: somebody on this ticket was let in with no signal and could not be
+     * counted — the same question the offline report asks — and the ticket,
+     * counted as it now is, has no room for this party. Null otherwise, and
+     * the refusal is judged by the ordinary rule.
+     */
+    private function spentOffline(TicketScan $earlier, ?Ticket $ticket, string $eventId, ?int $party): ?ScanOutcome
+    {
+        if ($ticket === null) {
+            return null;
+        }
+
+        $uncounted = TicketScan::query()
+            ->where('ticket_id', $ticket->id)
+            ->whereKeyNot($earlier->getKey())
+            ->where('offline_result', ScanOutcome::ACCEPTED)
+            ->where('result', '<>', ScanOutcome::ACCEPTED)
+            ->exists();
+
+        if (! $uncounted) {
+            return null;
+        }
+
+        $verdict = $this->decide($ticket, $eventId, $party);
+
+        return $verdict->result === ScanOutcome::ACCEPTED ? null : $verdict;
+    }
+
     /** The answer this scan got the first time it arrived. */
     private function replay(TicketScan $earlier, ?Ticket $ticket): ScanOutcome
     {
         $remaining = $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0;
 
+        // Counted in online while the door, with no answer, turned them away.
+        // "They are in" would be the one thing not true.
+        $turnedAway = $earlier->offline_result !== null && $earlier->offline_result !== ScanOutcome::ACCEPTED;
+
         return (new ScanOutcome(
             $earlier->result,
-            $earlier->admitted > 0 ? 'Already recorded — they are in.' : 'Already recorded.',
+            match (true) {
+                $earlier->admitted > 0 && $turnedAway => 'Turned away with no signal, but the server had already let them in, so the ticket reads as used. They can come in.',
+                $earlier->admitted > 0 => 'Already recorded — they are in.',
+                default => 'Already recorded.',
+            },
             admitted: $earlier->admitted,
             remaining: $remaining,
             applied: $earlier->offline_result === null || $earlier->admitted > 0,
@@ -251,7 +438,13 @@ class CheckInService
             : $at;
     }
 
-    private function decide(?Ticket $ticket, string $eventId, ?int $party): ScanOutcome
+    /**
+     * @param  int  $alreadyCounted  People this same scan already put on the
+     *                               ticket, online, before the door's own
+     *                               answer arrived. Not held against it — see
+     *                               `reconcile`.
+     */
+    private function decide(?Ticket $ticket, string $eventId, ?int $party, int $alreadyCounted = 0): ScanOutcome
     {
         if ($ticket === null) {
             return new ScanOutcome(ScanOutcome::NOT_FOUND, 'Not recognised.');
@@ -275,7 +468,7 @@ class CheckInService
             return new ScanOutcome(ScanOutcome::VOID, 'This ticket was handed back and is waiting to be resold.');
         }
 
-        $remaining = $ticket->admits - $ticket->admitted_count;
+        $remaining = $ticket->admits - $ticket->admitted_count + $alreadyCounted;
 
         if ($remaining <= 0) {
             $when = $ticket->checked_in_at?->diffForHumans();
