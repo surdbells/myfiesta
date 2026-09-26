@@ -41,6 +41,7 @@ export type Permission =
   | "refunds.process"
   | "messages.send"
   | "payouts.request"
+  | "payouts.destination"
   | "team.manage"
   | "organization.brand"
   | "organization.integrations";
@@ -893,6 +894,12 @@ export interface PayoutStatement {
   requests: PayoutRequestRow[];
   /** Whether this member may ask to be paid: owners and finance. */
   can_request: boolean;
+  /**
+   * Whether this member may change where payouts are sent: owners only.
+   * Everybody who can see the statement sees the destination; only an owner
+   * is offered the form.
+   */
+  can_change_destination: boolean;
 }
 
 /** An organizer asking to be paid, and what became of it. */

@@ -48,11 +48,17 @@
       <div>
         <p class="warn__title font-semibold">We have nowhere to send this</p>
         <p class="warn__detail mt-1 max-w-[52ch] text-pretty text-sm text-text-muted">
-          Add an Interac address or a bank account, then ask to be paid.
+          @if (canChangeDestination()) {
+            Add an Interac address or a bank account, then ask to be paid.
+          } @else {
+            {{ ownerOnly }} Ask them to add an Interac address or a bank account.
+          }
         </p>
       </div>
 
-      <button uiButton type="button" (click)="openForm()">Add payout details</button>
+      @if (canChangeDestination()) {
+        <button uiButton type="button" (click)="openForm()">Add payout details</button>
+      }
     </div>
   }
 
@@ -268,20 +274,33 @@
               test deposit. It protects your payouts if someone else ever gets into this account.
             </p>
           }
+
+          @if (!canChangeDestination()) {
+            <!--
+              Shown, not hidden: a manager or finance member checks these
+              details as often as anybody. Only the form is withheld, because
+              choosing whose account the money lands in is the owner's call.
+            -->
+            <p class="dest__owner mt-2 text-sm text-text-muted">{{ ownerOnly }}</p>
+          }
         </div>
 
-        <button uiButton variant="secondary" size="sm" type="button" (click)="openForm()">
-          <ui-icon [icon]="editIcon" size="sm" />
-          Change
-        </button>
+        @if (canChangeDestination()) {
+          <button uiButton variant="secondary" size="sm" type="button" (click)="openForm()">
+            <ui-icon [icon]="editIcon" size="sm" />
+            Change
+          </button>
+        }
       </div>
-    } @else {
+    } @else if (canChangeDestination()) {
       <ui-empty
         title="No payout details yet"
         hint="Add an Interac address or a bank account so we know where to send your money."
       >
         <button uiButton type="button" (click)="openForm()">Add payout details</button>
       </ui-empty>
+    } @else {
+      <ui-empty title="No payout details yet" [hint]="ownerOnly" />
     }
   </section>
 }

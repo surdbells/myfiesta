@@ -112,6 +112,8 @@ class PermissionAuthorityTest extends TestCase
                 'tickets.manage', 'codes.manage',
                 'attendees.view', 'door.scan',
                 'money.view', 'refunds.process', 'payouts.request',
+                // Owners alone decide whose account the payouts land in.
+                'payouts.destination',
                 'messages.send',
                 // Owners alone decide who is on the team, and what the
                 // organization is called on a page somebody is paying on, and
@@ -144,6 +146,24 @@ class PermissionAuthorityTest extends TestCase
                     "{$role->value} should not hold {$permission->value}",
                 );
             }
+        }
+    }
+
+    /**
+     * Seeing the money is not choosing where it goes.
+     *
+     * Managers and finance both see the balance, and until this permission
+     * existed that was all it took to point the payouts at another account.
+     */
+    public function test_only_an_owner_can_change_where_payouts_go(): void
+    {
+        $this->assertTrue($this->member(Role::Owner)->hasPermissionIn($this->org->id, Permission::PayoutsDestination));
+
+        foreach ([Role::Manager, Role::Finance, Role::Marketing, Role::Door] as $role) {
+            $this->assertFalse(
+                $this->member($role)->hasPermissionIn($this->org->id, Permission::PayoutsDestination),
+                "{$role->value} should not be able to change where payouts go",
+            );
         }
     }
 

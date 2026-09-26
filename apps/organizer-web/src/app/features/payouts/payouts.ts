@@ -45,6 +45,11 @@ interface DestinationDraft {
  * owed, which nights is that, and what have you sent me. The destination sits
  * last because it is set once and then never looked at again — until it is
  * wrong, which is why it is on the same screen rather than buried in settings.
+ *
+ * Everybody who can see the money sees where it goes; only an owner may change
+ * it. Pointing the payouts at another account is how a member of a team
+ * becomes a thief, so the API refuses anybody else and this screen tells them
+ * who can instead of offering a form that would fail.
  */
 @Component({
   selector: 'app-payouts',
@@ -218,6 +223,18 @@ export class Payouts {
   );
 
   /**
+   * Whether this member may change where the money goes.
+   *
+   * Owners only, and the server's answer rather than a role check here: the
+   * API refuses everybody else, so offering them the form would only lead to
+   * a 403 after they had typed a whole account number.
+   */
+  readonly canChangeDestination = computed(() => this.statement()?.can_change_destination ?? false);
+
+  /** What everybody else is told in place of the Add and Change buttons. */
+  readonly ownerOnly = "Only the organization's owner can change where payouts go.";
+
+  /**
    * Whether there is money owed with nowhere to send it.
    *
    * The single most useful thing this screen can say, and the reason the
@@ -268,6 +285,8 @@ export class Payouts {
   }
 
   openForm(): void {
+    if (!this.canChangeDestination()) return;
+
     const current = this.destination();
 
     this.formError.set(null);

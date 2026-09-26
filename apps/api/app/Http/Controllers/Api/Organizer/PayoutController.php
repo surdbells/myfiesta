@@ -68,6 +68,10 @@ class PayoutController extends Controller
             'requests' => $this->requestHistory($organization),
             // Whether this member may ask to be paid — owners and finance.
             'can_request' => $request->user()->hasPermissionIn($organization->id, Permission::PayoutsRequest),
+            // Whether this member may change where it is sent — owners only.
+            // Sent rather than left for the client to work out, so a manager
+            // is never offered a form that answers 403.
+            'can_change_destination' => $request->user()->hasPermissionIn($organization->id, Permission::PayoutsDestination),
         ]);
     }
 
@@ -283,10 +287,22 @@ class PayoutController extends Controller
      * is the same thing a fresh page load would show — a save that returned
      * what it just stored would put a full account number in a response for no
      * reason at all.
+     *
+     * Owners only. This used to need nothing more than seeing the money, so a
+     * manager or a finance member could quietly point every future payout at
+     * their own account. Checked before the details are even validated: a
+     * member who may not change them has no business learning which fields
+     * would have been accepted.
      */
     public function update(Request $request): JsonResponse
     {
         $organization = $this->organization($request);
+
+        abort_unless(
+            $request->user()->hasPermissionIn($organization->id, Permission::PayoutsDestination),
+            403,
+            "Only the organization's owner can change where payouts go.",
+        );
 
         $rail = $request->input('rail');
 
@@ -309,6 +325,15 @@ class PayoutController extends Controller
         $detail = OrganizationPayoutDetail::query()
             ->firstOrNew(['organization_id' => $organization->id]);
 
+        // Where it pointed before, masked, for the audit entry below. "Changed
+        // to the account ending 4567" answers half the question somebody asks
+        // after a payout goes astray; the other half is what it was before.
+        $before = $detail->exists
+            ? ['rail' => $detail->rail, 'last_four' => $detail->account_last_four]
+            : null;
+
+        $wasVerified = $detail->exists && $detail->verified_at !== null;
+
         $detail->fill($data + [
             'organization_id' => $organization->id,
             'currency' => $this->currency($organization),
@@ -329,7 +354,9 @@ class PayoutController extends Controller
          * institution number and the rail used to be missing, so moving the
          * same account and transit numbers to a different bank kept the mark.
          */
-        if ($detail->exists && $detail->isDirty(OrganizationPayoutDetail::DESTINATION_FIELDS)) {
+        $moved = $detail->exists && $detail->isDirty(OrganizationPayoutDetail::DESTINATION_FIELDS);
+
+        if ($moved) {
             $detail->forceFill([
                 'verified_at' => null,
                 'verified_by' => null,
@@ -345,6 +372,15 @@ class PayoutController extends Controller
         $this->auditor->record('payout_details.updated', $organization, $request->user(), $organization->id, [
             'rail' => $detail->rail,
             'last_four' => $detail->account_last_four,
+            // Null the first time details are added.
+            'from' => $before,
+            // Whether payouts now go somewhere they did not go before — true
+            // the first time as well. For Interac this is the only thing that
+            // tells a redirect apart from saving the same address again: both
+            // sides read "interac, no last four", and the address itself stays
+            // out of a log that is kept after somebody asks to be erased.
+            'destination_changed' => $before === null || $moved,
+            'verification_cleared' => $moved && $wasVerified,
         ]);
 
         SensitiveDataAccess::record(

@@ -43,6 +43,11 @@ interface DestinationDraft {
  * account number is typed, sent, and never seen again: the API keeps only its
  * last four in the clear, so that is all this screen can ever show, and the
  * field is empty every time it opens.
+ *
+ * Everybody who can see the money sees where it goes; only an owner is
+ * offered Add or Change. Pointing the payouts at a different account is how a
+ * member of a team becomes a thief, so the API refuses anybody else and this
+ * screen says so rather than handing them a form that would fail.
  */
 @Component({
   selector: 'mf-org-payouts',
@@ -62,19 +67,23 @@ interface DestinationDraft {
           @if (pending(); as p) {
             <div class="waiting">
               <p><strong>{{ cash(p.amount) }}</strong> asked for {{ day(p.requested_at) }} — waiting to be paid.</p>
-              <button mfButton size="sm" variant="secondary" [loading]="busy()" (click)="withdraw(p)">Withdraw the request</button>
+              @if (s.can_request) {
+                <button mfButton size="sm" variant="secondary" [loading]="busy()" (click)="withdraw(p)">Withdraw the request</button>
+              }
             </div>
           } @else if (canAsk()) {
             <button mfButton block class="ask" (click)="startAsk()">Ask to be paid</button>
           } @else if (s.balance.amount > 0 && !s.destination) {
-            <p class="warn">There is money owed and nowhere to send it. Add where it goes below.</p>
+            <p class="warn">There is money owed and nowhere to send it.{{ s.can_change_destination ? ' Add where it goes below.' : '' }}</p>
           }
         </mf-card>
 
         <section class="block">
           <div class="heading-row">
             <h2 class="heading">Where it goes</h2>
-            <button mfButton size="sm" variant="secondary" (click)="openDestination()">{{ s.destination ? 'Change' : 'Add' }}</button>
+            @if (s.can_change_destination) {
+              <button mfButton size="sm" variant="secondary" (click)="openDestination()">{{ s.destination ? 'Change' : 'Add' }}</button>
+            }
           </div>
           @if (s.destination; as d) {
             <mf-card quiet class="destination">
@@ -97,6 +106,10 @@ interface DestinationDraft {
             </mf-card>
           } @else {
             <p class="muted">Nothing yet. Payouts cannot be sent until this is set.</p>
+          }
+          @if (!s.can_change_destination) {
+            <!-- Shown, not hidden: only the form is the owner's. -->
+            <p class="muted owner-only">{{ ownerOnly }}</p>
           }
         </section>
 
@@ -274,6 +287,10 @@ interface DestinationDraft {
       overflow-wrap: anywhere;
     }
 
+    .owner-only {
+      margin-top: var(--space-3);
+    }
+
     .form {
       display: grid;
       gap: var(--space-4);
@@ -331,6 +348,9 @@ export class OrgPayouts implements OnInit {
     const s = this.statement();
     return !!s && s.can_request && !!s.destination && s.balance.amount > 0 && !this.pending();
   });
+
+  /** What a manager or finance member sees in place of Add and Change. */
+  protected readonly ownerOnly = 'Only the organization’s owner can change where payouts go.';
 
   protected readonly tooMuch = computed(() => (this.askAmount() ?? 0) > (this.statement()?.balance.amount ?? 0));
 
@@ -443,7 +463,11 @@ export class OrgPayouts implements OnInit {
 
   protected openDestination(): void {
     const s = this.statement();
-    const current = s?.destination;
+    // The server refuses anybody else, and finding that out after typing a
+    // whole account number is worse than never being offered the sheet.
+    if (!s?.can_change_destination) return;
+
+    const current = s.destination;
 
     this.formError.set(null);
     this.draft.set({

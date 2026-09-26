@@ -48,6 +48,17 @@ enum Permission: string
     // people whose job is where the money goes, not everybody who can see it.
     case PayoutsRequest = 'payouts.request';
 
+    /**
+     * Where the payouts are sent: the Interac address or the bank account.
+     *
+     * Owner-only, like the team and the integrations. It used to ride on
+     * seeing the money, so a manager or a finance member could point every
+     * future payout at an account of their own — the classic way a member of
+     * a team becomes a thief. Seeing the balance and asking for it are jobs
+     * others can do; deciding whose account it lands in is the owner's.
+     */
+    case PayoutsDestination = 'payouts.destination';
+
     // Reaching the audience
     case MessagesSend = 'messages.send';
 
@@ -89,9 +100,10 @@ enum Permission: string
     {
         return match ($role) {
             /*
-             * Everything, including the two nobody else gets: taking an event
-             * off sale permanently, and deleting one. Both were already
-             * owner-only in EventPolicy::delete and stay that way.
+             * Everything, including what nobody else gets: taking an event
+             * off sale permanently and deleting one — both already owner-only
+             * in EventPolicy::delete — and the team, the brand, the
+             * integrations and where the payouts are sent.
              */
             Role::Owner => self::cases(),
 
@@ -107,6 +119,7 @@ enum Permission: string
             ],
 
             // Money in and money out, and nothing that changes what is on sale.
+            // Asks for a payout, but does not choose where it is sent.
             Role::Finance => [
                 self::EventsView,
                 self::MoneyView, self::RefundsProcess, self::PayoutsRequest,

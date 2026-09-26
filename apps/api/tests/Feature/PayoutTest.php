@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Enums\TokenAbility;
+use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
@@ -272,5 +273,171 @@ class PayoutTest extends TestCase
         ])->assertForbidden();
 
         $this->assertSame(0, OrganizationPayoutDetail::count());
+    }
+
+    // --- who may change where it goes ----------------------------------------
+
+    private function verifiedInterac(): OrganizationPayoutDetail
+    {
+        return OrganizationPayoutDetail::create([
+            'organization_id' => $this->org->id,
+            'rail' => 'interac',
+            'currency' => 'CAD',
+            'interac_email' => 'money@lagosnights.test',
+            'verified_at' => now(),
+            'verification_method' => 'interac_test_transfer',
+        ]);
+    }
+
+    public function test_an_owner_can_change_where_the_money_goes(): void
+    {
+        $this->verifiedInterac();
+        $this->signedInAs(Role::Owner);
+
+        $this->getJson('/api/organizer/payouts')
+            ->assertOk()
+            ->assertJsonPath('can_change_destination', true);
+
+        $this->putJson('/api/organizer/payout-details', [
+            'rail' => 'bank_transfer',
+            'account_name' => 'Lagos Nights Inc',
+            'bank_name' => 'Royal Bank',
+            'account_number' => '1234567',
+        ])->assertOk()->assertJsonPath('account_last_four', '4567');
+
+        $this->assertSame('bank_transfer', OrganizationPayoutDetail::sole()->rail);
+    }
+
+    /**
+     * Seeing the money is not choosing where it goes.
+     *
+     * Managers and finance both see the balance, and until now that was all it
+     * took to point every future payout at an account of their own. Refused
+     * even for a well-formed request, and the details on file are untouched —
+     * including the verification, which a refused write must not clear.
+     */
+    public function test_managers_and_finance_see_the_destination_but_cannot_change_it(): void
+    {
+        $detail = $this->verifiedInterac();
+
+        foreach ([Role::Manager, Role::Finance] as $role) {
+            $this->signedInAs($role);
+
+            $this->getJson('/api/organizer/payouts')
+                ->assertOk()
+                ->assertJsonPath('can_change_destination', false)
+                // Still shown: checking the details is not the same as changing them.
+                ->assertJsonPath('destination.interac_email', 'money@lagosnights.test');
+
+            $this->putJson('/api/organizer/payout-details', [
+                'rail' => 'interac',
+                'interac_email' => 'attacker@example.test',
+            ])
+                ->assertForbidden()
+                ->assertJsonPath('message', "Only the organization's owner can change where payouts go.");
+
+            $this->putJson('/api/organizer/payout-details', [
+                'rail' => 'bank_transfer',
+                'account_name' => 'Somebody Else',
+                'bank_name' => 'Another Bank',
+                'account_number' => '99998888',
+            ])->assertForbidden();
+        }
+
+        $fresh = $detail->fresh();
+
+        $this->assertSame(1, OrganizationPayoutDetail::count());
+        $this->assertSame('interac', $fresh->rail);
+        $this->assertSame('money@lagosnights.test', $fresh->interac_email);
+        $this->assertNull($fresh->account_last_four);
+        $this->assertNotNull($fresh->verified_at);
+
+        // Nothing written, so nothing to record as written.
+        $this->assertSame(0, AuditLog::where('action', 'payout_details.updated')->count());
+        $this->assertSame(0, SensitiveDataAccess::where('action', 'write')->count());
+    }
+
+    public function test_changing_where_the_money_goes_is_recorded_with_where_it_went_before(): void
+    {
+        $this->verifiedInterac();
+        $owner = $this->signedInAs(Role::Owner);
+
+        $this->putJson('/api/organizer/payout-details', [
+            'rail' => 'bank_transfer',
+            'account_name' => 'Lagos Nights Inc',
+            'bank_name' => 'Royal Bank',
+            'account_number' => '1234567',
+        ])->assertOk();
+
+        $entry = AuditLog::where('action', 'payout_details.updated')->sole();
+
+        $this->assertSame($owner->id, $entry->actor_id);
+        $this->assertSame($this->org->id, $entry->organization_id);
+        $this->assertSame('bank_transfer', $entry->metadata['rail']);
+        $this->assertSame('4567', $entry->metadata['last_four']);
+        $this->assertSame(['rail' => 'interac', 'last_four' => null], $entry->metadata['from']);
+        $this->assertTrue($entry->metadata['destination_changed']);
+        $this->assertTrue($entry->metadata['verification_cleared']);
+
+        // Masked in the record as everywhere else: the full number is not
+        // evidence of anything the last four does not already show.
+        $this->assertStringNotContainsString('1234567', json_encode($entry->metadata));
+    }
+
+    /**
+     * One Interac address swapped for another is still a change on record.
+     *
+     * Interac has no last four, so before and after both read "interac" and
+     * nothing else. Without saying so outright, pointing an unverified address
+     * somewhere new wrote the same entry as opening the form and saving the
+     * address already there — and after a payout went astray, the record could
+     * not say when the address changed. The address itself stays out of it.
+     */
+    public function test_moving_to_another_interac_address_is_recorded_as_a_move(): void
+    {
+        $this->signedInAs(Role::Owner);
+
+        // Each save, and the one entry it wrote. Picked out by what was new
+        // rather than by time, since three saves can share a timestamp.
+        $seen = [];
+
+        $save = function (string $email) use (&$seen): array {
+            $this->putJson('/api/organizer/payout-details', [
+                'rail' => 'interac',
+                'interac_email' => $email,
+            ])->assertOk();
+
+            $entry = AuditLog::where('action', 'payout_details.updated')
+                ->whereNotIn('id', $seen)
+                ->sole();
+
+            $seen[] = $entry->id;
+
+            return $entry->metadata;
+        };
+
+        $entries = [
+            $save('money@lagosnights.test'),
+            $save('money@lagosnights.test'),
+            $save('attacker@example.test'),
+        ];
+
+        // The first time: nowhere before, somewhere now.
+        $this->assertNull($entries[0]['from']);
+        $this->assertTrue($entries[0]['destination_changed']);
+
+        // The same address saved again goes nowhere new.
+        $this->assertSame(['rail' => 'interac', 'last_four' => null], $entries[1]['from']);
+        $this->assertFalse($entries[1]['destination_changed']);
+
+        // A different address does, though nothing was verified to clear.
+        $this->assertSame(['rail' => 'interac', 'last_four' => null], $entries[2]['from']);
+        $this->assertTrue($entries[2]['destination_changed']);
+        $this->assertFalse($entries[2]['verification_cleared']);
+
+        foreach ($entries as $metadata) {
+            $this->assertStringNotContainsString('lagosnights.test', json_encode($metadata));
+            $this->assertStringNotContainsString('example.test', json_encode($metadata));
+        }
     }
 }
