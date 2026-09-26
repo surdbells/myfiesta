@@ -101,9 +101,11 @@ on fewer:
 
 Both doors read through these, the console's and the phone's: the phone's used
 to act on any QR in view, and to start its four seconds from the first read.
-A code the camera sees that is not a ticket's is not a scan; the phone says so
-by the preview, since a door staring at a camera that does nothing learns
-nothing, and the console stays quiet.
+A code the camera sees that is not a ticket's is not a scan, but both doors say
+so over the preview for a few seconds (`NotATicketNote`), since a door staring
+at a camera that does nothing learns nothing. Not while a ticket has been in
+view in the last two seconds: then the other code is a poster behind the guest.
+The console used to stay quiet.
 
 Tested in `apps/organizer-web` (`door-reads.spec.ts`, and through the door
 screen in `door.spec.ts`) and through the phone's door in `apps/mobile`

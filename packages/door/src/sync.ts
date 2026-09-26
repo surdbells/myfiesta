@@ -28,16 +28,16 @@ const REFUSED_BECAUSE: Record<string, string> = {
  * can be lost after the server has acted: a timeout, or the wifi dropping on
  * the way back. The queued copy goes under the scan's own id, so the server
  * knows it for the scan it has already recorded and a table is not let in
- * twice. But it then answers with what it decided the first time, as it does
- * for any scan it has already recorded, and compares nothing, because the
- * first time was online. So a guest let in from this phone's list on a ticket
- * the server had just refused — used at another door since the list was
- * fetched, or refunded — went through the sync with nobody told. The door
- * knows what it did, so it compares here.
+ * twice. It used to answer with what it decided the first time and compare
+ * nothing, so a guest let in from this phone's list on a ticket the server had
+ * just refused — used at another door since the list was fetched, or refunded
+ * — went through the sync with nobody told.
  *
- * Such an answer is the one with no `offline_result`. Once the server compares
- * these itself and says so, they arrive in its `conflicts` like any other, and
- * nothing is added here.
+ * The server now compares these itself (CheckInService::reconcile) and names
+ * the disagreement in its `conflicts` like any other, with the door's decision
+ * in `offline_result`. This is the fallback for an answer with no
+ * `offline_result` — a server from before that change — and adds nothing
+ * when the server has already spoken.
  */
 export function conflictsIn(batch: readonly OfflineScan[], result: SyncResult): SyncResult['conflicts'] {
   const queued = new Map(batch.map((scan) => [scan.client_id, scan]));

@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { RepeatReads, SAME_TICKET_AGAIN_AFTER_MS, ticketCode } from '@myfiesta/door';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  NOT_A_TICKET_SAID_FOR_MS,
+  NotATicketNote,
+  RepeatReads,
+  SAME_TICKET_AGAIN_AFTER_MS,
+  TICKET_IN_VIEW_WITHIN_MS,
+  ticketCode,
+} from '@myfiesta/door';
 
 /**
  * What a door does with what its camera reads, from `@myfiesta/door`.
@@ -93,6 +100,72 @@ describe('what a door acts on', () => {
 
       expect(reads.take('WFY7-F77K4EJW', true, 0)).toBe(false);
       expect(reads.take('WFY7-F77K4EJW', false, 200)).toBe(true);
+    });
+  });
+
+  /**
+   * Both doors, the phone's and now the console's, say so when the camera is
+   * shown a QR code that is not a ticket's. The console used to say nothing,
+   * and a door holding up a guest's payment code saw a camera doing nothing.
+   */
+  describe('a code that is not a ticket’s', () => {
+    let showing: boolean;
+    let note: NotATicketNote;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      showing = false;
+      note = new NotATicketNote((said) => (showing = said));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('is said for three seconds after the camera last saw it', () => {
+      note.sawSomethingElse();
+
+      expect(showing).toBe(true);
+
+      vi.advanceTimersByTime(2000);
+      // Still held up: the three seconds count from here, not from the first sighting.
+      note.sawSomethingElse();
+      vi.advanceTimersByTime(NOT_A_TICKET_SAID_FOR_MS - 1);
+
+      expect(showing).toBe(true);
+
+      vi.advanceTimersByTime(1);
+
+      expect(showing).toBe(false);
+    });
+
+    it('is not said while a ticket is in view beside it, and is once the ticket has gone', () => {
+      note.sawTicket(0);
+      note.sawSomethingElse(0);
+      note.sawSomethingElse(TICKET_IN_VIEW_WITHIN_MS - 1);
+
+      // The poster on the wall behind a guest whose ticket is being read.
+      expect(showing).toBe(false);
+
+      // The guest has gone in, and the poster is all the camera sees.
+      note.sawSomethingElse(TICKET_IN_VIEW_WITHIN_MS);
+
+      expect(showing).toBe(true);
+    });
+
+    it('comes down the moment a ticket is seen', () => {
+      note.sawSomethingElse(0);
+      note.sawTicket(400);
+
+      expect(showing).toBe(false);
+    });
+
+    it('comes down with the camera, and leaves nothing running behind it', () => {
+      note.sawSomethingElse();
+      note.clear();
+
+      expect(showing).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 });

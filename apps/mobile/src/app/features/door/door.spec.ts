@@ -11,6 +11,7 @@ vi.mock('@capacitor/haptics', () => ({
 
 import { Haptics } from '@capacitor/haptics';
 import { Api, ScanResult } from '../../core/api';
+import { DoorOffline } from '../../core/door-offline';
 import { Scanner } from '../../core/scanner';
 import { SessionStore } from '../../core/session';
 import { Door } from './door';
@@ -389,6 +390,87 @@ describe('The door, on a phone', () => {
 
       expect(page.textContent).toContain('Let them in');
       expect(page.querySelector('.recent')?.textContent).toContain('WFY7-F77K4EJW');
+    });
+  });
+
+  /**
+   * The screen sends what is waiting and fetches the list when it opens, then
+   * keeps doing both on timers. The timers used to be set going only once the
+   * first sync had finished, which on a slow wifi can be well after the screen
+   * was left: nothing was left to stop them, and they went on all night for
+   * that event — replacing the list another event's door was deciding from.
+   */
+  describe('sending and fetching without the screen open', () => {
+    /** The phone's offline side, with a first sync still waiting on the server. */
+    function slowFirstSync() {
+      let settle!: (went: boolean) => void;
+      const first = new Promise<boolean>((resolve) => (settle = resolve));
+      const syncs: string[] = [];
+      const refreshes: string[] = [];
+
+      TestBed.overrideProvider(DoorOffline, {
+        useValue: {
+          supported: true,
+          listCount: signal(0),
+          listUpdatedAt: signal(null),
+          pendingCount: signal(1),
+          connectionLost: signal(false),
+          conflicts: signal([]),
+          unrecorded: signal([]),
+          prepare: async () => undefined,
+          sync: (event: string) => {
+            syncs.push(event);
+
+            return syncs.length === 1 ? first : Promise.resolve(true);
+          },
+          refreshList: async (event: string) => {
+            refreshes.push(event);
+          },
+        },
+      });
+
+      return { syncs, refreshes, settle };
+    }
+
+    it('stops once the screen is left, however long the first sync takes', async () => {
+      vi.useFakeTimers();
+      const offline = slowFirstSync();
+      const fixture = TestBed.createComponent(Door);
+
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(offline.syncs).toEqual(['evt_1']);
+
+      // Back to the events list with the scans still on their way...
+      fixture.destroy();
+
+      // ...and the server answering some time after.
+      offline.settle(false);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(offline.syncs).toEqual(['evt_1']);
+      expect(offline.refreshes).toEqual([]);
+    });
+
+    it('keeps sending and fetching while the screen is open', async () => {
+      vi.useFakeTimers();
+      const offline = slowFirstSync();
+      const fixture = TestBed.createComponent(Door);
+
+      fixture.detectChanges();
+      offline.settle(true);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(offline.refreshes).toEqual(['evt_1']);
+
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+
+      // Every fifteen seconds, and the list every three minutes.
+      expect(offline.syncs).toHaveLength(13);
+      expect(offline.refreshes).toHaveLength(2);
+
+      fixture.destroy();
     });
   });
 });

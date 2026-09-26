@@ -68,8 +68,9 @@ function withFrames(page: HTMLElement): void {
  * camera wherever there is one now, reading with ZXing where the browser
  * cannot — and one ticket held up to it is still one scan, however long it is
  * held up or the answer takes. What it reads that is not a ticket's goes
- * nowhere, and a scan the server will never take cannot hold up the queue of
- * scans made without signal.
+ * nowhere, and is said over the preview as the phone app says it, and a scan
+ * the server will never take cannot hold up the queue of scans made without
+ * signal.
  */
 describe('Door', () => {
   let backend: HttpTestingController;
@@ -213,9 +214,11 @@ describe('Door', () => {
     expect(fixture.nativeElement.textContent).toContain('2 in · 2 still outside');
   });
 
-  it('sends nothing for a QR code that is not a ticket’s', async () => {
+  it('sends nothing for a QR code that is not a ticket’s, and says what it saw', async () => {
     const link = `https://example.com/${'x'.repeat(40)}`;
-    const fixture = await scanningWith(vi.fn(async () => [{ rawValue: link }]));
+    const detect = vi.fn(async () => [{ rawValue: link }]);
+    const fixture = await scanningWith(detect);
+    const page: HTMLElement = fixture.nativeElement;
 
     await vi.advanceTimersByTimeAsync(2000);
     fixture.detectChanges();
@@ -224,7 +227,33 @@ describe('Door', () => {
     // would hold every scan queued behind it.
     expect(backend.match(SCAN)).toHaveLength(0);
     expect(fixture.componentInstance.code()).toBe('');
-    expect(fixture.nativeElement.textContent).not.toContain('Do not admit');
+    expect(page.textContent).not.toContain('Do not admit');
+    // It used to say nothing, and a door shown a payment code saw a camera doing nothing.
+    expect(page.textContent).toContain('That QR code is not a ticket.');
+
+    // Gone once it is out of view.
+    detect.mockResolvedValue([]);
+    await vi.advanceTimersByTimeAsync(3000);
+    fixture.detectChanges();
+
+    expect(page.textContent).not.toContain('That QR code is not a ticket.');
+  });
+
+  it('says nothing about a code behind a ticket that is being read', async () => {
+    const fixture = await scanningWith(
+      vi.fn(async () => [{ rawValue: 'WFY7-F77K4EJW' }, { rawValue: 'https://example.com/poster' }]),
+    );
+
+    await vi.advanceTimersByTimeAsync(2000);
+    fixture.detectChanges();
+
+    const scans = backend.match(SCAN);
+
+    expect(scans.map((scan) => scan.request.body.code)).toEqual(['WFY7-F77K4EJW']);
+    expect(fixture.nativeElement.textContent).not.toContain('That QR code is not a ticket.');
+
+    scans[0].flush(admitted);
+    await vi.advanceTimersByTimeAsync(0);
   });
 
   it('says a typed code cannot be a ticket’s rather than sending it', () => {

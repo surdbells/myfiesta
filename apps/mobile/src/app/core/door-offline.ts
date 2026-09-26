@@ -49,7 +49,8 @@ export class DoorOffline extends DoorOfflineStore {
    */
   readonly unrecorded = signal<OfflineScan[]>([]);
 
-  private syncing = false;
+  /** The sync under way for each event, for a second call to wait on — see `sync`. */
+  private readonly sending = new Map<string, Promise<boolean>>();
 
   /** Load what this phone already has for the event, and count it. */
   async prepare(eventId: string): Promise<void> {
@@ -136,13 +137,40 @@ export class DoorOffline extends DoorOfflineStore {
    * the server named. The rest go with the next sync. Of those, a refusal is
    * forgotten, and an admission is kept on the phone, unsent, for `unrecorded`.
    *
-   * What the server got wrong is compared there too (`conflictsIn`): a scan
-   * that reached the server online and was queued when its answer did not
-   * come back is one the server answers without comparing.
+   * What the server got wrong it names itself, including for a scan that
+   * reached it online and was queued when its answer did not come back: it
+   * compares the door's decision with its own and reports the difference like
+   * any other offline conflict. `conflictsIn` still compares on the phone, as
+   * a fallback for an answer that carries no decision to compare.
+   *
+   * Answers whether it all went: true once the server has answered for every
+   * scan that was waiting when the sync began, false if any is still on the
+   * phone for want of signal or because the server refused its batch.
+   *
+   * One at a time for an event. A call while a sync is already sending waits
+   * for that one and has its answer. It used to be told true straight away,
+   * with the scans still on their way and nobody knowing yet whether they
+   * would get there: a door screen opened again mid-sync went on to fetch its
+   * list as if the queue had gone, found scans still waiting, and fetched
+   * nothing — so a phone just back in signal kept the old list for minutes
+   * more.
    */
-  async sync(eventId: string): Promise<boolean> {
-    if (!this.supported || this.syncing) return true;
+  sync(eventId: string): Promise<boolean> {
+    if (!this.supported) return Promise.resolve(true);
 
+    const under = this.sending.get(eventId);
+
+    if (under) return under;
+
+    const sending = this.send(eventId).finally(() => this.sending.delete(eventId));
+
+    this.sending.set(eventId, sending);
+
+    return sending;
+  }
+
+  /** One sync, from reading the queue to counting what is left: see `sync`. */
+  private async send(eventId: string): Promise<boolean> {
     const pending = await this.pending(eventId).catch(() => []);
 
     if (pending.length === 0) {
@@ -150,8 +178,6 @@ export class DoorOffline extends DoorOfflineStore {
 
       return true;
     }
-
-    this.syncing = true;
 
     let batch: OfflineScan[] = [];
 
@@ -188,7 +214,6 @@ export class DoorOffline extends DoorOfflineStore {
 
       return false;
     } finally {
-      this.syncing = false;
       await this.countPending(eventId);
     }
   }

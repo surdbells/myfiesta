@@ -86,3 +86,58 @@ export class RepeatReads {
     this.last.at = now;
   }
 }
+
+/** How long "That QR code is not a ticket" stays up after the camera last saw one. */
+export const NOT_A_TICKET_SAID_FOR_MS = 3000;
+
+/**
+ * How recently a ticket has to have been in view for another code beside it to
+ * be taken as something behind it, not what was held up.
+ */
+export const TICKET_IN_VIEW_WITHIN_MS = 2000;
+
+/**
+ * Saying so when the camera is shown a QR code that is not a ticket's.
+ *
+ * Not a scan — nothing is sent and nothing buzzes — but said over the preview
+ * for a few seconds: a door holding up a guest's payment code or the event's
+ * own poster otherwise stares at a camera that does nothing and learns nothing.
+ *
+ * Not while a ticket is in view as well, or was a moment ago. The camera reads
+ * everything in the frame, and then the other code is only the poster on the
+ * wall behind the guest; a door told "that is not a ticket" while it checks a
+ * good one in stops believing the screen. And taken down the moment a ticket
+ * is seen.
+ *
+ * Here rather than in either door so both say it on the same timing. No
+ * framework in it, like the rest of this package: each door hands over what to
+ * do when the note goes up or comes down, and keeps the note itself.
+ */
+export class NotATicketNote {
+  private ticketSeenAt = -Infinity;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  constructor(private readonly show: (showing: boolean) => void) {}
+
+  /** The camera saw a ticket's code. */
+  sawTicket(now = Date.now()): void {
+    this.ticketSeenAt = now;
+    this.clear();
+  }
+
+  /** The camera saw a code that is not a ticket's. */
+  sawSomethingElse(now = Date.now()): void {
+    if (now - this.ticketSeenAt < TICKET_IN_VIEW_WITHIN_MS) return;
+
+    clearTimeout(this.timer);
+    this.show(true);
+    this.timer = setTimeout(() => this.clear(), NOT_A_TICKET_SAID_FOR_MS);
+  }
+
+  /** Taken down: a ticket came into view, the camera stopped, or the door screen went. */
+  clear(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.show(false);
+  }
+}

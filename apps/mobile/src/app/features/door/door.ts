@@ -2,7 +2,15 @@ import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild }
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
-import { RepeatReads, partyKey, partySize, scanId, ticketCode, unrecordedAdmission } from '@myfiesta/door';
+import {
+  NotATicketNote,
+  RepeatReads,
+  partyKey,
+  partySize,
+  scanId,
+  ticketCode,
+  unrecordedAdmission,
+} from '@myfiesta/door';
 import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
@@ -566,6 +574,8 @@ export class Door implements OnDestroy {
 
   private next = 0;
   private timers: ReturnType<typeof setInterval>[] = [];
+  /** Whether the screen has been left, for work started before then to stop — see `prepareForNoSignal`. */
+  private left = false;
 
   // --- when the signal goes --------------------------------------------------
 
@@ -595,9 +605,11 @@ export class Door implements OnDestroy {
   /** Whether the camera has just been shown a QR code that is not a ticket's. */
   readonly notATicket = signal(false);
 
-  /** When the camera last saw a ticket's code, so a poster behind one is not mistaken for what was held up. */
-  private ticketSeenAt = -Infinity;
-  private notATicketTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * When to say so and when to stop, out of `@myfiesta/door` so the console's
+   * door says it on the same timing — see `NotATicketNote`.
+   */
+  private readonly notATicketNote = new NotATicketNote((showing) => this.notATicket.set(showing));
 
   readonly cameraNote = computed(() => {
     if (this.cameraReady() === false && this.scanner.refusal() === null) {
@@ -629,6 +641,13 @@ export class Door implements OnDestroy {
    * The list is fetched on arrival and every few minutes after, and the queue
    * is sent on a timer rather than only when the browser says it is online —
    * a venue wifi that quietly starts working again fires no such event.
+   *
+   * Each step stops if the screen has been left while it was waiting. The
+   * first sync can take a while on a slow wifi, and a screen left before it
+   * finished used to go on and set the timers anyway, after they had been
+   * cleared, with nothing left to stop them: this event's list fetched every
+   * three minutes all night, replacing the one another event's door was
+   * deciding from.
    */
   private async prepareForNoSignal(): Promise<void> {
     const eventId = this.eventId();
@@ -636,8 +655,13 @@ export class Door implements OnDestroy {
     if (!eventId || !this.offline.supported) return;
 
     await this.offline.prepare(eventId);
+    if (this.left) return;
+
     await this.offline.sync(eventId);
+    if (this.left) return;
+
     await this.offline.refreshList(eventId);
+    if (this.left) return;
 
     this.timers.push(setInterval(() => void this.offline.sync(eventId), 15_000));
     this.timers.push(setInterval(() => void this.offline.refreshList(eventId), 3 * 60_000));
@@ -657,7 +681,7 @@ export class Door implements OnDestroy {
 
   async stopCamera(): Promise<void> {
     await this.scanner.stop();
-    this.notATicket.set(false);
+    this.notATicketNote.clear();
   }
 
   /**
@@ -671,41 +695,27 @@ export class Door implements OnDestroy {
    * first sighting only: a ticket held up through a slow answer was sent again,
    * with the party size already cleared, which on a table's ticket lets in
    * everyone still outside. See `ticketCode` and `RepeatReads`.
+   *
+   * A QR code that is not a ticket's is not a scan, but it is said over the
+   * preview for a few seconds — not while a ticket is in view beside it, when
+   * it is only something behind. See `NotATicketNote`.
    */
   private read(raw: string): void {
     const code = ticketCode(raw);
     const now = Date.now();
 
     if (!code) {
-      this.sawSomethingElse(now);
+      this.notATicketNote.sawSomethingElse(now);
 
       return;
     }
 
-    this.ticketSeenAt = now;
-    this.notATicket.set(false);
+    this.notATicketNote.sawTicket(now);
 
     if (!this.reads.take(code, this.busy(), now)) return;
 
     this.code.set(code);
     void this.submit().finally(() => this.reads.answered(code));
-  }
-
-  /**
-   * A QR code the camera read that is not a ticket's.
-   *
-   * Not a scan — nothing is sent and nothing buzzes — but said over the
-   * preview for a few seconds: a door holding up a guest's payment code or the
-   * event's own poster otherwise stares at a camera that does nothing and
-   * learns nothing. Not while a ticket is in view as well, when the other code
-   * is only something behind it.
-   */
-  private sawSomethingElse(now: number): void {
-    if (now - this.ticketSeenAt < 2000) return;
-
-    this.notATicket.set(true);
-    clearTimeout(this.notATicketTimer);
-    this.notATicketTimer = setTimeout(() => this.notATicket.set(false), 3000);
   }
 
   /** Keeps "How many" to digits as they are typed; what is pasted is checked on the way out. */
@@ -714,9 +724,10 @@ export class Door implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.left = true;
     this.timers.forEach(clearInterval);
     this.timers = [];
-    clearTimeout(this.notATicketTimer);
+    this.notATicketNote.clear();
 
     // Leaving the screen with the camera running is a phone that stays warm in
     // somebody's pocket all night, and on the native path a page that has lost

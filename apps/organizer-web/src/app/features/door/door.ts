@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
 import {
   CameraRefusal,
+  NotATicketNote,
   PageCamera,
   RepeatReads,
   canScanInPage,
@@ -252,10 +253,11 @@ export class Door implements OnDestroy {
    * has answered — a sync whose response is lost is simply sent again, and
    * the scan ids make that harmless.
    *
-   * What the door got wrong is read out of the answer by `conflictsIn`, which
-   * also compares a scan that reached the server online and was queued when
-   * its answer did not come back: the server answers that one without
-   * comparing.
+   * What the door got wrong is read out of the answer by `conflictsIn`. The
+   * server names it, including for a scan that reached it online and was
+   * queued when its answer did not come back — it compares the door's decision
+   * with its own — and `conflictsIn` compares on the door only for an answer
+   * that carries no decision to compare.
    */
   async sync(): Promise<boolean> {
     if (!this.offlineSupported) return true;
@@ -406,6 +408,12 @@ export class Door implements OnDestroy {
 
   /** What the camera has already acted on, so one ticket held up is one scan. */
   private readonly reads = new RepeatReads();
+
+  /** Whether the camera has just been shown a QR code that is not a ticket's. */
+  readonly notATicket = signal(false);
+
+  /** When to say so and when to stop, by the phone's rules — see `NotATicketNote`. */
+  private readonly notATicketNote = new NotATicketNote((showing) => this.notATicket.set(showing));
 
   /**
    * Whether this browser can read a QR code with its camera: a camera it is
@@ -586,7 +594,10 @@ export class Door implements OnDestroy {
         onLive: () => this.scanning.set(true),
         // The phone locked, or the tab went to the background: back to the
         // button rather than a black frame that never reads.
-        onEnded: () => this.scanning.set(false),
+        onEnded: () => {
+          this.scanning.set(false);
+          this.notATicketNote.clear();
+        },
       });
 
       if (refusal) this.cameraError.set(CAMERA_REFUSED[refusal]);
@@ -600,14 +611,29 @@ export class Door implements OnDestroy {
    *
    * Only a ticket's, and only once while it is held up: the camera reads
    * whatever is in front of it several times a second, and a scan admits
-   * somebody. A QR code that is not a ticket's is not a scan at all, and says
-   * nothing — it is usually a poster behind the guest. See `ticketCode` and
-   * `RepeatReads` for why each rule is what it is.
+   * somebody. See `ticketCode` and `RepeatReads` for why each rule is what it
+   * is.
+   *
+   * A QR code that is not a ticket's is not a scan at all, but it is said over
+   * the preview, as the phone app says it. This door used to stay quiet, on
+   * the grounds that such a code is usually a poster behind the guest — and a
+   * door shown a guest's payment code stared at a camera that did nothing.
+   * The poster is still not mentioned while a ticket is in view beside it:
+   * see `NotATicketNote`.
    */
   private read(raw: string): void {
     const code = ticketCode(raw);
+    const now = Date.now();
 
-    if (!code || !this.reads.take(code, this.busy())) return;
+    if (!code) {
+      this.notATicketNote.sawSomethingElse(now);
+
+      return;
+    }
+
+    this.notATicketNote.sawTicket(now);
+
+    if (!this.reads.take(code, this.busy(), now)) return;
 
     this.code.set(code);
     void this.send(code).finally(() => this.reads.answered(code));
@@ -616,6 +642,7 @@ export class Door implements OnDestroy {
   stopCamera(): void {
     this.camera.stop();
     this.scanning.set(false);
+    this.notATicketNote.clear();
   }
 
   ngOnDestroy(): void {

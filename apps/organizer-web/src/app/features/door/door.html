@@ -287,6 +287,15 @@
          blocks autoplay outright. -->
     <video #preview class="block aspect-[4/3] w-full object-cover" muted playsinline autoplay></video>
     <div class="reticle absolute inset-[22%_26%] rounded-md border-[3px] border-[rgba(255,255,255,0.85)] shadow-[0_0_0_100vmax_rgba(0,0,0,0.35)]" aria-hidden="true"></div>
+
+    <!-- Over the preview, where whoever is holding the camera is already
+         looking: a code that is not a ticket's sends nothing, and without
+         this the door learns nothing either. -->
+    @if (scanning() && notATicket()) {
+      <p class="not-a-ticket absolute inset-x-3 top-3 m-0 rounded-md bg-[rgba(0,0,0,0.72)] px-3 py-2 text-center text-sm leading-snug text-white" role="status">
+        That QR code is not a ticket. Ask to see the ticket itself.
+      </p>
+    }
   </div>
 
   @if (scanning()) {

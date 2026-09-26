@@ -17,7 +17,14 @@ export {
   openDetector,
   zxingWasmUrl,
 } from './camera';
-export { RepeatReads, SAME_TICKET_AGAIN_AFTER_MS, ticketCode } from './reads';
+export {
+  NOT_A_TICKET_SAID_FOR_MS,
+  NotATicketNote,
+  RepeatReads,
+  SAME_TICKET_AGAIN_AFTER_MS,
+  TICKET_IN_VIEW_WITHIN_MS,
+  ticketCode,
+} from './reads';
 export { MOST_AT_ONCE, partyKey, partySize } from './party';
 export { conflictsIn, unrecordedAdmission, unsendableScans } from './sync';
 export type { PartySize } from './party';

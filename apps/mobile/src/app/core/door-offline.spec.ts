@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIndexedDB } from '../../../../../packages/door/src/testing/memory-indexeddb';
-import { Api, ApiError, OfflineScan, ScanResult, SyncResult } from './api';
+import { Api, ApiError, DoorList, OfflineScan, ScanResult, SyncResult } from './api';
 import { DoorOffline } from './door-offline';
 
 const admitted: ScanResult = {
@@ -38,6 +38,17 @@ const later: OfflineScan = {
   scanned_at: '2026-09-26T21:02:00Z',
 };
 
+/** The door list as the server sends it: hashes and a name, never a code. */
+const list: DoorList = {
+  event_id: 'evt_1',
+  salt: 'c2FsdC1mb3ItZXZ0XzE',
+  iterations: 1000,
+  generated_at: '2026-09-26T21:05:00Z',
+  tickets: [
+    { hash: 'aGFzaC1vZi1vbmU', status: 'valid', admits: 1, admitted_count: 1, holder_name: 'Ada Okoro', type: 'General' },
+  ],
+};
+
 /** The API refusing a batch whole, naming the field it would not take. */
 function refusal(field: string): ApiError {
   return new ApiError('The given data was invalid.', 422, { [field]: ['Not valid.'] });
@@ -60,10 +71,12 @@ describe('DoorOffline, sending what was scanned without signal', () => {
   let offline: DoorOffline;
   let sent: OfflineScan[][];
   let replies: (() => Promise<SyncResult>)[];
+  let listsFetched: string[];
 
   beforeEach(() => {
     sent = [];
     replies = [];
+    listsFetched = [];
 
     const db = memoryIndexedDB();
 
@@ -79,6 +92,11 @@ describe('DoorOffline, sending what was scanned without signal', () => {
               sent.push(scans);
 
               return replies.shift()!();
+            },
+            doorList: async (event: string) => {
+              listsFetched.push(event);
+
+              return list;
             },
           },
         },
@@ -118,6 +136,26 @@ describe('DoorOffline, sending what was scanned without signal', () => {
     data: scans.map((scan) => ({ ...admitted, client_id: scan.client_id, conflict: null })),
     conflicts: [],
   });
+
+  /**
+   * A sync the server has not answered yet, on a slow venue wifi: `answer`
+   * is the reply arriving, `lose` the signal going before it does.
+   */
+  function slowReply(reply: SyncResult) {
+    let answer!: () => void;
+    let lose!: () => void;
+    const arriving = new Promise<SyncResult>((resolve, reject) => {
+      answer = () => resolve(reply);
+      lose = () => reject(new ApiError('No connection. Check signal and try again.', 0));
+    });
+
+    replies.push(() => arriving);
+
+    return { answer, lose };
+  }
+
+  /** Until the phone has sent the first batch and is waiting on the server. */
+  const onItsWay = () => vi.waitFor(() => expect(sent).toHaveLength(1));
 
   it('drops only the scan the server can never take, and the rest go with the next sync', async () => {
     await queueOnThisPhone([good, tooLong, later]);
@@ -163,6 +201,78 @@ describe('DoorOffline, sending what was scanned without signal', () => {
     expect(await offline.sync('evt_1')).toBe(false);
     expect(await queued()).toEqual([good, tooLong]);
     expect(offline.connectionLost()).toBe(true);
+  });
+
+  /**
+   * The fifteen-second timer, a scan that went through online, and the door
+   * screen opened again all ask for a sync, and one may still be sending. The
+   * second used to be told true at once — everything sent — with the scans
+   * still on their way, and still on the phone if the signal then went.
+   */
+  describe('asked again while a sync is still sending', () => {
+    it('waits for that sync, and says the scans did not go when they did not', async () => {
+      await queueOnThisPhone([good]);
+      const server = slowReply(accepted(good));
+
+      const first = offline.sync('evt_1');
+
+      await onItsWay();
+
+      const second = offline.sync('evt_1');
+
+      server.lose();
+
+      expect(await second).toBe(false);
+      expect(await first).toBe(false);
+      expect(await queued()).toEqual([good]);
+      expect(offline.pendingCount()).toBe(1);
+      // Waited on, not sent a second time alongside.
+      expect(sent).toHaveLength(1);
+    });
+
+    it('says they went only once the server has answered for them', async () => {
+      await queueOnThisPhone([good]);
+      const server = slowReply(accepted(good));
+
+      void offline.sync('evt_1');
+      await onItsWay();
+
+      let answered: boolean | undefined;
+      const second = offline.sync('evt_1').then((went) => (answered = went));
+
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(answered).toBeUndefined();
+
+      server.answer();
+
+      expect(await second).toBe(true);
+      expect(await queued()).toEqual([]);
+      expect(offline.pendingCount()).toBe(0);
+      expect(sent).toHaveLength(1);
+    });
+
+    it('lets a door screen opened again mid-sync fetch its list once the scans have gone', async () => {
+      await queueOnThisPhone([good]);
+      const server = slowReply(accepted(good));
+
+      // Sending when the door screen was left for the events list...
+      void offline.sync('evt_1');
+      await onItsWay();
+
+      // ...and what the screen does when it is opened again: count what is
+      // waiting, send it, then fetch the list.
+      await offline.prepare('evt_1');
+      const arriving = offline.sync('evt_1').then(() => offline.refreshList('evt_1'));
+
+      server.answer();
+      await arriving;
+
+      // Told the queue had gone while it had not, it found a scan still
+      // waiting and fetched nothing, and the phone kept the old list.
+      expect(listsFetched).toEqual(['evt_1']);
+      expect(offline.listCount()).toBe(1);
+    });
   });
 
   describe('a scan it has to drop that had let somebody in', () => {
