@@ -242,6 +242,22 @@ class PermissionAuthorityTest extends TestCase
             Permission::namesForRole(Role::Owner),
             $response->json('organizations.0.permissions'),
         );
+
+        $this->assertSame(['attendee', 'organizer'], $response->json('abilities'));
+    }
+
+    public function test_an_attendee_registering_is_told_it_is_only_an_attendee(): void
+    {
+        $this->postJson('/api/auth/register', [
+            'name' => 'Tunde Bello',
+            'email' => 'tunde@example.com',
+            'password' => 'correct horse 7',
+            'password_confirmation' => 'correct horse 7',
+            'attendee' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('abilities', ['attendee'])
+            ->assertJsonPath('organizations', []);
     }
 
     public function test_the_me_endpoint_agrees_with_the_sign_in_payload(): void

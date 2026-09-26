@@ -25,33 +25,6 @@ export interface Ticket {
   event: { slug: string; title: string; starts_at: string; timezone: string; city: string };
 }
 
-export interface OrganizerEvent {
-  id: string;
-  title: string;
-  status: string;
-  starts_at: string;
-  timezone: string;
-  city: string;
-  tickets_issued: number;
-  checked_in: number;
-}
-
-export interface EventTotals {
-  currency: string;
-  gross: Money;
-  net: Money;
-  orders: number;
-  tickets_issued: number;
-  checked_in: number;
-}
-
-export interface Guest {
-  name: string | null;
-  email: string;
-  ticket_type: string | null;
-  checked_in: boolean;
-}
-
 /*
  * Defined once, in @myfiesta/door, and re-exported so existing imports keep
  * working. The console declared the same shapes and so did this app; two apps
@@ -363,14 +336,15 @@ export class Api {
    * console, where there is a screen wide enough to build one; this is for
    * somebody who bought as a guest and wants their tickets to follow them.
    */
-  register(name: string, email: string, password: string): Promise<Record<string, unknown>> {
+  /** With an organization name, an organizer account and its events page; without one, an attendee. */
+  register(name: string, email: string, password: string, organization: string | null = null): Promise<Record<string, unknown>> {
     return this.send('POST', '/api/auth/register', {
       body: {
         name,
         email,
         password,
         password_confirmation: password,
-        attendee: true,
+        ...(organization ? { organization } : { attendee: true }),
         device: 'mobile',
       },
       anonymous: true,
@@ -420,28 +394,6 @@ export class Api {
 
   transfer(ticketId: string, email: string, name: string): Promise<unknown> {
     return this.send('POST', `/api/tickets/${ticketId}/transfer`, { body: { email, name } });
-  }
-
-  // --- organizer ------------------------------------------------------------
-
-  async events(organizationId?: string | null): Promise<OrganizerEvent[]> {
-    const body = await this.send<{ data: OrganizerEvent[] }>('GET', '/api/organizer/events', {
-      query: organizationId ? { organization: organizationId } : undefined,
-    });
-
-    return body.data;
-  }
-
-  summary(eventId: string): Promise<EventTotals> {
-    return this.send('GET', `/api/organizer/events/${eventId}/summary`);
-  }
-
-  async guests(eventId: string, search = ''): Promise<Guest[]> {
-    const body = await this.send<{ data: Guest[] }>('GET', `/api/organizer/events/${eventId}/guests`, {
-      query: search.trim() === '' ? undefined : { q: search.trim() },
-    });
-
-    return body.data;
   }
 
   // --- the door -------------------------------------------------------------

@@ -170,16 +170,17 @@ class AccountController extends Controller
 
         $user->load('organizations');
 
+        // The same rule signing in uses, rather than a second list that grants
+        // the organizer screens to an account with no organization behind them.
+        $abilities = $user->tokenAbilities();
+
         return response()->json([
-            'token' => $user->createToken(
-                $data['device'] ?? 'web',
-                // The same rule signing in uses, rather than a second list
-                // that grants the organizer screens to an account with no
-                // organization behind them.
-                $user->tokenAbilities(),
-                now()->addDays(30),
-            )->plainTextToken,
+            'token' => $user->createToken($data['device'] ?? 'web', $abilities, now()->addDays(30))->plainTextToken,
             'user' => ['name' => $user->name, 'email' => $user->email],
+            // Said, as signing in says it. The phone decides which half of the
+            // app to open from this, and without it a brand-new organizer was
+            // shown the attendee's.
+            'abilities' => $abilities,
             'organizations' => $user->organizations->map(fn ($o) => [
                 'id' => $o->id,
                 'name' => $o->name,
