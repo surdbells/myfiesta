@@ -9,6 +9,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** A 422's complaints, by field, so a form can put each under its own box. */
+    readonly fields?: Record<string, string[]>,
   ) {
     super(message);
   }
@@ -137,6 +139,15 @@ export class Api {
   /** The token, when there is one. Set on sign-in, cleared on 401. */
   token: string | null = null;
 
+  /**
+   * Which organization organizer requests are about.
+   *
+   * Sent as X-Organization, the same header the console sends: somebody who
+   * runs two promotions from one account is asking about one of them, and the
+   * API authorises against the organization named rather than guessing.
+   */
+  organization: string | null = null;
+
   readonly base = this.resolveBase();
 
   private resolveBase(): string {
@@ -167,6 +178,7 @@ export class Api {
     const token = options.anonymous ? null : (options.token ?? this.token);
 
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token && this.organization && path.startsWith('/api/organizer')) headers['X-Organization'] = this.organization;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
 
     let response: Response;
@@ -187,7 +199,9 @@ export class Api {
     const text = await response.text();
     const body = text === '' ? {} : (JSON.parse(text) as Record<string, unknown>);
 
-    if (!response.ok) throw new ApiError(this.messageFor(response.status, body), response.status);
+    if (!response.ok) {
+      throw new ApiError(this.messageFor(response.status, body), response.status, body['errors'] as Record<string, string[]> | undefined);
+    }
 
     return body as T;
   }
@@ -211,6 +225,86 @@ export class Api {
     const first = errors ? Object.values(errors)[0]?.[0] : null;
 
     return first ?? 'That did not work.';
+  }
+
+  // --- the organizer's own requests ------------------------------------------
+
+  /** A signed-in request, for the organizer client to build on. */
+  request<T>(method: string, path: string, body?: unknown, query?: Record<string, string>): Promise<T> {
+    return this.send<T>(method, path, { body, query });
+  }
+
+  /**
+   * A file, sent with progress.
+   *
+   * fetch cannot report how much of an upload has gone, and a poster from a
+   * phone camera is several megabytes over venue wifi — a spinner with no
+   * number on it is the moment somebody cancels and tries again. So this one
+   * request is made the older way, which can.
+   */
+  upload<T>(
+    path: string,
+    fields: Record<string, string | Blob>,
+    onProgress?: (percent: number | null) => void,
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const body = new FormData();
+
+      for (const [key, value] of Object.entries(fields)) body.append(key, value);
+
+      xhr.open('POST', this.base + path);
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (this.token) xhr.setRequestHeader('Authorization', `Bearer ${this.token}`);
+      if (this.organization) xhr.setRequestHeader('X-Organization', this.organization);
+
+      xhr.upload.onprogress = (event) =>
+        onProgress?.(event.lengthComputable ? Math.round((event.loaded / event.total) * 100) : null);
+
+      xhr.onerror = () => reject(new ApiError('No connection. Check signal and try again.', 0));
+      xhr.ontimeout = () => reject(new ApiError('That took too long. Try again on a better connection.', 0));
+      xhr.timeout = 120_000;
+
+      xhr.onload = () => {
+        let parsed: Record<string, unknown> = {};
+
+        try {
+          parsed = xhr.responseText ? (JSON.parse(xhr.responseText) as Record<string, unknown>) : {};
+        } catch {
+          // A non-JSON body is only ever an error page.
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) resolve(parsed as T);
+        else reject(new ApiError(this.messageFor(xhr.status, parsed), xhr.status, parsed['errors'] as Record<string, string[]> | undefined));
+      };
+
+      xhr.send(body);
+    });
+  }
+
+  /** A CSV export, as text, for handing to the phone's share sheet. */
+  async download(path: string, query?: Record<string, string>): Promise<string> {
+    const url = new URL(this.base + path);
+
+    for (const [key, value] of Object.entries(query ?? {})) {
+      if (value !== '') url.searchParams.set(key, value);
+    }
+
+    const headers: Record<string, string> = { Accept: 'text/csv' };
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.organization) headers['X-Organization'] = this.organization;
+
+    let response: Response;
+
+    try {
+      response = await fetch(url, { headers, signal: AbortSignal.timeout(60_000) });
+    } catch {
+      throw new ApiError('No connection. Check signal and try again.', 0);
+    }
+
+    if (!response.ok) throw new ApiError(this.messageFor(response.status, {}), response.status);
+
+    return response.text();
   }
 
   // --- browsing, which needs no account --------------------------------------

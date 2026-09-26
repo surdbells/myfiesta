@@ -9,6 +9,8 @@
     "paths": {
       "@myfiesta/door": ["../../packages/door/src/index.ts"],
       "@myfiesta/api-types": ["../../packages/api-types/src/index.ts"],
+      "@myfiesta/shared": ["../../packages/shared/src/index.ts"],
+      "@myfiesta/shared/*": ["../../packages/shared/src/*"],
       "@myfiesta/ui": ["../../packages/ui/src/index.ts"]
     },
     "strict": true,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Organizer;
 
 use App\Enums\EventStatus;
+use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
@@ -15,6 +16,7 @@ use App\Services\Events\SalesReport;
 use App\Services\Follows\Announcements;
 use App\Support\Paging;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -63,36 +65,9 @@ class EventController extends Controller
          * six more queries for an organizer with thirty events, on the screen
          * they open first.
          */
-        $query = Event::query()
-            ->whereIn('organization_id', $this->organizationIds($request))
-            ->withCount([
-                'tickets as tickets_issued' => fn ($q) => $q->whereIn('status', ['valid', 'checked_in']),
-                'tickets as checked_in' => fn ($q) => $q->where('status', 'checked_in'),
-                'orders as orders_count' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS),
-                // A tier with no limit makes the whole room unlimited, and a
-                // capacity bar drawn without knowing that is a lie.
-                'ticketTypes as unlimited_tiers' => fn ($q) => $q->whereNull('quantity_available'),
-            ])
-            ->withSum(
-                ['orders as revenue_amount' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
-                'net_revenue_amount',
-            )
-            ->withSum('ticketTypes as capacity', 'quantity_available')
-            // When the last one sold. "Nothing since Tuesday" is the signal an
-            // organizer acts on, and it is invisible in a total.
-            ->withMax(
-                ['orders as last_sale_at' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
-                'paid_at',
-            )
-            // The poster, at thumbnail size. A list of nights is a list of
-            // posters in an organizer's head, and a row of text is slower to
-            // find the right one in than a picture they chose themselves.
-            ->with(['banner'])
-            ->addSelect([
-                'views' => DB::table('event_views')
-                    ->selectRaw('coalesce(sum(views + embed_views), 0)')
-                    ->whereColumn('event_views.event_id', 'events.id'),
-            ]);
+        $query = $this->withInsights(
+            Event::query()->whereIn('organization_id', $this->organizationIds($request)),
+        );
 
         match ($request->query('when')) {
             'upcoming' => $query->where('starts_at', '>=', now())->orderBy('starts_at'),
@@ -116,20 +91,82 @@ class EventController extends Controller
                 'timezone' => $e->timezone,
                 'city' => $e->city,
                 'currency' => $e->currency,
-                'tickets_issued' => $e->tickets_issued,
-                'checked_in' => $e->checked_in,
-                'orders' => (int) $e->orders_count,
-                // Null where any tier is unlimited: there is no proportion of
-                // an unlimited room, and drawing one full or empty is worse
-                // than drawing none.
-                'capacity' => $e->unlimited_tiers > 0 ? null : (int) $e->capacity,
-                'revenue' => ['amount' => (int) $e->revenue_amount, 'currency' => $e->currency],
-                'views' => (int) $e->views,
-                'last_sale_at' => $e->last_sale_at ? Carbon::parse($e->last_sale_at)->toIso8601String() : null,
+                ...$this->insights($request, $e),
                 'poster_url' => $e->banner?->renditionUrl('thumb'),
             ])->values(),
             'meta' => Paging::meta($events),
         ]);
+    }
+
+    /**
+     * Enough to judge a night by, as aggregates on the query that fetches it.
+     *
+     * What sold, what it earned, how much of the room is gone, how many
+     * looked, and when the last ticket went — for the list and for one event
+     * alike, from this one place, so the two cannot disagree about what "sold"
+     * means.
+     *
+     * @param  Builder<Event>  $query
+     * @return Builder<Event>
+     */
+    private function withInsights(Builder $query): Builder
+    {
+        return $query
+            ->withCount([
+                'tickets as tickets_issued' => fn ($q) => $q->whereIn('status', ['valid', 'checked_in']),
+                'tickets as checked_in' => fn ($q) => $q->where('status', 'checked_in'),
+                'orders as orders_count' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS),
+                // A tier with no limit makes the whole room unlimited, and a
+                // capacity bar drawn without knowing that is a lie.
+                'ticketTypes as unlimited_tiers' => fn ($q) => $q->whereNull('quantity_available'),
+            ])
+            ->withSum(
+                ['orders as revenue_amount' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
+                'net_revenue_amount',
+            )
+            ->withSum('ticketTypes as capacity', 'quantity_available')
+            // When the last one sold. "Nothing since Tuesday" is the signal an
+            // organizer acts on, and it is invisible in a total.
+            ->withMax(
+                ['orders as last_sale_at' => fn ($q) => $q->whereIn('status', self::LIVE_ORDERS)],
+                'paid_at',
+            )
+            // The poster. A list of nights is a list of posters in an
+            // organizer's head, and a row of text is slower to find the right
+            // one in than a picture they chose themselves.
+            ->with(['banner'])
+            ->addSelect([
+                'views' => DB::table('event_views')
+                    ->selectRaw('coalesce(sum(views + embed_views), 0)')
+                    ->whereColumn('event_views.event_id', 'events.id'),
+            ]);
+    }
+
+    /**
+     * The counted fields, as the list and the single event both send them.
+     *
+     * Earnings are null, not zero, for somebody who may not see money in the
+     * event's organization — the rule the overview already follows. A door
+     * member of the team needs to know how full the room is, not what it took.
+     *
+     * @return array<string, mixed>
+     */
+    private function insights(Request $request, Event $e): array
+    {
+        $maySeeMoney = $request->user()->hasPermissionIn($e->organization_id, Permission::MoneyView);
+
+        return [
+            'tickets_issued' => (int) $e->tickets_issued,
+            'checked_in' => (int) $e->checked_in,
+            'orders' => (int) $e->orders_count,
+            // Null where any tier is unlimited: there is no proportion of an
+            // unlimited room, and drawing one full or empty is worse than
+            // drawing none.
+            'capacity' => $e->unlimited_tiers > 0 ? null : (int) $e->capacity,
+            'revenue' => $maySeeMoney ? ['amount' => (int) $e->revenue_amount, 'currency' => $e->currency] : null,
+            'views' => (int) $e->views,
+            'last_sale_at' => $e->last_sale_at ? Carbon::parse($e->last_sale_at)->toIso8601String() : null,
+        ];
     }
 
     /**
@@ -183,12 +220,20 @@ class EventController extends Controller
      * title, date, counts — and an edit form needs every field it is allowed to
      * change. Widening the list to serve the form would send description and
      * address for thirty events to render a table that shows neither.
+     *
+     * It carries the list's counts as well. The shape said it did — the type
+     * both clients read extends the list row — and it did not, which nothing
+     * noticed until a screen showed how a night was going from this endpoint
+     * and read undefined for every figure.
      */
     public function show(Request $request, Event $event): JsonResponse
     {
         $this->authorize('view', $event);
 
+        $counted = $this->withInsights(Event::query()->whereKey($event->id))->firstOrFail();
+
         return response()->json([
+            ...$this->insights($request, $counted),
             'id' => $event->id,
             'slug' => $event->slug,
             'title' => $event->title,

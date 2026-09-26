@@ -37,3 +37,4 @@ export { MfStat } from './stat';
 export { MfAvatar } from './avatar';
 export { MfMultiSelect } from './multi-select';
 export { MfImagePick } from './image-pick';
+export { MfSpark } from './spark';

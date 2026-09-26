@@ -1,0 +1,11 @@
+{
+  "name": "@myfiesta/shared",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Framework-free helpers both the console and the phone app need to agree on: times in an event's own zone, and the places events happen.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  }
+}

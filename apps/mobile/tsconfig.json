@@ -3,7 +3,9 @@
   "compilerOptions": {
     "paths": {
       "@myfiesta/door": ["../../packages/door/src/index.ts"],
-      "@myfiesta/api-types": ["../../packages/api-types/src/index.ts"]
+      "@myfiesta/api-types": ["../../packages/api-types/src/index.ts"],
+      "@myfiesta/shared": ["../../packages/shared/src/index.ts"],
+      "@myfiesta/shared/*": ["../../packages/shared/src/*"]
     },
     "strict": true,
     "noImplicitOverride": true,

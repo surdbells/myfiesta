@@ -25,6 +25,14 @@ const signedIn = () => {
   return session.locked() ? router.createUrlTree(['/door']) : true;
 };
 
+/** The organizer screens, for accounts whose token carries the organizer scope. */
+const organizerOnly = () => {
+  const session = inject(SessionStore);
+  const router = inject(Router);
+
+  return session.canSeeSales() ? true : router.createUrlTree(['/']);
+};
+
 const doorOnly = () => {
   const session = inject(SessionStore);
   const router = inject(Router);
@@ -103,22 +111,18 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tickets/ticket').then((m) => m.TicketDetail),
   },
   {
-    // The organizer's tab. The events list for now; the hub it grows into
-    // carries the organization's money, orders, codes and team as well.
+    /*
+     * The organizer's side of the app: everything the console does, from a
+     * phone. One lazy chunk, so somebody who only ever buys tickets never
+     * downloads any of it.
+     */
     path: 'manage',
-    canActivate: [signedIn],
-    loadComponent: () => import('./features/organizer/events').then((m) => m.Events),
+    canActivate: [signedIn, organizerOnly],
+    loadChildren: () => import('./features/manage/manage.routes').then((m) => m.MANAGE_ROUTES),
   },
-  {
-    path: 'events',
-    canActivate: [signedIn],
-    loadComponent: () => import('./features/organizer/events').then((m) => m.Events),
-  },
-  {
-    path: 'events/:id',
-    canActivate: [signedIn],
-    loadComponent: () => import('./features/organizer/event').then((m) => m.EventNight),
-  },
+  // Where the organizer screens used to live, for links already out there.
+  { path: 'events', redirectTo: 'manage/events', pathMatch: 'full' },
+  { path: 'events/:id', redirectTo: 'manage/events/:id' },
   {
     path: 'settings',
     canActivate: [signedIn],

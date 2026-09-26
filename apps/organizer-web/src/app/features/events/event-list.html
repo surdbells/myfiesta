@@ -109,9 +109,16 @@
                 </span>
 
                 <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
-                  <span class="figure text-lg">{{ cash(event.revenue) }}</span>
-                  <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                  <!-- Earnings only for somebody who may see money; the API sends
+                       null otherwise, and a column of dashes reads as a broken night. -->
+                  @if (event.revenue) {
+                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
+                    <span class="figure text-lg">{{ cash(event.revenue) }}</span>
+                    <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                  } @else {
+                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Orders</span>
+                    <span class="figure text-lg">{{ event.orders }}</span>
+                  }
                 </span>
 
                 <span class="grid gap-1">
@@ -222,9 +229,16 @@
                 </span>
 
                 <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
-                  <span class="figure text-lg">{{ cash(event.revenue) }}</span>
-                  <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                  <!-- Earnings only for somebody who may see money; the API sends
+                       null otherwise, and a column of dashes reads as a broken night. -->
+                  @if (event.revenue) {
+                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
+                    <span class="figure text-lg">{{ cash(event.revenue) }}</span>
+                    <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                  } @else {
+                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Orders</span>
+                    <span class="figure text-lg">{{ event.orders }}</span>
+                  }
                 </span>
 
                 <span class="grid gap-1">

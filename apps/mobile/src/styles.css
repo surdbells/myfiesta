@@ -36,6 +36,7 @@
   --mf-kb: 0px;
   --mf-sheet-lift: 0px;
   --mf-upload: 0;
+  --mf-spark-h: 56px;
 
   /* The curve the phone's own sheets and pushes move on. */
   --mf-ease-out: cubic-bezier(0.32, 0.72, 0, 1);

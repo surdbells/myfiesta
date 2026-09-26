@@ -22,6 +22,9 @@ export interface Session {
   email: string | null;
   organizations: Membership[];
 
+  /** Which of them the organizer screens are about. The first, until one is chosen. */
+  activeOrganization?: string;
+
   /** Door sessions only: the one event this phone may scan, and until when. */
   eventId?: string;
   eventTitle?: string;
@@ -63,7 +66,49 @@ export class SessionStore {
   readonly locked = computed(() => this.scope() === 'door');
   readonly canSeeSales = computed(() => this.scope() === 'organizer');
 
-  readonly organization = computed(() => this.state()?.organizations[0] ?? null);
+  readonly organizations = computed(() => this.state()?.organizations ?? []);
+
+  readonly organization = computed(() => {
+    const session = this.state();
+
+    if (!session) return null;
+
+    return session.organizations.find((o) => o.id === session.activeOrganization) ?? session.organizations[0] ?? null;
+  });
+
+  /**
+   * Whether this member may do this, in the organization being looked at.
+   *
+   * For hiding what would only be refused: a door-staff member of the team
+   * does not need a Refund button that answers "not allowed". The API still
+   * decides — this is courtesy, not the boundary.
+   */
+  can(permission: string): boolean {
+    return this.organization()?.permissions.includes(permission) ?? false;
+  }
+
+  /** Look at another of the organizations this account belongs to. */
+  async chooseOrganization(id: string): Promise<void> {
+    const session = this.state();
+
+    if (!session || !session.organizations.some((o) => o.id === id)) return;
+
+    await this.save({ ...session, activeOrganization: id });
+  }
+
+  /**
+   * Take in a fresh list of memberships — after accepting an invitation, or
+   * when the phone has been away long enough for a role to change.
+   */
+  async refreshMemberships(organizations: Membership[]): Promise<void> {
+    const session = this.state();
+
+    if (!session) return;
+
+    const active = organizations.some((o) => o.id === session.activeOrganization) ? session.activeOrganization : undefined;
+
+    await this.save({ ...session, organizations, activeOrganization: active });
+  }
 
   async restore(): Promise<void> {
     try {
@@ -139,6 +184,7 @@ export class SessionStore {
   async clear(): Promise<void> {
     this.state.set(null);
     this.api.token = null;
+    this.api.organization = null;
     // A phone handed back must not keep announcing somebody else's Saturday,
     // or hold a ticket that lets whoever has it now through a door.
     await this.reminders.clear();
@@ -164,5 +210,6 @@ export class SessionStore {
   private adopt(session: Session): void {
     this.state.set(session);
     this.api.token = session.token;
+    this.api.organization = this.organization()?.id ?? null;
   }
 }

@@ -63,7 +63,7 @@ import { MfIconButton } from './icon-button';
             class="back"
             [icon]="backIcon"
             label="Back"
-            [tone]="overlay() && !pastHero() ? 'over' : 'plain'"
+            [tone]="overlay() && overlayDark() && !pastHero() ? 'over' : 'plain'"
             (click)="goBack()"
           ></button>
         }
@@ -89,7 +89,23 @@ import { MfIconButton } from './icon-button';
       }
     </header>
 
-    <main #body class="body" [class.flush]="flush()" [class.under-bar]="!overlay()" (scroll)="scrolledTo()">
+    @if (refreshable()) {
+      <div class="pull" [style.transform]="'translateY(' + pullY() + 'px)'" [style.opacity]="pullOpacity()" aria-hidden="true">
+        <span class="spinner" [class.spinning]="refreshing()" [style.transform]="'rotate(' + pullY() * 3 + 'deg)'"></span>
+      </div>
+    }
+
+    <main
+      #body
+      class="body"
+      [class.flush]="flush()"
+      [class.under-bar]="!overlay()"
+      (scroll)="scrolledTo()"
+      (touchstart)="pullStart($event)"
+      (touchmove)="pullMove($event)"
+      (touchend)="pullEnd()"
+      (touchcancel)="pullEnd()"
+    >
       @if (large()) {
         <div class="hero-title">
           <h1>{{ title() }}</h1>
@@ -286,6 +302,43 @@ import { MfIconButton } from './icon-button';
       white-space: normal;
     }
 
+    /* ------------------------------------------------------ pull to refresh */
+
+    .pull {
+      position: absolute;
+      z-index: 19;
+      top: calc(var(--mf-bar-h) - 44px);
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      margin-left: -20px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-full);
+      background: var(--surface-raised);
+      box-shadow: var(--shadow-overlay);
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: var(--radius-full);
+      border: 2.5px solid var(--primary-soft);
+      border-top-color: var(--primary);
+    }
+
+    .spinner.spinning {
+      animation: mf-spin 0.7s linear infinite;
+    }
+
+    @keyframes mf-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     /* ------------------------------------------------------------- footer */
 
     .footer:empty {
@@ -327,8 +380,11 @@ export class MfScreen {
   /** A place, not a step: the title sits big in the page and folds into the bar. */
   readonly large = input(false, { transform: booleanAttribute });
 
-  /** The screen opens on a photograph that runs up under a clear bar. */
+  /** The screen opens on a header of its own that runs up under a clear bar. */
   readonly overlay = input(false, { transform: booleanAttribute });
+
+  /** What is under the clear bar is a photograph: its buttons sit on dark chips. */
+  readonly overlayDark = input(true, { transform: booleanAttribute });
 
   /** Something is saving: a line runs along the bar. */
   readonly busy = input(false, { transform: booleanAttribute });
@@ -336,8 +392,14 @@ export class MfScreen {
   /** A form or flow: the bottom bar goes away while this is open. */
   readonly task = input(false, { transform: booleanAttribute });
 
+  /** Pulling down at the top asks for fresh data. */
+  readonly refreshable = input(false, { transform: booleanAttribute });
+
   /** Emitted when back is pressed on a screen without `backTo`. */
   readonly backed = output<void>();
+
+  /** Pulled far enough and let go. The screen reloads and sets `busy` meanwhile. */
+  readonly refresh = output<void>();
 
   protected readonly backIcon = ChevronLeft;
   protected readonly chrome = inject(Chrome);
@@ -374,6 +436,55 @@ export class MfScreen {
   });
 
   private key: string | null = null;
+
+  // --- pull to refresh ------------------------------------------------------
+
+  private pullFrom: number | null = null;
+  protected readonly pullY = signal(0);
+  protected readonly refreshing = signal(false);
+  protected readonly pullOpacity = computed(() => (this.refreshing() ? 1 : Math.min(1, this.pullY() / 56)));
+
+  protected pullStart(event: TouchEvent): void {
+    if (!this.refreshable() || this.refreshing() || this.body().nativeElement.scrollTop > 0) return;
+
+    this.pullFrom = event.touches[0].clientY;
+  }
+
+  protected pullMove(event: TouchEvent): void {
+    if (this.pullFrom === null) return;
+
+    const dy = event.touches[0].clientY - this.pullFrom;
+
+    // Resistance, like the phone's own: the further the pull, the less it gives.
+    this.pullY.set(dy > 0 ? Math.min(96, dy * 0.45) : 0);
+  }
+
+  protected pullEnd(): void {
+    if (this.pullFrom === null) return;
+
+    this.pullFrom = null;
+
+    if (this.pullY() > 60) {
+      this.refreshing.set(true);
+      this.pullY.set(56);
+      this.refresh.emit();
+
+      // Held for at least a beat, so a fast reload still reads as "it did it".
+      const started = Date.now();
+      const settle = () => {
+        if (this.busy() && Date.now() - started < 15_000) return void setTimeout(settle, 120);
+
+        setTimeout(() => {
+          this.refreshing.set(false);
+          this.pullY.set(0);
+        }, Math.max(0, 500 - (Date.now() - started)));
+      };
+
+      setTimeout(settle, 120);
+    } else {
+      this.pullY.set(0);
+    }
+  }
 
   constructor() {
     const destroyRef = inject(DestroyRef);

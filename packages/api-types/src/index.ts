@@ -196,8 +196,13 @@ export interface OrganizerEvent {
   orders: number;
   /** Null where a tier is unlimited: there is no proportion of an open room. */
   capacity: number | null;
-  /** What the organizer earned: after their own discounts, net of tax. */
-  revenue: Money;
+  /**
+   * What the organizer earned: after their own discounts, net of tax.
+   *
+   * Null for a member who may not see money — marketing and door staff are
+   * shown how full the room is, never what it took. Null is not zero.
+   */
+  revenue: Money | null;
   /** Page views, counted once a visit. Absent for anything before they were. */
   views: number;
   /** When the last ticket sold. Null if none has. */
