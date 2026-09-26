@@ -34,7 +34,7 @@ import {
   selector: 'mf-organizer',
   imports: [MfScreen, MfCard, MfBadge, MfButton, MfPoster, MfEmpty, MfSkeleton],
   template: `
-    <mf-screen [title]="organizer()?.name ?? 'Organizer'" back (backed)="back()">
+    <mf-screen [title]="organizer()?.name ?? 'Organizer'" back backTo="/">
       @if (loading()) {
         <mf-skeleton height="6rem" />
         <mf-skeleton class="mt" height="5rem" />
@@ -337,9 +337,5 @@ export class Organizer {
 
   open(event: EventCard): void {
     void this.router.navigate(['/e', event.slug]);
-  }
-
-  back(): void {
-    void this.router.navigate(['/']);
   }
 }

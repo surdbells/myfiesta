@@ -31,7 +31,7 @@ import {
   selector: 'mf-event-night',
   imports: [FormsModule, MfScreen, MfCard, MfBadge, MfEmpty, MfField, MfSelect, MfSkeleton, MfButton],
   template: `
-    <mf-screen [title]="title() ?? 'Tonight'" subtitle="What it took, and who is inside" back (backed)="leave()">
+    <mf-screen [title]="title() ?? 'Tonight'" subtitle="What it took, and who is inside" back backTo="/manage">
       <button mfButton variant="ghost" size="sm" screenActions (click)="scan()">Scan</button>
 
       @if (totals(); as money) {
@@ -292,9 +292,5 @@ export class EventNight {
 
   scan(): void {
     void this.router.navigate(['/door'], { queryParams: { event: this.id(), title: this.title() } });
-  }
-
-  leave(): void {
-    void this.router.navigate(['/events']);
   }
 }

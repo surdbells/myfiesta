@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Api, ApiError } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { MfButton, MfField, MfScreen } from '../../ui';
+import { Navigation } from '../../core/navigation';
 
 /**
  * Making an account, from the phone.
@@ -25,7 +26,7 @@ import { MfButton, MfField, MfScreen } from '../../ui';
   selector: 'mf-join',
   imports: [FormsModule, MfScreen, MfField, MfButton],
   template: `
-    <mf-screen title="Create an account" back (backed)="back()">
+    <mf-screen title="Create an account" back backTo="/sign-in">
       @if (sent(); as message) {
         <p class="sent">{{ message }}</p>
         <button mfButton class="mt" size="lg" block variant="secondary" (click)="back()">
@@ -129,6 +130,7 @@ import { MfButton, MfField, MfScreen } from '../../ui';
   `,
 })
 export class Join {
+  private readonly nav = inject(Navigation);
   private readonly api = inject(Api);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
@@ -203,6 +205,6 @@ export class Join {
   }
 
   back(): void {
-    void this.router.navigate(['/sign-in']);
+    this.nav.back('/sign-in');
   }
 }

@@ -23,7 +23,7 @@ interface Followed {
   selector: 'mf-following',
   imports: [MfScreen, MfCard, MfButton, MfBadge, MfEmpty, MfSkeleton],
   template: `
-    <mf-screen title="Following" back (backed)="back()">
+    <mf-screen title="Following" back backTo="/settings">
       @if (loading()) {
         <mf-skeleton height="4rem" />
         <mf-skeleton class="mt" height="4rem" />
@@ -153,9 +153,5 @@ export class Following {
 
   open(organizer: Followed): void {
     void this.router.navigate(['/o', organizer.slug]);
-  }
-
-  back(): void {
-    void this.router.navigate(['/settings']);
   }
 }

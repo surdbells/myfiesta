@@ -1,8 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { Api, ApiError } from '../../core/api';
 import { MfButton, MfField, MfScreen } from '../../ui';
+import { Navigation } from '../../core/navigation';
 
 /**
  * Asking for a reset link.
@@ -19,7 +19,7 @@ import { MfButton, MfField, MfScreen } from '../../ui';
   selector: 'mf-forgot-password',
   imports: [FormsModule, MfScreen, MfField, MfButton],
   template: `
-    <mf-screen title="Forgotten password" back (backed)="back()">
+    <mf-screen title="Forgotten password" back backTo="/sign-in">
       @if (sent(); as message) {
         <p class="sent">{{ message }}</p>
         <p class="note">The link opens in your browser, where you can set a new one.</p>
@@ -96,8 +96,8 @@ import { MfButton, MfField, MfScreen } from '../../ui';
   `,
 })
 export class ForgotPassword {
+  private readonly nav = inject(Navigation);
   private readonly api = inject(Api);
-  private readonly router = inject(Router);
 
   readonly email = signal('');
   readonly busy = signal(false);
@@ -120,6 +120,6 @@ export class ForgotPassword {
   }
 
   back(): void {
-    void this.router.navigate(['/sign-in']);
+    this.nav.back('/sign-in');
   }
 }

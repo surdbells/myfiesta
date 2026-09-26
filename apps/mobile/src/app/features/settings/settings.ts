@@ -27,7 +27,7 @@ import {
   selector: 'mf-settings',
   imports: [MfScreen, MfCard, MfButton, MfSegmented, MfSelect, MfSheet, MfSwitch],
   template: `
-    <mf-screen title="Settings" back (backed)="leave()">
+    <mf-screen title="Settings" large>
       <mf-card>
         <p class="label">Signed in as</p>
         <h2>{{ session.session()?.name }}</h2>
@@ -230,9 +230,5 @@ export class Settings {
 
   go(path: string): void {
     void this.router.navigate([path]);
-  }
-
-  leave(): void {
-    void this.router.navigate([this.session.canSeeSales() ? '/events' : '/tickets']);
   }
 }

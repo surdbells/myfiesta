@@ -2,29 +2,17 @@
  * The app's one stylesheet: tokens, the type scale, and the handful of base
  * rules every screen relies on. Components carry their own styles.
  *
- * Ionic supplies structure here and nothing else. Its core.css is imported for
- * the layout primitives (the router outlet's page stacking, scroll handling,
- * safe areas); its theming stylesheets are not, because the point of this app
- * is that it does not look like a default Ionic app. Every control on screen —
- * buttons, fields, sheets, selects — is ours, drawn from the same tokens the
- * web apps use, so a phone screenshot and a browser screenshot are the same
- * product.
+ * No Ionic. Every control on screen — buttons, fields, sheets, selects, the
+ * bars — is ours, drawn from the same tokens the web apps use, so a phone
+ * screenshot and a browser screenshot are the same product. The shell that
+ * Ionic used to provide (page stacking, transitions, a back stack) is the
+ * app's own too; see app.ts and core/navigation.ts.
  */
-@import '@ionic/angular/css/core.css';
 
 @import '../../../packages/tokens/fonts/fonts.css';
 @import '../../../packages/tokens/dist/tokens.css';
 
 :root {
-  /*
-   * Ionic's own variables, pointed at ours. ion-content and ion-app are the
-   * only Ionic elements the app renders, and left alone they paint Ionic's
-   * greys straight through a dark theme.
-   */
-  --ion-background-color: var(--surface-sunken);
-  --ion-text-color: var(--text);
-  --ion-font-family: var(--font-family-sans);
-
   /* What the phone gives back after the notch and the home indicator. */
   --mf-safe-top: env(safe-area-inset-top, 0px);
   --mf-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -32,6 +20,23 @@
   /* One height for every tappable thing: 48px is the smallest comfortable target. */
   --mf-tap: 48px;
 
+  /* The height of the bars, so content can leave room for them. */
+  --mf-app-bar: 56px;
+  --mf-tab-bar: 64px;
+
+  /*
+   * Set at runtime, declared here with their resting values so nothing that
+   * reads them is ever reading a variable that does not exist. The shell sets
+   * the bar space while the bottom bar is showing; each screen sets its own
+   * bar and footer heights once measured, and the keyboard's while it is up.
+   */
+  --mf-bar-space: var(--mf-safe-bottom);
+  --mf-bar-h: calc(var(--mf-safe-top) + var(--mf-app-bar));
+  --mf-footer-h: 0px;
+  --mf-kb: 0px;
+
+  /* The curve the phone's own sheets and pushes move on. */
+  --mf-ease-out: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
@@ -52,9 +57,12 @@
 }
 
 html,
-body {
+body,
+mf-root {
+  display: block;
   margin: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--surface-sunken);
   color: var(--text);
   font-family: var(--font-family-sans);
@@ -169,10 +177,90 @@ h3 {
  */
 html.scanning,
 html.scanning body,
-html.scanning ion-app,
-html.scanning ion-router-outlet,
-html.scanning .ion-page {
+html.scanning mf-root,
+html.scanning mf-root .frame,
+html.scanning mf-root .stage {
   background: transparent !important;
+}
+
+/*
+ * Moving between screens.
+ *
+ * The stage slides; the bottom bar, which has its own transition name, stays
+ * where it is. data-nav is set for the length of one transition by
+ * app.config — forward, back, or a switch between tabs.
+ */
+/*
+ * Named only while a transition runs. An element with a view-transition-name
+ * is a backdrop root, so a bottom bar named all the time could only ever blur
+ * itself — it sat over the page looking frosted and showed everything behind
+ * it sharp. data-nav is set synchronously as the transition starts, before the
+ * old screen is captured, so both halves carry the names.
+ */
+:root[data-nav] mf-root .stage {
+  view-transition-name: stage;
+}
+
+:root[data-nav] mf-tabs {
+  view-transition-name: tabbar;
+}
+
+::view-transition-group(stage) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--mf-ease-out);
+}
+
+:root[data-nav='forward']::view-transition-old(stage) {
+  animation: 320ms var(--mf-ease-out) both mf-push-away;
+}
+
+:root[data-nav='forward']::view-transition-new(stage) {
+  animation: 320ms var(--mf-ease-out) both mf-push-in;
+}
+
+/* Back: the top screen leaves to the right, above what it reveals. */
+:root[data-nav='back']::view-transition-old(stage) {
+  z-index: 2;
+  animation: 300ms var(--mf-ease-out) both mf-pop-away;
+}
+
+:root[data-nav='back']::view-transition-new(stage) {
+  animation: 300ms var(--mf-ease-out) both mf-pop-in;
+}
+
+/* Tabs are places side by side, not a stack: they cross-fade, quickly. */
+:root[data-nav='switch']::view-transition-old(stage),
+:root[data-nav='switch']::view-transition-new(stage),
+:root[data-nav='none']::view-transition-old(stage),
+:root[data-nav='none']::view-transition-new(stage) {
+  animation-duration: 160ms;
+}
+
+@keyframes mf-push-in {
+  from {
+    transform: translateX(100%);
+    box-shadow: var(--shadow-floating);
+  }
+}
+
+@keyframes mf-push-away {
+  to {
+    transform: translateX(-24%);
+    filter: brightness(0.86);
+  }
+}
+
+@keyframes mf-pop-away {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes mf-pop-in {
+  from {
+    transform: translateX(-24%);
+    filter: brightness(0.86);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

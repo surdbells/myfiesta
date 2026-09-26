@@ -17,6 +17,7 @@ import {
   MfSkeleton,
   ToastStore,
 } from '../../ui';
+import { Navigation } from '../../core/navigation';
 
 /**
  * One ticket, full screen.
@@ -32,7 +33,7 @@ import {
   selector: 'mf-ticket',
   imports: [FormsModule, MfScreen, MfCard, MfBadge, MfButton, MfQr, MfSheet, MfField, MfEmpty, MfSkeleton],
   template: `
-    <mf-screen [title]="ticket()?.event?.title ?? 'Ticket'" back (backed)="leave()">
+    <mf-screen [title]="ticket()?.event?.title ?? 'Ticket'" back backTo="/tickets">
       @if (loading()) {
         <mf-card><mf-skeleton height="16rem" /></mf-card>
       } @else if (!ticket()) {
@@ -182,6 +183,7 @@ import {
   `,
 })
 export class TicketDetail {
+  private readonly nav = inject(Navigation);
   private readonly api = inject(Api);
   private readonly held = inject(HeldTicketStore);
   private readonly router = inject(Router);
@@ -256,6 +258,6 @@ export class TicketDetail {
   }
 
   leave(): void {
-    void this.router.navigate(['/tickets']);
+    this.nav.back('/tickets');
   }
 }

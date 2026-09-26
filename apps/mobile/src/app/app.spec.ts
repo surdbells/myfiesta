@@ -79,10 +79,10 @@ describe('the shell', () => {
 
   it('shows the money tab only to somebody who may see money', () => {
     scope.set('attendee');
-    expect(shell.tabs().map((tab) => tab.link)).not.toContain('/events');
+    expect(shell.tabs().map((tab) => tab.link)).not.toContain('/manage');
 
     scope.set('organizer');
-    expect(shell.tabs().map((tab) => tab.link)).toContain('/events');
+    expect(shell.tabs().map((tab) => tab.link)).toContain('/manage');
   });
 
   describe('the tab bar', () => {

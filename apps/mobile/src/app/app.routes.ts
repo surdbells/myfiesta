@@ -103,6 +103,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tickets/ticket').then((m) => m.TicketDetail),
   },
   {
+    // The organizer's tab. The events list for now; the hub it grows into
+    // carries the organization's money, orders, codes and team as well.
+    path: 'manage',
+    canActivate: [signedIn],
+    loadComponent: () => import('./features/organizer/events').then((m) => m.Events),
+  },
+  {
     path: 'events',
     canActivate: [signedIn],
     loadComponent: () => import('./features/organizer/events').then((m) => m.Events),

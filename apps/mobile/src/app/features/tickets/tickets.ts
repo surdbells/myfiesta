@@ -18,7 +18,7 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton } from '../../
   selector: 'mf-tickets',
   imports: [MfScreen, MfCard, MfBadge, MfEmpty, MfSkeleton, MfButton],
   template: `
-    <mf-screen title="Your tickets" [subtitle]="subtitle()">
+    <mf-screen title="Your tickets" [subtitle]="subtitle()" large>
       <button mfButton variant="ghost" size="sm" screenActions (click)="settings()">Settings</button>
 
       @if (stale()) {

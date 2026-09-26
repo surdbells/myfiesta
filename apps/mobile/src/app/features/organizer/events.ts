@@ -16,7 +16,7 @@ import { MfBadge, MfButton, MfCard, MfEmpty, MfScreen, MfSegmented, MfSkeleton, 
   selector: 'mf-events',
   imports: [MfScreen, MfCard, MfBadge, MfEmpty, MfSkeleton, MfSegmented, MfButton],
   template: `
-    <mf-screen title="Your events" [subtitle]="session.organization()?.name ?? null">
+    <mf-screen title="Your events" [subtitle]="session.organization()?.name ?? null" large>
       <button mfButton variant="ghost" size="sm" screenActions (click)="settings()">Settings</button>
 
       <mf-segmented class="tabs" [segments]="tabs" [(value)]="tab" ariaLabel="Which events" />

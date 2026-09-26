@@ -1,83 +1,194 @@
-import { Component, booleanAttribute, input, output } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  booleanAttribute,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { Router } from '@angular/router';
+import { ChevronLeft } from 'lucide-angular';
+import { Navigation } from '../core/navigation';
+import { Chrome } from '../core/chrome';
+import { MfIconButton } from './icon-button';
 
 /**
- * The frame every screen sits in: a header that stays, a body that scrolls.
+ * The frame every screen sits in: an app bar, a body that scrolls under it,
+ * and an optional footer for the action the screen exists for.
  *
- * Not ion-header / ion-toolbar. Those carry iOS and Material chrome, a
- * platform-dependent title alignment and a height this app does not want; what
- * is actually needed is a strip that respects the notch and gets out of the
- * way.
+ * The bar has states, and each one answers something the reader is doing:
  *
- * The header keeps its own background rather than being transparent, so a
- * ticket QR scrolling under it does not turn the title unreadable.
+ * - **flat** at the top of a screen, the same colour as the page, so a screen
+ *   that has not been scrolled has no chrome to look past;
+ * - **scrolled** once content passes under it: translucent, blurred, with a
+ *   hairline — the cue that there is more above;
+ * - **large** titles on the places the bottom bar goes to. The title sits in
+ *   the page, big, and folds into the bar as it scrolls away — the phone's
+ *   own pattern for "this is a place" rather than "this is a step";
+ * - **overlay** for a screen that opens on a photograph: the bar is clear and
+ *   its buttons sit on dark chips until the picture has scrolled past;
+ * - **busy**, a thin line moving along its bottom edge while something saves.
+ *
+ * Back is the navigation service's back, so the arrow, Android's button and
+ * the iOS edge swipe all do the same thing — and it goes to the previous
+ * screen rather than a fixed parent, with `backTo` only for a screen opened
+ * from outside the app.
+ *
+ * A `task` screen — a form, a flow with a Save at the end — takes the bottom
+ * bar away while it is open. A Save button with three tabs underneath it is an
+ * invitation to leave halfway.
  */
 @Component({
   selector: 'mf-screen',
+  imports: [MfIconButton],
   template: `
-    <header class="bar">
-      @if (back()) {
-        <button class="icon" type="button" aria-label="Back" (click)="backed.emit()">
-          <span class="chevron" aria-hidden="true"></span>
-        </button>
-      }
-
-      <div class="titles">
-        <h1>{{ title() }}</h1>
-        @if (subtitle()) {
-          <p class="sub">{{ subtitle() }}</p>
+    <header
+      #bar
+      class="bar"
+      [class.scrolled]="scrolled()"
+      [class.collapsed]="collapsed()"
+      [class.large]="large()"
+      [class.overlay]="overlay() && !pastHero()"
+    >
+      <div class="row">
+        @if (back()) {
+          <button
+            mfIconButton
+            class="back"
+            [icon]="backIcon"
+            label="Back"
+            [tone]="overlay() && !pastHero() ? 'over' : 'plain'"
+            (click)="goBack()"
+          ></button>
         }
+
+        <div class="titles" [class.hidden]="titleHidden()">
+          <h1 class="title">{{ title() }}</h1>
+          @if (subtitle() && !large()) {
+            <p class="sub">{{ subtitle() }}</p>
+          }
+        </div>
+
+        <div class="actions">
+          <ng-content select="[screenActions]" />
+        </div>
       </div>
 
-      <div class="actions">
-        <ng-content select="[screenActions]" />
+      <div class="under">
+        <ng-content select="[screenBar]" />
       </div>
+
+      @if (busy()) {
+        <span class="progress" role="progressbar" aria-label="Working"></span>
+      }
     </header>
 
-    <main class="body" [class.flush]="flush()">
+    <main #body class="body" [class.flush]="flush()" [class.under-bar]="!overlay()" (scroll)="scrolledTo()">
+      @if (large()) {
+        <div class="hero-title">
+          <h1>{{ title() }}</h1>
+          @if (subtitle()) {
+            <p class="sub">{{ subtitle() }}</p>
+          }
+        </div>
+      }
+
       <ng-content />
     </main>
+
+    <footer class="footer" [style.transform]="lift()">
+      <ng-content select="[screenFooter]" />
+    </footer>
   `,
+  host: {
+    '[style.--mf-bar-h.px]': 'barHeight()',
+    '[style.--mf-kb.px]': 'chrome.keyboardHeight()',
+  },
   styles: `
     :host {
-      display: grid;
-      /* minmax(0, ...) on the column as well as the row.
-         A grid track is max-content by default, so without this the whole
-         screen takes the width of its widest child — one header button too
-         many and the frame is wider than the phone, with every screen under
-         it shifted sideways. */
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
+      position: relative;
+      display: block;
       width: 100%;
       height: 100%;
+      overflow: hidden;
       background: var(--surface-sunken);
     }
 
+    /* ---------------------------------------------------------------- bar */
+
     .bar {
+      position: absolute;
+      z-index: 20;
+      inset: 0 0 auto 0;
+      padding-top: var(--mf-safe-top);
+      background: var(--surface-sunken);
+      border-bottom: 1px solid transparent;
+      transition:
+        background-color 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
+    }
+
+    .bar.scrolled {
+      background: color-mix(in srgb, var(--surface) 84%, transparent);
+      backdrop-filter: blur(18px) saturate(1.6);
+      border-bottom-color: var(--border-subtle);
+      box-shadow: var(--shadow-card);
+    }
+
+    .bar.overlay {
+      background: transparent;
+      backdrop-filter: none;
+      border-bottom-color: transparent;
+      box-shadow: none;
+    }
+
+    .row {
       display: flex;
-      min-width: 0;
       align-items: center;
-      gap: var(--space-3);
-      padding: calc(var(--mf-safe-top) + var(--space-4)) var(--space-5) var(--space-3);
-      background: var(--surface);
-      border-bottom: 1px solid var(--border-subtle);
+      gap: var(--space-1);
+      min-width: 0;
+      height: var(--mf-app-bar);
+      padding: 0 var(--space-2) 0 var(--space-5);
+    }
+
+    .row:has(.back) {
+      padding-left: var(--space-1);
     }
 
     .titles {
       flex: 1;
       min-width: 0;
+      transition:
+        opacity 160ms ease,
+        transform 200ms var(--mf-ease-out);
     }
 
-    h1 {
-      font-size: var(--font-size-xl);
+    /* The large title is in the page; the bar's copy waits until it has gone. */
+    .titles.hidden {
+      opacity: 0;
+      transform: translateY(6px);
+      pointer-events: none;
+    }
+
+    .title {
+      font-size: var(--font-size-lg);
       font-weight: var(--font-weight-bold);
       letter-spacing: var(--font-tracking-tight);
+      line-height: 1.2;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .sub {
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-xs);
       color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -87,44 +198,118 @@ import { Component, booleanAttribute, input, output } from '@angular/core';
     .actions {
       display: flex;
       align-items: center;
-      gap: var(--space-2);
     }
 
-    .icon {
-      display: grid;
-      place-items: center;
-      width: var(--mf-tap);
-      height: var(--mf-tap);
-      margin-left: calc(var(--space-3) * -1);
-      border: 0;
-      border-radius: var(--radius-full);
-      background: transparent;
-      color: var(--text);
-      cursor: pointer;
+    .under:empty {
+      display: none;
     }
 
-    .icon:active {
-      background: var(--surface-hover);
+    .under {
+      padding: 0 var(--space-5) var(--space-3);
     }
 
-    .chevron {
-      width: 0.6rem;
-      height: 0.6rem;
-      border-left: 2px solid currentColor;
-      border-bottom: 2px solid currentColor;
-      transform: rotate(45deg) translate(2px, -2px);
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--primary) 18%, transparent);
     }
+
+    .progress::after {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 38%;
+      background: var(--primary);
+      animation: mf-progress 1.1s var(--mf-ease-out) infinite;
+    }
+
+    @keyframes mf-progress {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(270%);
+      }
+    }
+
+    /* --------------------------------------------------------------- body */
 
     .body {
+      height: 100%;
       overflow-y: auto;
       overscroll-behavior-y: contain;
-      padding: var(--space-5);
-      /* Room under the last card for the home indicator and a thumb. */
-      padding-bottom: calc(var(--mf-safe-bottom) + var(--space-8));
+      -webkit-overflow-scrolling: touch;
+      padding: var(--space-4) var(--space-5);
+      /* Room for the bottom bar or the footer, the home indicator, the
+         keyboard when it is up, and a thumb. */
+      padding-bottom: calc(var(--mf-bar-space) + var(--mf-footer-h) + var(--mf-kb) + var(--space-8));
+      scroll-padding-top: calc(var(--mf-bar-h) + var(--space-3));
+    }
+
+    /* Content starts below the bar and scrolls up under it. */
+    .body.under-bar {
+      padding-top: calc(var(--mf-bar-h) + var(--space-2));
     }
 
     .body.flush {
-      padding: 0 0 calc(var(--mf-safe-bottom) + var(--space-6));
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .body.flush.under-bar {
+      padding-top: var(--mf-bar-h);
+    }
+
+    .hero-title {
+      display: grid;
+      gap: var(--space-1);
+      margin: 0 0 var(--space-5);
+    }
+
+    .body.flush .hero-title {
+      padding: 0 var(--space-5);
+    }
+
+    .hero-title h1 {
+      font-size: var(--font-size-3xl);
+      font-weight: var(--font-weight-bold);
+      letter-spacing: var(--font-tracking-tighter);
+      line-height: 1.05;
+    }
+
+    .hero-title .sub {
+      font-size: var(--font-size-sm);
+      white-space: normal;
+    }
+
+    /* ------------------------------------------------------------- footer */
+
+    .footer:empty {
+      display: none;
+    }
+
+    .footer {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-5) calc(var(--mf-safe-bottom) + var(--space-3));
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: blur(18px) saturate(1.6);
+      border-top: 1px solid var(--border-subtle);
+      box-shadow: 0 -8px 24px -16px rgb(0 0 0 / 0.25);
+      transition: transform 240ms var(--mf-ease-out);
+    }
+
+    .footer > ::ng-deep * {
+      flex: 1;
     }
   `,
 })
@@ -133,8 +318,165 @@ export class MfScreen {
   readonly subtitle = input<string | null>(null);
   readonly back = input(false, { transform: booleanAttribute });
 
-  /** No padding on the body: for full-bleed lists and the camera. */
+  /** Where back goes when the app has nothing underneath this screen. */
+  readonly backTo = input<string | null>(null);
+
+  /** No side padding on the body: for full-bleed lists and the camera. */
   readonly flush = input(false, { transform: booleanAttribute });
 
+  /** A place, not a step: the title sits big in the page and folds into the bar. */
+  readonly large = input(false, { transform: booleanAttribute });
+
+  /** The screen opens on a photograph that runs up under a clear bar. */
+  readonly overlay = input(false, { transform: booleanAttribute });
+
+  /** Something is saving: a line runs along the bar. */
+  readonly busy = input(false, { transform: booleanAttribute });
+
+  /** A form or flow: the bottom bar goes away while this is open. */
+  readonly task = input(false, { transform: booleanAttribute });
+
+  /** Emitted when back is pressed on a screen without `backTo`. */
   readonly backed = output<void>();
+
+  protected readonly backIcon = ChevronLeft;
+  protected readonly chrome = inject(Chrome);
+
+  private readonly nav = inject(Navigation);
+  private readonly router = inject(Router);
+  private readonly bar = viewChild.required<ElementRef<HTMLElement>>('bar');
+  private readonly body = viewChild.required<ElementRef<HTMLElement>>('body');
+
+  /** Measured once rendered. Unset until then, so the resting value in styles.css holds. */
+  protected readonly barHeight = signal<number | null>(null);
+  private readonly top = signal(0);
+
+  protected readonly scrolled = computed(() => this.top() > 2);
+
+  /** The large title has scrolled up behind the bar. */
+  protected readonly collapsed = computed(() => this.large() && this.top() > 44);
+
+  /** The photograph at the top has scrolled away. */
+  protected readonly pastHero = computed(() => this.top() > 220);
+
+  protected readonly titleHidden = computed(() => {
+    if (this.large()) return !this.collapsed();
+    if (this.overlay()) return !this.pastHero();
+
+    return false;
+  });
+
+  /** Lifts the footer above the keyboard, which the WebView does not resize for. */
+  protected readonly lift = computed(() => {
+    const height = this.chrome.keyboardHeight();
+
+    return height > 0 ? `translateY(calc(-${height}px + var(--mf-safe-bottom)))` : null;
+  });
+
+  private key: string | null = null;
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+
+    effect(() => {
+      if (this.back()) this.nav.claimBack(this, () => this.goBack());
+      else this.nav.releaseBack(this);
+    });
+
+    effect(() => this.chrome.task.set(this.task()));
+
+    // The tab you are already on, tapped again: back to the top. Only the
+    // places the bar goes to answer it — a pushed screen underneath does not.
+    let seen = this.chrome.scrollTopRequested();
+
+    effect(() => {
+      const asked = this.chrome.scrollTopRequested();
+
+      if (asked !== seen && this.nav.isTabRoot()) this.scrollToTop();
+      seen = asked;
+    });
+
+    // The focused field, kept in view when the keyboard comes up over it.
+    effect(() => {
+      if (!this.chrome.keyboard()) return;
+
+      const active = document.activeElement;
+
+      if (active instanceof HTMLElement && this.body().nativeElement.contains(active)) {
+        requestAnimationFrame(() => active.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      }
+    });
+
+    afterNextRender(() => {
+      this.key = this.router.url;
+
+      // The bar's height decides where content starts, and it changes: a
+      // sub-bar appears, the type is set larger by the phone's settings.
+      const observer = new ResizeObserver(() => this.barHeight.set(this.bar().nativeElement.offsetHeight));
+      observer.observe(this.bar().nativeElement);
+      this.barHeight.set(this.bar().nativeElement.offsetHeight);
+
+      const footer = this.body().nativeElement.parentElement?.querySelector<HTMLElement>('.footer');
+
+      if (footer) {
+        const measure = () => this.body().nativeElement.style.setProperty('--mf-footer-h', `${footer.offsetHeight}px`);
+        new ResizeObserver(measure).observe(footer);
+        measure();
+      }
+
+      this.restoreScroll();
+
+      destroyRef.onDestroy(() => observer.disconnect());
+    });
+
+    destroyRef.onDestroy(() => {
+      this.nav.releaseBack(this);
+      if (this.task()) this.chrome.task.set(false);
+      if (this.key) this.nav.rememberScroll(this.key, this.body().nativeElement.scrollTop);
+    });
+  }
+
+  goBack(): void {
+    const fallback = this.backTo();
+
+    if (fallback !== null) this.nav.back(fallback);
+    else this.backed.emit();
+  }
+
+  /** Scroll the body back to the top — a tapped tab that is already open does this. */
+  scrollToTop(): void {
+    this.body().nativeElement.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  protected scrolledTo(): void {
+    const top = this.body().nativeElement.scrollTop;
+
+    this.top.set(top);
+    this.chrome.reportScroll(top);
+  }
+
+  /**
+   * Back where the list was, when arriving by going back.
+   *
+   * The content arrives a moment after the screen does — it is fetched — so
+   * this keeps trying for a few hundred milliseconds while the list grows tall
+   * enough to scroll to where it was.
+   */
+  private restoreScroll(): void {
+    const saved = this.key ? this.nav.savedScroll(this.key) : null;
+
+    if (!saved) return;
+
+    const body = this.body().nativeElement;
+    let tries = 0;
+
+    const attempt = () => {
+      body.scrollTop = saved;
+
+      if (Math.abs(body.scrollTop - saved) > 2 && tries++ < 45) requestAnimationFrame(attempt);
+      else this.scrolledTo();
+    };
+
+    attempt();
+  }
 }

@@ -20,7 +20,7 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
   selector: 'mf-saved',
   imports: [MfScreen, MfCard, MfPoster, MfEmpty, MfSkeleton],
   template: `
-    <mf-screen title="Saved" back (backed)="back()">
+    <mf-screen title="Saved" back backTo="/">
       @if (loading()) {
         <mf-skeleton height="5rem" />
         <mf-skeleton class="mt" height="5rem" />
@@ -161,9 +161,5 @@ export class Saved {
 
   open(event: EventCard): void {
     void this.router.navigate(['/e', event.slug]);
-  }
-
-  back(): void {
-    void this.router.navigate(['/']);
   }
 }

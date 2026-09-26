@@ -1,19 +1,11 @@
 import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
-import { provideIonicAngular } from '@ionic/angular';
+import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
 import { routes } from './app.routes';
 import { SessionStore } from './core/session';
 import { Reminders } from './core/reminders';
 import { Theme } from './core/theme';
+import { Navigation } from './core/navigation';
 
-/**
- * Ionic is configured once, and configured down.
- *
- * `mode: 'md'` pins the platform's structural behaviour so a screen does not
- * shift by a few pixels between iOS and Android for reasons nobody can see in
- * the code — the look is ours either way. Ripples and Ionic's focus outline
- * are off: the app's own controls answer a press themselves.
- */
 /**
  * Whether the phone has been asked for less movement.
  *
@@ -25,23 +17,35 @@ function prefersLessMotion(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+/**
+ * Screens move the way the phone's own apps move them.
+ *
+ * Forward slides the new screen in from the right over the old one; back
+ * slides the top one away to reveal what was underneath; moving between tabs
+ * is a quick cross-fade, because tabs are places side by side rather than a
+ * stack. The direction comes from Navigation, which knows whether this was a
+ * push, a pop or a switch — the one thing the router alone cannot say.
+ *
+ * Nothing moves when the phone has been asked for less motion: the transitions
+ * are left out entirely rather than shortened.
+ */
+const transitions = withViewTransitions({
+  skipInitialTransition: true,
+  onViewTransitionCreated: ({ transition }) => {
+    const root = document.documentElement;
+    const direction = inject(Navigation).direction();
+
+    root.dataset['nav'] = direction;
+    void transition.finished.finally(() => delete root.dataset['nav']);
+  },
+});
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideIonicAngular({
-      mode: 'md',
-      rippleEffect: false,
-      /*
-       * Page transitions, unless the phone has been asked for less motion.
-       *
-       * The stylesheet already flattens every CSS animation in the app when
-       * that is set, but Ionic drives its transitions in JavaScript, where a
-       * media query cannot reach them — so somebody who turned motion down to
-       * stop screens sliding still had the screens sliding.
-       */
-      animated: !prefersLessMotion(),
-    }),
-    provideRouter(routes, withComponentInputBinding()),
+    prefersLessMotion()
+      ? provideRouter(routes, withComponentInputBinding())
+      : provideRouter(routes, withComponentInputBinding(), transitions),
 
     /*
      * The saved theme and the saved session, before the first route resolves.
@@ -52,6 +56,9 @@ export const appConfig: ApplicationConfig = {
      * frame into somebody's face at a dark venue.
      */
     provideAppInitializer(async () => {
+      // Listening before the first navigation, so it knows where the app opened.
+      inject(Navigation);
+
       const theme = inject(Theme);
       const session = inject(SessionStore);
       const reminders = inject(Reminders);

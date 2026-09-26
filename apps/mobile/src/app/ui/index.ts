@@ -1,11 +1,10 @@
 /**
  * The app's controls.
  *
- * Every one of them is ours. Ionic supplies the shell — the router outlet, the
- * page transitions, the platform's idea of a safe area — and nothing that a
- * person looks at or touches, so the phone app is recognisably the same
- * product as the two web apps rather than a default Ionic build wearing a
- * brand colour.
+ * Every one of them is ours, and so is the shell they sit in — there is no
+ * Ionic left in the app. The phone app is recognisably the same product as
+ * the two web apps rather than a default component library wearing a brand
+ * colour.
  */
 export { MfButton } from './button';
 export { MfField } from './field';
@@ -23,4 +22,6 @@ export { MfToasts, ToastStore } from './toast';
 export { MfQr } from './qr';
 export { MfCarousel } from './carousel';
 export { MfPoster } from './poster';
-export { MfTabs } from './tabs';
+export { MfTabs, type MfTab } from './tabs';
+export { MfIcon, type MfIconSize, type LucideIconData } from './icon';
+export { MfIconButton } from './icon-button';

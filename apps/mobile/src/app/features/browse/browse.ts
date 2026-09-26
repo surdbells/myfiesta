@@ -31,7 +31,7 @@ import {
   selector: 'mf-browse',
   imports: [FormsModule, MfScreen, MfCard, MfField, MfSelect, MfPoster, MfEmpty, MfSkeleton, MfButton],
   template: `
-    <mf-screen title="Find something on" back (backed)="leave()">
+    <mf-screen title="Find something on" back backTo="/">
       <div class="filters">
         <mf-field label="Search">
           <input
@@ -342,9 +342,5 @@ export class Browse {
 
   open(event: EventCard): void {
     void this.router.navigate(['/e', event.slug]);
-  }
-
-  leave(): void {
-    void this.router.navigate(['/']);
   }
 }

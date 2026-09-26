@@ -55,7 +55,7 @@ import { SessionStore } from '../../core/session';
     MfSelect,
   ],
   template: `
-    <mf-screen [title]="event()?.title ?? 'Event'" back flush (backed)="leave()">
+    <mf-screen [title]="event()?.title ?? 'Event'" back flush backTo="/">
       <span class="actions" screenActions>
         @if (!past()) {
           <button
@@ -783,9 +783,5 @@ export class Event {
     const base = this.discover.siteBase();
 
     return base + path;
-  }
-
-  leave(): void {
-    void this.router.navigate(['/']);
   }
 }

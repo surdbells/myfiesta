@@ -1,10 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Search } from 'lucide-angular';
 import { Discover, EventCard } from '../../core/discovery';
 import { SessionStore } from '../../core/session';
 import { shortEventTime } from '../../core/event-time';
 import { formatMoney } from '../../core/money';
 import {
+  MfScreen,
+  MfIconButton,
   MfBadge,
   MfButton,
   MfCard,
@@ -31,21 +34,12 @@ import {
  */
 @Component({
   selector: 'mf-home',
-  imports: [MfCarousel, MfPoster, MfCard, MfBadge, MfButton, MfEmpty, MfSkeleton, MfSelect],
+  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfBadge, MfButton, MfEmpty, MfSkeleton, MfSelect],
   template: `
-    <div class="screen">
-      <header class="bar">
-        <div>
-          <p class="hello subtle">{{ greeting() }}</p>
-          <h1>What’s on</h1>
-        </div>
+    <mf-screen title="What’s on" [subtitle]="greeting()" large>
+      <button mfIconButton screenActions tone="tonal" [icon]="searchIcon" label="Search events" (click)="go('/browse')"></button>
 
-        <button class="ghost" type="button" (click)="go('/browse')" aria-label="Search events">
-          <span class="magnifier" aria-hidden="true"></span>
-        </button>
-      </header>
-
-      <div class="body">
+      <div class="content">
         @if (cityOptions().length > 2) {
           <mf-select
             class="city"
@@ -165,70 +159,13 @@ import {
           }
         }
       </div>
-    </div>
+    </mf-screen>
   `,
   styles: `
-    .screen {
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      height: 100%;
-      background: var(--surface-sunken);
-    }
-
-    .bar {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: var(--space-3);
-      padding: calc(var(--mf-safe-top) + var(--space-5)) var(--space-5) var(--space-3);
-      background: var(--surface);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .hello {
-      font-size: var(--font-size-sm);
-    }
-
-    h1 {
-      font-size: var(--font-size-2xl);
-    }
-
-    .ghost {
-      display: grid;
-      place-items: center;
-      width: var(--mf-tap);
-      height: var(--mf-tap);
-      border: 0;
-      border-radius: var(--radius-full);
-      background: var(--surface-inset);
-      cursor: pointer;
-    }
-
-    .magnifier {
-      width: 14px;
-      height: 14px;
-      border: 2px solid var(--text-muted);
-      border-radius: 50%;
-      position: relative;
-    }
-
-    .magnifier::after {
-      content: '';
-      position: absolute;
-      right: -6px;
-      bottom: -6px;
-      width: 8px;
-      height: 2px;
-      background: var(--text-muted);
-      transform: rotate(45deg);
-    }
-
-    .body {
+    .content {
       display: grid;
       align-content: start;
       gap: var(--space-6);
-      overflow-y: auto;
-      padding: var(--space-5) var(--space-5) calc(var(--mf-safe-bottom) + var(--space-8));
     }
 
     .city {
@@ -348,6 +285,8 @@ import {
   `,
 })
 export class Home {
+  protected readonly searchIcon = Search;
+
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);
   readonly session = inject(SessionStore);
