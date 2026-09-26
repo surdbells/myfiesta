@@ -384,6 +384,22 @@ export class Api {
     return this.send('GET', '/api/auth/me');
   }
 
+  /**
+   * A name and a phone number. Not the email: changing the address an account
+   * is reached at has to be confirmed at the new address, and the server
+   * refuses it here for that reason.
+   */
+  updateProfile(body: { name?: string; phone?: string | null }): Promise<{ name: string; email: string; phone: string | null }> {
+    return this.send('PATCH', '/api/auth/profile', { body });
+  }
+
+  /** Signs every other device out; this one stays. */
+  changePassword(current: string, password: string): Promise<{ message: string }> {
+    return this.send('POST', '/api/auth/password', {
+      body: { current_password: current, password, password_confirmation: password },
+    });
+  }
+
   // --- attendee -------------------------------------------------------------
 
   async tickets(): Promise<Ticket[]> {

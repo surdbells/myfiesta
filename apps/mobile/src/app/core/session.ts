@@ -96,6 +96,12 @@ export class SessionStore {
     await this.save({ ...session, activeOrganization: id });
   }
 
+  /** The name shown back to the account, after it is changed. */
+  async rename(name: string): Promise<void> {
+    const session = this.state();
+    if (session) await this.save({ ...session, name });
+  }
+
   /**
    * Take in a fresh list of memberships — after accepting an invitation, or
    * when the phone has been away long enough for a role to change.

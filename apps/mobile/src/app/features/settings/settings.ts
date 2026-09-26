@@ -4,14 +4,17 @@ import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
 import { Reminders } from '../../core/reminders';
 import { Api, Ticket } from '../../core/api';
+import { messageOf, fieldErrors } from '../../core/errors';
 import {
   MfButton,
   MfCard,
+  MfField,
   MfScreen,
   MfSegmented,
   MfSelect,
   MfSheet,
   MfSwitch,
+  ToastStore,
   type MfOption,
   type MfSegment,
 } from '../../ui';
@@ -19,13 +22,13 @@ import {
 /**
  * The account, the theme, and the way out.
  *
- * Three settings and no more. Everything else this app could be asked to
- * configure belongs in the console on a bigger screen; a phone settings page
- * that goes on for a page and a half is one nobody reads.
+ * Short on purpose: a phone settings page that goes on for a page and a half
+ * is one nobody reads. What an organization configures lives under Manage;
+ * this is the person — their name, their password, how the app looks.
  */
 @Component({
   selector: 'mf-settings',
-  imports: [MfScreen, MfCard, MfButton, MfSegmented, MfSelect, MfSheet, MfSwitch],
+  imports: [MfScreen, MfCard, MfButton, MfField, MfSegmented, MfSelect, MfSheet, MfSwitch],
   template: `
     <mf-screen title="Settings" large>
       <mf-card>
@@ -33,6 +36,12 @@ import {
         <h2>{{ session.session()?.name }}</h2>
         @if (session.session()?.email; as email) {
           <p class="muted">{{ email }}</p>
+        }
+        @if (!session.locked()) {
+          <div class="account-actions">
+            <button mfButton size="sm" variant="secondary" (click)="editDetails()">Your details</button>
+            <button mfButton size="sm" variant="secondary" (click)="startPassword()">Change password</button>
+          </div>
         }
       </mf-card>
 
@@ -104,6 +113,36 @@ import {
       <p class="version subtle">myFiesta {{ version }}</p>
     </mf-screen>
 
+    <mf-sheet [open]="detailsOpen()" heading="Your details" subheading="Your email cannot be changed here yet — a new address has to be confirmed first." closable (closed)="detailsOpen.set(false)">
+      <div class="form">
+        <mf-field label="Name" [error]="err('name')">
+          <input autocomplete="name" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" />
+        </mf-field>
+        <mf-field label="Phone" optional hint="For the team to reach you on the night. Never shown to buyers." [error]="err('phone')">
+          <input type="tel" inputmode="tel" autocomplete="tel" [value]="phone()" (input)="phone.set($any($event.target).value)" maxlength="32" />
+        </mf-field>
+      </div>
+      <ng-container sheetFooter>
+        <button mfButton variant="secondary" (click)="detailsOpen.set(false)">Cancel</button>
+        <button mfButton [loading]="saving()" [disabled]="!name().trim()" (click)="saveDetails()">Save</button>
+      </ng-container>
+    </mf-sheet>
+
+    <mf-sheet [open]="passwordOpen()" heading="Change password" subheading="Every other phone and browser signed in as you is signed out." closable (closed)="closePassword()">
+      <div class="form">
+        <mf-field label="Current password" [error]="err('current_password')">
+          <input type="password" autocomplete="current-password" [value]="current()" (input)="current.set($any($event.target).value)" />
+        </mf-field>
+        <mf-field label="New password" [hint]="passwordHint()" [error]="err('password')">
+          <input type="password" autocomplete="new-password" [value]="next()" (input)="next.set($any($event.target).value)" />
+        </mf-field>
+      </div>
+      <ng-container sheetFooter>
+        <button mfButton variant="secondary" (click)="closePassword()">Cancel</button>
+        <button mfButton [loading]="saving()" [disabled]="!passwordReady()" (click)="savePassword()">Change it</button>
+      </ng-container>
+    </mf-sheet>
+
     <mf-sheet
       [open]="confirming()"
       heading="Sign out?"
@@ -119,6 +158,18 @@ import {
     </mf-sheet>
   `,
   styles: `
+    .account-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+
+    .form {
+      display: grid;
+      gap: var(--space-4);
+    }
+
     .label {
       font-size: var(--font-size-xs);
       text-transform: uppercase;
@@ -178,6 +229,30 @@ export class Settings {
   ];
 
   readonly confirming = signal(false);
+
+  private readonly toasts = inject(ToastStore);
+
+  readonly detailsOpen = signal(false);
+  readonly passwordOpen = signal(false);
+  readonly name = signal('');
+  readonly phone = signal('');
+  readonly current = signal('');
+  readonly next = signal('');
+  readonly saving = signal(false);
+  readonly errors = signal<Record<string, string>>({});
+
+  /** The server's rule, said while typing — the same words the join screen uses. */
+  readonly passwordHint = computed(() => {
+    const p = this.next();
+    if (p === '') return 'At least 10 characters, with a letter and a number.';
+    if (p.length < 10) return 'At least 10 characters.';
+    if (!/[a-zA-Z]/.test(p) || !/\d/.test(p)) return 'Needs at least one letter and one number.';
+    return null;
+  });
+
+  readonly passwordReady = computed(
+    () => !this.saving() && this.current() !== '' && this.next().length >= 10 && /[a-zA-Z]/.test(this.next()) && /\d/.test(this.next()),
+  );
   readonly busy = signal(false);
 
   readonly organizations = computed<MfOption[]>(() =>
@@ -214,12 +289,73 @@ export class Settings {
     void this.theme.set(choice as ThemeChoice);
   }
 
-  switchOrganization(id: string | null): void {
-    if (!id) return;
+  async switchOrganization(id: string | null): Promise<void> {
+    if (!id || id === this.organizationId()) return;
 
-    // Which organization the API answers for is decided by the session's own
-    // order, so switching is a reorder rather than a second source of truth.
-    void this.router.navigate(['/events'], { queryParams: { organization: id } });
+    // The session holds which organization the API answers for; everything
+    // under Manage reads it from there and loads afresh on the way in.
+    await this.session.chooseOrganization(id);
+    await this.router.navigate(['/manage']);
+  }
+
+  err(field: string): string | null {
+    return this.errors()[field] ?? null;
+  }
+
+  editDetails(): void {
+    this.name.set(this.session.session()?.name ?? '');
+    this.phone.set('');
+    this.errors.set({});
+    this.detailsOpen.set(true);
+  }
+
+  async saveDetails(): Promise<void> {
+    this.saving.set(true);
+    this.errors.set({});
+
+    try {
+      const saved = await this.api.updateProfile({ name: this.name().trim(), ...(this.phone().trim() ? { phone: this.phone().trim() } : {}) });
+      await this.session.rename(saved.name);
+      this.detailsOpen.set(false);
+      this.toasts.show('Saved.', 'success');
+    } catch (error) {
+      this.errors.set(fieldErrors(error));
+      if (!Object.keys(this.errors()).length) this.toasts.show(messageOf(error), 'danger');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  startPassword(): void {
+    this.current.set('');
+    this.next.set('');
+    this.errors.set({});
+    this.passwordOpen.set(true);
+  }
+
+  /** What was typed does not outlive the sheet. */
+  closePassword(): void {
+    this.passwordOpen.set(false);
+    this.current.set('');
+    this.next.set('');
+  }
+
+  async savePassword(): Promise<void> {
+    if (!this.passwordReady()) return;
+
+    this.saving.set(true);
+    this.errors.set({});
+
+    try {
+      const { message } = await this.api.changePassword(this.current(), this.next());
+      this.closePassword();
+      this.toasts.show(message, 'success');
+    } catch (error) {
+      this.errors.set(fieldErrors(error));
+      if (!Object.keys(this.errors()).length) this.toasts.show(messageOf(error), 'danger');
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   async signOut(): Promise<void> {
