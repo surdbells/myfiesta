@@ -295,6 +295,13 @@ platform is called, so linking it on iOS one day moves iPhones back to it
 without a code change. `npm run check` still lists the unlinked plugin, as a
 gap that is covered rather than one that is open.
 
+**The console's door reads with the same code, in any browser.** The camera
+inside the page lives in `packages/door`, and both apps use it: an iPhone at a
+door is the same Safari whichever app it opened, so there is one reader to get
+right rather than two. The console ships the `.wasm` from its own origin as the
+phone does, and fetches it when the door screen opens rather than when the
+camera first starts — which may be after the signal has gone.
+
 **Reminders are scheduled on the phone, not pushed.** Three hours before a
 night somebody holds a ticket for. No certificates to manage, no device token
 to keep in sync, and nothing needed at the moment it fires — somebody on a bus

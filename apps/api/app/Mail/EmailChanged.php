@@ -23,6 +23,12 @@ use Illuminate\Mail\Mailables\Envelope;
  * holds the new one. Both addresses and the name were typed by whoever holds
  * the account, which after a takeover is not the person reading this — hence
  * KeepsTypedTextPlain.
+ *
+ * Sent straight away, like every other email about moving an account. It is
+ * the owner's only word that the account has gone, and a stopped queue worker
+ * makes no noise: queued, the account would move and its owner would hear
+ * nothing. Nor is it built to be queued — the account is passed whole, so a
+ * queued copy would put the row, password hash included, in the jobs table.
  */
 class EmailChanged extends Mailable
 {

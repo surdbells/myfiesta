@@ -24,9 +24,9 @@ php artisan schedule:work               # everything the app does on its own
 
 ### The worker
 
-`QUEUE_CONNECTION=database`, and every email in this system is queued: the
-ticket somebody just bought, a reminder before doors, a waitlist opening, an
-announcement to an organizer's followers, a password reset.
+`QUEUE_CONNECTION=database`, and nearly every email in this system is queued:
+the ticket somebody just bought, a reminder before doors, a waitlist opening,
+an announcement to an organizer's followers, the link behind a privacy request.
 
 With no worker running, none of that fails. The rows sit in the `jobs` table
 and nothing is ever sent — which is a platform that takes money and goes quiet.
@@ -35,6 +35,15 @@ A development database left running without a worker will show them piling up:
 ```bash
 php artisan tinker --execute="echo DB::table('jobs')->count();"
 ```
+
+A few go out while the request is answered instead: a password reset, a team
+invitation, and the link that moves an account to a new address. Each carries
+a token that exists nowhere else, and a queued email is a copy of it sitting in
+`jobs`. The other emails about moving an account go with that link, so the
+owner's warning never waits on a worker the link did not. That makes these the
+wrong ones to test the worker with — they arrive without it — and it means the
+API process itself has to reach the mail server, not only the worker.
+`MailQueueingTest` fails if an email changes sides.
 
 ### Counting without watching
 

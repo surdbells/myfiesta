@@ -24,12 +24,17 @@ jobs:
         id: filter
         with:
           filters: |
-            api:        ['apps/api/**']
-            web:        ['apps/web/**', 'packages/tokens/**']
-            # packages/door is compiled as source by both, and tested only
-            # through them: the camera, and what a door decides with no signal.
-            organizer:  ['apps/organizer-web/**', 'packages/tokens/**', 'packages/door/**']
-            mobile:     ['apps/mobile/**', 'packages/tokens/**', 'packages/door/**']
+            # Every package an app reads is compiled as source by that app, or
+            # read by its tests, and checked only through it — packages/door is
+            # the camera and what a door decides with no signal, and the door's
+            # hash fixture in packages/contract is one the console and the API
+            # must both reproduce. tools/check-ci-filters.cjs fails when a
+            # filter leaves one out. The three Angular apps install from the
+            # one lockfile at the root, so a change to it is a change to each.
+            api:        ['apps/api/**', 'packages/contract/**', 'packages/api-types/**']
+            web:        ['apps/web/**', 'packages/tokens/**', 'packages/ui/**', 'package.json', 'package-lock.json']
+            organizer:  ['apps/organizer-web/**', 'packages/tokens/**', 'packages/door/**', 'packages/ui/**', 'packages/shared/**', 'packages/api-types/**', 'packages/contract/**', 'package.json', 'package-lock.json']
+            mobile:     ['apps/mobile/**', 'packages/tokens/**', 'packages/door/**', 'packages/shared/**', 'packages/api-types/**', 'package.json', 'package-lock.json']
             contract:   ['packages/contract/**']
             tokens:     ['packages/tokens/**']
 
@@ -78,6 +83,10 @@ jobs:
       # actually links. One that is not linked never fails; the feature that
       # needed it simply does nothing on a device.
       - run: node tools/check-native-plugins.cjs
+      # The path filters above against what each app reads out of packages/.
+      # A package a filter leaves out is a change to it that runs none of the
+      # builds or tests using it, and still comes back green.
+      - run: node tools/check-ci-filters.cjs
 
   api:
     needs: changes
@@ -126,33 +135,37 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
 
+  # The two web apps install the way the phone app does, from the workspace
+  # root. There is one lockfile, beside the root package.json; the ones these
+  # jobs used to name, inside each app, do not exist.
+  #
+  # Their specs run in jsdom, as they do locally. --browsers=ChromeHeadless was
+  # a Karma flag; the unit-test builder reads it as a request for Vitest's
+  # browser mode, which needs a browser provider no app installs, so the step
+  # could only fail.
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run: { working-directory: apps/web }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '24', cache: npm, cache-dependency-path: apps/web/package-lock.json }
+        with: { node-version: '24', cache: npm, cache-dependency-path: package-lock.json }
       - run: npm ci
-      - run: npm run build
-      - run: npm test -- --watch=false --browsers=ChromeHeadless
+      - run: npm run build --workspace web
+      - run: npm test --workspace web -- --watch=false
 
   organizer-web:
     needs: changes
     if: needs.changes.outputs.organizer == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run: { working-directory: apps/organizer-web }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '24', cache: npm, cache-dependency-path: apps/organizer-web/package-lock.json }
+        with: { node-version: '24', cache: npm, cache-dependency-path: package-lock.json }
       - run: npm ci
-      - run: npm run build
-      - run: npm test -- --watch=false --browsers=ChromeHeadless
+      - run: npm run build --workspace organizer-web
+      - run: npm test --workspace organizer-web -- --watch=false
 
   mobile:
     needs: changes

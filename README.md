@@ -60,8 +60,8 @@ php artisan migrate && php artisan storage:link
 php artisan serve
 
 # …and two more processes beside it. Neither says anything when it is missing:
-# with no worker every email queues and is never sent, and with no scheduler
-# abandoned baskets keep holding tickets an event could have sold.
+# with no worker nearly every email queues and is never sent, and with no
+# scheduler abandoned baskets keep holding tickets an event could have sold.
 php artisan queue:work
 php artisan schedule:work
 

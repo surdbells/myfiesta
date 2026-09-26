@@ -10,10 +10,17 @@ list.
 
 ## The two nobody remembers
 
-**The queue worker.** Every email this platform sends is queued: tickets,
-reminders, campaigns, announcements, password resets, the link behind a
-privacy request. Without a worker an order is paid, the tickets are minted, the
-ledger is written — and the buyer is told nothing at all. Nothing errors.
+**The queue worker.** Nearly every email this platform sends is queued:
+tickets, reminders, campaigns, announcements, the link behind a privacy
+request. Without a worker an order is paid, the tickets are minted, the ledger
+is written — and the buyer is told nothing at all. Nothing errors.
+
+The exceptions carry a link whose token exists nowhere else — a password reset,
+a team invitation, the link that moves an account to a new address — and go
+out while the request is answered, because a queued email is a copy of its
+token sitting in the jobs table. The other emails about moving an account go
+with them, so the owner's warning never waits on a worker that the link did
+not. So the API itself has to reach the mail server, not only the worker.
 
 **The scheduler.** One minute of cron, running `schedule:run`. Without it:
 

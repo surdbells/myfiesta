@@ -12,6 +12,7 @@ use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Messaging\MessageSender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -236,6 +237,25 @@ class AttendeeMessageTest extends TestCase
         $this->assertSame('List-Unsubscribe=One-Click', $headers->text['List-Unsubscribe-Post']);
     }
 
+    /**
+     * A reply is not handed to an inbox nobody chose for it.
+     *
+     * The organization has no address it picked for replies. The contact
+     * address an import leaves behind may be the owner's own sign-in address,
+     * and nobody in the console can see it — so it is not used, and nor is the
+     * address of whoever pressed send.
+     */
+    public function test_a_reply_goes_to_no_personal_inbox(): void
+    {
+        $this->org->update(['contact_email' => 'ada.personal@example.com']);
+        $this->holder('chidi@example.com');
+        $this->asRole(Role::Manager);
+
+        $this->send()->assertCreated();
+
+        Mail::assertQueued(AttendeeMessage::class, fn (AttendeeMessage $mail) => $mail->envelope()->replyTo === []);
+    }
+
     public function test_the_gap_between_holders_and_reachable_is_reported(): void
     {
         $this->holder('ada@example.com');
@@ -269,7 +289,7 @@ class AttendeeMessageTest extends TestCase
             ->where('email', 'chidi@example.com')->delete();
         $message->update(['status' => 'queued']);
 
-        app(\App\Services\Messaging\MessageSender::class)->send($message);
+        app(MessageSender::class)->send($message);
 
         // Ada is not written to a second time.
         Mail::assertQueued(AttendeeMessage::class, 3);

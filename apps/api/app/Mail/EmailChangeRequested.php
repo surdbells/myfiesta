@@ -27,6 +27,13 @@ use Illuminate\Mail\Mailables\Envelope;
  * the person it is warning about, if it was not the owner. KeepsTypedTextPlain
  * is what stops either of them turning into a link beside that advice.
  *
+ * Sent straight away, like the link it warns about (see EmailChangeConfirm).
+ * Queued, it would wait on the queue worker while the link did not, so a
+ * stopped worker would deliver the link and hold back the warning for as long
+ * as the link works. It is also not built to be queued: nothing here reduces
+ * the account to an id, so a queued copy would be the whole row, password hash
+ * included, in the jobs table.
+ *
  * Somebody frightened by this will reply to it whatever it says, so a reply
  * goes to the support inbox (RepliesReachSupport).
  */

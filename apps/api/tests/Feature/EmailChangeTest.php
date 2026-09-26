@@ -296,6 +296,33 @@ class EmailChangeTest extends TestCase
         $this->assertSame('chidi@example.com', $someoneElse->fresh()->email);
     }
 
+    /**
+     * Sent while the request is answered, every one of them, whichever address
+     * was asked for.
+     *
+     * The link carries a token that exists nowhere else, so it is not queued,
+     * as a team invitation and a password reset are not: a queued email is a
+     * copy of the token in the jobs table. The note sent in its place goes the
+     * same way, or the two cases would take different times to answer. And the
+     * warnings to the old address go with them, so a stopped queue worker can
+     * never deliver the link while holding back the word to the owner.
+     */
+    public function test_nothing_about_moving_an_account_waits_in_the_queue(): void
+    {
+        User::factory()->create(['email' => 'taken@example.com']);
+
+        $this->ask('taken@example.com')->assertStatus(202);
+        $this->ask('new@example.com')->assertStatus(202);
+        $this->open($this->linkSentTo('new@example.com'))->assertOk();
+
+        foreach ([EmailChangeConfirm::class, EmailChangeAddressInUse::class, EmailChangeRequested::class, EmailChanged::class] as $mailable) {
+            Mail::assertSent($mailable);
+            Mail::assertNotQueued($mailable);
+        }
+
+        Mail::assertNothingQueued();
+    }
+
     public function test_an_address_held_by_a_closed_account_cannot_be_moved_to_either(): void
     {
         User::factory()->create(['email' => 'gone@example.com'])->delete();

@@ -18,8 +18,17 @@ use Illuminate\Queue\SerializesModels;
  * Sent from the platform rather than from the organizer's own address, because
  * the platform's domain is the one with the SPF and DKIM records — a message
  * claiming to be from a venue's Gmail would be filed as spam by half the
- * inboxes it reached. The organizer's name is in the subject and the reply-to,
- * which is what actually matters to the reader.
+ * inboxes it reached. The event leads the subject and the organizer's name
+ * signs the message, which is what actually matters to the reader.
+ *
+ * No Reply-To, so a reply goes to the platform's from address. An organization
+ * has no address it has chosen for replies. contact_email is only ever written
+ * by the legacy import — from the old brand settings, or else the account
+ * holder's own sign-in address — and nothing in the console shows it or lets
+ * anybody change it, so buyers' replies sent there would land in an inbox
+ * nobody picked for them. Nor the address of whoever pressed send: the message
+ * goes out in the organization's name, not theirs. When an owner can name an
+ * address for replies, that is the Reply-To this should carry.
  */
 class AttendeeMessage extends Mailable implements ShouldQueue
 {

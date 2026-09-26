@@ -127,6 +127,11 @@ in for the `BarcodeDetector` Safari does not have. The `.wasm` ships inside
 the app rather than coming from a CDN, so a door with no signal still scans.
 Android keeps ML Kit, which links there.
 
+The console's door page scans the same way, with the same code: the camera
+moved into `packages/door`, and both apps use it. So the console reads codes
+in any browser — Safari and Firefox included, where it used to ask for them to
+be typed.
+
 Neither of the two ways out it was waiting on turned out to be needed: iOS
 still links through SPM and ML Kit is still absent from it, which
 `npm run check` records as a covered gap. Why the WebView won is in

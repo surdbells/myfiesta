@@ -21,6 +21,11 @@ use Illuminate\Mail\Mailables\Envelope;
  * waiting, so that nothing else can tell this case apart, but its token is sent
  * nowhere — this email included.
  *
+ * Sent straight away, not queued, because the link it stands in for is (see
+ * EmailChangeConfirm). Queued while the link was not, this case would answer
+ * the person asking sooner than the other one does — and how long the answer
+ * took would say whether the address has an account.
+ *
  * A reply goes to the support inbox (RepliesReachSupport), like the other
  * emails about an address being moved.
  */
