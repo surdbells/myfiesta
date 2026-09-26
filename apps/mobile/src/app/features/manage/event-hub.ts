@@ -7,6 +7,7 @@ import {
   Bell,
   CalendarClock,
   ClipboardList,
+  Code,
   Copy,
   DoorOpen,
   ExternalLink,
@@ -49,11 +50,13 @@ import {
   MfList,
   MfRow,
   MfScreen,
+  MfSegmented,
   MfSheet,
   MfSkeleton,
   MfStat,
   ToastStore,
   type MenuAction,
+  type MfSegment,
 } from '../../ui';
 
 /**
@@ -68,7 +71,7 @@ import {
  */
 @Component({
   selector: 'mf-event-hub',
-  imports: [MfScreen, MfIconButton, MfIcon, MfBadge, MfButton, MfCard, MfEmpty, MfField, MfList, MfRow, MfSheet, MfSkeleton, MfStat],
+  imports: [MfScreen, MfIconButton, MfIcon, MfBadge, MfButton, MfCard, MfEmpty, MfField, MfList, MfRow, MfSegmented, MfSheet, MfSkeleton, MfStat],
   template: `
     <mf-screen
       [title]="event()?.title ?? 'Event'"
@@ -162,6 +165,7 @@ import {
             @if (session.can('codes.manage')) {
               <mf-row label="Discount codes" sub="Codes, batches and promoters" [icon]="codesIcon" [link]="here('codes')" />
             }
+            <mf-row label="On your own website" sub="Two lines to paste, and people buy there" [icon]="embedIcon" action (pressed)="embedOpen.set(true)" />
           </mf-list>
 
           <mf-list class="block" heading="Who is coming">
@@ -236,6 +240,15 @@ import {
       }
     </mf-screen>
 
+    <mf-sheet [open]="embedOpen()" heading="On your own website" [subheading]="event()?.status === 'published' ? 'Paste it where your site lets you. Payment opens in its own tab; everything else happens on your page.' : 'It starts working once the event is on sale.'" closable (closed)="embedOpen.set(false)">
+      <mf-segmented ariaLabel="How it appears" [segments]="embedStyles" [(value)]="embedStyle" />
+      <pre class="snippet">{{ snippet() }}</pre>
+      <ng-container sheetFooter>
+        <button mfButton variant="secondary" (click)="copySnippet()"><mf-icon [icon]="copyIcon" size="sm" /> Copy</button>
+        <button mfButton (click)="sendSnippet()"><mf-icon [icon]="shareIcon" size="sm" /> Send it</button>
+      </ng-container>
+    </mf-sheet>
+
     <mf-sheet [open]="duplicating()" heading="Duplicate this night" subheading="Tickets, extras and questions come across. Sales do not." (closed)="duplicating.set(false)">
       <div class="form">
         <mf-field label="Name">
@@ -252,6 +265,19 @@ import {
     </mf-sheet>
   `,
   styles: `
+    .snippet {
+      margin: var(--space-4) 0 0;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--surface-inset);
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-xs);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: all;
+    }
+
     .hero {
       position: relative;
       display: grid;
@@ -411,6 +437,30 @@ export class EventHub implements OnInit {
   protected readonly scanIcon = ScanLine;
   protected readonly shareIcon = Share2;
   protected readonly dateIcon = CalendarClock;
+  protected readonly embedIcon = Code;
+  protected readonly copyIcon = Copy;
+
+  protected readonly embedOpen = signal(false);
+  protected readonly embedStyle = signal<'button' | 'inline'>('button');
+  protected readonly embedStyles: MfSegment[] = [
+    { value: 'button', label: 'A button' },
+    { value: 'inline', label: 'In the page' },
+  ];
+
+  /**
+   * Two lines for the organizer's own site. A button that opens the tickets
+   * over their page is the default: it fits every layout, and is still an
+   * ordinary link if the script never loads.
+   */
+  protected readonly snippet = computed(() => {
+    const slug = this.event()?.slug ?? '';
+    const site = this.discover.siteBase();
+    const script = `<script src="${site}/embed.js" async></script>`;
+
+    return this.embedStyle() === 'button'
+      ? `<a href="${site}/${slug}" data-myfiesta-event="${slug}" data-myfiesta-mode="button">Buy tickets</a>\n${script}`
+      : `<div data-myfiesta-event="${slug}"></div>\n${script}`;
+  });
   protected readonly stopIcon = XCircle;
 
   protected readonly cash = formatMoney;
@@ -450,6 +500,24 @@ export class EventHub implements OnInit {
       this.error.set(messageOf(error));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  protected async copySnippet(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.snippet());
+      this.toasts.show('Copied. Paste it into your site.', 'success');
+    } catch {
+      this.toasts.show('Copying is blocked here. Send it instead.', 'danger');
+    }
+  }
+
+  /** Usually to whoever runs the website. */
+  protected async sendSnippet(): Promise<void> {
+    try {
+      await Share.share({ title: `Tickets for ${this.event()?.title ?? 'our event'} on our site`, text: this.snippet() });
+    } catch {
+      // Dismissed. The code is still on screen.
     }
   }
 
