@@ -277,8 +277,11 @@ reads it — the engine's own where it has one, ZXing compiled to WebAssembly
 where it does not, which includes every Safari. The code box stays on screen
 under all of them — a cracked lens, a flat battery and a screen that will not
 brighten all end there, and that is not a moment to be hunting for a fallback.
-The same code is read many times a second, so the door ignores a repeat for
-four seconds: one guest, one admission, rather than a wall of "already used".
+The same code is read many times a second, so the door ignores a repeat until
+it has been out of view for four seconds — counted from the last sighting and
+held while a scan is still waiting for its answer: one guest, one admission,
+rather than a wall of "already used", and never a second send of a group
+ticket with its party size cleared.
 
 **On iPhone the door scans inside the WebView, not with ML Kit.** The ML Kit
 plugin ships a CocoaPods podspec and no `Package.swift`, and the iOS project

@@ -43,7 +43,8 @@ class SettlementPolicy
     /**
      * Recording a settlement is a platform action, never an organizer one.
      *
-     * Handled by Filament policies on the admin side; an organizer token must
+     * The admin panel decides that for itself, in SettlementResource's own
+     * can* methods, and does not come through here. An organizer token must
      * never reach it, which is why this returns false unconditionally rather
      * than checking a role.
      */
