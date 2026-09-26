@@ -51,11 +51,13 @@ npm run android --workspace mobile   # opens Android Studio
 npm run ios --workspace mobile       # opens Xcode, on a Mac
 ```
 
-Camera scanning works on Android and not on iPhone: the ML Kit plugin ships a
-CocoaPods podspec and no `Package.swift`, and this project links its plugins
-through SPM, so `cap sync` leaves it out without saying anything. The door says
-"This phone cannot scan" and offers the code box. `npm run check` keeps the gap
-visible; `docs/DECISIONS.md` has the two ways out.
+Camera scanning uses ML Kit on Android and the WebView on iPhone: the ML Kit
+plugin ships a CocoaPods podspec and no `Package.swift`, and this project links
+its plugins through SPM, so `cap sync` leaves it out without saying anything.
+On iPhone the door reads with `getUserMedia` and ZXing compiled to WebAssembly,
+whose `.wasm` is built into the app (`media/zxing_reader.wasm`) so scanning
+works with no signal. `npm run check` lists the unlinked plugin as a covered
+gap; `docs/DECISIONS.md` says why.
 
 `android/` and `ios/` are committed. They carry the icons, the splash screen
 and the signing configuration, which are release assets rather than build

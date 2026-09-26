@@ -119,13 +119,18 @@ is built and working, and announcements already go out by email. Push is an
 addition to that rather than a replacement: a mailbox reaches somebody who
 installed the app once in June.
 
-### 8. Camera scanning on iPhone — **M**, and a decision
+### 8. Camera scanning on iPhone — **done, 26 September 2026**
 
-Already written up in [DECISIONS.md](DECISIONS.md). The ML Kit scanner ships a
-CocoaPods podspec and no `Package.swift`, and the iOS project links through
-SPM, so `cap sync` silently omits it. Android scans; iPhone offers the code
-box. The way out is moving iOS to CocoaPods or finding a scanner that ships
-SPM.
+The iPhone reads codes inside the WebView. The camera comes through
+`getUserMedia`, and ZXing compiled to WebAssembly reads the frames, standing
+in for the `BarcodeDetector` Safari does not have. The `.wasm` ships inside
+the app rather than coming from a CDN, so a door with no signal still scans.
+Android keeps ML Kit, which links there.
+
+Neither of the two ways out it was waiting on turned out to be needed: iOS
+still links through SPM and ML Kit is still absent from it, which
+`npm run check` records as a covered gap. Why the WebView won is in
+[DECISIONS.md](DECISIONS.md).
 
 ### 9. Organizers selling from their own site — **done, 19 September 2026**
 
@@ -268,7 +273,8 @@ promoters possible: webhooks and keys (10), selling from an organizer's own
 site (9), campaigns (11), and the analytics to judge all three by (13). Then
 the two compliance pieces that should never wait for the first request or the
 first chargeback: data requests (16) and disputes (17). Then resale (5), built
-as a return rather than a marketplace.
+as a return rather than a marketplace. Then camera scanning on iPhone (8),
+answered in the WebView rather than by changing how iOS links its plugins.
 
 **Built, waiting on an account:** SMS (12). The path runs end to end against a
 log driver; a provider account in each market is the only missing piece.
@@ -276,10 +282,6 @@ log driver; a provider account in each market is the only missing piece.
 **Waiting on credentials, and nothing else:** wallet passes (6) and push (7).
 Neither needs design work, so both should be picked up the week the keys
 arrive rather than scheduled.
-
-**Waiting on a decision, not on work:** camera scanning on iPhone (8) — the
-scanner library ships CocoaPods and this project links through SPM, so it is
-a choice between moving iOS to CocoaPods and finding another scanner.
 
 **Deliberately later:** instalments (14) until a festival needs them, reserved
 seating (15) until a seated venue does, translation (18) while both markets

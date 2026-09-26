@@ -2,7 +2,6 @@ import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild }
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
-import { Capacitor } from '@capacitor/core';
 import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
@@ -53,14 +52,14 @@ interface Outcome {
           door scans far more often than it types, and the frame is deliberately
           large: a small preview is one somebody holds at the wrong distance.
         -->
-<!--
-          The preview stays in the page whether or not it is running: the
-          browser scanner reads frames off this element, so a camera that is
-          only created once scanning starts can never start. Folded away rather
-          than removed when idle.
+        <!--
+          The preview stays in the page whether or not it is running: on an
+          iPhone, and in any browser, the scanner reads frames off this
+          element, so a camera that is only created once scanning starts can
+          never start. Folded away rather than removed when idle.
         -->
-        <section class="camera" [class.native]="nativePreview" [class.idle]="!scanning()">
-          <video #preview class="preview" [class.hidden]="nativePreview" muted playsinline></video>
+        <section class="camera" [class.native]="nativePreview()" [class.idle]="!scanning()">
+          <video #preview class="preview" [class.hidden]="nativePreview()" muted playsinline autoplay></video>
           <div class="reticle" aria-hidden="true"></div>
 
           @if (scanning()) {
@@ -232,8 +231,8 @@ interface Outcome {
       aspect-ratio: 4 / 3;
     }
 
-    /* Folded away, not removed: the element has to exist for the browser
-       scanner to read frames off it. */
+    /* Folded away, not removed: the element has to exist for the scanner to
+       read frames off it. */
     .camera.idle {
       position: absolute;
       width: 1px;
@@ -243,8 +242,8 @@ interface Outcome {
       pointer-events: none;
     }
 
-    /* Natively the camera is behind the page, so this frame is a window
-       rather than a container with a picture in it. */
+    /* ML Kit's camera is behind the page, so this frame is a window rather
+       than a container with a picture in it. */
     .camera.native {
       background: transparent;
       box-shadow: 0 0 0 2px var(--border-strong);
@@ -494,21 +493,28 @@ export class Door implements OnDestroy {
   readonly scanning = this.scanner.running;
   /** Null until the question has been asked; a button that flickers in is worse than one that waits. */
   readonly cameraReady = signal<boolean | null>(null);
-  readonly nativePreview = Capacitor.isNativePlatform();
+  /**
+   * Whether the camera is ML Kit's, behind the page, rather than a video in
+   * it. Asked of the scanner rather than of the platform: an iPhone is native
+   * and still reads with the camera inside the page.
+   */
+  readonly nativePreview = computed(() => this.scanner.engine() === 'mlkit');
 
   /** The last code the camera read, so one ticket held up is one request. */
   private lastRead = { code: '', at: 0 };
 
   readonly cameraNote = computed(() => {
     if (this.cameraReady() === false && this.scanner.refusal() === null) {
-      return 'No camera this app can read codes with. Type the code from the ticket.';
+      return 'This phone cannot scan codes. Type the code from the ticket.';
     }
 
     switch (this.scanner.refusal()) {
       case 'permission':
         return 'The camera was refused. Type the code, or allow the camera in settings.';
       case 'unsupported':
-        return 'This phone cannot scan. Type the code from the ticket.';
+        return 'This phone cannot scan codes. Type the code from the ticket.';
+      case 'no-camera':
+        return 'No camera was found. Type the code from the ticket.';
       case 'unavailable':
         return 'The camera could not start. Type the code from the ticket.';
       default:

@@ -270,13 +270,30 @@ stating because the cheap path is always to reach for the framework's
 component and override it until it nearly matches.
 
 **A door reads a ticket with the camera, and can always be typed into.** ML Kit
-natively, because a queue moves at the speed of its worst scan and a WebView
-decoder is the worst scan; `BarcodeDetector` in a browser, which is for
-development rather than a promise, since Safari has none. The code box stays on
-screen under both — a cracked lens, a flat battery and a screen that will not
+on Android, because a queue moves at the speed of its worst scan and a native
+decoder is quicker in the dark and at an angle than one in a WebView. On iPhone,
+and in any browser, the camera runs inside the page and a `BarcodeDetector`
+reads it — the engine's own where it has one, ZXing compiled to WebAssembly
+where it does not, which includes every Safari. The code box stays on screen
+under all of them — a cracked lens, a flat battery and a screen that will not
 brighten all end there, and that is not a moment to be hunting for a fallback.
-The same code is read thirty times a second, so the door ignores a repeat for
+The same code is read many times a second, so the door ignores a repeat for
 four seconds: one guest, one admission, rather than a wall of "already used".
+
+**On iPhone the door scans inside the WebView, not with ML Kit.** The ML Kit
+plugin ships a CocoaPods podspec and no `Package.swift`, and the iOS project
+links its plugins through Swift Package Manager, so `cap sync` leaves it out.
+Linking it means moving iOS to CocoaPods — a structural change for one plugin,
+and one that cannot be built or checked without a Mac. Reading in the page
+needs neither: `getUserMedia` for the rear camera, and the `barcode-detector`
+ponyfill standing in for the detector Safari lacks. Its `.wasm` is part of the
+app's own build rather than fetched from the library's CDN, because the door
+is where the signal goes. Frames are read five times a second at most, which
+is more than a queue needs and less than makes an older phone hot. Which reader
+a phone gets is decided by whether ML Kit is actually linked, not by what the
+platform is called, so linking it on iOS one day moves iPhones back to it
+without a code change. `npm run check` still lists the unlinked plugin, as a
+gap that is covered rather than one that is open.
 
 **Reminders are scheduled on the phone, not pushed.** Three hours before a
 night somebody holds a ticket for. No certificates to manage, no device token
@@ -555,13 +572,6 @@ needed.
 - **Stripe variance handling** — reconciliation will surface historical sales
   whose recorded amount differs from what was charged, some already settled to
   organizers. A commercial conversation, not a code path.
-- **Camera scanning on iPhone** — the ML Kit scanner ships a CocoaPods podspec
-  and no `Package.swift`, and the iOS project links its plugins through Swift
-  Package Manager. So `cap sync` leaves it out, silently, and camera scanning
-  at a door works on Android and not on iPhone. The app says so and offers the
-  code box, which is the fallback that has to exist anyway. Answering it means
-  moving iOS to CocoaPods — a structural choice with its own cost — or finding
-  a scanner that ships SPM. `npm run check` holds the gap visible meanwhile.
 - **Push credentials** — FCM and APNs. Blocked on keys, not on code: following
   an organizer is the list a "they announced a night" push would ride on, and
   it already sends by email. Push is an addition to that, not a replacement —

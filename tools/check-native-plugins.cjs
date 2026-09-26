@@ -14,9 +14,9 @@ const { join } = require('node:path');
  * That has already happened here twice over. The iOS project went three
  * plugins behind because a sync was run as `cap sync android`, which does not
  * touch iOS; and the barcode scanner ships a CocoaPods podspec and no
- * `Package.swift`, so it cannot be linked into an SPM project at all — which
- * means camera scanning at a door does not work on iPhone, however carefully
- * the scanner is written.
+ * `Package.swift`, so it cannot be linked into an SPM project at all. Camera
+ * scanning on iPhone did not work, however carefully the scanner was written,
+ * until reading moved into the WebView.
  *
  * Run by `npm run check`. It reads files rather than building anything.
  */
@@ -42,19 +42,20 @@ const plugins = Object.keys(manifest.dependencies ?? {}).filter(
 );
 
 /**
- * Known and not yet answered.
+ * Known, and answered some other way.
  *
  * Listed so that this check stays useful for everything else rather than
  * sitting red — and so the gap is written down somewhere rather than being an
- * absence nobody can see. Each one is a decision waiting in docs/DECISIONS.md.
+ * absence nobody can see. Each one says what covers for the missing plugin,
+ * and docs/DECISIONS.md says why that was chosen over linking it.
  */
 const ACCEPTED = new Map([
   [
     '@capacitor-mlkit/barcode-scanning',
     'ios: ships a CocoaPods podspec and no Package.swift, and this project links plugins ' +
-      'through SPM. Camera scanning at a door therefore does not work on iPhone; the app ' +
-      'says so and offers the code box. Resolving it means moving iOS to CocoaPods or ' +
-      'finding a scanner that ships SPM — see docs/DECISIONS.md.',
+      'through SPM, so ML Kit is still not linked on iPhone. Scanning there runs in the ' +
+      'WebView instead — the camera through getUserMedia, read by ZXing compiled to ' +
+      'WebAssembly and shipped inside the app. Android keeps ML Kit. See docs/DECISIONS.md.',
   ],
 ]);
 
