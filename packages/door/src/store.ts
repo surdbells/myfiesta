@@ -47,6 +47,25 @@ export class DoorOfflineStore {
   private tickets = new Map<string, DoorListTicket>();
 
   /**
+   * The event this door is working: the one `load` was last asked for or,
+   * until a door has asked, the first list saved.
+   *
+   * Each app holds one store for every door it opens, and a door screen can be
+   * left, and another event's opened, while its list is still on its way from
+   * the server. That list used to land afterwards and replace the new door's,
+   * which then decided against the wrong event's tickets — every one of its
+   * own reading as not on the list — until the next refresh, three minutes
+   * later on the phone. So the store keeps which door is open, taken when the
+   * door asks rather than when an answer comes back, and only that door's
+   * list is ever the one in memory.
+   */
+  private working: string | null = null;
+
+  get eventId(): string | null {
+    return this.working;
+  }
+
+  /**
    * Whether this browser can hash at all.
    *
    * WebCrypto only exists in a secure context: https, or localhost. A console
@@ -57,25 +76,43 @@ export class DoorOfflineStore {
 
   // --- the list --------------------------------------------------------------
 
-  /** Load whatever this phone already saved for the event. */
+  /**
+   * Load whatever this phone already saved for the event, as the list its door
+   * decides from from now on.
+   *
+   * The last event's list is put away at once rather than when this one's has
+   * been read, so nothing is decided against it in between. And a read that
+   * finishes after another door has opened does not become that door's list:
+   * a door opened with nothing saved finds that out in one read, and the door
+   * before it, still reading its tickets, used to finish second and leave its
+   * own list in memory for the new one.
+   */
   async load(eventId: string): Promise<StoredList | null> {
     if (!this.supported) return null;
+
+    if (this.working !== eventId) this.putAway();
+    this.working = eventId;
 
     const db = await this.open();
     const list = await request<StoredList | undefined>(
       db.transaction('lists').objectStore('lists').get(eventId),
     );
 
+    const rows = list
+      ? await request<StoredTicket[]>(
+          db.transaction('tickets').objectStore('tickets').index('event_id').getAll(eventId),
+        )
+      : [];
+
+    // Still what this phone has saved for the event, and answered as that,
+    // but another door is open now and decides from its own.
+    if (this.working !== eventId) return list ?? null;
+
     if (!list) {
-      this.list = null;
-      this.tickets.clear();
+      this.putAway();
 
       return null;
     }
-
-    const rows = await request<StoredTicket[]>(
-      db.transaction('tickets').objectStore('tickets').index('event_id').getAll(eventId),
-    );
 
     this.list = list;
     this.tickets = new Map(rows.map((row) => [row.hash, strip(row)]));
@@ -91,8 +128,15 @@ export class DoorOfflineStore {
    * offline admission is not forgotten by a refresh that raced the sync. So
    * are admissions the server could not take: the server's list says those
    * tickets are unused, and they are not.
+   *
+   * Saved for its own event whichever door is open when it arrives — lists
+   * are kept per event, and it is still that event's freshest — but it only
+   * becomes the list in memory if its event's door is the one open. See
+   * `working`.
    */
   async save(list: DoorList): Promise<StoredList> {
+    this.working ??= list.event_id;
+
     const db = await this.open();
     const tx = db.transaction(['lists', 'tickets'], 'readwrite');
     const tickets = tx.objectStore('tickets');
@@ -120,12 +164,18 @@ export class DoorOfflineStore {
     tx.objectStore('lists').put(stored);
     await done(tx);
 
-    this.list = stored;
-    this.tickets = new Map(list.tickets.map((ticket) => [ticket.hash, { ...ticket }]));
+    const saved = new Map(list.tickets.map((ticket) => [ticket.hash, { ...ticket }]));
 
+    if (list.event_id === this.working) {
+      this.list = stored;
+      this.tickets = saved;
+    }
+
+    // Counted on the list just saved, not on whichever is in memory by now,
+    // so a list saved for a door already left still has them when it opens.
     for (const scan of await this.queued(list.event_id)) {
       if (scan.offline_result === 'accepted') {
-        await this.admitLocally(scan.code, scan.party);
+        await this.countOn(stored, saved, scan.code, scan.party);
       }
     }
 
@@ -150,13 +200,15 @@ export class DoorOfflineStore {
    * the one answer that differs, and the message says why.
    */
   async decide(code: string, party: number | null): Promise<ScanResult> {
-    const hash = await this.hash(code);
-    const ticket = hash ? (this.tickets.get(hash) ?? null) : null;
+    // One list from the hash to the count, whichever door opens in between.
+    const { list, tickets } = this;
+    const hash = await this.hash(code, list);
+    const ticket = hash ? (tickets.get(hash) ?? null) : null;
     const outcome = decideOffline(ticket, party);
 
     // Counted only when somebody actually went in. The rules decide; this
     // writes down what they decided.
-    if (outcome.accepted && ticket) await this.admitLocally(code, party);
+    if (outcome.accepted && ticket) await this.countOn(list, tickets, code, party);
 
     return outcome;
   }
@@ -168,10 +220,24 @@ export class DoorOfflineStore {
    * later does not think a ticket it just admitted is still unused.
    */
   async admitLocally(code: string, party: number | null, admittedCount?: number): Promise<void> {
-    const hash = await this.hash(code);
-    const ticket = hash ? this.tickets.get(hash) : undefined;
+    await this.countOn(this.list, this.tickets, code, party, admittedCount);
+  }
 
-    if (!ticket || !this.list) return;
+  /**
+   * Count people in on one list, and write it down under that list's event —
+   * the list in memory, or one just saved for a door that is not open.
+   */
+  private async countOn(
+    list: StoredList | null,
+    tickets: Map<string, DoorListTicket>,
+    code: string,
+    party: number | null,
+    admittedCount?: number,
+  ): Promise<void> {
+    const hash = await this.hash(code, list);
+    const ticket = hash ? tickets.get(hash) : undefined;
+
+    if (!list || !hash || !ticket) return;
 
     const next = admittedCount ?? admittedAfter(ticket, party);
 
@@ -180,7 +246,7 @@ export class DoorOfflineStore {
 
     const db = await this.open();
     const tx = db.transaction('tickets', 'readwrite');
-    tx.objectStore('tickets').put({ ...ticket, key: `${this.list.event_id}:${hash}`, event_id: this.list.event_id });
+    tx.objectStore('tickets').put({ ...ticket, key: `${list.event_id}:${hash}`, event_id: list.event_id });
     await done(tx);
   }
 
@@ -274,10 +340,16 @@ export class DoorOfflineStore {
    * byte for byte; if the two ever disagreed, every offline scan would read
    * as not recognised.
    */
-  private async hash(code: string): Promise<string | null> {
-    if (!this.list || !this.supported) return null;
+  private async hash(code: string, list: StoredList | null): Promise<string | null> {
+    if (!list || !this.supported) return null;
 
-    return hashCode(code, this.list.salt, this.list.iterations);
+    return hashCode(code, list.salt, list.iterations);
+  }
+
+  /** No list in memory: nothing to decide from until the open door's has been read. */
+  private putAway(): void {
+    this.list = null;
+    this.tickets = new Map();
   }
 
   private open(): Promise<IDBDatabase> {

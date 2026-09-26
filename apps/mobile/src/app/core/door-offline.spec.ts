@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DoorOfflineStore, hashCode } from '@myfiesta/door';
 import { memoryIndexedDB } from '../../../../../packages/door/src/testing/memory-indexeddb';
 import { Api, ApiError, DoorList, OfflineScan, ScanResult, SyncResult } from './api';
 import { DoorOffline } from './door-offline';
@@ -72,11 +73,13 @@ describe('DoorOffline, sending what was scanned without signal', () => {
   let sent: OfflineScan[][];
   let replies: (() => Promise<SyncResult>)[];
   let listsFetched: string[];
+  let listReplies: (() => Promise<DoorList>)[];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sent = [];
     replies = [];
     listsFetched = [];
+    listReplies = [];
 
     const db = memoryIndexedDB();
 
@@ -96,7 +99,7 @@ describe('DoorOffline, sending what was scanned without signal', () => {
             doorList: async (event: string) => {
               listsFetched.push(event);
 
-              return list;
+              return (listReplies.shift() ?? (async () => ({ ...list, event_id: event })))();
             },
           },
         },
@@ -104,6 +107,9 @@ describe('DoorOffline, sending what was scanned without signal', () => {
     });
 
     offline = onThisPhone(TestBed.inject(DoorOffline));
+
+    // Its door screen open, as it is whenever this phone sends or fetches.
+    await offline.prepare('evt_1');
   });
 
   afterEach(() => {
@@ -111,7 +117,7 @@ describe('DoorOffline, sending what was scanned without signal', () => {
   });
 
   /** A door on this phone's storage — the one open now, or a new one after a restart. */
-  function onThisPhone(door: DoorOffline): DoorOffline {
+  function onThisPhone<T extends DoorOfflineStore>(door: T): T {
     Object.defineProperty(door, 'supported', { value: true });
 
     return door;
@@ -144,14 +150,16 @@ describe('DoorOffline, sending what was scanned without signal', () => {
   function slowReply(reply: SyncResult) {
     let answer!: () => void;
     let lose!: () => void;
+    let refuse!: (field: string) => void;
     const arriving = new Promise<SyncResult>((resolve, reject) => {
       answer = () => resolve(reply);
       lose = () => reject(new ApiError('No connection. Check signal and try again.', 0));
+      refuse = (field) => reject(refusal(field));
     });
 
     replies.push(() => arriving);
 
-    return { answer, lose };
+    return { answer, lose, refuse };
   }
 
   /** Until the phone has sent the first batch and is waiting on the server. */
@@ -361,5 +369,171 @@ describe('DoorOffline, sending what was scanned without signal', () => {
     // A request that timed out may still have arrived; the same id makes the
     // queued copy the same scan rather than a second person.
     expect(saved).toMatchObject([{ client_id: good.client_id, code: 'WFY7-F77K4EJW', party: 2 }]);
+  });
+
+  /**
+   * One door screen at a time, but what the last one asked the server for can
+   * still be on its way when the next is opened: its list, or a sync on a slow
+   * wifi. What comes back belongs to the door that was left, and is said there
+   * when it opens again — never on the door open now, which used to be told
+   * another event's list, count and problems as if they were its own.
+   */
+  describe('a door left for another event’s while it was still waiting on the server', () => {
+    const TONIGHT = 'WFY7-F77K4EJW';
+    const TOMORROW = 'MFST-9K2L4XQ7';
+
+    /** An event's list as the server sends it, hashed with the event's own salt. */
+    async function listFor(eventId: string, generatedAt: string, ...codes: string[]): Promise<DoorList> {
+      const salt = `salt-for-${eventId}`;
+
+      return {
+        event_id: eventId,
+        salt,
+        iterations: 1,
+        generated_at: generatedAt,
+        tickets: await Promise.all(
+          codes.map(async (code) => ({
+            hash: await hashCode(code, salt, 1),
+            status: 'valid',
+            admits: 1,
+            admitted_count: 0,
+            holder_name: 'Ada Okoro',
+            type: 'General',
+          })),
+        ),
+      };
+    }
+
+    /** A list the server has not sent yet: `answer` is it arriving. */
+    function slowList(reply: DoorList) {
+      let answer!: () => void;
+      const arriving = new Promise<DoorList>((resolve) => (answer = () => resolve(reply)));
+
+      listReplies.push(() => arriving);
+
+      return { answer };
+    }
+
+    it('keeps deciding from tomorrow’s list, and says so, when tonight’s arrives late', async () => {
+      // Tomorrow's door has been worked on this phone before.
+      await onThisPhone(new DoorOfflineStore()).save(
+        await listFor('evt_2', '2026-09-26T18:00:00Z', TOMORROW, 'KQ4M-7ZP2XC9D'),
+      );
+
+      const server = slowList(await listFor('evt_1', '2026-09-26T21:05:00Z', TONIGHT));
+      const refreshing = offline.refreshList('evt_1');
+
+      await vi.waitFor(() => expect(listsFetched).toEqual(['evt_1']));
+      await offline.prepare('evt_2');
+
+      server.answer();
+      await refreshing;
+
+      expect(offline.listCount()).toBe(2);
+      expect(offline.listUpdatedAt()).toEqual(new Date('2026-09-26T18:00:00Z'));
+      // Tonight's list would read every one of tomorrow's tickets as not on it.
+      expect((await offline.decide(TOMORROW, null)).result).toBe('accepted');
+
+      // Saved all the same, for tonight's door, which has it when it opens again.
+      await offline.prepare('evt_1');
+
+      expect(offline.listCount()).toBe(1);
+      expect(offline.listUpdatedAt()).toEqual(new Date('2026-09-26T21:05:00Z'));
+    });
+
+    it('does not say the last door’s list is saved on a door that has none', async () => {
+      await offline.refreshList('evt_1');
+
+      expect(offline.listCount()).toBe(1);
+
+      await offline.prepare('evt_2');
+
+      expect(offline.listCount()).toBe(0);
+      expect(offline.listUpdatedAt()).toBeNull();
+    });
+
+    it('counts the scans waiting from the door that is open, not from the one it left mid-sync', async () => {
+      await queueOnThisPhone([good, later]);
+      await offline.prepare('evt_1');
+
+      const server = slowReply(accepted(good, later));
+      const sending = offline.sync('evt_1');
+
+      await onItsWay();
+      // Left for tomorrow's door, which has made no scans.
+      await offline.prepare('evt_2');
+
+      server.lose();
+      await sending;
+
+      // "Sending 2 scans made while offline", said on a door that made none.
+      expect(offline.pendingCount()).toBe(0);
+
+      // And tomorrow's list not fetched while they waited.
+      await offline.refreshList('evt_2');
+
+      expect(listsFetched).toEqual(['evt_2']);
+
+      // Tonight's, still waiting, when its door opens again.
+      await offline.prepare('evt_1');
+
+      expect(offline.pendingCount()).toBe(2);
+    });
+
+    it('says what the server found wrong with tonight’s scans on tonight’s door', async () => {
+      await queueOnThisPhone([good]);
+
+      const server = slowReply({
+        data: [
+          {
+            ...admitted,
+            result: 'duplicate',
+            accepted: false,
+            admitted: 0,
+            message: 'Already recorded.',
+            offline_result: null,
+            conflict: null,
+            client_id: good.client_id,
+          },
+        ],
+        conflicts: [],
+      });
+      const sending = offline.sync('evt_1');
+
+      await onItsWay();
+      await offline.prepare('evt_2');
+
+      server.answer();
+      await sending;
+
+      expect(offline.conflicts()).toEqual([]);
+
+      await offline.prepare('evt_1');
+
+      expect(offline.conflicts()).toMatchObject([{ client_id: good.client_id, conflict: 'admitted_invalid' }]);
+    });
+
+    it('says who went in unrecorded on tonight’s door, where only its own staff can dismiss it', async () => {
+      const halfAPerson: OfflineScan = { ...later, party: 1.5 };
+
+      await queueOnThisPhone([good, halfAPerson]);
+
+      const server = slowReply(accepted(good));
+      const sending = offline.sync('evt_1');
+
+      await onItsWay();
+      await offline.prepare('evt_2');
+
+      server.refuse('scans.1.party');
+      await sending;
+
+      expect(offline.unrecorded()).toEqual([]);
+
+      // Tapped on tomorrow's door, which has nothing of its own to dismiss.
+      await offline.dismissUnrecorded();
+      await offline.prepare('evt_1');
+
+      expect(offline.unrecorded()).toEqual([halfAPerson]);
+    });
   });
 });

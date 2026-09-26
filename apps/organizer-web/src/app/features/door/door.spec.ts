@@ -433,6 +433,31 @@ describe('Door', () => {
       expect(door.pendingCount()).toBe(0);
     });
 
+    /**
+     * The first sync can take a while on a slow wifi. A screen left before it
+     * finished used to go on and fetch this event's list anyway, then set its
+     * timers going after they had been cleared, with nothing left to stop
+     * them: this event's scans sent and its list fetched all night, by a door
+     * nobody could see, whichever event's door was open.
+     */
+    it('stops sending and fetching once the screen is left, however long the first sync takes', async () => {
+      vi.useFakeTimers();
+      queueOnThisPhone([good]);
+
+      const fixture = render();
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      const first = backend.expectOne(SYNC);
+
+      fixture.destroy();
+      first.flush({ data: [{ ...admitted, client_id: good.client_id, conflict: null }], conflicts: [] });
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+
+      expect(backend.match(LIST)).toHaveLength(0);
+      expect(backend.match(SYNC)).toHaveLength(0);
+    });
+
     it('keeps every scan when what the server refused is not something a person typed or a camera read', async () => {
       vi.useFakeTimers();
       const phone = queueOnThisPhone([good, unsendable]);

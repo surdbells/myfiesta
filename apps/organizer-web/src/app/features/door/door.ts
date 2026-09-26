@@ -159,6 +159,8 @@ export class Door implements OnDestroy {
   });
 
   private timers: ReturnType<typeof setInterval>[] = [];
+  /** Whether the screen has been left, for work started before then to stop — see `startOffline`. */
+  private left = false;
 
   private readonly onOnline = () => {
     this.online.set(true);
@@ -187,11 +189,20 @@ export class Door implements OnDestroy {
    * The saved list is loaded first so a phone that opens this screen with no
    * connection — reopened in a basement — is ready immediately instead of
    * waiting on a download that will never arrive.
+   *
+   * Each step stops if the screen has been left while it was waiting, as the
+   * phone app's door does. The first sync can take a while on a slow wifi,
+   * and a screen left before it finished used to go on and fetch the list,
+   * then set the timers going after they had been cleared, with nothing left
+   * to stop them: this event's scans sent and its list fetched all night by a
+   * door nobody could see, whichever event's door was open.
    */
   private async startOffline(): Promise<void> {
     if (!this.offlineSupported) return;
 
     const saved = await this.offline.load(this.eventId).catch(() => null);
+
+    if (this.left) return;
 
     if (saved) {
       this.listCount.set(saved.count);
@@ -210,6 +221,7 @@ export class Door implements OnDestroy {
     if (this.pendingCount() > 0) this.connectionLost.set(true);
 
     await this.syncAndRefresh();
+    if (this.left) return;
 
     // Sending waits for signal; so does the list. Both retried on a timer
     // rather than only on the browser's "online" event, which does not fire
@@ -224,7 +236,7 @@ export class Door implements OnDestroy {
 
     // Refreshed only once the queue is clear: a list fetched before the
     // server has heard about offline admissions would not know about them.
-    if (sent) await this.refreshList();
+    if (sent && !this.left) await this.refreshList();
   }
 
   async refreshList(): Promise<void> {
@@ -650,7 +662,9 @@ export class Door implements OnDestroy {
     // light burning and the battery draining, which reads as spyware.
     this.stopCamera();
 
+    this.left = true;
     this.timers.forEach(clearInterval);
+    this.timers = [];
 
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.onOnline);

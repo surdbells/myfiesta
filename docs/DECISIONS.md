@@ -168,6 +168,19 @@ admit people who already hold a ticket. Money changing hands and stock leaving
 the room cannot be decided by a phone on its own, so the sell sheet says plainly
 that it needs signal rather than queueing something it cannot honour.
 
+**A scan whose answer was lost is one scan, and the server compares it.** A
+door scans online first and queues the scan under the same id only when no
+answer comes back, so a request that timed out but arrived is not counted
+twice. When that queued copy syncs, the server keeps the door's decision beside
+its own and, where they differ, records and returns the difference like any
+other offline conflict: a guest let in on a ticket it had refused is
+`admitted_invalid`, and only people beyond what it already counted are added.
+A refusal the door made because the same ticket was already let in offline is
+not reported as somebody owed entry — that is a copied ticket working as it
+should. Where the door turned away a guest the server had let in, the server
+keeps its admission and says so rather than undoing a check-in that has
+already been announced to webhooks.
+
 **An add-on is a line on the order, not a table of its own.** A bottle, a table,
 a shirt: sold with a ticket, settled through the same ledger, and admitting
 nobody. An order line therefore carries exactly one of a ticket type or an

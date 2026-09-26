@@ -1,6 +1,9 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { DoorOfflineStore, OfflineScan, ScanResult, conflictsIn, scanId } from '@myfiesta/door';
 import { Api, ApiError } from './api';
+
+/** Where the phone's answer and the server's later disagreed, about one scan. */
+type Conflict = ScanResult & { client_id: string };
 
 /**
  * The door when the signal goes, on a phone.
@@ -20,26 +23,66 @@ import { Api, ApiError } from './api';
  * comes back. A refusal is never treated as a connection failure — a 401 means
  * this pass has been taken back, and a phone that keeps admitting people on a
  * revoked pass is worse than one that stops.
+ *
+ * One of these for the whole app, and one door screen open at a time — but
+ * what the last door asked the server for can still be on its way when the
+ * next is opened: its list, or a sync on a slow wifi. What comes back belongs
+ * to the door that was left, and is said there when it opens again. It used to
+ * be said on whichever door was open by then, as if it were that door's own.
  */
 @Injectable({ providedIn: 'root' })
 export class DoorOffline extends DoorOfflineStore {
   private readonly api = inject(Api);
 
-  /** How many scans are waiting to be sent. */
-  readonly pendingCount = signal(0);
+  /** The event whose door is open: the one `prepare` was last asked for. */
+  private readonly doorOpen = signal<string | null>(null);
 
-  /** How many tickets are on the saved list, and when it was fetched. */
+  /** Scans waiting to be sent, counted for each event — see `pendingCount`. */
+  private readonly waiting = signal<Readonly<Record<string, number>>>({});
+
+  /**
+   * How many scans are waiting to be sent from the door that is open.
+   *
+   * Counted for each event, and read for the open door's. It was one number
+   * for the whole phone, set by whichever count finished last, and a sync for
+   * a door already left, finishing late, put that event's count on the next
+   * event's door: "Sending 2 scans made while offline" on a door that had
+   * made none, and its list not fetched while they waited.
+   */
+  readonly pendingCount = computed(() => {
+    const open = this.doorOpen();
+
+    return open === null ? 0 : (this.waiting()[open] ?? 0);
+  });
+
+  /**
+   * How many tickets are on the saved list, and when it was fetched: the list
+   * the open door decides from, never another event's.
+   */
   readonly listCount = signal(0);
   readonly listUpdatedAt = signal<Date | null>(null);
 
   /** True once a request has failed for want of a connection. */
   readonly connectionLost = signal(false);
 
-  /** Where the phone's answer and the server's later disagreed. */
-  readonly conflicts = signal<(ScanResult & { client_id: string })[]>([]);
+  /**
+   * Where the phone's answer and the server's later disagreed, for each event.
+   *
+   * On this phone only, never saved, so kept for a door that has been left
+   * rather than dropped: the guest it is about may still be in that room.
+   */
+  private readonly clashes = signal<Readonly<Record<string, Conflict[]>>>({});
+
+  /** Where the phone's answer and the server's later disagreed, at the door that is open. */
+  readonly conflicts = computed<Conflict[]>(() => {
+    const open = this.doorOpen();
+
+    return open === null ? [] : (this.clashes()[open] ?? []);
+  });
 
   /**
-   * People let in offline on scans the server could not take.
+   * People let in offline on scans the server could not take, at the door
+   * that is open.
    *
    * Never sent again, because they never can be as they are — see `sync` —
    * and on no record but this phone's: the ticket still reads as unused on
@@ -52,16 +95,30 @@ export class DoorOffline extends DoorOfflineStore {
   /** The sync under way for each event, for a second call to wait on — see `sync`. */
   private readonly sending = new Map<string, Promise<boolean>>();
 
-  /** Load what this phone already has for the event, and count it. */
+  /**
+   * Open the event's door: load what this phone already has for it, and
+   * count it.
+   *
+   * Nothing of the last door's is said on this one meanwhile, and if another
+   * door is opened before this has finished reading, what it read is not said
+   * at all.
+   */
   async prepare(eventId: string): Promise<void> {
-    const saved = await this.load(eventId).catch(() => null);
-
-    if (saved) {
-      this.listCount.set(saved.count);
-      this.listUpdatedAt.set(new Date(saved.generated_at));
+    if (this.doorOpen() !== eventId) {
+      this.listCount.set(0);
+      this.listUpdatedAt.set(null);
+      this.unrecorded.set([]);
     }
 
-    this.unrecorded.set(await this.unrecordedAdmissions(eventId).catch(() => []));
+    this.doorOpen.set(eventId);
+
+    await this.load(eventId).catch(() => null);
+    const kept = await this.unrecordedAdmissions(eventId).catch(() => []);
+
+    if (this.doorOpen() !== eventId) return;
+
+    this.showSavedList();
+    this.unrecorded.set(kept);
     await this.countPending(eventId);
   }
 
@@ -70,16 +127,18 @@ export class DoorOffline extends DoorOfflineStore {
    *
    * Not while scans are waiting: a list fetched before the server has heard
    * about offline admissions would not know about them, and this phone would
-   * forget it had already let those people in.
+   * forget it had already let those people in. Waiting for this event, that
+   * is: another event's scans have nothing to do with its list.
    */
   async refreshList(eventId: string): Promise<void> {
-    if (!this.supported || this.pendingCount() > 0) return;
+    if (!this.supported || (this.waiting()[eventId] ?? 0) > 0) return;
 
     try {
-      const saved = await this.save(await this.api.doorList(eventId));
+      await this.save(await this.api.doorList(eventId));
 
-      this.listCount.set(saved.count);
-      this.listUpdatedAt.set(new Date(saved.generated_at));
+      // A list for a door left while it was on its way is saved for that
+      // door, and the list in memory is still the open door's.
+      this.showSavedList();
       this.connectionLost.set(false);
     } catch (error) {
       if (this.lostConnection(error)) this.connectionLost.set(true);
@@ -174,7 +233,7 @@ export class DoorOffline extends DoorOfflineStore {
     const pending = await this.pending(eventId).catch(() => []);
 
     if (pending.length === 0) {
-      this.pendingCount.set(0);
+      this.waiting.update((counts) => ({ ...counts, [eventId]: 0 }));
 
       return true;
     }
@@ -194,7 +253,7 @@ export class DoorOffline extends DoorOfflineStore {
         const conflicts = conflictsIn(batch, result);
 
         if (conflicts.length > 0) {
-          this.conflicts.update((all) => [...all, ...conflicts]);
+          this.clashes.update((all) => ({ ...all, [eventId]: [...(all[eventId] ?? []), ...conflicts] }));
         }
       }
 
@@ -207,7 +266,9 @@ export class DoorOffline extends DoorOfflineStore {
         const admissions = await this.dropUnsendable(batch, error.fields).catch(() => []);
         const kept = new Set(admissions.map((scan) => scan.client_id));
 
-        if (admissions.length > 0) {
+        // Said now only if this event's door is still the one open. They are
+        // on the phone either way, and `prepare` reads them back when it is.
+        if (admissions.length > 0 && this.doorOpen() === eventId) {
           this.unrecorded.update((all) => [...all.filter((scan) => !kept.has(scan.client_id)), ...admissions]);
         }
       }
@@ -218,8 +279,13 @@ export class DoorOffline extends DoorOfflineStore {
     }
   }
 
+  /** Read at the door that is open; any other door's are kept for it. */
   dismissConflicts(): void {
-    this.conflicts.set([]);
+    const open = this.doorOpen();
+
+    if (open === null) return;
+
+    this.clashes.update(({ [open]: _read, ...rest }) => rest);
   }
 
   /** Door staff have read them: off the screen, and off the phone. */
@@ -243,6 +309,16 @@ export class DoorOffline extends DoorOfflineStore {
   }
 
   private async countPending(eventId: string): Promise<void> {
-    this.pendingCount.set((await this.pending(eventId).catch(() => [])).length);
+    const waiting = (await this.pending(eventId).catch(() => [])).length;
+
+    this.waiting.update((counts) => ({ ...counts, [eventId]: waiting }));
+  }
+
+  /** The list in memory, which is only ever the open door's: see `DoorOfflineStore.save`. */
+  private showSavedList(): void {
+    const saved = this.summary;
+
+    this.listCount.set(saved?.count ?? 0);
+    this.listUpdatedAt.set(saved ? new Date(saved.generated_at) : null);
   }
 }
