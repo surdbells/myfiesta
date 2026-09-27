@@ -491,13 +491,23 @@ class EventController extends Controller
         if ($to === EventStatus::Draft) {
             $event->update(['status' => EventStatus::Draft->value]);
 
+            // Off sale already because the organization is suspended, and now
+            // because the organizer says so too. Theirs is the decision that
+            // outlasts the suspension: without the mark, lifting it leaves this
+            // one a draft instead of putting it back on sale (Suspension).
+            $keptOff = $event->unpublished_by_suspension_at !== null;
+
+            if ($keptOff) {
+                $event->forceFill(['unpublished_by_suspension_at' => null])->save();
+            }
+
             // Taking an event off sale is not cancelling it, but it does stop
             // people buying — worth a record of who decided that and when.
             $this->auditor->record(
                 'event.unpublished',
                 $event,
                 $request->user(),
-                metadata: ['from' => $from->value],
+                metadata: ['from' => $from->value] + ($keptOff ? ['kept_off_after_suspension' => true] : []),
             );
 
             return response()->json(['status' => EventStatus::Draft->value]);

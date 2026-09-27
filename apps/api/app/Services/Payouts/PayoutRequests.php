@@ -10,6 +10,8 @@ use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Organizations\Suspension;
+use App\Services\Organizations\WhileSuspended;
 use App\Support\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +32,9 @@ use Illuminate\Support\Facades\Mail;
  *   entry, the verification check and the audit trail are the same ones.
  * - Paying more than is owed — an overdraft — is possible here and nowhere
  *   else, and only by an administrator, with a reason.
+ * - Nothing is asked for or paid while the organization is suspended. A
+ *   request already waiting is held, not rejected (see Suspension), and can
+ *   still be withdrawn by the organizer or refused by staff with a reason.
  */
 class PayoutRequests
 {
@@ -63,7 +68,13 @@ class PayoutRequests
         return DB::transaction(function () use ($organization, $by, $amount, $note) {
             // Serialised per organization, so two requests from two tabs
             // cannot both read the same balance.
-            Organization::query()->whereKey($organization->id)->lockForUpdate()->first();
+            $locked = Organization::query()->whereKey($organization->id)->lockForUpdate()->first();
+
+            // Read from the locked row, so a suspension landing at the same
+            // moment is either seen here or holds this request as it lands.
+            if ($locked?->suspended_at !== null) {
+                throw PayoutRequestRefused::because(WhileSuspended::withContact(WhileSuspended::PAYOUTS));
+            }
 
             $available = $this->available($organization, $amount->currency);
 
@@ -132,6 +143,13 @@ class PayoutRequests
         }
 
         return $this->decide($request, function (PayoutRequest $locked) use ($by, $amount, $rail, $note) {
+            // Held, not rejected: it waits, with its place in the queue,
+            // until the suspension is lifted. Either test is enough — the
+            // flag is what the screens show, the organization is the rule.
+            if ($locked->held_at !== null || Suspension::inForce($locked->organization_id)) {
+                throw PayoutRequestRefused::because('This organization is suspended, so its payouts are frozen. The request is held, and can be paid once the suspension is lifted.');
+            }
+
             $organization = $locked->organization;
             $available = $this->available($organization, $amount->currency);
             $overdraft = $amount->amount > $available->amount;

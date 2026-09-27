@@ -65,7 +65,11 @@ class EventReminderMail extends Mailable implements ShouldQueue
                 'event' => $event,
                 'when' => $this->phrasing(),
                 'localTime' => $this->localTime(),
-                'url' => rtrim(config('app.public_url', config('app.url')), '/').'/'.$event->slug,
+                // No page to link to while the event is held off sale by its
+                // organization's suspension: the site answers 404 for a draft.
+                'url' => $event->status === 'published'
+                    ? rtrim(config('app.public_url', config('app.url')), '/').'/'.$event->slug
+                    : null,
                 'unsubscribeUrl' => $this->unsubscribeUrl(),
             ],
         );

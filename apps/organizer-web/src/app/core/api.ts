@@ -65,7 +65,13 @@ import {
   PayoutDestination,
   UploadProgress,
   Overview,
+  OrganizationStanding,
+  Account,
+  AccountErasurePreview,
+  AccountErasureResult,
 } from './api.types';
+import { EmailVerification } from './email-verification';
+import { isEmailUnverified } from './errors';
 import { SessionStore, type StaffSession } from './session';
 import { DoorPassStore } from './door-pass';
 
@@ -99,7 +105,9 @@ export const ANONYMOUS = new HttpContextToken<boolean>(() => false);
  * worse than one that asks you to sign in again.
  *
  * A 403 is left alone. That is the server saying this account may not do this
- * particular thing, which is information, not a broken session.
+ * particular thing, which is information, not a broken session. The one it
+ * also reports is `email_unverified`, which the shell answers with a prompt
+ * (EmailVerification) instead of each screen saying it in its own words.
  *
  * A request marked ANONYMOUS is passed through untouched.
  */
@@ -110,6 +118,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const base = inject(API_BASE_URL);
   const doorPass = inject(DoorPassStore);
+  const verification = inject(EmailVerification);
 
   // A door pass on this phone, for its own door. Sent instead of any organizer
   // session, and never with the organization header: it acts for one event's
@@ -168,19 +177,25 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         void router.navigate(wasStaff ? ['/impersonate/ended'] : ['/sign-in']);
       }
 
+      // The one 403 with something to do about it: the address has to be
+      // proved first. Every screen that can meet it — publishing, asking to
+      // be paid, changing where payouts go — gets the same prompt, with the
+      // button that sends the link again, rather than its own red sentence.
+      if (isEmailUnverified(error)) {
+        verification.refused(typeof error.error?.message === 'string' ? error.error.message : null);
+      }
+
       return throwError(() => error);
     }),
   );
 };
 
-/** The signed-in person, as GET /api/auth/me has them: what the account page edits, and their memberships. */
-export interface Account {
-  name: string;
-  email: string;
-  phone: string | null;
-  timezone: string | null;
-  organizations: Session['organizations'];
-}
+/**
+ * The signed-in person, as GET /api/auth/me has them: what the account page
+ * edits, their memberships, and whether their address is proved. Written down
+ * once, in @myfiesta/api-types, for the phone to read the same way.
+ */
+export type { Account } from './api.types';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -239,6 +254,8 @@ export class Api {
     organization?: string;
     /** Joining somebody's organization instead of creating one. */
     invitation?: string;
+    /** The terms, privacy and refund policies, agreed to. Refused without it. */
+    accept_terms: boolean;
   }): Observable<Session & { pending?: boolean }> {
     return this.http.post<Session & { pending?: boolean }>(
       `${this.base}/api/auth/register`,
@@ -288,6 +305,28 @@ export class Api {
    */
   me(): Observable<Account> {
     return this.http.get<Account>(`${this.base}/api/auth/me`);
+  }
+
+  /**
+   * A fresh link to prove the address the account already has. 202 when one
+   * went, 200 with `verified` when there was nothing to prove, and 429 with
+   * the server's own sentence about how long to wait.
+   */
+  resendVerification(): Observable<{ message: string; verified: boolean }> {
+    return this.http.post<{ message: string; verified: boolean }>(`${this.base}/api/auth/email/verification`, {});
+  }
+
+  /** What deleting this account would do, and what would stop it. Changes nothing. */
+  erasurePreview(): Observable<AccountErasurePreview> {
+    return this.http.get<AccountErasurePreview>(`${this.base}/api/auth/erasure`);
+  }
+
+  /**
+   * Delete this account: the privacy page's erasure, on the password. A 409
+   * is the only owner of an organization being told nothing happened.
+   */
+  eraseAccount(currentPassword: string): Observable<AccountErasureResult> {
+    return this.http.post<AccountErasureResult>(`${this.base}/api/auth/erasure`, { current_password: currentPassword });
   }
 
   /**
@@ -365,6 +404,11 @@ export class Api {
   /** Everything the dashboard shows, in one request. */
   overview(): Observable<Overview> {
     return this.http.get<Overview>(`${this.base}/api/organizer/overview`);
+  }
+
+  /** Whether myFiesta is selling for the organization being worked in: the suspension banner. */
+  standing(): Observable<OrganizationStanding> {
+    return this.http.get<OrganizationStanding>(`${this.base}/api/organizer/standing`);
   }
 
   /**

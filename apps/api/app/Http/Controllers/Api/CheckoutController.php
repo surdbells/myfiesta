@@ -77,6 +77,10 @@ class CheckoutController extends Controller
             return response()->json(['message' => $e->getMessage()], $e->status);
         }
 
+        // Which terms the buyer agreed to, and when, kept on the order the way
+        // its prices are. Before anything is issued for it.
+        $request->recordAcceptance($order);
+
         if ($request->boolean('embedded')) {
             $order->forceFill(['embedded' => true])->save();
         }
@@ -162,6 +166,12 @@ class CheckoutController extends Controller
             ->where('kind', 'ticketed')
             ->first();
 
+        // Taken off sale because its organizer is suspended: a buyer part-way
+        // through is told that, rather than that the event does not exist.
+        if ($event === null && Event::query()->where('slug', $slug)->whereNotNull('unpublished_by_suspension_at')->exists()) {
+            abort(422, 'This organizer is not selling tickets on myFiesta at the moment. Tickets already bought are not affected.');
+        }
+
         if ($event === null) {
             throw new NotFoundHttpException('Event not found.');
         }
@@ -207,7 +217,18 @@ class CheckoutController extends Controller
             // So the client can label it honestly rather than guessing whether
             // tax was added or was already inside the price.
             'tax_inclusive' => (bool) $quote->taxRate?->inclusive,
-            'tax_label' => $quote->taxRate?->name,
+            // "GST + QST" in Quebec while QST is collected, not just "GST".
+            'tax_label' => $quote->taxLabel(),
+            // Each tax on its own, and how much of the service charge is tax,
+            // for a client that shows them the way the receipt will.
+            'tax_lines' => array_map(fn ($line) => [
+                'name' => $line->name,
+                'rate' => $line->percent(),
+                'on' => $line->on,
+                'included' => $line->inclusive,
+                'amount' => $money($line->amount),
+            ], $quote->taxLines),
+            'service_charge_tax' => $money($quote->serviceChargeTax ?? Money::zero($quote->currency())),
             'code_applied' => $quote->code?->code,
             'access_code_applied' => $quote->accessCode?->code,
             // Null for a code on every ticket.

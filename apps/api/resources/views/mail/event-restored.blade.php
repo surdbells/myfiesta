@@ -1,5 +1,9 @@
 <x-mail::message>
-@if ($event->status === 'published')
+@if ($waitsForSuspension)
+# The takedown on {{ $event->title }} is lifted
+
+We have lifted the takedown on **{{ $event->title }}**. Your organization's sales are suspended at the moment, so it stays off sale for now. It goes back on sale by itself when the suspension is lifted, as long as it has not started by then — there is nothing you need to do.
+@elseif ($event->status === 'published')
 # {{ $event->title }} is back on sale
 
 We have lifted the takedown on **{{ $event->title }}**. Its page is visible again and tickets are on sale.

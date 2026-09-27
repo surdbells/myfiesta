@@ -11,9 +11,11 @@
 Your ticket is in the email you got when you bought it — search your inbox for
 **{{ $event->title }}**. Have the code ready at the door.
 
+@if ($url)
 <x-mail::button :url="$url">
 See the event
 </x-mail::button>
+@endif
 
 See you there,<br>
 {{ $event->organization->name }}

@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Organizations\Suspension;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -62,7 +63,7 @@ class EventModeration
             throw StaffActionRefused::because('Give the organizer a reason they can act on. It is emailed to them.');
         }
 
-        $from = DB::transaction(function () use ($event, $staff, $reason) {
+        [$from, $heldBySuspension] = DB::transaction(function () use ($event, $staff, $reason) {
             $locked = $this->lock($event);
 
             if ($locked->taken_down_at !== null) {
@@ -77,6 +78,10 @@ class EventModeration
 
             $from = $locked->status;
 
+            // A draft only because its organization is suspended: it was on
+            // sale until then, and lifting this takedown should treat it so.
+            $heldBySuspension = $locked->unpublished_by_suspension_at !== null;
+
             $locked->forceFill([
                 'status' => 'draft',
                 'is_featured' => false,
@@ -85,18 +90,19 @@ class EventModeration
                 'taken_down_by' => $staff->id,
             ])->save();
 
-            return $from;
+            return [$from, $heldBySuspension];
         });
 
         $event->refresh();
 
         $told = $this->organizers($event);
 
-        $this->auditor->record('event.taken_down', $event, $staff, metadata: [
+        $this->auditor->record('event.taken_down', $event, $staff, metadata: array_filter([
             'reason' => $reason,
             'from' => $from,
+            'off_sale_for_suspension' => $heldBySuspension ?: null,
             'organizers_told' => $told->count(),
-        ]);
+        ], fn ($value) => $value !== null));
 
         $told->each(fn (string $email) => Mail::to($email)->send(new EventTakenDown($event, $reason)));
 
@@ -119,7 +125,7 @@ class EventModeration
 
         $wasPublished = $this->wasPublishedWhenTakenDown($event);
 
-        $status = DB::transaction(function () use ($event, $wasPublished) {
+        [$status, $waitsForSuspension] = DB::transaction(function () use ($event, $wasPublished) {
             $locked = $this->lock($event);
 
             if ($locked->taken_down_at === null) {
@@ -131,6 +137,16 @@ class EventModeration
 
             $status = $wasPublished && $locked->starts_at->isFuture() && $canSell ? 'published' : 'draft';
 
+            // The organization is suspended: nothing of its goes on sale. The
+            // event waits with the ones the suspension took off sale, and goes
+            // back on sale with them when it is lifted.
+            $waitsForSuspension = $status === 'published' && Suspension::inForce($locked->organization_id);
+
+            if ($waitsForSuspension) {
+                $status = 'draft';
+                $locked->forceFill(['unpublished_by_suspension_at' => now()]);
+            }
+
             $locked->forceFill([
                 'status' => $status,
                 'published_at' => $status === 'published' ? ($locked->published_at ?? now()) : $locked->published_at,
@@ -139,7 +155,7 @@ class EventModeration
                 'taken_down_by' => null,
             ])->save();
 
-            return $status;
+            return [$status, $waitsForSuspension];
         });
 
         $event->refresh();
@@ -148,11 +164,14 @@ class EventModeration
 
         $this->auditor->record('event.restored', $event, $staff, metadata: array_filter([
             'status' => $status,
+            'waits_for_suspension' => $waitsForSuspension ?: null,
             'note' => $note ? trim($note) : null,
             'organizers_told' => $told->count(),
         ], fn ($value) => $value !== null));
 
-        $told->each(fn (string $email) => Mail::to($email)->send(new EventRestored($event)));
+        // Waiting for the suspension, "publish it from the console" would be
+        // refused: it goes back on sale by itself when that is lifted.
+        $told->each(fn (string $email) => Mail::to($email)->send(new EventRestored($event, $waitsForSuspension)));
 
         return $status;
     }
@@ -185,6 +204,11 @@ class EventModeration
      * for exactly this question. Without one — a failed audit write — it stays
      * a draft, which is the answer that cannot put anything on sale by
      * mistake.
+     *
+     * An event taken down while its organization was suspended was a draft
+     * only because of the suspension, and was on sale before it. Counted as
+     * published, so the order staff lift the two in does not decide whether
+     * it goes back on sale.
      */
     private function wasPublishedWhenTakenDown(Event $event): bool
     {
@@ -195,7 +219,8 @@ class EventModeration
             ->latest('created_at')
             ->first();
 
-        return ($entry?->metadata['from'] ?? null) === 'published';
+        return ($entry?->metadata['from'] ?? null) === 'published'
+            || ($entry?->metadata['off_sale_for_suspension'] ?? false) === true;
     }
 
     /**

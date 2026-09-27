@@ -21,7 +21,8 @@ use App\Models\User;
  *   to somebody else, which is how a ticket is stolen by phone if support can
  *   do it on request.
  * - Administrators alone change what the public sees or who can sign in:
- *   featuring, taking an event down, deactivating an account.
+ *   featuring, taking an event down, deactivating an account, suspending an
+ *   organization.
  */
 enum StaffAction: string
 {
@@ -34,6 +35,8 @@ enum StaffAction: string
     case Feature = 'feature';
     case TakeDown = 'take_down';
     case Deactivate = 'deactivate';
+    // Suspending a whole organization: every event off sale, payouts frozen.
+    case Suspend = 'suspend';
 
     /** @return list<PlatformRole> */
     public function roles(): array
@@ -41,7 +44,7 @@ enum StaffAction: string
         return match ($this) {
             self::Resend, self::SignOut, self::Note => [PlatformRole::Admin, PlatformRole::Finance, PlatformRole::Support],
             self::Refund, self::Void, self::Reissue => [PlatformRole::Admin, PlatformRole::Finance],
-            self::Feature, self::TakeDown, self::Deactivate => [PlatformRole::Admin],
+            self::Feature, self::TakeDown, self::Deactivate, self::Suspend => [PlatformRole::Admin],
         };
     }
 

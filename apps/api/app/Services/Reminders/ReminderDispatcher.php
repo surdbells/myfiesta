@@ -45,7 +45,17 @@ class ReminderDispatcher
         $candidates = EventReminder::query()
             ->where('status', 'scheduled')
             ->whereHas('event', fn ($q) => $q
-                ->where('status', 'published')
+                ->where(fn ($on) => $on
+                    ->where('status', 'published')
+                    // Off sale only because its organization is suspended
+                    // (Suspension). The tickets are still good and the door
+                    // still lets people in, so the people holding them are
+                    // reminded as they would have been. Skipped until the
+                    // lift, a reminder due meanwhile would be too late to send.
+                    ->orWhere(fn ($held) => $held
+                        ->where('status', 'draft')
+                        ->whereNotNull('unpublished_by_suspension_at')
+                        ->whereNull('taken_down_at')))
                 ->where('starts_at', '>', now()))
             ->with('event')
             ->get()

@@ -80,6 +80,28 @@ records whether it is inclusive or added at checkout.
 calculates on the discounted amount, platform commission takes the net. The
 discount is the organizer's cost, not one the platform shares.
 
+**What is charged is a setting; what was charged is on the order.** The
+service charge per currency, the seller of record, tax on the service charge,
+Quebec's QST and the numbers on receipts are platform settings an
+administrator changes in the admin, over defaults from `.env`, each change
+audited with what it replaced. Every order keeps its tax lines (each tax with
+its own rate — GST and QST side by side in Quebec) and a copy of the settings
+it was priced under, so a receipt never changes after the settings do. Tax on
+the service charge is kept inside `service_charge_amount`, with
+`service_charge_tax_amount` saying how much of it is tax, rather than added to
+`tax_amount`: the ticket's tax is what the organizer's ledger holds back and a
+refund returns in proportion, and tax on the platform's own fee is neither
+theirs nor part of the ticket. That keeps total = net revenue + tax + service
+charge, and every ledger sum, exactly as they were. A refund records its own
+share of that tax (`refunds.service_charge_tax_amount`), and the admin's
+reports count it as tax rather than as the platform's revenue. In Nigeria the service
+charge includes its VAT the way prices do, so the buyer pays the same either
+way. Launch tax rates are installed by a migration rather than only a seeder;
+a rate that has applied to a sale can only be superseded. A place has one rate
+on any day — the database refuses overlapping dates — and a rate never starts
+before today, so a scheduled replacement moves together with the rate it
+replaces rather than leaving a gap or an overlap.
+
 **Settlement stays manual** for now, per-currency and per-rail. Because the data
 stays, banking and KYC columns are encrypted at rest, Filament access is
 role-restricted, and access is logged. Stripe Connect and Paystack split
@@ -131,6 +153,58 @@ change is attributable even where the endpoint keeps no entry of its own.
 Nothing extends a session; ending it, losing the staff role, or anything that
 revokes the staff member's sign-ins (signed out everywhere, deactivated, a new
 password) ends it at once, including a link not yet opened.
+
+**Suspending an organization stops it selling and being paid, and nothing
+else.** Administrators suspend from the organization's page in the admin
+panel, with a reason kept on the record; staff choose whether the
+organization is shown it. Every event on sale goes back to a draft and is
+marked as taken off by the suspension; checkout, door sales, handing tickets
+back for resale, telling the waitlist, campaigns and publishing are refused
+(the API answers 403 with one plain sentence and where to write); new payout
+requests are refused, waiting ones are held — not rejected — and nothing can
+be settled. A payment that lands afterwards for an order begun before the
+suspension is a sale all the same, so it is refunded in full and issues
+nothing, like one for a night that was called off; the buyer is told the
+organizer is not selling on myFiesta, never that it is suspended. What is
+deliberately left alone: everybody who already has a ticket keeps it and the
+door still admits them (scanning, the offline list, door staff opening the
+night they work), refunds can still be made, ticket holders can still be
+written to and are still sent their reminders, and guest-list tickets can
+still be issued (no money moves). An event's campaign that falls due while
+the event is held is cancelled, as for any event off sale, and is the
+organizer's to schedule again. Lifting it puts back exactly what it took: the
+marked events go back on sale unless they have started or were cancelled,
+deleted or taken down meanwhile — not re-checked for a ticket type on sale,
+since they were on sale as they stood — and the rest stay drafts; the owners'
+email names both lists. An event the organizer takes off sale themselves
+during the suspension loses its mark and stays a draft. One taken down during
+it counts as on sale before the takedown, so lifting both, in either order,
+puts it back. Held requests go back to waiting in their place. Suspending
+twice changes nothing the first did. Each step is one transaction, written to the audit trail on the organization, on each event
+and on each request, and the owners are emailed both ways. The console shows
+a banner on every screen for as long as it lasts.
+
+**Signing up and buying record that the terms were accepted, and which
+ones.** The terms, the privacy policy and the refund policy are agreed to
+together, by an unticked box on every sign-up (console and phone) and on the
+checkout; the API refuses either without it (422, one plain sentence). What is
+kept is the version — `config/terms.php`, bumped in the same change as the
+words on the public site — and the moment: on the order, always, so an order
+stays explainable against the words it was placed under; on the account, for
+somebody who signed up or joined by invitation. A sign-up carries its
+agreement until its link is opened, and the account gets the agreement of
+whichever sign-up the password opened — never a stranger's. The checkout reads
+no sign-in — not the public site's, which has none, and not a token an app
+might send — so it asks every buyer every time, places no order for an account
+and never writes to one behind a typed address. A person whose account has
+not agreed to the version in force is not held back from anything else. A
+checkout that knows its buyer would ask an account once per version and keep
+the agreement on it too (`Terms` is ready for that), but it has to place the
+order for that account in the same change. Door sales are not asked: the
+person paying is in front of the organizer's staff, gives nothing, has no
+screen of ours to read on, and the organizer selling agreed when they signed
+up. No IP address or browser is kept with the agreement, because the privacy
+page does not say we hold either.
 
 ## Clients
 
@@ -649,8 +723,12 @@ needed.
 
 ## Still open
 
-- **Merchant of record for tax** — determines who remits. An accountant's call,
-  wanted before the money phase because the schema reflects the answer.
+- **Merchant of record for tax** — determines who remits. An accountant's call.
+  The code no longer waits on it: organizer or platform is a platform setting,
+  and each order records which applied. Still to decide: which one, whether the
+  service charge is taxed, QST registration, the registration numbers, and —
+  where the organizer is the seller — how the ticket tax held back from their
+  payout reaches them or is remitted for them.
 - **Forced-update threshold** — the share of un-updated installs that gates
   launch. Agree the number in advance, not during launch week.
 - **Stripe variance handling** — reconciliation will surface historical sales

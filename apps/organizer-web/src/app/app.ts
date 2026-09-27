@@ -5,6 +5,8 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
 import { StaffBanner } from './features/impersonation/staff-banner';
+import { SuspensionBanner } from './features/suspension/suspension-banner';
+import { VerifyEmail } from './features/account/verify-email';
 
 /** One entry in the sidebar. */
 interface NavItem {
@@ -19,7 +21,7 @@ const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner, SuspensionBanner, VerifyEmail],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

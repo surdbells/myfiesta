@@ -47,7 +47,12 @@ class EventPolicy
             return false;
         }
 
-        return $event->status === 'published' || $user->isStaffOf($event->organization_id);
+        return $event->status === 'published'
+            || $user->isStaffOf($event->organization_id)
+            // Off sale only because the organization is suspended. The door
+            // keeps working for everybody who paid, so door staff keep the
+            // night they were working — it was published when they got it.
+            || $event->unpublished_by_suspension_at !== null;
     }
 
     public function create(User $user, string $organizationId): bool

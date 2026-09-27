@@ -96,15 +96,18 @@ class PayoutRequestsTable
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => self::STATUSES[$state] ?? $state)
-                    ->color(fn (string $state) => match ($state) {
-                        'pending' => 'warning',
-                        'paid' => 'success',
-                        'rejected' => 'danger',
+                    ->color(fn (string $state, PayoutRequest $record) => match (true) {
+                        $state === 'pending' && $record->held_at !== null => 'danger',
+                        $state === 'pending' => 'warning',
+                        $state === 'paid' => 'success',
+                        $state === 'rejected' => 'danger',
                         default => 'gray',
                     })
-                    ->description(fn (PayoutRequest $record) => match ($record->status) {
-                        'paid' => Listing::format((int) $record->paid_amount, $record->currency).' by '.($record->decider?->name ?? 'staff'),
-                        'rejected' => $record->decision_note,
+                    ->description(fn (PayoutRequest $record) => match (true) {
+                        $record->status === 'paid' => Listing::format((int) $record->paid_amount, $record->currency).' by '.($record->decider?->name ?? 'staff'),
+                        $record->status === 'rejected' => $record->decision_note,
+                        // Waiting, but not to be paid: see Suspension.
+                        $record->isPending() && $record->held_at !== null => 'Held — the organization is suspended',
                         default => null,
                     })
                     ->sortable(),
@@ -141,6 +144,16 @@ class PayoutRequestsTable
                     ),
 
                 Listing::dateRange('asked', 'created_at', 'Asked'),
+
+                // Waiting on an organization's suspension rather than on us.
+                TernaryFilter::make('held')
+                    ->label('Held for a suspension')
+                    ->trueLabel('Held')
+                    ->falseLabel('Not held')
+                    ->queries(
+                        true: fn (Builder $query) => $query->where('payout_requests.status', 'pending')->whereNotNull('payout_requests.held_at'),
+                        false: fn (Builder $query) => $query->whereNull('payout_requests.held_at'),
+                    ),
             ])
             ->recordActions([
                 self::pay(),
@@ -162,7 +175,9 @@ class PayoutRequestsTable
             ->label('Pay')
             ->icon('heroicon-o-banknotes')
             ->color('success')
-            ->visible(fn (PayoutRequest $record) => $record->isPending())
+            // Not while held: the organization is suspended and its payouts
+            // are frozen. PayoutRequests refuses it as well.
+            ->visible(fn (PayoutRequest $record) => $record->isPending() && $record->held_at === null)
             ->modalHeading(fn (PayoutRequest $record) => 'Pay '.$record->organization?->name)
             ->modalDescription('Send the money first, then record it here. This writes the settlement and tells the organizer it was sent.')
             ->modalSubmitActionLabel('Record payment')

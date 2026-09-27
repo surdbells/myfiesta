@@ -37,7 +37,7 @@ class SettlementsTable
     {
         return Listing::defaults($table, 'settlements')
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
-                'organization:id,name',
+                'organization:id,name,suspended_at',
                 'event:id,title',
                 'settledBy:id,name',
             ]))
@@ -52,7 +52,10 @@ class SettlementsTable
                     ->label('Organization')
                     ->searchable()
                     ->sortable()
-                    ->weight('medium'),
+                    ->weight('medium')
+                    // Nothing more goes to it until the suspension is lifted;
+                    // SettlementRecorder refuses, and this says why up front.
+                    ->description(fn ($record) => $record->organization?->isSuspended() ? 'Suspended — payouts frozen' : null),
 
                 TextColumn::make('event.title')
                     ->label('Event')

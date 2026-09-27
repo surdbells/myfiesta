@@ -167,11 +167,118 @@ export interface Membership {
   verified?: boolean;
 }
 
+/**
+ * Whether the platform is selling for an organization: GET
+ * /api/organizer/standing, for the console's banner.
+ *
+ * Asked on its own rather than read from the sign-in, because a suspension
+ * lands while people are signed in. `reason` is only there when myFiesta
+ * chose to share it; `support_email` is null when the deployment has none.
+ */
+export interface OrganizationStanding {
+  organization: { id: string; name: string };
+  suspended: boolean;
+  suspension: {
+    /** ISO 8601. */
+    since: string | null;
+    reason: string | null;
+    support_email: string | null;
+  } | null;
+}
+
+/**
+ * Asking for an account: POST /api/auth/register, from the console or the
+ * phone.
+ *
+ * Answered 202 with `SignUpPending` for every address alike — the account is
+ * made when the emailed link is opened — except when joining by invitation,
+ * which is answered 201 with a `Session` straight away.
+ */
+export interface SignUp {
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+  /** The events page to open. Left out by somebody going out, or joining a team. */
+  organization?: string;
+  /** Joining somebody's organization instead of opening one. */
+  invitation?: string;
+  /** Said, not inferred from a missing organization. */
+  attendee?: boolean;
+  device?: string;
+  /**
+   * The box, ticked: the terms, the privacy policy and the refund policy,
+   * agreed to. The server refuses the sign-up with a 422 without it, and the
+   * account keeps which version was agreed to, and when.
+   */
+  accept_terms: boolean;
+}
+
+/** The answer to every sign-up without an invitation: check your email. */
+export interface SignUpPending {
+  message: string;
+  pending: true;
+}
+
 export interface Session {
   token: string;
   user: { name: string; email: string };
   abilities: string[];
   organizations: Membership[];
+}
+
+/** The signed-in person, as GET /api/auth/me has them now. */
+export interface Account {
+  name: string;
+  email: string;
+  /**
+   * Whether the address is proved. Until it is, putting an event on sale,
+   * asking to be paid and changing where payouts go are refused with a 403
+   * whose code is `email_unverified`.
+   */
+  email_verified: boolean;
+  phone: string | null;
+  timezone: string | null;
+  organizations: Membership[];
+}
+
+/**
+ * What deleting the signed-in account would do, from GET /api/auth/erasure.
+ *
+ * The same erasure as the privacy page's form. `refused` is set while the
+ * person is the only owner of an organization — nothing can be deleted until
+ * each of those has another owner or is closed — or while the account has
+ * myFiesta staff access, which another administrator removes first.
+ */
+export interface AccountErasurePreview {
+  email: string;
+  /** A proved address is deleted on the password; any other is sent a link first. */
+  email_verified: boolean;
+  refused: string | null;
+  organizations: {
+    id: string;
+    name: string;
+    slug: string;
+    role: Role;
+    only_owner: boolean;
+  }[];
+  /** How long orders and the ledger are kept, with nobody's name on them. */
+  kept_for_years: number;
+  /**
+   * Whether the audit trail names them — a refund sent, a price changed, on
+   * somebody's team. That stays under their name: nobody can edit it.
+   */
+  history_kept: boolean;
+}
+
+/**
+ * POST /api/auth/erasure: `completed` (200) has signed out every device,
+ * this one included; `pending` (202) waits for the emailed link; `refused`
+ * (409) changed nothing.
+ */
+export interface AccountErasureResult {
+  status: 'completed' | 'pending' | 'refused';
+  message: string;
 }
 
 /**
@@ -955,4 +1062,60 @@ export interface OrganizationOrderPage {
     /** Null where the page spans currencies — two sets of money do not add. */
     summary: { gross: Money; refunded: Money; net: Money } | null;
   };
+}
+
+/**
+ * One tax on an order, with its own rate.
+ *
+ * Quebec with QST collected has GST and QST side by side; a taxed service
+ * charge has its own lines, marked `on: 'service_charge'`.
+ */
+export interface ReceiptTax {
+  /** GST, HST, QST, VAT. */
+  name: string;
+  /** A percentage as written: "5", "9.975", "13", "7.5". */
+  rate: string;
+  on: 'tickets' | 'service_charge';
+  /** Inside the price it was charged on (Nigeria), rather than added to it. */
+  included: boolean;
+  amount: Money;
+}
+
+/** Somebody named on a receipt, with the numbers their taxes are filed under. */
+export interface ReceiptParty {
+  name: string | null;
+  address: string | null;
+  /** Only the ones that exist and apply. */
+  registrations: { label: string; number: string }[];
+}
+
+/**
+ * What was paid, to whom, and each tax on it.
+ *
+ * Read from the order's own copy of how it was priced, so it says what was
+ * charged at the time whatever the settings say now. Never carries a ticket
+ * code. Adds up: subtotal, less discount, plus every tax not `included`, plus
+ * the service charge, is the total.
+ */
+export interface Receipt {
+  reference: string;
+  issued_at: string;
+  currency: 'CAD' | 'NGN';
+  seller_of_record: 'organizer' | 'platform';
+  /** Who sold the tickets. */
+  seller: ReceiptParty;
+  /** Who sold the booking service — the service charge — where that is not the seller. */
+  service: ReceiptParty | null;
+  /** The organizer, named where the platform was the seller. */
+  organizer: string | null;
+  lines: { name: string; quantity: number; unit_price: Money; discount: Money; amount: Money }[];
+  subtotal: Money;
+  discount: Money;
+  taxes: ReceiptTax[];
+  /** Before any tax added to it; with its tax inside where prices include tax. */
+  service_charge: Money;
+  total: Money;
+  tax_included: boolean;
+  /** Money given back since, if any. */
+  refunded: Money;
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -24,7 +25,29 @@ class Organization extends Model
 
     protected function casts(): array
     {
-        return ['verified_at' => 'datetime'];
+        return [
+            'verified_at' => 'datetime',
+            'suspended_at' => 'datetime',
+            'suspension_reason_shared' => 'boolean',
+        ];
+    }
+
+    /**
+     * Whether the platform has stopped selling for this organization.
+     *
+     * As this instance last read it. Anything that sells or pays out asks
+     * Suspension::inForce() instead, which reads the row again: a checkout
+     * holding an organization loaded a minute ago must not sell on it.
+     */
+    public function isSuspended(): bool
+    {
+        return $this->suspended_at !== null;
+    }
+
+    /** The member of staff who suspended it, while it is suspended. */
+    public function suspender(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'suspended_by');
     }
 
     /**
@@ -87,5 +110,10 @@ class Organization extends Model
     public function identityDocuments(): HasMany
     {
         return $this->hasMany(OrganizationIdentityDocument::class);
+    }
+
+    public function payoutRequests(): HasMany
+    {
+        return $this->hasMany(PayoutRequest::class);
     }
 }

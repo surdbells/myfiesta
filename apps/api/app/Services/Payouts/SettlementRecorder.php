@@ -8,6 +8,7 @@ use App\Models\OrganizationPayoutDetail;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Organizations\Suspension;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
@@ -52,6 +53,22 @@ class SettlementRecorder
             // settlement. Allowing one here would put an entry in the ledger
             // that increases a balance and calls itself a payout.
             throw SettlementRefused::because('A settlement has to be a positive amount.');
+        }
+
+        /*
+         * A suspended organization's payouts are frozen.
+         *
+         * Refused rather than recorded with a reason, unlike unverified
+         * details below: a suspension exists to stop money reaching the
+         * organization, and the screens that send it say so before anybody
+         * does. The rare payment that went out anyway is recorded by lifting
+         * the suspension first, which puts that decision in the trail too.
+         */
+        if (Suspension::inForce($organization)) {
+            throw SettlementRefused::because(
+                'This organization is suspended, so its payouts are frozen. Do not send money while it is suspended; '
+                .'if a payment has already gone out, lift the suspension to record it.'
+            );
         }
 
         $balance = LedgerEntry::balancesFor($organization)[$amount->currency]

@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Organizations\Suspension;
 use App\Services\Payments\StripeGateway;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -73,7 +74,26 @@ class CheckoutService
         array $addOns = [],
         string $channel = 'online',
     ): Quote {
+        $this->refuseIfOver($event, $channel);
+
         return $this->pricer->quote($event, $quantities, $code, $ref, $access, $addOns, $channel);
+    }
+
+    /**
+     * No online sale for a night that is over by its own listing.
+     *
+     * A payment for one arrived after the night was over and went straight
+     * back (Fulfiller), with the processor's fee lost on the way — so every
+     * such sale cost the platform money, and anybody could make as many as
+     * they liked. The quote says so as well, before anybody types a card
+     * number. The door is left alone: it stays open past the listed end, and
+     * its cash is already in the tin.
+     */
+    private function refuseIfOver(Event $event, string $channel): void
+    {
+        if ($channel !== 'door' && TurnedAway::pastSelling($event, now())) {
+            throw new CheckoutException('This event has ended, so tickets for it are no longer on sale.');
+        }
     }
 
     /**
@@ -107,9 +127,18 @@ class CheckoutService
         ?User $soldBy = null,
         ?string $doorPassId = null,
     ): Order {
+        // A suspended organization sells nothing, here or at the door. Read
+        // from the row now: its events come off sale in the same moment, but
+        // a buyer part-way through holds the event as it was a minute ago.
+        if (Suspension::inForce($event->organization_id)) {
+            throw new CheckoutException('This organizer is not selling tickets on myFiesta at the moment. Tickets already bought are not affected.');
+        }
+
         if ($event->status !== 'published') {
             throw new CheckoutException('Tickets for this event are not on sale.');
         }
+
+        $this->refuseIfOver($event, $channel);
 
         // Before the holds, deliberately. A refusal here costs the buyer a
         // message and nothing else; a hold taken for an order that was never
@@ -161,6 +190,12 @@ class CheckoutService
                 'service_charge_amount' => $quote->serviceCharge->amount,
                 'total_amount' => $quote->total->amount,
                 'tax_rate_id' => $quote->taxRate?->id,
+                // Each tax, and the settings it was priced under, so the
+                // receipt never has to ask today's settings about this order.
+                'service_charge_tax_amount' => $quote->serviceChargeTax?->amount ?? 0,
+                'tax_lines' => $quote->taxLinesForStorage(),
+                'seller_of_record' => $quote->sellerOfRecord?->value,
+                'pricing_snapshot' => $quote->snapshot,
                 'code_id' => $quote->code?->id,
                 'access_code_id' => $quote->accessCode?->id,
                 'ref_slug' => $quote->refSlug,

@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\ResaleListing;
 use App\Models\Ticket;
 use App\Services\Audit\Auditor;
+use App\Services\Organizations\Suspension;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,14 @@ class Resale
     {
         if (! $event->resale_enabled) {
             return 'This organizer is not taking tickets back for this event.';
+        }
+
+        // A listed ticket stops working at the door the moment it is listed,
+        // and nobody can buy the place while the organizer is suspended — so
+        // listing one now would leave the holder with neither the ticket nor
+        // the money. Keeping it is the better deal until sales resume.
+        if (Suspension::inForce($event->organization_id)) {
+            return 'This organizer is not selling tickets at the moment, so tickets cannot be handed back. Your ticket still works at the door.';
         }
 
         if ($ticket->status === 'listed') {
