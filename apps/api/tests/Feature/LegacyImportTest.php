@@ -6,298 +6,41 @@ use App\Enums\Role;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Models\Venue;
 use App\Services\Legacy\LegacyImporter;
 use App\Services\Legacy\LegacyMap;
+use App\Services\Refunds\RefundService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
- * The import, run end to end against the old schema.
- *
- * The `legacy` connection is pointed at a schema of its own here, and the old
- * tables are built to the shapes the dump actually has — varchar joins, money in two
- * different units, a status column with no constraint. That is enough to
- * exercise every decision the importer makes without needing a MySQL server
- * in the test environment, and it is the only way to find out whether rows
- * written through the application's own models survive its own constraints.
- *
- * The rows below are taken from the real data: a $15 sale, a $50 ticket type,
- * an abandoned checkout stuck at PENDING, an event with a null timezone and no
- * end time.
+ * The import, run end to end against the old schema (see LegacyFixtures).
  */
 class LegacyImportTest extends TestCase
 {
+    use LegacyFixtures;
     use RefreshDatabase;
-
-    private const KNOWN_PASSWORD = 'the-one-they-already-use';
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // The old database is MySQL and this environment has only the Postgres
-        // driver, so the fixture lives in a schema of its own on the same
-        // server. What is being tested is the importer's reading of a shape,
-        // not MySQL — and the shape is reproduced faithfully below: varchar
-        // joins, no foreign keys, money in two units.
-        config(['database.connections.legacy' => array_merge(
-            config('database.connections.pgsql'),
-            ['search_path' => 'legacy_src'],
-        )]);
-
-        // Dropped and rebuilt per test. This connection is outside the
-        // transaction RefreshDatabase wraps the default one in, so its rows
-        // would otherwise survive into the next test.
-        DB::connection('legacy')->statement('DROP SCHEMA IF EXISTS legacy_src CASCADE');
-        DB::connection('legacy')->statement('CREATE SCHEMA legacy_src');
-
-        $this->buildLegacySchema();
-        $this->seedLegacyRows();
+        $this->setUpLegacyDatabase();
     }
 
     protected function tearDown(): void
     {
-        DB::connection('legacy')->statement('DROP SCHEMA IF EXISTS legacy_src CASCADE');
+        $this->tearDownLegacyDatabase();
 
         parent::tearDown();
-    }
-
-    private function legacy(): \Illuminate\Database\Schema\Builder
-    {
-        return Schema::connection('legacy');
-    }
-
-    private function buildLegacySchema(): void
-    {
-        $this->legacy()->create('user_accounts', function ($t) {
-            $t->integer('id')->primary();
-            $t->string('first_name');
-            $t->string('last_name');
-            $t->string('user_type')->default('event_org');
-            $t->string('email_address');
-            $t->string('phone_number')->nullable();
-            $t->string('password');
-            $t->string('_status')->default('active');
-            $t->timestamp('_registered')->nullable();
-        });
-
-        $this->legacy()->create('events', function ($t) {
-            $t->integer('id')->primary();
-            // The joins are varchars in the source, not foreign keys. There
-            // are none anywhere in that database.
-            $t->string('_organizer');
-            $t->string('_title');
-            $t->string('_category')->nullable();
-            $t->string('_location')->nullable();
-            $t->string('_timezone')->nullable();
-            $t->string('_province')->nullable();
-            $t->string('_venue')->nullable();
-            $t->text('_description')->nullable();
-            $t->string('_start_date');
-            $t->string('_start_time')->nullable();
-            $t->text('_slug')->nullable();
-            $t->string('_dress_code')->nullable();
-            $t->boolean('_identity_req')->default(true);
-            $t->string('_status')->default('DRAFT');
-            $t->boolean('is_featured')->default(false);
-            $t->timestamp('created')->nullable();
-        });
-
-        $this->legacy()->create('event_tickets', function ($t) {
-            $t->integer('id')->primary();
-            $t->string('_event');
-            $t->string('_organizer');
-            $t->string('ticket_title');
-            $t->string('ticket_type')->nullable();
-            $t->integer('ticket_price');   // whole dollars
-            $t->integer('admits')->default(1);
-            $t->text('ticket_description')->nullable();
-            $t->integer('max_ticket_per_person')->default(10);
-            $t->integer('ticket_available')->default(100);
-            $t->timestamp('_ticket_added')->nullable();
-            $t->string('_ticket_status')->default('Enabled');
-        });
-
-        $this->legacy()->create('tickets_sales', function ($t) {
-            $t->integer('sales_id')->primary();
-            $t->string('_event');
-            $t->text('_ticket');
-            $t->string('_guest');
-            $t->text('_quantity');
-            $t->integer('_cost');          // cents
-            $t->string('_ticket_status')->default('PENDING');
-            $t->string('_checkout')->default('AWAITING');
-            $t->string('_payment_status')->default('PENDING');
-            $t->timestamp('_pdate')->nullable();
-        });
-
-        $this->legacy()->create('ticket_issued', function ($t) {
-            $t->integer('ticket_id')->primary();
-            $t->string('event');
-            $t->string('ticket');
-            $t->string('_type');
-            $t->string('_sale');
-            $t->string('_guest');
-            $t->string('_custom_name')->default('');
-            $t->timestamp('_date')->nullable();
-            $t->boolean('is_checkedin')->default(false);
-        });
-
-        $this->legacy()->create('extra_data', function ($t) {
-            $t->integer('extra_id')->primary();
-            $t->string('user_account');
-            $t->string('brand_name')->nullable();
-            $t->text('brand_description')->nullable();
-            $t->string('brand_number')->nullable();
-            $t->string('brand_email_address')->nullable();
-            $t->string('brand_twitter')->nullable();
-            $t->string('brand_facebook')->nullable();
-            $t->string('brand_instagram')->nullable();
-            // The columns this import deliberately does not read.
-            $t->string('bank_account_number')->nullable();
-            $t->string('legal_doc_num')->nullable();
-        });
-
-        $this->legacy()->create('extra_logo', function ($t) {
-            $t->integer('id')->primary();
-            $t->string('extra');
-            $t->text('logo');
-        });
-
-        $this->legacy()->create('settlements', function ($t) {
-            $t->integer('id')->primary();
-            $t->string('event');
-            $t->string('organizer');
-            $t->float('amount');           // a double, in the source
-            $t->string('type')->default('full');
-            $t->text('note')->nullable();
-            $t->string('status')->default('success');
-            $t->timestamp('date')->nullable();
-        });
-    }
-
-    private function seedLegacyRows(): void
-    {
-        $db = DB::connection('legacy');
-
-        $db->table('user_accounts')->insert([
-            [
-                'id' => 26, 'first_name' => 'Ada', 'last_name' => 'Okoro',
-                'email_address' => 'ada@lagosnights.test', 'phone_number' => '+14165550101',
-                // A real bcrypt hash of a known password, so the test can
-                // check the thing that matters: that this person signs in
-                // after the cutover with the password they already have.
-                'password' => password_hash(self::KNOWN_PASSWORD, PASSWORD_BCRYPT),
-                '_registered' => '2024-01-04 10:00:00',
-            ],
-            [
-                // The other generation of hash. This account has to arrive
-                // without a usable password.
-                'id' => 31, 'first_name' => 'Bem', 'last_name' => 'Tar',
-                'email_address' => 'bem@example.test', 'phone_number' => null,
-                'password' => '356a192b7913b04c54574d18c28d46e6395428ab',
-                '_registered' => '2023-06-01 09:00:00',
-            ],
-        ]);
-
-        $db->table('events')->insert([
-            [
-                'id' => 176, '_organizer' => '26', '_title' => 'Standard Night',
-                '_category' => 'Nightlife', '_location' => 'Toronto',
-                '_timezone' => null, '_province' => 'ON', '_venue' => 'The Room',
-                '_description' => 'A night.', '_start_date' => '2024-05-11',
-                '_start_time' => '22:00', '_slug' => null, '_dress_code' => 'Smart',
-                '_identity_req' => true, '_status' => 'PUBLISHED', 'is_featured' => false,
-                'created' => '2024-05-01 12:00:00',
-            ],
-            [
-                // No status the new system recognises, so it must draft. Also
-                // no start time, which the source frequently leaves blank.
-                'id' => 177, '_organizer' => '31', '_title' => 'Unknown State',
-                '_category' => null, '_location' => null,
-                '_timezone' => null, '_province' => null, '_venue' => null,
-                '_description' => '', '_start_date' => '2024-06-01',
-                '_start_time' => null, '_slug' => null, '_dress_code' => null,
-                '_identity_req' => true, '_status' => 'ARCHIVED', 'is_featured' => false,
-                'created' => '2024-05-20 12:00:00',
-            ],
-        ]);
-
-        $db->table('event_tickets')->insert([
-            [
-                'id' => 58, '_event' => '176', '_organizer' => '26',
-                'ticket_title' => 'Standard Ticket', 'ticket_price' => 5,
-                'admits' => 1, 'max_ticket_per_person' => 2, 'ticket_available' => 4,
-                '_ticket_added' => '2024-05-11 15:26:18', '_ticket_status' => 'Enabled',
-            ],
-        ]);
-
-        $db->table('tickets_sales')->insert([
-            [
-                'sales_id' => 17, '_event' => '176', '_ticket' => '58|3|15',
-                // The real shape: First|Last|email, on every row in that
-                // table. A basket of three at $5.
-                '_guest' => 'Ada|Buyer|buyer@example.test',
-                '_quantity' => '58|3|15', '_cost' => 1500,
-                '_ticket_status' => 'PAID', '_checkout' => 'cs_live_abc123',
-                '_payment_status' => 'paid', '_pdate' => '2024-05-11 18:00:00',
-            ],
-            [
-                // One of the 981. Two years at PENDING.
-                'sales_id' => 18, '_event' => '176', '_ticket' => '58|1|5',
-                '_guest' => 'Someone|Who Left|left@example.test', '_quantity' => '58|1|5',
-                '_cost' => 500, '_ticket_status' => 'PENDING',
-                '_checkout' => 'AWAITING', '_payment_status' => 'PENDING',
-                '_pdate' => '2024-05-11 18:05:00',
-            ],
-        ]);
-
-        $db->table('ticket_issued')->insert([
-            [
-                'ticket_id' => 900, 'event' => '176', 'ticket' => 'MFST-9K2L4XQ7',
-                '_type' => '58', '_sale' => '17', '_guest' => 'buyer@example.test',
-                '_custom_name' => 'Ada Guest', '_date' => '2024-05-11 18:00:01',
-                'is_checkedin' => true,
-            ],
-            [
-                'ticket_id' => 901, 'event' => '176', 'ticket' => 'MFST-3H8N2VRD',
-                '_type' => '58', '_sale' => '17', '_guest' => 'buyer@example.test',
-                '_custom_name' => '', '_date' => '2024-05-11 18:00:02',
-                'is_checkedin' => false,
-            ],
-        ]);
-
-        $db->table('extra_data')->insert([[
-            'extra_id' => 12, 'user_account' => '26',
-            'brand_name' => 'Lagos Nights', 'brand_description' => 'Afrobeats, monthly.',
-            'brand_number' => '+14165550199', 'brand_email_address' => 'hello@lagosnights.test',
-            'brand_twitter' => 'lagosnights', 'brand_facebook' => 'lagosnightsto',
-            'brand_instagram' => 'lagos.nights',
-            // Present, and deliberately not carried across.
-            'bank_account_number' => '000123456', 'legal_doc_num' => 'AB1234567',
-        ]]);
-
-        // A one-pixel PNG, as a data URI — which is how every image in that
-        // database is actually stored, longblob column or not.
-        $db->table('extra_logo')->insert([[
-            'id' => 5, 'extra' => '12',
-            'logo' => 'data:image/png;base64,'.base64_encode(base64_decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-            )),
-        ]]);
-
-        $db->table('settlements')->insert([[
-            'id' => 40, 'event' => '176', 'organizer' => '26',
-            'amount' => 12.34, 'type' => 'full', 'note' => 'Paid by Interac',
-            'status' => 'success', 'date' => '2024-05-20 10:00:00',
-        ]]);
     }
 
     private function import(): array
@@ -446,8 +189,8 @@ class LegacyImportTest extends TestCase
         // The reason order lines are not decoration. RefundService allocates
         // by line weight; with no lines every weight is zero and the refund
         // is refused as being worth nothing.
-        $share = (new \ReflectionMethod(\App\Services\Refunds\RefundService::class, 'shareFor'))
-            ->invoke(app(\App\Services\Refunds\RefundService::class), $order, $order->tickets);
+        $share = (new \ReflectionMethod(RefundService::class, 'shareFor'))
+            ->invoke(app(RefundService::class), $order, $order->tickets);
 
         $this->assertGreaterThan(0, $share['amount']);
     }
@@ -541,22 +284,300 @@ class LegacyImportTest extends TestCase
     {
         $this->import();
 
-        $before = [
-            User::count(), Organization::count(), Event::count(),
-            TicketType::count(), Order::count(), Ticket::count(),
-            LedgerEntry::count(),
-        ];
+        $before = $this->everythingCounted();
 
         // A quarter of a gigabyte over a network does not finish first time.
         // The recovery has to be running it again.
         $this->import();
 
-        $after = [
-            User::count(), Organization::count(), Event::count(),
-            TicketType::count(), Order::count(), Ticket::count(),
-            LedgerEntry::count(),
-        ];
+        $this->assertSame($before, $this->everythingCounted());
+    }
 
-        $this->assertSame($before, $after);
+    public function test_an_order_that_fails_part_way_leaves_nothing_behind_and_is_tried_again(): void
+    {
+        // The connection going between an order and its basket. Before each
+        // row was one transaction, this left an order with no lines that
+        // legacy_map called done, and the next run skipped it for good.
+        $dropped = true;
+
+        OrderLine::creating(function () use (&$dropped): void {
+            if ($dropped) {
+                throw new RuntimeException('server closed the connection unexpectedly');
+            }
+        });
+
+        $result = $this->import();
+
+        // Nothing of either order: its row, its lines, its ledger entry and
+        // its map row all went back together. Sale 18 fails the same way —
+        // it has a basket too — and says so.
+        $this->assertSame(0, Order::count());
+        $this->assertSame(0, OrderLine::count());
+        $this->assertSame(0, LedgerEntry::whereNotNull('order_id')->count());
+        $this->assertFalse(DB::table('legacy_map')->where('source_table', 'tickets_sales')->exists());
+
+        // The tickets for it are skipped as missing rather than written
+        // against an order the map remembered and the database did not.
+        $this->assertSame(0, Ticket::count());
+        $this->assertContains('ticket 900 skipped: order or event not imported', $result['notes']);
+
+        // Written down, with the source row it came from and why.
+        $failure = DB::table('legacy_import_failures')
+            ->where('source_table', 'tickets_sales')->where('source_id', '17')
+            ->first();
+
+        $this->assertNotNull($failure);
+        $this->assertStringContainsString('server closed the connection', $failure->reason);
+        $this->assertNull($failure->resolved_at);
+        $this->assertContains(
+            ['table' => 'tickets_sales', 'id' => '17', 'reason' => $failure->reason],
+            $result['failures'],
+        );
+
+        // The run carried on past it: settlements come after orders.
+        $this->assertSame(1, LedgerEntry::where('type', 'settlement')->count());
+
+        // The connection is back. The same command, run again.
+        $dropped = false;
+
+        $retry = $this->import();
+
+        $order = Order::where('buyer_email', 'buyer@example.test')->with('lines')->firstOrFail();
+
+        $this->assertSame([], $retry['failures']);
+        $this->assertCount(1, $order->lines);
+        $this->assertSame(1500, (int) LedgerEntry::where('order_id', $order->id)->sum('amount'));
+        $this->assertSame(2, Ticket::where('order_id', $order->id)->count());
+        $this->assertSame(1, LedgerEntry::where('type', 'settlement')->count(), 'Not written a second time.');
+
+        $this->assertNotNull(
+            DB::table('legacy_import_failures')->where('source_id', '17')->value('resolved_at'),
+            'Kept, and marked as having come across.',
+        );
+    }
+
+    public function test_an_order_whose_ledger_entry_fails_takes_its_lines_back_with_it(): void
+    {
+        // The last write before the map row. Committed piecemeal, this was an
+        // order and its basket that the organizer was never credited for.
+        LedgerEntry::creating(function (LedgerEntry $entry): void {
+            if ($entry->type === 'sale') {
+                throw new RuntimeException('bad row');
+            }
+        });
+
+        $result = $this->import();
+
+        // The paid sale is gone whole. The abandoned one writes no ledger
+        // entry, so it came across.
+        $this->assertSame(['17'], array_column(
+            array_filter($result['failures'], fn (array $f) => $f['table'] === 'tickets_sales'),
+            'id',
+        ));
+        $this->assertFalse(Order::where('buyer_email', 'buyer@example.test')->exists());
+        $this->assertSame(1, OrderLine::count(), 'Only the abandoned checkout\'s basket.');
+        $this->assertNull(DB::table('legacy_map')->where('source_table', 'tickets_sales')->where('source_id', '17')->first());
+        $this->assertSame(1, DB::table('legacy_import_failures')->whereNull('resolved_at')->where('source_id', '17')->count());
+    }
+
+    public function test_bad_data_in_one_row_does_not_stop_the_rest(): void
+    {
+        // The same person twice, as the old system allowed: its email column
+        // had no unique index. The second cannot become a user here, and it
+        // must not take anybody else down with it.
+        DB::connection('legacy')->table('user_accounts')->insert([
+            'id' => 32, 'first_name' => 'Ada', 'last_name' => 'Again',
+            'email_address' => 'ADA@lagosnights.test', 'phone_number' => null,
+            'password' => password_hash('other', PASSWORD_BCRYPT),
+            '_registered' => '2024-02-01 10:00:00',
+        ]);
+
+        $result = $this->import();
+
+        $this->assertCount(1, $result['failures']);
+        $this->assertSame('user_accounts', $result['failures'][0]['table']);
+        $this->assertSame('32', $result['failures'][0]['id']);
+
+        // The constraint, not the row: Postgres quotes the offending value
+        // on the line after, and that line is not kept.
+        $this->assertStringContainsString('users_email_unique', $result['failures'][0]['reason']);
+        $this->assertStringNotContainsString('lagosnights', $result['failures'][0]['reason']);
+
+        // No half of it: no second organization with no owner, no logo, no
+        // map row saying it came across.
+        $this->assertSame(2, Organization::count());
+        $this->assertSame(1, User::where('email', 'ada@lagosnights.test')->count());
+        $this->assertNull(DB::table('legacy_map')->where('source_table', 'organization_for_account')->where('source_id', '32')->first());
+
+        // Everything else is here.
+        $this->assertSame(2, Event::count());
+        $this->assertSame(2, Order::count());
+        $this->assertSame(2, Ticket::count());
+    }
+
+    public function test_a_failed_row_does_not_leave_its_venue_or_its_count_behind(): void
+    {
+        // An event that cannot be written after its venue already was.
+        Event::creating(function (Event $event): void {
+            if ($event->title === 'Standard Night') {
+                throw new RuntimeException('bad row');
+            }
+        });
+
+        $result = $this->import();
+
+        $this->assertSame(0, Venue::count(), 'The venue went back with its event.');
+        $this->assertArrayNotHasKey('venues', $result['counts']);
+        $this->assertSame(1, Event::count());
+    }
+
+    public function test_an_order_waits_for_a_ticket_type_that_failed_rather_than_losing_its_basket(): void
+    {
+        // Written around, the paid order committed with no lines, the map
+        // called it done, and the run that brought its ticket type across
+        // passed it by: no basket for good, and nothing outstanding.
+        $failing = true;
+
+        TicketType::creating(function () use (&$failing): void {
+            if ($failing) {
+                throw new RuntimeException('bad row');
+            }
+        });
+
+        $result = $this->import();
+
+        $this->assertEqualsCanonicalizing(
+            ['event_tickets:58', 'tickets_sales:17', 'tickets_sales:18'],
+            array_map(fn (array $f) => $f['table'].':'.$f['id'], $result['failures']),
+        );
+        $this->assertSame(0, Order::count());
+        $this->assertStringContainsString(
+            'waiting for ticket type 58',
+            (string) DB::table('legacy_import_failures')->where('source_table', 'tickets_sales')->where('source_id', '17')->value('reason'),
+        );
+        $this->assertNotContains('order 17 imported with no lines at all', $result['notes']);
+
+        $failing = false;
+
+        $retry = $this->import();
+
+        $this->assertSame([], $retry['failures']);
+        $this->assertSame([], (new LegacyMap)->outstandingFailures());
+
+        $order = Order::where('buyer_email', 'buyer@example.test')->with('lines')->firstOrFail();
+
+        $this->assertCount(1, $order->lines);
+        $this->assertSame(1500, (int) $order->lines->sum('line_total_amount'));
+        $this->assertSame(1500, (int) LedgerEntry::where('order_id', $order->id)->sum('amount'));
+        $this->assertSame(2, Ticket::where('order_id', $order->id)->count());
+    }
+
+    public function test_a_settlement_waits_for_an_event_that_failed_rather_than_belonging_to_none(): void
+    {
+        // A settlement for an event the old database never had is kept as it
+        // was, under no event. Only one still to come is waited for.
+        DB::connection('legacy')->table('settlements')->insert([
+            'id' => 41, 'event' => '999', 'organizer' => '26', 'amount' => 5.0,
+            'type' => 'full', 'note' => null, 'status' => 'success', 'date' => '2024-06-01 10:00:00',
+        ]);
+
+        $failing = true;
+
+        Event::creating(function (Event $event) use (&$failing): void {
+            if ($failing && $event->title === 'Standard Night') {
+                throw new RuntimeException('bad row');
+            }
+        });
+
+        $result = $this->import();
+
+        $this->assertContains('settlements:40', array_map(fn (array $f) => $f['table'].':'.$f['id'], $result['failures']));
+        $this->assertSame(0, LedgerEntry::where('type', 'settlement')->where('amount', -1234)->count());
+
+        $orphan = LedgerEntry::where('type', 'settlement')->where('amount', -500)->sole();
+        $this->assertNull($orphan->event_id);
+        $this->assertContains('settlement 41: event 999 is not in the old database, kept without it', $result['notes']);
+
+        $failing = false;
+
+        $retry = $this->import();
+
+        $this->assertSame([], $retry['failures']);
+        $this->assertSame([], (new LegacyMap)->outstandingFailures());
+
+        $settlement = LedgerEntry::where('type', 'settlement')->where('amount', -1234)->sole();
+
+        $this->assertSame(Event::where('title', 'Standard Night')->firstOrFail()->id, $settlement->event_id);
+    }
+
+    public function test_a_row_can_be_left_behind_on_purpose_and_stops_being_listed(): void
+    {
+        // The same person twice. The fix is to not bring the second one, and
+        // until there was a way to say so the import exited non-zero for good.
+        DB::connection('legacy')->table('user_accounts')->insert([
+            'id' => 32, 'first_name' => 'Ada', 'last_name' => 'Again',
+            'email_address' => 'ADA@lagosnights.test', 'phone_number' => null,
+            'password' => password_hash('other', PASSWORD_BCRYPT),
+            '_registered' => '2024-02-01 10:00:00',
+        ]);
+
+        $this->artisan('legacy:import')->assertFailed();
+
+        // Not without a reason, and not a row that is not on the list.
+        $this->artisan('legacy:import', ['--leave-behind' => ['user_accounts:32']])->assertFailed();
+        $this->artisan('legacy:import', ['--leave-behind' => ['user_accounts:33'], '--because' => 'typo'])->assertFailed();
+        $this->assertNull(DB::table('legacy_import_failures')->where('source_id', '32')->value('resolved_at'));
+
+        $this->artisan('legacy:import', ['--leave-behind' => ['user_accounts:32'], '--because' => 'duplicate of account 26'])
+            ->expectsOutputToContain('Nothing else is outstanding')
+            ->assertSuccessful();
+
+        // Still in the source and still tried, in case it was fixed. It was
+        // not, and it stays where it was put.
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $failure = DB::table('legacy_import_failures')->where('source_id', '32')->first();
+
+        $this->assertNotNull($failure->resolved_at);
+        $this->assertSame('duplicate of account 26', $failure->left_behind_because);
+        $this->assertSame(2, (int) $failure->attempts);
+
+        // Fixed after all: it comes across, and the record says that instead.
+        DB::connection('legacy')->table('user_accounts')->where('id', 32)->update(['email_address' => 'ada.again@example.test']);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertNull(DB::table('legacy_import_failures')->where('source_id', '32')->value('left_behind_because'));
+        $this->assertTrue(User::where('email', 'ada.again@example.test')->exists());
+    }
+
+    public function test_a_failure_for_a_row_that_did_come_across_is_cleared(): void
+    {
+        $this->import();
+
+        // The COMMIT reached the server and its answer was lost with the
+        // connection: the row is across, and the run wrote it down as failed.
+        // Nothing would try it again, so nothing would clear it.
+        DB::table('legacy_import_failures')->insert([
+            'source_table' => 'tickets_sales', 'source_id' => '17',
+            'reason' => 'server closed the connection unexpectedly', 'attempts' => 1,
+            'first_failed_at' => now(), 'last_failed_at' => now(),
+        ]);
+
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertNotNull(DB::table('legacy_import_failures')->where('source_id', '17')->value('resolved_at'));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function everythingCounted(): array
+    {
+        return [
+            User::count(), Organization::count(), Event::count(), Venue::count(),
+            TicketType::count(), Order::count(), OrderLine::count(), Ticket::count(),
+            LedgerEntry::count(), DB::table('legacy_map')->count(),
+        ];
     }
 }

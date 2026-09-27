@@ -2,7 +2,6 @@
 
 namespace App\Services\Legacy;
 
-use App\Models\Event;
 use App\Models\EventImage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -82,6 +81,7 @@ class LegacyPosterImporter
             }
 
             $blob = $image['bytes'];
+            $path = null;
 
             try {
                 $extension = LegacyRules::extensionFor($image['mime']);
@@ -96,27 +96,43 @@ class LegacyPosterImporter
                 // of object storage.
                 $size = @getimagesizefromstring($blob) ?: null;
 
-                $record = EventImage::create([
-                    'event_id' => $eventId,
-                    // The poster is the banner. There is no separate poster
-                    // concept in this schema — events.poster_path was replaced
-                    // by an image with this kind.
-                    'kind' => 'banner',
-                    'path' => $path,
-                    'width' => $size[0] ?? null,
-                    'height' => $size[1] ?? null,
-                    'byte_size' => strlen($blob),
-                    'mime' => $image['mime'],
-                    'position' => 0,
-                ]);
+                // The image row and its map row together, so a poster is
+                // either moved and known to be moved or not moved at all.
+                $this->map->atomically(function () use ($eventId, $path, $size, $blob, $image, $legacyId) {
+                    $record = EventImage::create([
+                        'event_id' => $eventId,
+                        // The poster is the banner. There is no separate poster
+                        // concept in this schema — events.poster_path was replaced
+                        // by an image with this kind.
+                        'kind' => 'banner',
+                        'path' => $path,
+                        'width' => $size[0] ?? null,
+                        'height' => $size[1] ?? null,
+                        'byte_size' => strlen($blob),
+                        'mime' => $image['mime'],
+                        'position' => 0,
+                    ]);
 
-                $this->map->record('event_poster', $legacyId, 'event_image', $record->id);
+                    $this->map->record('event_poster', $legacyId, 'event_image', $record->id);
+
+                    // With the rows, so a poster that came across on a retry
+                    // is never left listed as outstanding.
+                    $this->map->resolved('event_poster', $legacyId);
+                });
 
                 $moved++;
                 $bytes += strlen($blob);
             } catch (\Throwable $e) {
                 // One unreadable poster does not stop the other 285. The event
-                // is already imported and shows without an image.
+                // is already imported and shows without an image, the file
+                // that nothing points at is taken back, and the reason is
+                // written down for the next run to be judged against.
+                if ($path !== null) {
+                    Storage::disk('public')->delete($path);
+                }
+
+                $this->map->failed('event_poster', $legacyId, LegacyRules::failureReason($e));
+
                 $failed++;
             }
 
@@ -127,5 +143,4 @@ class LegacyPosterImporter
 
         return ['moved' => $moved, 'empty' => $empty, 'failed' => $failed, 'bytes' => $bytes];
     }
-
 }

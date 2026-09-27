@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Services\Legacy\LegacyRules;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Tests\TestCase;
 
 /**
@@ -132,5 +133,39 @@ class LegacyRulesTest extends TestCase
         $this->assertSame('summer-fest-2024', LegacyRules::slugify('Summer Fest 2024!', 'x'));
         $this->assertSame('event-99', LegacyRules::slugify('🎉🎉🎉', 'event-99'));
         $this->assertSame('event-99', LegacyRules::slugify('   ', 'event-99'));
+    }
+
+    // --- why a row did not come across -------------------------------------
+
+    public function test_a_failure_reason_names_the_constraint_and_keeps_none_of_the_row(): void
+    {
+        // What Postgres says about a ticket whose code is already taken: the
+        // constraint on the first line, the code itself on the next, and
+        // Laravel adds the statement with its bindings after that.
+        $driver = new \PDOException(
+            'SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint "tickets_code_unique"'
+            ."\nDETAIL:  Key (code)=(MFST-TESTCODE) already exists."
+        );
+
+        $e = new QueryException(
+            'pgsql',
+            'insert into "tickets" ("code") values (?)',
+            ['MFST-TESTCODE'],
+            $driver,
+        );
+
+        $reason = LegacyRules::failureReason($e);
+
+        $this->assertStringContainsString('tickets_code_unique', $reason);
+        $this->assertStringNotContainsString('MFST-TESTCODE', $reason);
+        $this->assertStringNotContainsString('insert into', $reason);
+    }
+
+    public function test_a_failure_that_is_not_the_database_says_what_it_was(): void
+    {
+        $this->assertSame(
+            'RuntimeException: server closed the connection unexpectedly',
+            LegacyRules::failureReason(new \RuntimeException("server closed the connection unexpectedly\nsecond line")),
+        );
     }
 }

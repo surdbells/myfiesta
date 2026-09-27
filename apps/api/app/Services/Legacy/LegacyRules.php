@@ -4,6 +4,7 @@ namespace App\Services\Legacy;
 
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 
 /**
  * Every decision the import has to make, in one place and none of it doing I/O.
@@ -469,6 +470,36 @@ final class LegacyRules
         $slug = trim($slug, '-');
 
         return $slug === '' ? $fallback : substr($slug, 0, 80);
+    }
+
+    /**
+     * Why a row did not come across, in words that are safe to keep.
+     *
+     * A database error arrives with the row attached: Postgres adds a DETAIL
+     * line quoting the offending values, and Laravel appends the whole
+     * statement with its bindings filled in. For a ticket that is the ticket
+     * code, and ticket codes are not written anywhere they could be read back
+     * out of. The first line of the driver's message names the constraint,
+     * which is what somebody fixing the row needs; the values are in the
+     * source, under the id recorded beside this.
+     */
+    public static function failureReason(\Throwable $e): string
+    {
+        $message = $e instanceof QueryException && $e->getPrevious() !== null
+            ? $e->getPrevious()->getMessage()
+            : class_basename($e).': '.$e->getMessage();
+
+        // The first line only. DETAIL, HINT and the statement come after it.
+        $first = trim(strtok($message, "\r\n") ?: '');
+
+        // Laravel's own suffix, if the message came without a previous one.
+        $first = trim((string) preg_replace('/\s*\(Connection: .*$/s', '', $first));
+
+        if ($first === '') {
+            $first = class_basename($e);
+        }
+
+        return mb_substr($first, 0, 500);
     }
 
     /**

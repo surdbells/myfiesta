@@ -12,7 +12,6 @@ use App\Models\TicketType;
 use App\Models\User;
 use App\Models\Venue;
 use App\Services\Payments\GatewayFee;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -28,11 +27,19 @@ use Illuminate\Support\Str;
  * produces a database that passes its own migration and fails the first time
  * somebody uses it.
  *
- * Two properties matter more than speed here:
+ * Three properties matter more than speed here:
  *
  *   Re-runnable. Every row is looked up in legacy_map before it is created.
  *   This will be interrupted — it is a quarter of a gigabyte of poster blobs
  *   across a network — and the recovery has to be `run it again`.
+ *
+ *   Whole rows or nothing. Each source row — an order with its lines, its
+ *   ledger entry and its legacy_map row; an account with its organization —
+ *   commits in one short transaction. A row that fails part-way leaves
+ *   nothing behind, is written to legacy_import_failures with the reason,
+ *   and the run moves on to the next one. The map row commits with the rest,
+ *   so "done" in the map always means done in the tables, and the next run
+ *   retries exactly the rows that are missing.
  *
  *   Honest about what it invented. Events have no end time in the source and
  *   most have no timezone; both are inferred, both are recorded as inferred,
@@ -52,6 +59,35 @@ class LegacyImporter
     /** @var list<string> */
     private array $notes = [];
 
+    /** @var list<array{table: string, id: string, reason: string}> */
+    private array $failures = [];
+
+    /**
+     * What the row in progress said and made, kept only if it commits.
+     *
+     * A note about a dropped basket line on an order that then rolled back is
+     * a note about something that does not exist; a count of venues made by
+     * it counts a venue that was never made; and a logo written for an
+     * organization that rolled back is a file nothing will ever point at.
+     */
+    private bool $inUnit = false;
+
+    /** @var list<string> */
+    private array $pendingNotes = [];
+
+    /** @var list<string> */
+    private array $pendingTicks = [];
+
+    /** @var list<string> */
+    private array $pendingFiles = [];
+
+    /**
+     * Ids the old database holds, per table, read once when first asked.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $sourceIds = [];
+
     public function __construct(
         private readonly LegacyMap $map,
         private readonly ?\Closure $progress = null,
@@ -63,13 +99,14 @@ class LegacyImporter
     }
 
     /**
-     * @return array{counts: array<string, int>, notes: list<string>}
+     * @return array{counts: array<string, int>, notes: list<string>, failures: list<array{table: string, id: string, reason: string}>}
      */
     public function run(): array
     {
-        // Order is dependency order, and each stage commits on its own. One
-        // transaction around the whole run would hold locks for as long as the
-        // import takes and lose everything to a single bad row two hours in.
+        // Order is dependency order, and each source row commits on its own
+        // (see unit()). One transaction around the whole run would hold locks
+        // for as long as the import takes and lose everything to a single bad
+        // row two hours in.
         $this->importOrganizers();
         $this->importEvents();
         $this->importTicketTypes();
@@ -77,7 +114,57 @@ class LegacyImporter
         $this->importTickets();
         $this->importSettlements();
 
-        return ['counts' => $this->counts, 'notes' => $this->notes];
+        return ['counts' => $this->counts, 'notes' => $this->notes, 'failures' => $this->failures];
+    }
+
+    /**
+     * One source row, all of it or none of it.
+     *
+     * The work runs in one short transaction together with the row's
+     * legacy_map entry (LegacyMap::atomically). If anything in it throws — bad
+     * data, a constraint, the connection going — the row is rolled back,
+     * recorded in legacy_import_failures under its source table and id, and
+     * the run moves on. Rows that depend on it are skipped as missing, or fail
+     * in turn waiting for it (waitFor), and are never written without it; all
+     * of them are tried again on the next run.
+     */
+    private function unit(string $sourceTable, int|string $sourceId, \Closure $work): void
+    {
+        $this->inUnit = true;
+        $this->pendingNotes = $this->pendingTicks = $this->pendingFiles = [];
+
+        try {
+            $this->map->atomically(function () use ($work, $sourceTable, $sourceId): void {
+                $work();
+
+                // In the same commit as the row. Marked afterwards, a run that
+                // died in between left a failure outstanding for a row the map
+                // called done — which no later run would ever try again, and
+                // so none would ever clear.
+                $this->map->resolved($sourceTable, $sourceId);
+            });
+        } catch (\Throwable $e) {
+            // Files are outside the transaction, so they are taken back by
+            // hand: a failed organization does not leave its logo behind.
+            if ($this->pendingFiles !== []) {
+                Storage::disk('public')->delete($this->pendingFiles);
+            }
+
+            $reason = LegacyRules::failureReason($e);
+
+            $this->map->failed($sourceTable, $sourceId, $reason);
+            $this->failures[] = ['table' => $sourceTable, 'id' => (string) $sourceId, 'reason' => $reason];
+
+            return;
+        } finally {
+            $this->inUnit = false;
+        }
+
+        array_push($this->notes, ...$this->pendingNotes);
+
+        foreach ($this->pendingTicks as $key) {
+            $this->counts[$key] = ($this->counts[$key] ?? 0) + 1;
+        }
     }
 
     /**
@@ -103,88 +190,97 @@ class LegacyImporter
                 continue;
             }
 
-            $password = LegacyRules::importablePassword($row->password ?? null);
-            $inferred = [];
-
-            if ($password === null) {
-                // SHA-1, or something unrecognised. The account comes across
-                // and the person resets on their next sign-in.
-                $inferred['password'] = 'not importable; reset required';
-            }
-
-            $name = trim(($row->first_name ?? '').' '.($row->last_name ?? ''));
-
-            $user = User::create([
-                'name' => $name === '' ? (string) $row->email_address : $name,
-                'email' => strtolower(trim((string) $row->email_address)),
-                // A random secret rather than null: the column is not nullable,
-                // and a value nobody knows is a password nobody can use. The
-                // real hash, where there is one, is written below.
-                'password' => Str::random(64),
-                'phone' => $row->phone_number ?: null,
-                // Every account in the source was created before this import
-                // and has been signing in, so the address is as verified as it
-                // was going to get. Requiring re-verification at cutover would
-                // lock out the entire user base on day one.
-                'email_verified_at' => $row->_registered ?? now(),
-                'created_at' => $row->_registered ?? now(),
-            ]);
-
-            if ($password !== null) {
-                // Written past the model, because `password` is cast to
-                // `hashed` and that cast re-validates an existing hash against
-                // this application's current cost policy — rejecting anything
-                // computed at a higher cost than we are configured for, which
-                // is exactly what an older system's hashes are.
-                //
-                // A legacy hash is a fact about a password somebody already
-                // has. It is stored as it was, and Laravel rehashes it to the
-                // current cost the first time they sign in.
-                DB::table('users')->where('id', $user->id)->update(['password' => $password]);
-            }
-
-            $this->map->record('user_accounts', $row->id, 'user', $user->id, $inferred);
-
-            // The brand, which is what buyers actually saw. Without it an
-            // organization ends up named after the person rather than the
-            // promoter — "Ada Okoro" where every poster said "Lagos Nights".
-            $brand = $this->brandFor($row->id);
-
-            $organizationName = $brand?->brand_name ?: $name;
-
-            if ($organizationName === '') {
-                $organizationName = (string) $row->email_address;
-            }
-
-            $organization = Organization::create([
-                'name' => $organizationName,
-                'slug' => $this->uniqueSlug(
-                    Organization::class,
-                    LegacyRules::slugify($organizationName, 'organizer-'.$row->id),
-                ),
-                'description' => $brand?->brand_description ?: null,
-                'contact_email' => strtolower(trim(
-                    $brand?->brand_email_address ?: (string) $row->email_address
-                )),
-                'contact_phone' => $brand?->brand_number ?: ($row->phone_number ?: null),
-                'instagram' => $brand?->brand_instagram ?: null,
-                'facebook' => $brand?->brand_facebook ?: null,
-                'x_handle' => $brand?->brand_twitter ?: null,
-                'created_at' => $row->_registered ?? now(),
-            ]);
-
-            $this->importLogo($organization, $brand?->extra_id);
-
-            $organization->members()->attach($user->id, [
-                'role' => 'owner',
-                'accepted_at' => $row->_registered ?? now(),
-            ]);
-
-            // Keyed by the same legacy id: events name their organizer by the
-            // account id, and this is what turns that into an organization.
-            $this->map->record('organization_for_account', $row->id, 'organization', $organization->id);
-            $this->tick('organizations');
+            // The account and its organization are one unit. Committed apart,
+            // an account whose organization failed was marked done, the next
+            // run skipped it, and every event it ran was skipped after it for
+            // want of an organizer.
+            $this->unit('user_accounts', $row->id, fn () => $this->importOrganizer($row));
         }
+    }
+
+    private function importOrganizer(object $row): void
+    {
+        $password = LegacyRules::importablePassword($row->password ?? null);
+        $inferred = [];
+
+        if ($password === null) {
+            // SHA-1, or something unrecognised. The account comes across
+            // and the person resets on their next sign-in.
+            $inferred['password'] = 'not importable; reset required';
+        }
+
+        $name = trim(($row->first_name ?? '').' '.($row->last_name ?? ''));
+
+        $user = User::create([
+            'name' => $name === '' ? (string) $row->email_address : $name,
+            'email' => strtolower(trim((string) $row->email_address)),
+            // A random secret rather than null: the column is not nullable,
+            // and a value nobody knows is a password nobody can use. The
+            // real hash, where there is one, is written below.
+            'password' => Str::random(64),
+            'phone' => $row->phone_number ?: null,
+            // Every account in the source was created before this import
+            // and has been signing in, so the address is as verified as it
+            // was going to get. Requiring re-verification at cutover would
+            // lock out the entire user base on day one.
+            'email_verified_at' => $row->_registered ?? now(),
+            'created_at' => $row->_registered ?? now(),
+        ]);
+
+        if ($password !== null) {
+            // Written past the model, because `password` is cast to
+            // `hashed` and that cast re-validates an existing hash against
+            // this application's current cost policy — rejecting anything
+            // computed at a higher cost than we are configured for, which
+            // is exactly what an older system's hashes are.
+            //
+            // A legacy hash is a fact about a password somebody already
+            // has. It is stored as it was, and Laravel rehashes it to the
+            // current cost the first time they sign in.
+            DB::table('users')->where('id', $user->id)->update(['password' => $password]);
+        }
+
+        // The brand, which is what buyers actually saw. Without it an
+        // organization ends up named after the person rather than the
+        // promoter — "Ada Okoro" where every poster said "Lagos Nights".
+        $brand = $this->brandFor($row->id);
+
+        $organizationName = $brand?->brand_name ?: $name;
+
+        if ($organizationName === '') {
+            $organizationName = (string) $row->email_address;
+        }
+
+        $organization = Organization::create([
+            'name' => $organizationName,
+            'slug' => $this->uniqueSlug(
+                Organization::class,
+                LegacyRules::slugify($organizationName, 'organizer-'.$row->id),
+            ),
+            'description' => $brand?->brand_description ?: null,
+            'contact_email' => strtolower(trim(
+                $brand?->brand_email_address ?: (string) $row->email_address
+            )),
+            'contact_phone' => $brand?->brand_number ?: ($row->phone_number ?: null),
+            'instagram' => $brand?->brand_instagram ?: null,
+            'facebook' => $brand?->brand_facebook ?: null,
+            'x_handle' => $brand?->brand_twitter ?: null,
+            'created_at' => $row->_registered ?? now(),
+        ]);
+
+        $this->importLogo($organization, $brand?->extra_id);
+
+        $organization->members()->attach($user->id, [
+            'role' => 'owner',
+            'accepted_at' => $row->_registered ?? now(),
+        ]);
+
+        $this->map->record('user_accounts', $row->id, 'user', $user->id, $inferred);
+
+        // Keyed by the same legacy id: events name their organizer by the
+        // account id, and this is what turns that into an organization.
+        $this->map->record('organization_for_account', $row->id, 'organization', $organization->id);
+        $this->tick('organizations');
     }
 
     /**
@@ -197,6 +293,9 @@ class LegacyImporter
      *
      * Matched case-insensitively on a trimmed name. "The Room" and "the room "
      * are the same place and an organizer typing it monthly will produce both.
+     *
+     * Made inside the event's unit, so a venue whose event rolls back goes
+     * with it and the map forgets it too.
      */
     private function venueFor(
         string $organizationId,
@@ -277,6 +376,10 @@ class LegacyImporter
 
         Storage::disk('public')->put($path, $image['bytes']);
 
+        // Remembered before anything else can fail, so a rollback of the
+        // organization takes the file with it.
+        $this->pendingFiles[] = $path;
+
         $organization->update(['logo_path' => $path]);
 
         $this->tick('logos');
@@ -328,60 +431,65 @@ class LegacyImporter
                 continue;
             }
 
-            // The source has no currency column. The market is decided by
-            // where the event is, and this database is the Canadian one.
-            $currency = 'CAD';
-            $timezone = LegacyRules::timezoneFor($row->_timezone, $currency);
-            $startsAt = LegacyRules::startsAt((string) $row->_start_date, $row->_start_time, $timezone);
-            $endsAt = LegacyRules::endsAt($startsAt);
-
-            $inferred = ['ends_at' => 'no end time in source; start + 6h'];
-
-            if (! $row->_timezone) {
-                $inferred['timezone'] = "guessed from currency: {$timezone}";
-            }
-
-            // `_location` is nullable in the source and `city` is not nullable
-            // here. Falling back to the province, then to a placeholder, keeps
-            // the event: a listing with a vague location is worth more to the
-            // organizer than an event that did not come across at all, and the
-            // placeholder is a search term for finding them afterwards.
-            $city = trim((string) ($row->_location ?: $row->_province ?: ''));
-
-            if ($city === '') {
-                $city = 'Unspecified';
-                $inferred['city'] = 'no location in source';
-            }
-
-            $status = LegacyRules::eventStatus($row->_status);
-
-            $event = Event::create([
-                'organization_id' => $organizationId,
-                'venue_id' => $this->venueFor($organizationId, $row->_venue, $city, $row->_province, $timezone),
-                'slug' => $this->uniqueSlug(
-                    Event::class,
-                    LegacyRules::slugify((string) ($row->_slug ?: $row->_title), 'event-'.$row->id),
-                ),
-                'title' => (string) $row->_title,
-                'description' => (string) $row->_description,
-                'currency' => $currency,
-                'starts_at' => $startsAt,
-                'ends_at' => $endsAt,
-                'timezone' => $timezone,
-                'city' => $city,
-                'subdivision' => $row->_province ?: null,
-                'country' => LegacyRules::countryFor($currency),
-                'category' => LegacyRules::category($row->_category),
-                'dress_code' => $row->_dress_code ?: null,
-                'id_required' => (bool) $row->_identity_req,
-                'status' => $status,
-                'is_featured' => (bool) $row->is_featured,
-                'published_at' => $status === 'published' ? ($row->created ?? now()) : null,
-                'created_at' => $row->created ?? now(),
-            ]);
-
-            $this->map->record('events', $row->id, 'event', $event->id, $inferred);
+            $this->unit('events', $row->id, fn () => $this->importEvent($row, $organizationId));
         }
+    }
+
+    private function importEvent(object $row, string $organizationId): void
+    {
+        // The source has no currency column. The market is decided by
+        // where the event is, and this database is the Canadian one.
+        $currency = 'CAD';
+        $timezone = LegacyRules::timezoneFor($row->_timezone, $currency);
+        $startsAt = LegacyRules::startsAt((string) $row->_start_date, $row->_start_time, $timezone);
+        $endsAt = LegacyRules::endsAt($startsAt);
+
+        $inferred = ['ends_at' => 'no end time in source; start + 6h'];
+
+        if (! $row->_timezone) {
+            $inferred['timezone'] = "guessed from currency: {$timezone}";
+        }
+
+        // `_location` is nullable in the source and `city` is not nullable
+        // here. Falling back to the province, then to a placeholder, keeps
+        // the event: a listing with a vague location is worth more to the
+        // organizer than an event that did not come across at all, and the
+        // placeholder is a search term for finding them afterwards.
+        $city = trim((string) ($row->_location ?: $row->_province ?: ''));
+
+        if ($city === '') {
+            $city = 'Unspecified';
+            $inferred['city'] = 'no location in source';
+        }
+
+        $status = LegacyRules::eventStatus($row->_status);
+
+        $event = Event::create([
+            'organization_id' => $organizationId,
+            'venue_id' => $this->venueFor($organizationId, $row->_venue, $city, $row->_province, $timezone),
+            'slug' => $this->uniqueSlug(
+                Event::class,
+                LegacyRules::slugify((string) ($row->_slug ?: $row->_title), 'event-'.$row->id),
+            ),
+            'title' => (string) $row->_title,
+            'description' => (string) $row->_description,
+            'currency' => $currency,
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'timezone' => $timezone,
+            'city' => $city,
+            'subdivision' => $row->_province ?: null,
+            'country' => LegacyRules::countryFor($currency),
+            'category' => LegacyRules::category($row->_category),
+            'dress_code' => $row->_dress_code ?: null,
+            'id_required' => (bool) $row->_identity_req,
+            'status' => $status,
+            'is_featured' => (bool) $row->is_featured,
+            'published_at' => $status === 'published' ? ($row->created ?? now()) : null,
+            'created_at' => $row->created ?? now(),
+        ]);
+
+        $this->map->record('events', $row->id, 'event', $event->id, $inferred);
     }
 
     /**
@@ -412,26 +520,31 @@ class LegacyImporter
                 continue;
             }
 
-            $event = Event::find($eventId);
-
-            $type = TicketType::create([
-                'event_id' => $eventId,
-                'name' => (string) $row->ticket_title,
-                'description' => $row->ticket_description ?: null,
-                'price_amount' => LegacyRules::ticketTypePrice($row->ticket_price, $event->currency)->amount,
-                'admits' => max(1, (int) ($row->admits ?? 1)),
-                'quantity_available' => (int) $row->ticket_available,
-                'max_per_order' => max(1, (int) $row->max_ticket_per_person),
-                // The source holds sale windows as four separate varchars of
-                // free text. They are not carried: a window parsed wrongly
-                // closes sales on an event that is still selling, and every
-                // one of these events has already happened.
-                'status' => strtolower((string) $row->_ticket_status) === 'enabled' ? 'on_sale' : 'hidden',
-                'created_at' => $row->_ticket_added ?? now(),
-            ]);
-
-            $this->map->record('event_tickets', $row->id, 'ticket_type', $type->id);
+            $this->unit('event_tickets', $row->id, fn () => $this->importTicketType($row, $eventId));
         }
+    }
+
+    private function importTicketType(object $row, string $eventId): void
+    {
+        $event = Event::findOrFail($eventId);
+
+        $type = TicketType::create([
+            'event_id' => $eventId,
+            'name' => (string) $row->ticket_title,
+            'description' => $row->ticket_description ?: null,
+            'price_amount' => LegacyRules::ticketTypePrice($row->ticket_price, $event->currency)->amount,
+            'admits' => max(1, (int) ($row->admits ?? 1)),
+            'quantity_available' => (int) $row->ticket_available,
+            'max_per_order' => max(1, (int) $row->max_ticket_per_person),
+            // The source holds sale windows as four separate varchars of
+            // free text. They are not carried: a window parsed wrongly
+            // closes sales on an event that is still selling, and every
+            // one of these events has already happened.
+            'status' => strtolower((string) $row->_ticket_status) === 'enabled' ? 'on_sale' : 'hidden',
+            'created_at' => $row->_ticket_added ?? now(),
+        ]);
+
+        $this->map->record('event_tickets', $row->id, 'ticket_type', $type->id);
     }
 
     /**
@@ -450,6 +563,10 @@ class LegacyImporter
      * the same constraints as new ones. An order here has to balance:
      * net_revenue + tax + service_charge = total. The old rows were never held
      * to that and a few of them will not meet it.
+     *
+     * Every money figure written here is a claim about what Stripe collected,
+     * and none of it is checked against Stripe at import time. That is
+     * `legacy:reconcile`, run after this.
      */
     private function importOrders(): void
     {
@@ -470,66 +587,78 @@ class LegacyImporter
                 continue;
             }
 
-            $event = Event::find($eventId);
-            $status = LegacyRules::orderStatus($row->_payment_status);
-
-            // Already in minor units. Not multiplied — see LegacyRules.
-            $netRevenue = LegacyRules::orderCost($row->_cost, $event->currency);
-
-            // 8%, as the source's own generated column computed it, and now
-            // stated in one place instead of in the schema.
-            $serviceCharge = $netRevenue->percentage(
-                (int) config('payments.service_charge_bps', 800)
-            );
-
-            $total = $netRevenue->plus($serviceCharge);
-
-            // `First|Last|email`, on every row in that table. Reading it as an
-            // address and falling back to a placeholder threw away the email
-            // for all 2,694 of them, which is where every ticket was sent.
-            $buyer = LegacyRules::parseBuyer($row->_guest);
-
-            $buyerEmail = $buyer['email']
-                ?? 'unknown-'.Str::random(12).'@imported.invalid';
-
-            $order = Order::create([
-                'organization_id' => $event->organization_id,
-                'event_id' => $eventId,
-                'buyer_email' => $buyerEmail,
-                'buyer_name' => $buyer['name'] !== '' ? $buyer['name'] : $buyerEmail,
-                'currency' => $event->currency,
-                'subtotal_amount' => $netRevenue->amount,
-                'discount_amount' => 0,
-                // The Canadian platform never charged tax. Recording zero is
-                // what happened; back-filling HST onto historic orders would
-                // invent a liability nobody incurred.
-                'tax_amount' => 0,
-                'tax_inclusive' => false,
-                'net_revenue_amount' => $netRevenue->amount,
-                'service_charge_amount' => $serviceCharge->amount,
-                'total_amount' => $total->amount,
-                'gateway_fee_amount' => $status === 'paid'
-                    ? GatewayFee::on($total, 'stripe')->amount
-                    : null,
-                'gateway' => $status === 'paid' ? 'stripe' : null,
-                // `_checkout` holds the Stripe Checkout Session id once one
-                // exists, and the string 'AWAITING' before that.
-                'gateway_reference' => str_starts_with((string) $row->_checkout, 'cs_')
-                    ? (string) $row->_checkout
-                    : null,
-                'status' => $status,
-                'paid_at' => $status === 'paid' ? ($row->_pdate ?? null) : null,
-                'created_at' => $row->_pdate ?? now(),
-            ]);
-
-            $this->map->record('tickets_sales', $row->sales_id, 'order', $order->id);
-
-            $this->importOrderLines($order, $row, $netRevenue->amount);
-
-            if ($status === 'paid') {
-                $this->writeLedger($order);
-            }
+            // The order, its basket, its ledger entry and its map row are one
+            // unit. This is the row the unit exists for: an order written
+            // without its lines cannot be refunded, one written without its
+            // ledger entry is money the organizer is never credited, and
+            // either of them marked done in the map stays that way.
+            $this->unit('tickets_sales', $row->sales_id, fn () => $this->importOrder($row, $eventId));
         }
+    }
+
+    private function importOrder(object $row, string $eventId): void
+    {
+        $event = Event::findOrFail($eventId);
+        $status = LegacyRules::orderStatus($row->_payment_status);
+
+        // Already in minor units. Not multiplied — see LegacyRules.
+        $netRevenue = LegacyRules::orderCost($row->_cost, $event->currency);
+
+        // 8%, as the source's own generated column computed it, and now
+        // stated in one place instead of in the schema.
+        $serviceCharge = $netRevenue->percentage(
+            (int) config('payments.service_charge_bps', 800)
+        );
+
+        $total = $netRevenue->plus($serviceCharge);
+
+        // `First|Last|email`, on every row in that table. Reading it as an
+        // address and falling back to a placeholder threw away the email
+        // for all 2,694 of them, which is where every ticket was sent.
+        $buyer = LegacyRules::parseBuyer($row->_guest);
+
+        $buyerEmail = $buyer['email']
+            ?? 'unknown-'.Str::random(12).'@imported.invalid';
+
+        $order = Order::create([
+            'organization_id' => $event->organization_id,
+            'event_id' => $eventId,
+            'buyer_email' => $buyerEmail,
+            'buyer_name' => $buyer['name'] !== '' ? $buyer['name'] : $buyerEmail,
+            'currency' => $event->currency,
+            'subtotal_amount' => $netRevenue->amount,
+            'discount_amount' => 0,
+            // The Canadian platform never charged tax. Recording zero is
+            // what happened; back-filling HST onto historic orders would
+            // invent a liability nobody incurred.
+            'tax_amount' => 0,
+            'tax_inclusive' => false,
+            'net_revenue_amount' => $netRevenue->amount,
+            'service_charge_amount' => $serviceCharge->amount,
+            'total_amount' => $total->amount,
+            'gateway_fee_amount' => $status === 'paid'
+                ? GatewayFee::on($total, 'stripe')->amount
+                : null,
+            'gateway' => $status === 'paid' ? 'stripe' : null,
+            // `_checkout` holds the Stripe Checkout Session id once one
+            // exists, and the string 'AWAITING' before that.
+            'gateway_reference' => str_starts_with((string) $row->_checkout, 'cs_')
+                ? (string) $row->_checkout
+                : null,
+            'status' => $status,
+            'paid_at' => $status === 'paid' ? ($row->_pdate ?? null) : null,
+            'created_at' => $row->_pdate ?? now(),
+        ]);
+
+        $this->importOrderLines($order, $row, $netRevenue->amount);
+
+        if ($status === 'paid') {
+            $this->writeLedger($order);
+        }
+
+        // Last, and in the same transaction as everything above it: the map
+        // says done only once there is nothing left to do.
+        $this->map->record('tickets_sales', $row->sales_id, 'order', $order->id);
     }
 
     /**
@@ -560,6 +689,10 @@ class LegacyImporter
             $typeId = $this->map->find('event_tickets', $line['legacy_type_id']);
 
             if (! $typeId) {
+                // Still in the old database: it failed, and the order waits
+                // for it rather than committing without its basket.
+                $this->waitFor('event_tickets', $line['legacy_type_id'], 'ticket type');
+
                 // The ticket type was deleted before the dump. The line cannot
                 // be written — order_lines requires the type — and the order
                 // is still worth keeping without it.
@@ -638,7 +771,6 @@ class LegacyImporter
             }
 
             $orderId = $this->map->find('tickets_sales', $row->_sale);
-            $typeId = $this->map->find('event_tickets', $row->_type);
             $eventId = $this->map->find('events', $row->event);
 
             if (! $orderId || ! $eventId) {
@@ -647,29 +779,40 @@ class LegacyImporter
                 continue;
             }
 
-            $order = Order::find($orderId);
-            $type = $typeId ? TicketType::find($typeId) : null;
-
-            $ticket = Ticket::create([
-                // The old code is kept. It is printed on tickets people are
-                // holding and scanned at doors — reissuing would invalidate
-                // every ticket already sold for an event that has not happened.
-                'code' => (string) $row->ticket,
-                'event_id' => $eventId,
-                'ticket_type_id' => $typeId,
-                'order_id' => $orderId,
-                'owner_email' => $order->buyer_email,
-                'holder_name' => $row->_custom_name ?: $order->buyer_name,
-                'status' => $row->is_checkedin ? 'checked_in' : 'valid',
-                'admits' => $type?->admits ?? 1,
-                'admitted_count' => $row->is_checkedin ? ($type?->admits ?? 1) : 0,
-                'created_at' => $row->_date ?? now(),
-            ]);
-
-            $this->map->record('ticket_issued', $row->ticket_id, 'ticket', $ticket->id, [
-                'checked_in_at' => 'not recorded by the source',
-            ]);
+            $this->unit('ticket_issued', $row->ticket_id, fn () => $this->importTicket($row, $orderId, $eventId));
         }
+    }
+
+    private function importTicket(object $row, string $orderId, string $eventId): void
+    {
+        $typeId = $this->map->find('event_tickets', $row->_type);
+
+        if (! $typeId) {
+            $this->waitFor('event_tickets', $row->_type, 'ticket type');
+        }
+
+        $order = Order::findOrFail($orderId);
+        $type = $typeId ? TicketType::find($typeId) : null;
+
+        $ticket = Ticket::create([
+            // The old code is kept. It is printed on tickets people are
+            // holding and scanned at doors — reissuing would invalidate
+            // every ticket already sold for an event that has not happened.
+            'code' => (string) $row->ticket,
+            'event_id' => $eventId,
+            'ticket_type_id' => $typeId,
+            'order_id' => $orderId,
+            'owner_email' => $order->buyer_email,
+            'holder_name' => $row->_custom_name ?: $order->buyer_name,
+            'status' => $row->is_checkedin ? 'checked_in' : 'valid',
+            'admits' => $type?->admits ?? 1,
+            'admitted_count' => $row->is_checkedin ? ($type?->admits ?? 1) : 0,
+            'created_at' => $row->_date ?? now(),
+        ]);
+
+        $this->map->record('ticket_issued', $row->ticket_id, 'ticket', $ticket->id, [
+            'checked_in_at' => 'not recorded by the source',
+        ]);
     }
 
     /**
@@ -690,7 +833,6 @@ class LegacyImporter
                 continue;
             }
 
-            $eventId = $this->map->find('events', $row->event);
             $organizationId = $this->map->find('organization_for_account', $row->organizer);
 
             if (! $organizationId) {
@@ -699,24 +841,80 @@ class LegacyImporter
                 continue;
             }
 
-            $amount = (int) round(((float) $row->amount) * 100);
-
-            $entry = LedgerEntry::create([
-                'organization_id' => $organizationId,
-                'event_id' => $eventId,
-                'type' => 'settlement',
-                'amount' => -$amount,
-                'currency' => 'CAD',
-                'reason' => $row->note ?: 'Imported settlement',
-                'occurred_at' => $row->date ?? now(),
-            ]);
-
-            $this->map->record('settlements', $row->id, 'ledger_entry', $entry->id, [
-                'amount' => 'source held this as a floating point double',
-            ]);
+            $this->unit('settlements', $row->id, fn () => $this->importSettlement($row, $organizationId));
         }
     }
 
+    private function importSettlement(object $row, string $organizationId): void
+    {
+        $amount = (int) round(((float) $row->amount) * 100);
+
+        $eventId = $this->map->find('events', $row->event);
+
+        if (! $eventId) {
+            // Filed under no event, a settlement for an event that came across
+            // on a later run stayed that way: the event's takings read as
+            // never paid out, and the payout as belonging to nothing.
+            $this->waitFor('events', $row->event, 'event');
+
+            if ((string) $row->event !== '') {
+                $this->note("settlement {$row->id}: event {$row->event} is not in the old database, kept without it");
+            }
+        }
+
+        $entry = LedgerEntry::create([
+            'organization_id' => $organizationId,
+            'event_id' => $eventId,
+            'type' => 'settlement',
+            'amount' => -$amount,
+            'currency' => 'CAD',
+            'reason' => $row->note ?: 'Imported settlement',
+            'occurred_at' => $row->date ?? now(),
+        ]);
+
+        $this->map->record('settlements', $row->id, 'ledger_entry', $entry->id, [
+            'amount' => 'source held this as a floating point double',
+        ]);
+    }
+
+    /**
+     * A parent that is still in the old database and has not come across yet.
+     *
+     * It failed, or it is waiting on a parent of its own, and either way a
+     * later run brings it. Written around instead — a basket line dropped, a
+     * settlement filed under no event — the row would commit without it, the
+     * map would call it done, and the run that brought the parent would pass
+     * it by: a paid order with no lines for good, and nothing left outstanding
+     * to say so. So the whole row fails here, is listed with the others, and
+     * is tried again once its parent is across.
+     *
+     * A parent the old database does not hold at all is gone, and the caller
+     * keeps the row without it as before.
+     *
+     * @throws \RuntimeException when the parent is still to come
+     */
+    private function waitFor(string $table, int|string|null $legacyId, string $what): void
+    {
+        if ($legacyId !== null && $this->inSource($table, $legacyId)) {
+            throw new \RuntimeException("waiting for {$what} {$legacyId}, which has not come across yet");
+        }
+    }
+
+    /**
+     * Whether the old database holds a row with this id.
+     *
+     * Every id at once, the first time a table is asked about: the tables
+     * asked about are small, and a question per basket line is not.
+     */
+    private function inSource(string $table, int|string $legacyId): bool
+    {
+        $this->sourceIds[$table] ??= $this->legacy()->table($table)
+            ->pluck('id')
+            ->mapWithKeys(fn ($id) => [(string) $id => true])
+            ->all();
+
+        return isset($this->sourceIds[$table][(string) $legacyId]);
+    }
 
     /**
      * A slug nothing else is using.
@@ -738,8 +936,17 @@ class LegacyImporter
         return $slug;
     }
 
+    /**
+     * Counted now for a row read, or on commit for something a unit made.
+     */
     private function tick(string $key): void
     {
+        if ($this->inUnit) {
+            $this->pendingTicks[] = $key;
+
+            return;
+        }
+
         $this->counts[$key] = ($this->counts[$key] ?? 0) + 1;
 
         if ($this->progress) {
@@ -749,6 +956,12 @@ class LegacyImporter
 
     private function note(string $message): void
     {
+        if ($this->inUnit) {
+            $this->pendingNotes[] = $message;
+
+            return;
+        }
+
         $this->notes[] = $message;
     }
 }
