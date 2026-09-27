@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Actions;
 use App\Filament\Support\Listing;
 use App\Filament\Support\Outcome;
 use App\Models\Order;
+use App\Models\Refund;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Refunds\RefundService;
@@ -207,24 +208,77 @@ final class OrderActions
 
         $refund = app(RefundService::class)->refund($order, $ticketIds, $staff, trim($reason));
 
-        // Sent, and the processor did not answer. It may well have paid the
-        // buyer, so this is neither a success nor "nothing happened" — and
-        // pressing Refund again would not help: those tickets are held by
-        // this refund until the processor is asked about it again.
+        return self::saidAbout($order->fresh(), $refund);
+    }
+
+    /**
+     * What the person who pressed Refund is told, true to where it stands.
+     *
+     * Succeeded: the processor took it, the money is on its way and the
+     * tickets it was for have stopped. Pending: sent, and no answer yet. It
+     * may well have paid the buyer, so it is neither a success nor "nothing
+     * happened" — and pressing Refund again would not help: those tickets are
+     * held by this refund until the processor is asked about it again.
+     * Failed: turned down, or never sent, and nothing moved.
+     *
+     * Except that a refusal can be the processor saying the money has gone
+     * back already, refunded in its own dashboard, and RefundService asks
+     * about that straight away and records what it finds (afterRefusal).
+     * Then the buyer does have their money, the order says so, and "nothing
+     * moved" would be the opposite of true.
+     *
+     * Public so the words can be checked without a processor to refuse.
+     */
+    public static function saidAbout(Order $order, Refund $refund): string|Notification
+    {
+        $processor = self::processorName($order);
+        $why = rtrim((string) ($refund->failure_reason ?: 'no reason given'), '. ');
+
+        if ($refund->status === 'succeeded') {
+            $tickets = $refund->tickets()->count();
+
+            return Listing::format((int) $refund->amount, $refund->currency).' is on its way back to the buyer through '.$processor.'. '
+                .($tickets === 1 ? 'The ticket it was for no longer gets in.' : "The {$tickets} tickets it was for no longer get in.");
+        }
+
         if ($refund->status === 'pending') {
             return Notification::make()
                 ->title('Refund sent, not yet confirmed')
-                ->body('The payment processor has not answered yet. It is asked again automatically, and the order shows the refund once it does. '
+                ->body("Sent to {$processor}, which has not answered yet".($refund->failure_reason ? " ({$why})" : '').'. '
+                    .'The money may already be on its way. It is asked about again automatically, and the order shows the refund once '.$processor.' answers. '
                     .'The tickets keep working until then. Do not refund them again.')
                 ->warning()
                 ->persistent();
         }
 
-        if ($refund->status !== 'succeeded') {
-            throw StaffActionRefused::because('The payment processor did not return the money: '
-                .rtrim((string) ($refund->failure_reason ?: 'no reason given'), '. ').'. Nothing was voided; the attempt is recorded on the order.');
+        $foundElsewhere = (int) Refund::query()
+            ->where('order_id', $order->id)
+            ->where('source', Refund::FROM_PROCESSOR)
+            ->where('status', 'succeeded')
+            ->where('created_at', '>=', $refund->created_at)
+            ->sum('amount');
+
+        if ($foundElsewhere > 0) {
+            return Notification::make()
+                ->title('Refund turned down: the money had already gone back')
+                ->body("{$processor} turned this refund down ({$why}). It had already refunded "
+                    .Listing::format($foundElsewhere, $refund->currency).' of this payment, made in its own dashboard, and that is now recorded on the order. '
+                    .($order->status === 'refunded'
+                        ? 'Nothing is left to refund, and the tickets no longer get in.'
+                        : 'The tickets still work: the organizer has been asked which ones it was for. Do not refund them again.'))
+                ->warning()
+                ->persistent();
         }
 
-        return Listing::format((int) $refund->amount, $refund->currency).' is on its way back to the buyer.';
+        throw StaffActionRefused::because("The refund did not go through: {$why}. No money moved and the tickets still work. The attempt is recorded on the order.");
+    }
+
+    private static function processorName(Order $order): string
+    {
+        return match ($order->gateway) {
+            'stripe' => 'Stripe',
+            'paystack' => 'Paystack',
+            default => 'the payment processor',
+        };
     }
 }

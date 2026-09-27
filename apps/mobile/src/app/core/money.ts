@@ -2,6 +2,9 @@ import {
   currencySymbol as symbolFor,
   formatMoney as format,
 } from '@myfiesta/shared/money';
+import { readAmount, type TypedAmount } from '@myfiesta/shared/money-input';
+
+export { readAmount, type TypedAmount };
 
 /** An amount and its currency, never one without the other. */
 export interface Money {
@@ -30,26 +33,56 @@ export function currencySymbol(currency: string): string {
   return symbolFor(currency);
 }
 
-/** Minor units as the decimal somebody types: 2500 → "25.00". */
-export function toMajor(amount: number | null): string {
-  return amount === null ? '' : (amount / 100).toFixed(2);
+/**
+ * Whether this phone writes cents after a comma, as one set to French does.
+ *
+ * Its decimal keypad then offers a comma and no point, so "25,50" is the only
+ * way its owner can type cents, and it is read that way (readAmount's
+ * commaForCents). Everywhere else a comma is thousands.
+ */
+export function writesCentsAfterComma(locale?: string): boolean {
+  const decimal = new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal');
+
+  return decimal?.value === ',';
 }
 
 /**
- * What somebody typed, as minor units.
+ * Minor units as somebody would type them: 2500 → "25.00", 500000 → "5,000.00".
  *
- * Forgiving about what a keyboard produces — "25", "25.5", "25,50" from a
- * phone set to a comma locale, a pasted "$25.00" — and exact about the result:
- * rounded to the cent here, once, rather than carried as a float that turns
- * 19.99 into 1998.9999 somewhere downstream. Null for anything that is not a
- * number at all.
+ * Grouped in thousands, because on blur this is how somebody sees that "5000"
+ * was taken as five thousand, and written so the box reads it back the same:
+ * commas and a point, or on a phone that writes cents after a comma, spaces
+ * and a comma ("5 000,00").
  */
-export function toMinor(typed: string): number | null {
-  const cleaned = typed.replace(/[^\d.,-]/g, '').replace(',', '.');
+export function toMajor(amount: number | null, commaForCents = writesCentsAfterComma()): string {
+  if (amount === null) return '';
 
-  if (cleaned === '' || cleaned === '.' || cleaned === '-') return null;
+  const size = Math.abs(amount);
+  const whole = Math.floor(size / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, commaForCents ? ' ' : ',');
+  const cents = String(size % 100).padStart(2, '0');
 
-  const value = Number(cleaned);
+  return `${amount < 0 ? '-' : ''}${whole}${commaForCents ? ',' : '.'}${cents}`;
+}
 
-  return Number.isFinite(value) ? Math.round(value * 100) : null;
+/**
+ * What somebody typed, as minor units: "5,000" is 500000.
+ *
+ * It used to turn the comma into a decimal point — a Lagos organizer typing
+ * ₦5,000 put a ticket on sale at ₦5.00. The reading is now the one the
+ * console uses (readAmount, shared): commas and spaces between thousands, one
+ * point before the cents, a currency sign ignored. Null for an empty box and
+ * for anything that could mean more than one amount, like "5,00" on a phone
+ * whose keypad has a point; amountProblem says why.
+ */
+export function toMinor(typed: string, commaForCents = writesCentsAfterComma()): number | null {
+  const reading = readAmount(typed, { commaForCents });
+
+  return reading.kind === 'amount' ? reading.minor : null;
+}
+
+/** What to say under an amount box that cannot be read. Null when it can be, or is empty. */
+export function amountProblem(typed: string, commaForCents = writesCentsAfterComma()): string | null {
+  const reading = readAmount(typed, { commaForCents });
+
+  return reading.kind === 'unclear' ? reading.message : null;
 }

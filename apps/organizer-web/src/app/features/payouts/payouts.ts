@@ -18,8 +18,8 @@ import {
 import { Banknote, Landmark, Pencil, ShieldCheck } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { Money, PayoutRequestRow, PayoutStatement, PayoutDestination } from '../../core/api.types';
-import { formatMoney, toMinorUnits } from '../../core/money';
-import { messageFor } from '../../core/errors';
+import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
+import { isEmailUnverified, messageFor } from '../../core/errors';
 
 /** The destination form, as somebody types it. */
 interface DestinationDraft {
@@ -116,8 +116,11 @@ export class Payouts {
   readonly askTooMuch = computed(() => {
     const balance = this.statement()?.balance.amount ?? 0;
 
-    return this.askAmount() !== '' && toMinorUnits(this.askAmount()) > balance;
+    return (toMinorUnits(this.askAmount()) ?? 0) > balance;
   });
+
+  /** "50,000" is fifty thousand; "50,00" is a question, asked under the box. */
+  readonly askProblem = computed(() => amountProblem(this.askAmount()));
 
   constructor() {
     this.load();
@@ -125,7 +128,7 @@ export class Payouts {
 
   ask(): void {
     const amount = toMinorUnits(this.askAmount());
-    if (amount <= 0 || this.askTooMuch() || this.asking()) return;
+    if (amount === null || amount <= 0 || this.askTooMuch() || this.asking()) return;
 
     this.asking.set(true);
     this.askError.set(null);
@@ -139,6 +142,8 @@ export class Payouts {
       },
       error: (response) => {
         this.asking.set(false);
+        // An unproved address gets the shell's prompt instead.
+        if (isEmailUnverified(response)) return;
         this.askError.set(messageFor(response, 'That request could not be sent.'));
       },
     });
@@ -351,6 +356,9 @@ export class Payouts {
       },
       error: (error) => {
         this.saving.set(false);
+        // An unproved address gets the shell's prompt on top of this form,
+        // which stays open with what was typed.
+        if (isEmailUnverified(error)) return;
         this.formError.set(
           error?.error?.message ?? 'Those details could not be saved. Check them and try again.',
         );

@@ -5,6 +5,7 @@ namespace App\Services\Checkout;
 use App\Mail\TicketsIssued;
 use App\Models\AddOn;
 use App\Models\Code;
+use App\Models\Event;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -89,8 +90,14 @@ class Fulfiller
                 return $locked;
             }
 
+            $nightIsOff = $this->nightIsOff($locked);
+
+            if ($nightIsOff !== null) {
+                return $this->turnAway($locked, $nightIsOff);
+            }
+
             if (! $this->hasRoom($locked)) {
-                return $this->turnAway($locked);
+                return $this->turnAway($locked, TurnedAway::SoldOut);
             }
 
             $locked->update([
@@ -283,6 +290,42 @@ class Fulfiller
     }
 
     /**
+     * Whether the night this order is for is still happening.
+     *
+     * Asked before there is any question of room, and of every payment, late
+     * or not. Money can arrive for a night that has been called off, is over,
+     * was taken down by staff, or whose organizer the platform has suspended —
+     * a Paystack transfer confirming after the organizer cancelled, a buyer
+     * still on the payment page when they did — and there is usually room for
+     * it, because nobody else could buy either. Honoured on room alone, it
+     * became tickets for a night that is not happening, and no refund:
+     * cancelling refunds the orders that were paid when it ran
+     * (EventCanceller), and this one was still pending then.
+     *
+     * "Over" here is once the door has closed, not the listed end. Checkout
+     * stops selling at the listed end, so what arrives between the two is a
+     * payment that was already on its way, for a ticket that still gets
+     * somebody in (TurnedAway::doorCloses).
+     *
+     * Not for a sale at the door. The cash is already in the tin, checkout
+     * refused the sale if the event was off (CheckoutService), and a door can
+     * stay open past the listed end. Nor for a free order, which is fulfilled
+     * in the same request that checked the event was on sale and not over,
+     * and has nothing to send back.
+     */
+    private function nightIsOff(Order $order): ?TurnedAway
+    {
+        if ($order->soldAtDoor() || ! $order->requiresPayment()) {
+            return null;
+        }
+
+        // Read whole, deleted or not: an event gone from every list is still
+        // the one this money was for, and a relation that hides it would read
+        // as no event at all.
+        return TurnedAway::forEvent(Event::withTrashed()->find($order->event_id), now());
+    }
+
+    /**
      * Whether there is room for everything on the order.
      *
      * Ordinarily there is nothing to check. The order still holds, live,
@@ -364,7 +407,7 @@ class Fulfiller
     }
 
     /**
-     * A payment for places that have gone.
+     * A payment for places that have gone, or for a night that is off.
      *
      * Nothing is issued, so nothing is oversold. The money arrived all the
      * same, and it goes back — all of it, automatically, because the buyer
@@ -380,17 +423,20 @@ class Fulfiller
      * the internet, and doing that inside this transaction would hold the
      * order — and the ticket types just counted — locked for as long as the
      * processor takes to answer. The buyer is told once the processor has
-     * accepted it, so the email is true when it is read.
+     * accepted it, so the email is true when it is read — and says why, from
+     * the reason the refund carries (TurnedAway): places that had gone, or a
+     * night that is not happening.
      */
-    private function turnAway(Order $order): Order
+    private function turnAway(Order $order, TurnedAway $why): Order
     {
         // Whatever of it was still held goes back on sale now.
         $this->releaseHolds($order);
 
-        app(Auditor::class)->record('order.sold_out_while_paying', $order, metadata: [
+        app(Auditor::class)->record($why->auditAction(), $order, metadata: [
             'reference' => $order->reference,
             'total' => $order->total_amount,
             'currency' => $order->currency,
+            'why' => $why->value,
         ]);
 
         // A free order has nothing to give back. It is closed, and that is
@@ -408,7 +454,7 @@ class Fulfiller
                 : GatewayFee::on($order->total, $order->gateway)->amount,
         ]);
 
-        DB::afterCommit(fn () => $this->giveItBack($order));
+        DB::afterCommit(fn () => $this->giveItBack($order, $why));
 
         return $order->refresh();
     }
@@ -424,13 +470,14 @@ class Fulfiller
      * already under way is a second delivery arriving behind the first, and
      * the first is dealing with it.
      */
-    private function giveItBack(Order $order): void
+    private function giveItBack(Order $order, TurnedAway $why): void
     {
         try {
-            app(RefundService::class)->refundUnfulfilled($order, 'Sold out while the buyer was paying.');
+            app(RefundService::class)->refundUnfulfilled($order, $why->refundReason());
         } catch (RefundRefused $e) {
-            Log::warning('A payment for places that had gone was not refunded here.', [
+            Log::warning('A payment that became no tickets was not refunded here.', [
                 'order' => $order->reference,
+                'why' => $why->value,
                 'reason' => $e->getMessage(),
             ]);
         }

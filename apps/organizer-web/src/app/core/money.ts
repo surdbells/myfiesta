@@ -1,5 +1,8 @@
 import { formatMoney as format } from '@myfiesta/shared/money';
+import { readAmount } from '@myfiesta/shared/money-input';
 import { Money } from './api.types';
+
+export { readAmount, type TypedAmount } from '@myfiesta/shared/money-input';
 
 /**
  * Minor units to something a person reads.
@@ -17,11 +20,27 @@ export function formatMoney(money: Money | null | undefined): string {
   return format(money);
 }
 
-/** What a person types, back to minor units. */
-export function toMinorUnits(major: string | number): number {
-  const value = typeof major === 'number' ? major : parseFloat(major);
+/**
+ * What a person typed, back to minor units: "5,000" is 500000.
+ *
+ * Null when there is no amount to take — nothing typed, or something that
+ * could mean more than one amount (see readAmount, shared with the phone). It
+ * used to be parseFloat, which stops at the first comma: a ₦5,000 ticket was
+ * saved at ₦5, and anything it could not read at all went through as zero,
+ * which is free. A box that cannot be read now stops the save and says why
+ * (amountProblem) instead.
+ */
+export function toMinorUnits(typed: string | number | null | undefined): number | null {
+  const reading = readAmount(typed);
 
-  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+  return reading.kind === 'amount' ? reading.minor : null;
+}
+
+/** What to say under an amount box that cannot be read. Null when it can be, or is empty. */
+export function amountProblem(typed: string | number | null | undefined): string | null {
+  const reading = readAmount(typed);
+
+  return reading.kind === 'unclear' ? reading.message : null;
 }
 
 export function toMajorUnits(minor: number): number {

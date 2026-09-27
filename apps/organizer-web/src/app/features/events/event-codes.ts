@@ -8,7 +8,7 @@ import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { CodeSales, OrganizerEventDetail, PageMeta, PromoCode, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
-import { formatMoney, toMinorUnits } from '../../core/money';
+import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
 import { describeZone, isoToZonedWallClock, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 import { SessionStore } from '../../core/session';
 
@@ -107,6 +107,13 @@ export class EventCodes implements OnInit {
   ];
 
   readonly discounts = computed(() => this.form().kind === 'discount' || this.form().kind === 'both');
+
+  /** A fixed amount is money, and is read as money is typed: "5,000" is five thousand. */
+  readonly discountProblem = computed(() => {
+    const form = this.form();
+
+    return this.discounts() && form.discount_type === 'fixed' ? amountProblem(form.discount_value) : null;
+  });
   readonly attributes = computed(() => this.form().kind === 'promoter' || this.form().kind === 'both');
 
   /** A presale-only code has to open something, or it does nothing at all. */
@@ -289,7 +296,8 @@ export class EventCodes implements OnInit {
   }
 
   submit(): void {
-    if (this.saving()) return;
+    // Said under the box already. Sent anyway, it would go as no discount.
+    if (this.saving() || this.discountProblem()) return;
 
     const form = this.form();
 

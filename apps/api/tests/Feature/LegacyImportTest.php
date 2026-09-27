@@ -107,6 +107,51 @@ class LegacyImportTest extends TestCase
         $this->assertStringContainsString('timezone', (string) $inferred);
     }
 
+    public function test_an_event_is_never_given_a_link_the_sites_own_pages_answer(): void
+    {
+        // Event pages live at the root, beside the site's own. An old event
+        // called "Events", and one whose old slug was "refunds", would each be
+        // given a link that opens the site's page instead of theirs.
+        DB::connection('legacy')->table('events')->insert([
+            [
+                'id' => 178, '_organizer' => '26', '_title' => 'Events',
+                '_category' => 'Nightlife', '_location' => 'Toronto',
+                '_timezone' => null, '_province' => 'ON', '_venue' => 'The Room',
+                '_description' => '', '_start_date' => '2024-07-01',
+                '_start_time' => '22:00', '_slug' => null, '_dress_code' => null,
+                '_identity_req' => false, '_status' => 'PUBLISHED', 'is_featured' => false,
+                'created' => '2024-06-01 12:00:00',
+            ],
+            [
+                'id' => 179, '_organizer' => '26', '_title' => 'Refund Party',
+                '_category' => 'Nightlife', '_location' => 'Toronto',
+                '_timezone' => null, '_province' => 'ON', '_venue' => 'The Room',
+                '_description' => '', '_start_date' => '2024-07-02',
+                '_start_time' => '22:00', '_slug' => 'Refunds', '_dress_code' => null,
+                '_identity_req' => false, '_status' => 'PUBLISHED', 'is_featured' => false,
+                'created' => '2024-06-01 12:00:00',
+            ],
+        ]);
+
+        $this->import();
+
+        $this->assertSame('events-2', Event::where('title', 'Events')->sole()->slug);
+        $this->assertSame('refunds-2', Event::where('title', 'Refund Party')->sole()->slug);
+
+        foreach (Event::query()->pluck('slug') as $slug) {
+            $this->assertNotContains($slug, Event::RESERVED_SLUGS);
+        }
+
+        // Where it went, on the record beside why.
+        $this->assertStringContainsString(
+            "'refunds' is one of this site's own pages",
+            (string) DB::table('legacy_map')->where('source_table', 'events')->where('source_id', '179')->value('inferred'),
+        );
+
+        // An ordinary title still gets its own words.
+        $this->assertSame('standard-night', Event::where('title', 'Standard Night')->sole()->slug);
+    }
+
     public function test_an_unrecognised_status_drafts_rather_than_publishes(): void
     {
         $this->import();

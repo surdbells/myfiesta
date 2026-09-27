@@ -13,8 +13,11 @@ use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\Disputes\RiskSignals;
+use App\Services\Refunds\RefundService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -87,6 +90,15 @@ class DisputeTest extends TestCase
             'paid_at' => now(),
         ]);
 
+        // What a refund splits the money by.
+        $order->lines()->create([
+            'ticket_type_id' => $this->event->ticketTypes()->value('id'),
+            'name' => 'General',
+            'unit_price_amount' => 5000,
+            'quantity' => $tickets,
+            'line_total_amount' => 5000 * $tickets,
+        ]);
+
         for ($i = 0; $i < $tickets; $i++) {
             Ticket::create([
                 'event_id' => $this->event->id,
@@ -132,6 +144,19 @@ class DisputeTest extends TestCase
             ],
             content: $payload,
         );
+    }
+
+    /** Stripe saying yes to a refund, for the amount it was asked for. */
+    private function stripeAcceptsRefunds(): void
+    {
+        Http::fake([
+            'api.stripe.com/v1/refunds*' => fn (Request $request) => Http::response([
+                'id' => 're_'.Str::random(10),
+                'amount' => (int) $request['amount'],
+                'currency' => 'cad',
+                'status' => 'succeeded',
+            ]),
+        ]);
     }
 
     private function disputeObject(array $overrides = []): array
@@ -212,6 +237,76 @@ class DisputeTest extends TestCase
         $this->stripe('charge.dispute.closed', $this->disputeObject(['status' => 'lost']), 'evt_close_two')->assertOk();
 
         $this->assertSame(1, LedgerEntry::where('type', 'chargeback')->count());
+    }
+
+    public function test_losing_after_a_partial_refund_takes_back_only_what_is_left(): void
+    {
+        $this->stripeAcceptsRefunds();
+
+        // One of the two tickets refunded by the organizer, then the whole
+        // payment disputed and lost.
+        app(RefundService::class)->refund($this->order, [$this->order->tickets()->orderBy('id')->value('id')]);
+
+        $this->assertSame(5000, (int) LedgerEntry::where('order_id', $this->order->id)->sum('amount'));
+
+        $this->stripe('charge.dispute.created', $this->disputeObject())->assertOk();
+        $this->stripe('charge.dispute.closed', $this->disputeObject(['status' => 'lost']))->assertOk();
+
+        // The half they still had, not the whole order a second time.
+        $this->assertSame(-5000, (int) LedgerEntry::where('type', 'chargeback')->sole()->amount);
+        $this->assertSame(0, (int) LedgerEntry::where('order_id', $this->order->id)->sum('amount'));
+
+        // The ticket still working stops; the refunded one stays refunded.
+        $this->assertSame(['refunded', 'void'], Ticket::where('order_id', $this->order->id)->orderBy('status')->pluck('status')->all());
+    }
+
+    public function test_losing_a_fully_refunded_order_takes_back_nothing(): void
+    {
+        $this->stripeAcceptsRefunds();
+
+        app(RefundService::class)->refund($this->order);
+
+        $this->stripe('charge.dispute.created', $this->disputeObject())->assertOk();
+        $this->stripe('charge.dispute.closed', $this->disputeObject(['status' => 'lost']))->assertOk();
+
+        $this->assertSame('lost', Dispute::sole()->status);
+
+        // The organizer gave it all back already. Charging them again would
+        // take money they do not have.
+        $this->assertSame(0, LedgerEntry::where('type', 'chargeback')->count());
+        $this->assertSame(0, (int) LedgerEntry::where('order_id', $this->order->id)->sum('amount'));
+    }
+
+    public function test_losing_an_order_that_was_never_a_sale_takes_back_nothing(): void
+    {
+        // A late payment for places that had gone: refunded whole, with no
+        // tickets and no sale ever written for the organizer.
+        $late = Order::create([
+            'organization_id' => $this->org->id,
+            'event_id' => $this->event->id,
+            'reference' => strtoupper(Str::random(10)),
+            'buyer_email' => 'late@example.com',
+            'buyer_name' => 'Late Buyer',
+            'currency' => 'CAD',
+            'subtotal_amount' => 5000,
+            'total_amount' => 5000,
+            'net_revenue_amount' => 5000,
+            'gateway' => 'stripe',
+            'gateway_reference' => 'cs_'.Str::random(10),
+            'gateway_payment_reference' => 'pi_late',
+            'status' => 'refunded',
+            'paid_at' => now(),
+            'refunded_at' => now(),
+        ]);
+
+        $this->stripe('charge.dispute.created', $this->disputeObject(['id' => 'dp_late', 'payment_intent' => 'pi_late', 'amount' => 5000]))->assertOk();
+        $this->stripe('charge.dispute.closed', $this->disputeObject(['id' => 'dp_late', 'payment_intent' => 'pi_late', 'amount' => 5000, 'status' => 'lost']))->assertOk();
+
+        $this->assertSame('lost', Dispute::where('order_id', $late->id)->sole()->status);
+        $this->assertSame(0, LedgerEntry::where('order_id', $late->id)->count());
+
+        // And nobody else's balance pays for it either.
+        $this->assertSame(10000, (int) LedgerEntry::where('organization_id', $this->org->id)->sum('amount'));
     }
 
     public function test_winning_leaves_everything_where_it_was(): void

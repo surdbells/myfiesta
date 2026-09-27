@@ -3,20 +3,27 @@
 namespace Tests\Feature;
 
 use App\Contracts\Payments\PaymentGatewayRegistry;
+use App\Enums\PlatformRole;
+use App\Exceptions\CheckoutException;
 use App\Mail\SoldOutWhilePaying;
 use App\Mail\TicketsIssued;
 use App\Models\AddOn;
 use App\Models\AuditLog;
 use App\Models\Event;
+use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Models\Refund;
 use App\Models\Ticket;
 use App\Models\TicketType;
+use App\Models\User;
 use App\Services\Checkout\AbandonedCheckouts;
 use App\Services\Checkout\CheckoutService;
 use App\Services\Checkout\Fulfiller;
+use App\Services\Checkout\TurnedAway;
+use App\Services\Door\DoorPasses;
+use App\Services\Organizations\Suspension;
 use Database\Seeders\TaxRateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -419,6 +426,323 @@ class LatePaymentTest extends TestCase
             && (int) $request['amount'] === $late->total_amount);
 
         Mail::assertQueued(SoldOutWhilePaying::class, fn (SoldOutWhilePaying $mail) => $mail->hasTo('late@example.com'));
+    }
+
+    // --- a night that is not happening ---------------------------------------
+
+    public function test_a_late_payment_for_an_event_cancelled_since_is_refunded_not_issued(): void
+    {
+        $type = $this->tier(50);
+
+        $late = $this->checkout([$type->id => 2], 'late@example.com');
+        $this->walkAway();
+
+        // Called off while the buyer's bank was still deciding. There is
+        // plenty of room — nobody else can buy either — and room is not the
+        // question any more.
+        $this->event->update(['status' => 'cancelled', 'cancelled_at' => now(), 'cancellation_reason' => 'The venue flooded.']);
+
+        $this->pay($late)->assertOk();
+
+        $late->refresh();
+
+        $this->assertSame(0, $late->tickets()->count());
+        $this->assertSame('refunded', $late->status);
+
+        // Every penny back, the same way a sold-out late payment goes back.
+        $refund = $late->refunds()->sole();
+        $this->assertSame('succeeded', $refund->status);
+        $this->assertSame($late->total_amount, (int) $refund->amount);
+        $this->assertSame($late->service_charge_amount, (int) $refund->service_charge_amount);
+        $this->assertSame(TurnedAway::Cancelled->refundReason(), $refund->reason);
+
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), '/v1/refunds')
+            && ($request->data()['metadata']['reason'] ?? null) === 'The event was cancelled before the payment arrived.');
+
+        // Never a sale, so never on the organizer's balance.
+        $this->assertSame(0, LedgerEntry::where('order_id', $late->id)->count());
+
+        $this->assertTrue(AuditLog::where('action', 'order.event_cancelled_while_paying')->where('subject_id', $late->id)->exists());
+        $this->assertFalse(AuditLog::where('action', 'order.sold_out_while_paying')->exists());
+
+        // Told it was cancelled, not that it sold out.
+        Mail::assertNotQueued(TicketsIssued::class);
+        Mail::assertQueued(SoldOutWhilePaying::class, fn (SoldOutWhilePaying $mail) => $mail->hasTo('late@example.com')
+            && $mail->why() === TurnedAway::Cancelled);
+    }
+
+    public function test_a_payment_still_holding_its_places_is_refunded_when_the_event_was_called_off(): void
+    {
+        $type = $this->tier(50);
+
+        // On the payment page, hold live, when the organizer cancelled. The
+        // cancellation refunded every paid order; this one was not paid yet.
+        $order = $this->checkout([$type->id => 1], 'onthepage@example.com');
+        $this->event->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+
+        $this->pay($order)->assertOk();
+
+        $order->refresh();
+        $this->assertSame(0, $order->tickets()->count());
+        $this->assertSame('refunded', $order->status);
+        $this->assertSame(0, $order->holds()->count(), 'The hold goes; there is nothing left to hold it for.');
+        $this->assertSame(1, $this->refundsAskedFor());
+    }
+
+    public function test_a_payment_for_an_event_staff_took_down_is_refunded(): void
+    {
+        $type = $this->tier(50);
+
+        $late = $this->checkout([$type->id => 1], 'late@example.com');
+        $this->walkAway();
+
+        $this->event->update([
+            'status' => 'draft',
+            'taken_down_at' => now(),
+            'taken_down_reason' => 'Reported as a copy of another promoter\'s event.',
+        ]);
+
+        $this->pay($late)->assertOk();
+
+        $late->refresh();
+        $this->assertSame(0, $late->tickets()->count());
+        $this->assertSame('refunded', $late->status);
+        $this->assertSame(TurnedAway::TakenDown->refundReason(), $late->refunds()->sole()->reason);
+        $this->assertTrue(AuditLog::where('action', 'order.event_taken_down_while_paying')->where('subject_id', $late->id)->exists());
+
+        Mail::assertQueued(SoldOutWhilePaying::class, fn (SoldOutWhilePaying $mail) => $mail->why() === TurnedAway::TakenDown);
+    }
+
+    public function test_a_payment_that_arrives_after_the_event_ended_is_refunded(): void
+    {
+        $this->event->update(['ends_at' => $this->event->starts_at->copy()->addHours(5)]);
+        $type = $this->tier(50);
+
+        $late = $this->checkout([$type->id => 1], 'late@example.com');
+
+        // The transfer confirms the morning after.
+        $this->travelTo($this->event->starts_at->copy()->addHours(9));
+
+        $this->pay($late)->assertOk();
+
+        $late->refresh();
+        $this->assertSame(0, $late->tickets()->count());
+        $this->assertSame('refunded', $late->status);
+        $this->assertSame(TurnedAway::Ended->refundReason(), $late->refunds()->sole()->reason);
+        $this->assertTrue(AuditLog::where('action', 'order.event_ended_while_paying')->where('subject_id', $late->id)->exists());
+
+        Mail::assertQueued(SoldOutWhilePaying::class, fn (SoldOutWhilePaying $mail) => $mail->why() === TurnedAway::Ended);
+    }
+
+    public function test_a_payment_during_the_night_is_still_honoured(): void
+    {
+        $type = $this->tier(50);
+
+        $late = $this->checkout([$type->id => 1], 'late@example.com');
+
+        // Started two hours ago and nothing says it has finished: an event
+        // with no end time runs half a day, as far as the door is concerned.
+        $this->travelTo($this->event->starts_at->copy()->addHours(2));
+
+        $this->pay($late)->assertOk();
+
+        $this->assertSame('paid', $late->fresh()->status);
+        $this->assertSame(1, $late->tickets()->count());
+        $this->assertSame(0, $this->refundsAskedFor());
+    }
+
+    public function test_an_event_with_no_end_time_is_over_once_its_door_closes_after_half_a_day(): void
+    {
+        $type = $this->tier(50);
+
+        $late = $this->checkout([$type->id => 1], 'late@example.com');
+
+        // Half a day in, the listing is over but the door is not: a ticket
+        // bought now still gets somebody in.
+        $this->travelTo($this->event->starts_at->copy()->addHours(TurnedAway::HOURS_WITHOUT_AN_END)->addMinute());
+        $this->assertNull(TurnedAway::forEvent($this->event->fresh(), now()));
+
+        $this->travelTo($this->event->starts_at->copy()->addHours(TurnedAway::HOURS_WITHOUT_AN_END + DoorPasses::GRACE_HOURS)->addMinute());
+
+        $this->pay($late)->assertOk();
+
+        $this->assertSame('refunded', $late->fresh()->status);
+        $this->assertSame(0, $late->tickets()->count());
+    }
+
+    public function test_a_payment_on_its_way_at_the_listed_end_is_honoured_while_the_door_is_open(): void
+    {
+        $this->event->update(['ends_at' => $this->event->starts_at->copy()->addHours(5)]);
+        $type = $this->tier(50);
+
+        // Started paying five minutes before the end, as it says on the page.
+        $this->travelTo($this->event->ends_at->copy()->subMinutes(5));
+        $order = $this->checkout([$type->id => 1], 'lastminute@example.com');
+
+        // And the payment lands twenty minutes after it. The door is still
+        // open, so this is a ticket that gets somebody in, not one to refund.
+        $this->travelTo($this->event->ends_at->copy()->addMinutes(20));
+
+        $this->pay($order)->assertOk();
+
+        $order->refresh();
+        $this->assertSame('paid', $order->status);
+        $this->assertSame(1, $order->tickets()->count());
+        $this->assertSame(0, $this->refundsAskedFor());
+        $this->assertSame($order->net_revenue_amount, (int) LedgerEntry::where('order_id', $order->id)->sum('amount'));
+        Mail::assertQueued(TicketsIssued::class);
+        Mail::assertNotQueued(SoldOutWhilePaying::class);
+    }
+
+    public function test_checkout_stops_selling_online_at_the_listed_end(): void
+    {
+        $this->event->update(['ends_at' => $this->event->starts_at->copy()->addHours(5)]);
+        $type = $this->tier(50);
+        $free = TicketType::create([
+            'event_id' => $this->event->id,
+            'name' => 'Guest list',
+            'price_amount' => 0,
+            'status' => 'on_sale',
+            'quantity_available' => 50,
+        ]);
+
+        // An hour after the end, still published, and no sales end on the
+        // tier. It used to take the money and then send it straight back,
+        // keeping nothing but the processor's fee — which was the platform's.
+        $this->travelTo($this->event->ends_at->copy()->addHour());
+
+        foreach ([$type, $free] as $tier) {
+            try {
+                app(CheckoutService::class)->reserve($this->event->fresh(), [$tier->id => 1], 'late@example.com', 'Ada Okafor');
+                $this->fail("A ticket for a night that is over was reserved ({$tier->name}).");
+            } catch (CheckoutException $e) {
+                $this->assertSame('This event has ended, so tickets for it are no longer on sale.', $e->getMessage());
+            }
+        }
+
+        // Said at the quote, before anybody types a card number.
+        $this->postJson("/api/events/{$this->event->slug}/quote", [
+            'items' => [['ticket_type_id' => $type->id, 'quantity' => 1]],
+        ])->assertStatus(422)->assertJsonPath('message', 'This event has ended, so tickets for it are no longer on sale.');
+
+        $this->assertSame(0, Order::count());
+        $this->assertSame(0, InventoryHold::count());
+        $this->assertSame(0, $this->refundsAskedFor());
+    }
+
+    public function test_a_door_sale_after_the_listed_end_is_still_a_sale(): void
+    {
+        // The party ran late. The door is still open, the cash is in the
+        // tin, and there is no processor to send it back through.
+        $this->event->update([
+            'starts_at' => now()->subHours(6),
+            'ends_at' => now()->subHour(),
+        ]);
+        $type = $this->tier(50);
+
+        $order = app(CheckoutService::class)->reserve(
+            $this->event, [$type->id => 1], null, 'Door sale',
+            channel: 'door', paymentMethod: 'cash', soldBy: User::factory()->create(),
+        );
+
+        app(Fulfiller::class)->fulfil($order);
+
+        $this->assertSame('paid', $order->fresh()->status);
+        $this->assertSame(1, $order->tickets()->count());
+        $this->assertSame(0, Refund::count());
+    }
+
+    public function test_a_payment_for_an_organizer_suspended_meanwhile_is_refunded(): void
+    {
+        $type = $this->tier(50);
+
+        // On the payment page, places held, when staff suspended the
+        // organizer. Checkout would refuse this buyer now; their payment was
+        // already on its way.
+        $order = $this->checkout([$type->id => 2], 'onthepage@example.com');
+
+        app(Suspension::class)->suspend(
+            Organization::findOrFail($this->event->organization_id),
+            User::factory()->create(['platform_role' => PlatformRole::Admin, 'email_verified_at' => now()]),
+            'Chargebacks on three events in a week.',
+        );
+
+        $this->assertSame('draft', $this->event->fresh()->status);
+
+        $this->pay($order)->assertOk();
+
+        $order->refresh();
+
+        // No tickets for a sale the platform stopped, and nothing on the
+        // balance of an organization whose money is frozen.
+        $this->assertSame(0, $order->tickets()->count());
+        $this->assertSame('refunded', $order->status);
+        $this->assertSame(0, $order->holds()->count());
+        $this->assertSame(0, LedgerEntry::where('order_id', $order->id)->count());
+
+        $refund = $order->refunds()->sole();
+        $this->assertSame($order->total_amount, (int) $refund->amount);
+        $this->assertSame(TurnedAway::Suspended->refundReason(), $refund->reason);
+        $this->assertTrue(AuditLog::where('action', 'order.organizer_suspended_while_paying')->where('subject_id', $order->id)->exists());
+
+        Mail::assertNotQueued(TicketsIssued::class);
+        Mail::assertQueued(SoldOutWhilePaying::class, fn (SoldOutWhilePaying $mail) => $mail->hasTo('onthepage@example.com')
+            && $mail->why() === TurnedAway::Suspended);
+    }
+
+    public function test_a_payment_after_a_suspension_was_lifted_is_honoured(): void
+    {
+        $type = $this->tier(50);
+        $organization = Organization::findOrFail($this->event->organization_id);
+        $admin = User::factory()->create(['platform_role' => PlatformRole::Admin, 'email_verified_at' => now()]);
+
+        $order = $this->checkout([$type->id => 1], 'patient@example.com');
+
+        app(Suspension::class)->suspend($organization, $admin, 'Chargebacks on three events in a week.');
+        app(Suspension::class)->unsuspend($organization, $admin, 'Looked into; nothing wrong.');
+
+        $this->pay($order)->assertOk();
+
+        $this->assertSame('paid', $order->fresh()->status);
+        $this->assertSame(1, $order->tickets()->count());
+        $this->assertSame(0, $this->refundsAskedFor());
+    }
+
+    public function test_each_reason_is_told_in_its_own_words(): void
+    {
+        $type = $this->tier(1);
+
+        $late = $this->checkout([$type->id => 1], 'late@example.com');
+        $this->walkAway();
+        $this->pay($this->checkout([$type->id => 1], 'prompt@example.com'));
+        $this->pay($late);
+
+        $refund = $late->refunds()->sole();
+
+        $said = fn (TurnedAway $why) => (new SoldOutWhilePaying($late->fresh(), tap($refund->replicate(), fn (Refund $r) => $r->reason = $why->refundReason())))->render();
+
+        $this->assertStringContainsString('Afro Fest has been cancelled', $said(TurnedAway::Cancelled));
+        $this->assertStringContainsString('after the event had ended', $said(TurnedAway::Ended));
+        $this->assertStringContainsString('Afro Fest is no longer on sale', $said(TurnedAway::TakenDown));
+
+        // A suspension is between the platform and the organizer. The buyer
+        // hears what checkout would have told them, and nothing about why.
+        $this->assertStringContainsString('Afro Fest is no longer on sale', $said(TurnedAway::Suspended));
+        $this->assertStringContainsString('no longer selling tickets on myFiesta', $said(TurnedAway::Suspended));
+        $this->assertStringNotContainsStringIgnoringCase('suspend', $said(TurnedAway::Suspended));
+
+        foreach ([TurnedAway::Cancelled, TurnedAway::Suspended, TurnedAway::Ended, TurnedAway::TakenDown] as $why) {
+            $html = $said($why);
+
+            $this->assertStringNotContainsString('sold out', $html);
+            $this->assertStringContainsString('CA$'.number_format($late->total_amount / 100, 2), $html);
+            $this->assertStringContainsString($late->reference, $html);
+        }
+
+        // A refund written before there was more than one reason said sold
+        // out, and still does.
+        $this->assertSame(TurnedAway::SoldOut, TurnedAway::fromRefundReason(null));
+        $this->assertStringContainsString('sold out while you were paying', $said(TurnedAway::SoldOut));
     }
 
     // --- orders that are not waiting for a payment --------------------------

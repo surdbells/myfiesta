@@ -74,17 +74,33 @@
               How much off ({{ currency() }})
             }
           </label>
-          <input
-            id="discountValue"
-            name="discountValue"
-            type="number"
-            min="0"
-            step="0.01"
-            required
-            [ngModel]="form().discount_value"
-            (ngModelChange)="form.set({ ...form(), discount_value: $event })"
-          />
-          @if (form().discount_type === 'fixed') {
+          @if (form().discount_type === 'percentage') {
+            <input
+              id="discountValue"
+              name="discountValue"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              [ngModel]="form().discount_value"
+              (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+            />
+          } @else {
+            <!-- Text, not a number box: a number box throws away "5,000", which is how naira are typed. -->
+            <input
+              id="discountValue"
+              name="discountValue"
+              inputmode="decimal"
+              autocomplete="off"
+              required
+              [attr.aria-invalid]="discountProblem() ? 'true' : null"
+              [ngModel]="form().discount_value"
+              (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+            />
+          }
+          @if (discountProblem(); as problem) {
+            <p class="help text-xs text-danger" role="alert">{{ problem }}</p>
+          } @else if (form().discount_type === 'fixed') {
             <p class="help text-xs text-text-muted">
               Only usable on events priced in {{ currency() }} — a fixed amount carries
               its currency with it.
@@ -258,7 +274,7 @@
     <p class="help -mt-2 text-xs text-text-muted">Times are {{ zoneName() }}, where the event is.</p>
 
     <div class="actions flex items-center gap-4">
-      <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim() || needsUnlock()">
+      <button uiButton type="submit" [loading]="saving()" [disabled]="saving() || !form().code.trim() || needsUnlock() || !!discountProblem()">
         @if (saving()) {
           Saving…
         } @else if (editing()) {

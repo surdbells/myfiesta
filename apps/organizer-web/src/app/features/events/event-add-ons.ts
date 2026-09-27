@@ -20,7 +20,7 @@ import { Api } from '../../core/api';
 import { AddOn } from '../../core/api.types';
 import { eventIdFrom } from '../../core/event-id';
 import { messageFor } from '../../core/errors';
-import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
+import { amountProblem, formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 
 /** An add-on as the form holds it, before it becomes an API body. */
 interface AddOnDraft {
@@ -98,9 +98,19 @@ export class EventAddOns {
 
   readonly formatMoney = formatMoney;
 
+  /**
+   * A price that reads as one amount, or nothing to save.
+   *
+   * It used to be read with parseFloat, and anything that was not a number
+   * came out as zero: an empty box, or "abc", saved the add-on as free, and
+   * "5,000" saved it at 5.
+   */
   readonly canSave = computed(
-    () => this.draft().name.trim().length >= 2 && toMinorUnits(this.draft().price) >= 0,
+    () => this.draft().name.trim().length >= 2 && toMinorUnits(this.draft().price) !== null,
   );
+
+  /** Why the price cannot be read, under the box. */
+  readonly priceError = computed(() => amountProblem(this.draft().price));
 
   /** What has been taken on extras, at face value. */
   readonly takings = computed(() => {
@@ -163,15 +173,17 @@ export class EventAddOns {
   }
 
   save(): void {
-    if (!this.canSave() || this.saving()) return;
-
     const draft = this.draft();
+    const price = toMinorUnits(draft.price);
+
+    if (!this.canSave() || this.saving() || price === null) return;
+
     const editing = this.editing();
 
     const body = {
       name: draft.name.trim(),
       description: draft.description.trim() || null,
-      price_amount: toMinorUnits(draft.price),
+      price_amount: price,
       quantity_available: this.number(draft.quantity),
       max_per_order: this.number(draft.maxPerOrder),
       status: draft.status,

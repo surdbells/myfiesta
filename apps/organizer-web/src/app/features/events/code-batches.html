@@ -79,16 +79,31 @@
             <label for="batchDiscountValue">
               @if (form().discount_type === 'percentage') { How much off (%) } @else { How much off ({{ currency() }}) }
             </label>
-            <input
-              id="batchDiscountValue"
-              name="batchDiscountValue"
-              type="number"
-              min="0"
-              step="0.01"
-              [ngModel]="form().discount_value"
-              (ngModelChange)="form.set({ ...form(), discount_value: $event })"
-            />
-            @if (form().discount_type === 'percentage' && form().discount_value === '100') {
+            @if (form().discount_type === 'percentage') {
+              <input
+                id="batchDiscountValue"
+                name="batchDiscountValue"
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="form().discount_value"
+                (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+              />
+            } @else {
+              <!-- Text, not a number box: a number box throws away "5,000", which is how naira are typed. -->
+              <input
+                id="batchDiscountValue"
+                name="batchDiscountValue"
+                inputmode="decimal"
+                autocomplete="off"
+                [attr.aria-invalid]="discountProblem() ? 'true' : null"
+                [ngModel]="form().discount_value"
+                (ngModelChange)="form.set({ ...form(), discount_value: $event })"
+              />
+            }
+            @if (discountProblem(); as problem) {
+              <p class="help text-xs text-danger" role="alert">{{ problem }}</p>
+            } @else if (form().discount_type === 'percentage' && form().discount_value === '100') {
               <p class="help text-xs text-text-muted">A free ticket for whoever holds one.</p>
             }
           </div>

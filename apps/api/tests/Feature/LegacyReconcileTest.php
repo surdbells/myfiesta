@@ -9,9 +9,11 @@ use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\Refund;
 use App\Models\Ticket;
+use App\Models\WebhookEndpoint;
 use App\Services\Legacy\LegacyImporter;
 use App\Services\Legacy\LegacyMap;
 use App\Services\Legacy\StripeRefundRecorder;
+use App\Services\Refunds\RefundService;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -60,8 +62,8 @@ class LegacyReconcileTest extends TestCase
         // Pacing and backoff are real waits in production and none here.
         Sleep::fake();
 
-        // --apply records the way a dashboard refund is recorded, and that
-        // tells the organizer.
+        // --apply records the way a dashboard refund is recorded, which
+        // would tell the organizer — and here must not.
         Mail::fake();
 
         $this->storage = sys_get_temp_dir().DIRECTORY_SEPARATOR.'legacy-reconcile-'.bin2hex(random_bytes(6));
@@ -297,9 +299,21 @@ class LegacyReconcileTest extends TestCase
         $this->assertSame(2, AuditLog::where('action', 'refund.made_elsewhere')->count());
         $this->assertSame(2, Refund::count());
 
-        // The organizer is told, once per refund, as for any dashboard refund.
-        Mail::assertQueued(RefundMadeElsewhere::class, 2);
-        Mail::assertQueued(RefundMadeElsewhere::class, fn (RefundMadeElsewhere $mail) => $mail->hasTo('ada@lagosnights.test'));
+        // Quietly. These went back before the switch; an email for each on
+        // the day of it is not news. The audit trail says so, and so does the
+        // report.
+        Mail::assertNotQueued(RefundMadeElsewhere::class);
+        Mail::assertNothingOutgoing();
+
+        foreach (['refund.made_elsewhere', 'refund.reconciled'] as $action) {
+            $this->assertSame(
+                [false, false],
+                AuditLog::where('action', $action)->get()->map(fn (AuditLog $log) => $log->metadata['organizer_told'])->all(),
+            );
+        }
+
+        $this->assertStringEndsWith('part of the order: no ticket stopped', $this->actions()['25']);
+        $this->assertStringNotContainsString('no ticket stopped', $this->actions()['17']);
 
         // The same again. Nothing new, and the report now agrees with Stripe.
         $ledger = LedgerEntry::count();
@@ -311,7 +325,36 @@ class LegacyReconcileTest extends TestCase
         $this->assertSame(2, AuditLog::where('action', 'refund.reconciled')->count());
         $this->assertSame('matched', $this->outcomes()['17']);
         $this->assertSame('matched', $this->outcomes()['25']);
-        Mail::assertQueued(RefundMadeElsewhere::class, 2);
+        Mail::assertNothingOutgoing();
+    }
+
+    public function test_apply_does_not_announce_old_refunds_to_the_organizers_integrations_either(): void
+    {
+        // An organizer who connected something after the switch. It never
+        // heard of these orders as paid, and "refunded" about one would be a
+        // row it has nothing to match against.
+        $endpoint = WebhookEndpoint::create([
+            'organization_id' => $this->order(17)->organization_id,
+            'url' => 'https://hooks.example.com/in',
+            'secret' => 'whsec_test',
+            'events' => WebhookEndpoint::EVENTS,
+        ]);
+
+        $this->artisan('legacy:reconcile --apply')->assertSuccessful();
+
+        $this->assertSame('refunded', $this->order(17)->status);
+        $this->assertSame(0, $endpoint->deliveries()->where('event', 'order.refunded')->count());
+    }
+
+    public function test_the_same_refund_made_in_the_dashboard_after_the_cutover_is_still_told(): void
+    {
+        // The quiet option is the cutover's alone. A dashboard refund today is
+        // news, and the organizer hears it.
+        $refund = app(RefundService::class)->recordMadeElsewhere($this->order(25), 540, 're_today');
+
+        $this->assertNotNull($refund);
+        Mail::assertQueued(RefundMadeElsewhere::class, fn (RefundMadeElsewhere $mail) => $mail->hasTo('ada@lagosnights.test'));
+        $this->assertTrue(AuditLog::where('action', 'refund.made_elsewhere')->sole()->metadata['organizer_told']);
     }
 
     public function test_apply_after_a_dry_run_does_not_resume_the_dry_runs_report(): void
@@ -376,7 +419,7 @@ class LegacyReconcileTest extends TestCase
         ]];
 
         $this->assertSame(
-            ['recorded re_25 (540 CAD, refunded in Stripe 2024-05-18)'],
+            ['recorded re_25 (540 CAD, refunded in Stripe 2024-05-18), part of the order: no ticket stopped'],
             $recorder->record($order, $refunds),
         );
         $this->assertSame([], $recorder->record($order->fresh(), $refunds));
@@ -554,6 +597,12 @@ class LegacyReconcileTest extends TestCase
     private function outcomes(): array
     {
         return array_map(fn (array $r) => $r['outcome'], $this->report());
+    }
+
+    /** @return array<string, string> legacy sale id => what --apply did about it */
+    private function actions(): array
+    {
+        return array_map(fn (array $r) => $r['action'], $this->report());
     }
 
     /** @return array<string, array<string, string>> legacy sale id => line */

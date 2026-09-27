@@ -87,14 +87,13 @@
       </div>
 
       <div class="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] items-start gap-4 max-[720px]:grid-cols-1">
-        <ui-field label="Amount" [error]="askTooMuch() ? 'That is more than you are owed.' : null" required>
+        <ui-field label="Amount" [error]="askTooMuch() ? 'That is more than you are owed.' : askProblem()" required>
+          <!-- Text, not a number box: a number box throws away "50,000", which is how naira are typed. -->
           <input
             id="askAmount"
             name="askAmount"
-            type="number"
             inputmode="decimal"
-            min="0.01"
-            step="0.01"
+            autocomplete="off"
             class="tabular-nums"
             [ngModel]="askAmount()"
             (ngModelChange)="setAskAmount($event)"
@@ -105,7 +104,7 @@
           <input id="askNote" name="askNote" maxlength="500" placeholder="Before the weekend, if possible" [ngModel]="askNote()" (ngModelChange)="askNote.set($event)" />
         </ui-field>
 
-        <button uiButton class="mt-[1.6rem] max-[720px]:mt-0" type="submit" [loading]="asking()" [disabled]="asking() || askTooMuch() || !askAmount()">Request payout</button>
+        <button uiButton class="mt-[1.6rem] max-[720px]:mt-0" type="submit" [loading]="asking()" [disabled]="asking() || askTooMuch() || !askAmount() || !!askProblem()">Request payout</button>
       </div>
 
       @if (askError(); as message) {

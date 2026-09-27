@@ -464,13 +464,17 @@ class LegacyImporter
 
         $status = LegacyRules::eventStatus($row->_status);
 
+        $wantedSlug = LegacyRules::slugify((string) ($row->_slug ?: $row->_title), 'event-'.$row->id);
+        $slug = $this->uniqueSlug(Event::class, $wantedSlug);
+
+        if (in_array($wantedSlug, Event::RESERVED_SLUGS, true)) {
+            $inferred['slug'] = "'{$wantedSlug}' is one of this site's own pages; the event is at '{$slug}'";
+        }
+
         $event = Event::create([
             'organization_id' => $organizationId,
             'venue_id' => $this->venueFor($organizationId, $row->_venue, $city, $row->_province, $timezone),
-            'slug' => $this->uniqueSlug(
-                Event::class,
-                LegacyRules::slugify((string) ($row->_slug ?: $row->_title), 'event-'.$row->id),
-            ),
+            'slug' => $slug,
             'title' => (string) $row->_title,
             'description' => (string) $row->_description,
             'currency' => $currency,
@@ -917,19 +921,30 @@ class LegacyImporter
     }
 
     /**
-     * A slug nothing else is using.
+     * A slug nothing else is using, and one the site can reach.
      *
      * The old events table has duplicate titles across years — the same club
      * night every month — and `_slug` is frequently null.
+     *
+     * An event also stays off the words the public site answers at its root
+     * (Event::RESERVED_SLUGS), the same way a new one does: an imported night
+     * called "Events" or "Refunds" was given a link the site's own page
+     * answers, and nobody could reach it. A reserved word takes a suffix like
+     * any collision. Organizations live under /o/, where nothing else is, so
+     * theirs only have to be unique.
      *
      * @param  class-string  $model
      */
     private function uniqueSlug(string $model, string $base): string
     {
+        $taken = $model === Event::class
+            ? fn (string $slug): bool => Event::slugIsTaken($slug, withTrashed: true)
+            : fn (string $slug): bool => $model::withTrashed()->where('slug', $slug)->exists();
+
         $slug = $base;
         $n = 2;
 
-        while ($model::withTrashed()->where('slug', $slug)->exists()) {
+        while ($taken($slug)) {
             $slug = $base.'-'.$n++;
         }
 

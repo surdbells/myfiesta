@@ -1,4 +1,7 @@
-import { formatMoney, toMajorUnits, toMinorUnits } from './money';
+import { amountProblem, formatMoney, readAmount, toMajorUnits, toMinorUnits } from './money';
+
+const NO_BREAK_SPACE = String.fromCharCode(0x00a0);
+const NARROW_NO_BREAK_SPACE = String.fromCharCode(0x202f);
 
 /**
  * Money crosses this boundary and no other.
@@ -54,20 +57,68 @@ describe('money', () => {
     expect(toMinorUnits(0)).toBe(0);
   });
 
-  it('rounds rather than truncating, so a cent is never quietly lost', () => {
-    expect(toMinorUnits('19.995')).toBe(2000);
-    expect(toMinorUnits('0.005')).toBe(1);
+  it('reads thousands the way both markets type them', () => {
+    // parseFloat stopped at the comma: a ₦5,000 ticket was saved at ₦5.
+    expect(toMinorUnits('5,000')).toBe(500000);
+    expect(toMinorUnits('5000')).toBe(500000);
+    expect(toMinorUnits('1,250.50')).toBe(125050);
+    expect(toMinorUnits('1 250')).toBe(125000);
+    // The narrow no-break space a French locale or a copied figure puts there,
+    // and the ordinary no-break one.
+    expect(toMinorUnits(`1${NARROW_NO_BREAK_SPACE}250`)).toBe(125000);
+    expect(toMinorUnits(`1${NO_BREAK_SPACE}250 000`)).toBe(125000000);
+    expect(toMinorUnits('12.5')).toBe(1250);
+    expect(toMinorUnits('0.99')).toBe(99);
+    expect(toMinorUnits('₦5,000')).toBe(500000);
+    expect(toMinorUnits('$25')).toBe(2500);
   });
 
-  it('treats unparseable input as zero rather than NaN', () => {
-    // NaN reaching the API becomes a price nobody can explain.
-    expect(toMinorUnits('')).toBe(0);
-    expect(toMinorUnits('abc')).toBe(0);
+  it('is exact, not a float rounded', () => {
+    expect(toMinorUnits('19.99')).toBe(1999);
+    expect(toMinorUnits('1234.56')).toBe(123456);
+  });
+
+  it('asks rather than guessing at a comma before cents', () => {
+    // "5,00" is five dollars on a phone set to French and five hundred by the
+    // thousands rule. Either reading could be out by a factor of a hundred,
+    // so it is neither.
+    expect(toMinorUnits('5,00')).toBeNull();
+    expect(amountProblem('5,00')).toContain('Use a point for cents');
+    expect(toMinorUnits('1 250,50')).toBeNull();
+  });
+
+  it('asks rather than guessing at a point before thousands', () => {
+    expect(toMinorUnits('5.000')).toBeNull();
+    expect(amountProblem('5.000')).toContain('For thousands, use a comma');
+    expect(toMinorUnits('1.250.000')).toBeNull();
+    // Not rounded to the cent: 19.995 could be a typo for either side of it.
+    expect(toMinorUnits('19.995')).toBeNull();
+  });
+
+  it('never quietly shortens a figure', () => {
+    for (const typed of ['5,000', '50,000', '1,000,000', '5 000']) {
+      expect(toMinorUnits(typed)! % 100000).toBe(0);
+    }
+
+    // Groups that are not thousands are a question, not a number.
+    expect(toMinorUnits('50,0000')).toBeNull();
+    expect(amountProblem('50,0000')).toContain('groups of three');
+  });
+
+  it('has nothing to say about an empty box, and says what is wrong with anything else', () => {
+    // It used to be zero for both — which is a free ticket.
+    expect(toMinorUnits('')).toBeNull();
+    expect(amountProblem('')).toBeNull();
+    expect(readAmount('   ').kind).toBe('empty');
+
+    expect(toMinorUnits('abc')).toBeNull();
+    expect(amountProblem('abc')).toBe('Type the amount in numbers, like 5,000 or 25.50.');
+    expect(amountProblem('-5')).toBe('An amount cannot be less than zero.');
   });
 
   it('round-trips a price without drift', () => {
     for (const price of ['0.01', '9.99', '25.00', '1234.56']) {
-      expect(toMinorUnits(String(toMajorUnits(toMinorUnits(price))))).toBe(toMinorUnits(price));
+      expect(toMinorUnits(String(toMajorUnits(toMinorUnits(price)!)))).toBe(toMinorUnits(price));
     }
   });
 });

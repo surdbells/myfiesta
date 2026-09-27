@@ -168,7 +168,7 @@
     </ui-field>
 
     <div class="grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
-      <ui-field label="Price" required>
+      <ui-field label="Price" [error]="priceError()" required>
         <input
           name="price"
           inputmode="decimal"

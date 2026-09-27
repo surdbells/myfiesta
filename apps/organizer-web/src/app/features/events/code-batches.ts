@@ -6,7 +6,7 @@ import { Api } from '../../core/api';
 import { CodeBatch, TicketType } from '../../core/api.types';
 import { saveFile } from '../../core/download';
 import { messageFor } from '../../core/errors';
-import { toMinorUnits } from '../../core/money';
+import { amountProblem, toMinorUnits } from '../../core/money';
 import { describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 
 /**
@@ -70,7 +70,18 @@ export class CodeBatches implements OnInit {
 
     if (!f.name.trim() || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) return false;
 
-    return f.purpose === 'discount' ? Number(f.discount_value) > 0 : f.unlock_ticket_type_ids.length > 0;
+    if (f.purpose !== 'discount') return f.unlock_ticket_type_ids.length > 0;
+
+    return f.discount_type === 'fixed'
+      ? (toMinorUnits(f.discount_value) ?? 0) > 0
+      : Number(f.discount_value) > 0;
+  });
+
+  /** A fixed amount is money, and is read as money is typed: "5,000" is five thousand. */
+  readonly discountProblem = computed(() => {
+    const f = this.form();
+
+    return f.purpose === 'discount' && f.discount_type === 'fixed' ? amountProblem(f.discount_value) : null;
   });
 
   ngOnInit(): void {

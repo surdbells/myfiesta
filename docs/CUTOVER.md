@@ -80,7 +80,8 @@ database to check: Nigerian sales start on this platform.
    is not `matched`.
 7. **Record what Stripe already refunded.** `php artisan legacy:reconcile --apply`.
    This records refunds made in Stripe that the old database never heard
-   about, and nothing else (see "Refunded in Stripe, not here").
+   about, and nothing else, without emailing organizers about them (see
+   "Refunded in Stripe, not here").
 8. **Sign off the report**, then **switch DNS** to this platform.
 9. **Afterwards:** delete the restricted key in Stripe, remove
    `LEGACY_STRIPE_KEY`, and keep the reports with the cutover record.
@@ -213,13 +214,26 @@ settled.
 through Stripe and the old database never heard. `--apply` records it the
 way a refund made in the Stripe dashboard is recorded after the cutover: a
 refund row, the ledger reversal, the order partly or fully refunded, and the
-tickets cancelled when the whole order went back. Each one queues an email to
-the people who can refund on that organization. For a partial refund it asks
-them which tickets it was for. The refund and its ledger entries are dated
-the day you run `--apply`; Stripe's own date is in the `action` column and
-the audit log. A line still showing this after `--apply` says in `action`
-why it was left: a refund still pending here, a different currency, or more
-than is left on the order. Those are settled by hand.
+tickets cancelled when the whole order went back. Unlike a dashboard refund
+after the cutover, it does this quietly: nobody at the organization is
+emailed and their integrations are not sent `order.refunded`. These refunds
+went back before the switch, some of them months ago, and one email per
+refund on the morning of it would be news about nothing that just happened.
+It is still audited: `refund.made_elsewhere` and `refund.reconciled`, each
+with `organizer_told: false`.
+
+The one thing the email would have done is ask which tickets a partial refund
+was for. Stripe does not say, so a partial refund cancels no ticket, and its
+line in `action` ends "part of the order: no ticket stopped". For an event
+that has already happened there is nothing to do. For one still to come, ask
+the organizer which tickets it was for and Void those in the admin's Tickets
+screen. Do not refund them: that would send the money a second time.
+
+The refund and its ledger entries are dated the day you run `--apply`;
+Stripe's own date is in the `action` column and the audit log. A line still
+showing this after `--apply` says in `action` why it was left: a refund still
+pending here, a different currency, or more than is left on the order. Those
+are settled by hand.
 
 **`refunded_here_only`: refunded here, not in Stripe.** The old database says
 refunded and Stripe shows no refund, so the buyer may not have their money.

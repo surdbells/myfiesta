@@ -35,7 +35,7 @@ use Illuminate\Support\Facades\DB;
 class ReconcileLegacy extends Command
 {
     protected $signature = 'legacy:reconcile
-        {--apply : record refunds Stripe has already made that this database has not; nothing else is changed}
+        {--apply : record refunds Stripe has already made that this database has not, without emailing organizers; nothing else is changed}
         {--resume : continue the most recent report of the same kind rather than starting a new one}
         {--rate= : Stripe requests per second, at most (default LEGACY_STRIPE_RATE, or 20)}
         {--limit= : stop after this many orders, for a first look}';
@@ -92,8 +92,10 @@ class ReconcileLegacy extends Command
 
         if ($this->option('apply')) {
             // Recorded the way a refund made in the Stripe dashboard is after
-            // the cutover, and that path tells the organizer.
-            $this->line('  Each refund recorded emails the people who can refund on that organization.');
+            // the cutover, but quietly: these went back before the switch, and
+            // an email about each one on the day of it is not news.
+            $this->line('  Organizers are not emailed about these. A refund of part of an order stops no ticket;');
+            $this->line('  the report marks each one, for you to settle with the organizer (docs/CUTOVER.md).');
         }
 
         $rate = $this->option('rate') ?? config('legacy.stripe_rate', 20);

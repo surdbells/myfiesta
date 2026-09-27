@@ -24,15 +24,15 @@ describe('typing money', () => {
   });
 
   it('forgives what a phone keyboard produces', () => {
-    // A comma from a phone set to a comma locale, a pasted symbol.
-    expect(toMinor('25,50')).toBe(2550);
+    // A comma from a phone whose keypad writes cents after one, a pasted symbol.
+    expect(toMinor('25,50', true)).toBe(2550);
     expect(toMinor('$25.00')).toBe(2500);
     expect(toMinor(' 40 ')).toBe(4000);
   });
 
-  it('rounds once, to the cent, rather than carrying a float', () => {
-    // 1.005 * 100 is 100.49999… in floating point.
-    expect(toMinor('1.005')).toBe(100);
+  it('is exact, and asks about a third decimal rather than rounding it away', () => {
+    // 1.005 * 100 is 100.49999… in floating point, and 1.005 is not a price.
+    expect(toMinor('1.005', false)).toBeNull();
     expect(Number.isInteger(toMinor('0.1'))).toBe(true);
   });
 
@@ -43,8 +43,8 @@ describe('typing money', () => {
   });
 
   it('shows minor units back the way they are typed', () => {
-    expect(toMajor(2500)).toBe('25.00');
-    expect(toMajor(5)).toBe('0.05');
+    expect(toMajor(2500, false)).toBe('25.00');
+    expect(toMajor(5, false)).toBe('0.05');
     expect(toMajor(null)).toBe('');
   });
 });

@@ -20,7 +20,7 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { EventWaitlist } from './event-waitlist';
 import { Money, TicketType } from '../../core/api.types';
-import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
+import { amountProblem, formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { describeZone, isoToZonedWallClock, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 
 /** A ticket type as the form holds it, before it becomes an API body. */
@@ -289,15 +289,8 @@ export class EventTickets {
     this.draft.set({ ...this.draft(), [key]: value });
   }
 
-  readonly priceError = computed(() => {
-    const price = this.draft().price.trim();
-
-    if (price === '') return null;
-
-    return Number.isFinite(Number(price)) && Number(price) >= 0
-      ? null
-      : 'Enter a price like 25 or 25.50.';
-  });
+  /** Read the way it was typed: "5,000" is five thousand, and "5,00" is a question. */
+  readonly priceError = computed(() => amountProblem(this.draft().price));
 
   /** What the chosen availability actually means, said under the control. */
   readonly statusOptions: SelectOption[] = [
@@ -331,7 +324,7 @@ export class EventTickets {
   });
 
   readonly canSave = computed(
-    () => this.draft().name.trim() !== '' && this.draft().price.trim() !== '' && !this.priceError(),
+    () => this.draft().name.trim() !== '' && toMinorUnits(this.draft().price) !== null,
   );
 
   save(): void {

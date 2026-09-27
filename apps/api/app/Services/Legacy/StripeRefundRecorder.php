@@ -22,7 +22,9 @@ use Illuminate\Support\Facades\DB;
  * row marked as made at the processor, the same ledger reversal, the same
  * order status arithmetic, and the tickets stopped when the whole order has
  * gone back. Two ways of recording one kind of refund would drift apart, and
- * the one the webhooks use is the one that is kept up to date.
+ * the one the webhooks use is the one that is kept up to date. The one thing
+ * it does differently is not tell the organizer: a refund made before the
+ * switch is history, not news.
  *
  * What this adds is the part a reconciliation needs and a notice does not.
  * It is keyed on Stripe's refund id, across every order, so running it again
@@ -69,12 +71,13 @@ class StripeRefundRecorder
             }
 
             $when = CarbonImmutable::createFromTimestamp($stripeRefund['created']);
+            $now = $order->fresh();
 
             // Beside the entry RefundService writes. That one says a refund
             // was made at the processor; this one says the cutover's check is
             // what found it, and when Stripe actually paid it — which the
             // refund row, dated today, does not.
-            $this->auditor->record('refund.reconciled', $order->fresh(), metadata: [
+            $this->auditor->record('refund.reconciled', $now, metadata: [
                 'refund_id' => $refund->id,
                 'gateway_reference' => $stripeRefund['id'],
                 'amount' => $refund->amount,
@@ -82,9 +85,14 @@ class StripeRefundRecorder
                 'tickets' => $refund->tickets()->count(),
                 'refunded_in_stripe_at' => $when->toIso8601String(),
                 'source' => 'legacy:reconcile',
+                'organizer_told' => false,
             ]);
 
-            $said[] = "recorded {$stripeRefund['id']} ({$refund->amount} {$refund->currency}, refunded in Stripe {$when->toDateString()})";
+            // A part refund stops no ticket: Stripe does not say which it was
+            // for, and with nobody emailed to ask, the report is where that
+            // question is left for a person (docs/CUTOVER.md).
+            $said[] = "recorded {$stripeRefund['id']} ({$refund->amount} {$refund->currency}, refunded in Stripe {$when->toDateString()})"
+                .($now->status === 'partially_refunded' ? ', part of the order: no ticket stopped' : '');
         }
 
         return $said;
@@ -137,7 +145,17 @@ class StripeRefundRecorder
 
             // Null only when it finds nothing left to refund, which the checks
             // above have already ruled out; it writes nothing in that case.
-            $refund = $this->refunds->recordMadeElsewhere($locked, $stripeRefund['amount'], $stripeRefund['id']);
+            //
+            // Quietly: the organizer is not emailed. These went back before
+            // the cutover, and a dashboard refund's email for each, all on the
+            // morning of the switch, would be news about nothing that just
+            // happened (docs/CUTOVER.md).
+            $refund = $this->refunds->recordMadeElsewhere(
+                $locked,
+                $stripeRefund['amount'],
+                $stripeRefund['id'],
+                tellTheOrganizer: false,
+            );
 
             return $refund === null
                 ? [null, 'nothing is left on the order here to refund']

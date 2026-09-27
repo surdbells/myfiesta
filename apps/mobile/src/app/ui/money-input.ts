@@ -1,6 +1,6 @@
 import { Component, booleanAttribute, computed, effect, input, model, signal } from '@angular/core';
 import { MfField } from './field';
-import { currencySymbol, toMajor, toMinor } from '../core/money';
+import { amountProblem, currencySymbol, toMajor, toMinor } from '../core/money';
 
 /**
  * A price, typed in major units and held in minor ones.
@@ -12,12 +12,17 @@ import { currencySymbol, toMajor, toMinor } from '../core/money';
  *
  * The text is left alone while it is being typed — reformatting "25." to
  * "25.00" under somebody's thumb moves the cursor — and tidied on blur.
+ *
+ * "5,000" is five thousand here, as it is in the console (toMinor). What
+ * cannot be read as one amount, like "5,00" on a keypad with a point, holds
+ * no value and says why once the box is left; the text stays as typed, so
+ * they can see what was refused and fix it rather than start again.
  */
 @Component({
   selector: 'mf-money',
   imports: [MfField],
   template: `
-    <mf-field [label]="label()" [hint]="hint()" [error]="error()" [optional]="optional()" [prefix]="symbol()">
+    <mf-field [label]="label()" [hint]="hint()" [error]="problem() ?? error()" [optional]="optional()" [prefix]="symbol()">
       <input
         type="text"
         inputmode="decimal"
@@ -55,6 +60,9 @@ export class MfMoney {
   protected readonly symbol = computed(() => currencySymbol(this.currency()));
   protected readonly text = signal('');
 
+  /** Why what was typed is not an amount, said once they have moved on. */
+  protected readonly problem = signal<string | null>(null);
+
   /** The last value this control set itself, so an outside change can be told apart. */
   private own: number | null | undefined = undefined;
 
@@ -64,7 +72,10 @@ export class MfMoney {
     effect(() => {
       const value = this.value();
 
-      if (value !== this.own) this.text.set(toMajor(value));
+      if (value !== this.own) {
+        this.text.set(toMajor(value));
+        this.problem.set(null);
+      }
     });
   }
 
@@ -72,9 +83,15 @@ export class MfMoney {
     this.text.set(raw);
     this.own = toMinor(raw);
     this.value.set(this.own);
+    // Not while they are still typing: "5," is on its way to "5,000".
+    this.problem.set(null);
   }
 
   protected tidy(): void {
-    this.text.set(toMajor(this.value()));
+    const problem = amountProblem(this.text());
+
+    this.problem.set(problem);
+
+    if (problem === null) this.text.set(toMajor(this.value()));
   }
 }

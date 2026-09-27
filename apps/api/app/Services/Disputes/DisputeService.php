@@ -125,20 +125,44 @@ class DisputeService
      * reading their balance sees a chargeback rather than a refund they never
      * agreed to — and settlements, which pay from this ledger, stop paying for
      * a sale that was taken back.
+     *
+     * It takes back what the organizer is still credited with for this order,
+     * which is what the order's own ledger entries add up to — not the order's
+     * net revenue. The two differ whenever money has already left the balance
+     * some other way: an order refunded in part or in full has its reversals
+     * in the ledger already, and a payment that arrived for places that had
+     * gone was refunded without a sale ever being written. Taking the net
+     * revenue off again charged the organizer for money they no longer had,
+     * or never had. Nothing is written when nothing is left; the tickets are
+     * voided either way.
      */
     private function takeBack(Order $order, Dispute $dispute): void
     {
-        LedgerEntry::create([
-            'organization_id' => $order->organization_id,
-            'event_id' => $order->event_id,
-            'order_id' => $order->id,
-            'type' => 'chargeback',
-            'amount' => -$order->net_revenue_amount,
-            'currency' => $order->currency,
-            'occurred_at' => now(),
-            'reason' => "Chargeback on order {$order->reference}"
-                .($dispute->reason ? " — {$dispute->reason}" : ''),
-        ]);
+        // Under the order's lock, the one a refund settles under, so a refund
+        // finishing at this moment is either counted here or comes after.
+        Order::query()->whereKey($order->id)->lockForUpdate()->first();
+
+        $stillCredited = (int) LedgerEntry::query()->where('order_id', $order->id)->sum('amount');
+
+        if ($stillCredited > 0) {
+            LedgerEntry::create([
+                'organization_id' => $order->organization_id,
+                'event_id' => $order->event_id,
+                'order_id' => $order->id,
+                'type' => 'chargeback',
+                'amount' => -$stillCredited,
+                'currency' => $order->currency,
+                'occurred_at' => now(),
+                'reason' => "Chargeback on order {$order->reference}"
+                    .($dispute->reason ? " — {$dispute->reason}" : ''),
+            ]);
+        } else {
+            Log::info('A lost dispute took back nothing from the organizer: nothing was left credited for the order.', [
+                'order' => $order->reference,
+                'dispute' => $dispute->gateway_reference,
+                'credited' => $stillCredited,
+            ]);
+        }
 
         Ticket::query()
             ->where('order_id', $order->id)
