@@ -131,7 +131,7 @@ let nextId = 0;
       line-height: var(--font-leading-normal);
     }
 
-    /* What the number is in: CA$ before it, % after it. Part of the box,
+    /* What the number is in: $ before it, % after it. Part of the box,
        not of the value, so it is never typed over or copied. */
     .affix {
       flex: none;

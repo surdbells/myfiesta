@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
@@ -39,6 +40,8 @@ export class EventDetail {
 
   readonly event = signal<EventDetailModel | null>(null);
   readonly notFound = signal(false);
+  /** The API did not answer, which is not the same as there being no event. */
+  readonly unavailable = signal(false);
   readonly shared = signal(false);
 
   readonly formatMoney = formatMoney;
@@ -58,7 +61,19 @@ export class EventDetail {
         // Counted once the page has something on it, and once a session.
         if (viewedOnce(data.slug, false)) this.api.recordView(data.slug, false);
       },
-      error: () => this.notFound.set(true),
+      error: (error: HttpErrorResponse) => {
+        // Only the API saying there is no such event makes it a 404. Anything
+        // else — a timeout, a 500 — is a page to come back to, and answering
+        // 404 for it would drop every event out of search the first time the
+        // API had a bad minute.
+        if (error.status === 404) {
+          this.notFound.set(true);
+          this.seo.notFound('Event not found');
+        } else {
+          this.unavailable.set(true);
+          this.seo.unavailable('Event unavailable');
+        }
+      },
     });
   }
 

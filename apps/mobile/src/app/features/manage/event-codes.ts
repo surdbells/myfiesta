@@ -603,7 +603,7 @@ export class EventCodes implements OnInit {
 
   // ---- describing -------------------------------------------------------
 
-  /** "20% off", "CA$5.00 off", or what it does when it takes nothing off. */
+  /** "20% off", "$5.00 off", or what it does when it takes nothing off. */
   protected describeDiscount(code: PromoCode): string {
     if (code.discount_type === 'percentage' && code.discount_value !== null) {
       return `${Number((code.discount_value / 100).toFixed(2))}% off`;

@@ -24,11 +24,12 @@ class Event extends Model
      * above that wildcard — so an event titled "Help" was given the slug
      * `help` and could never be reached: the help page answered instead. A
      * reserved word is treated as taken and gets a suffix like any collision.
-     * Keep in step with the top-level routes in apps/web.
+     * Keep in step with the top-level routes in apps/web and with SITE_PAGES
+     * in the phone app; ReservedSlugMirrorTest fails when they drift.
      */
     public const RESERVED_SLUGS = [
-        'events', 'help', 'terms', 'privacy', 'contact', 'order', 'tickets',
-        'register', 'sign-in', 'login', 'o', 'embed', 'embed-js',
+        'events', 'help', 'terms', 'privacy', 'contact', 'refunds', 'order',
+        'tickets', 'register', 'sign-in', 'login', 'o', 'embed', 'embed-js',
         'robots-txt', 'sitemap-xml',
     ];
 

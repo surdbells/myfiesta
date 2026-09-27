@@ -30,7 +30,7 @@ class SitemapController extends Controller
     public const LIMIT = 50000;
 
     /** Fixed pages that are worth a crawler's time. */
-    private const PAGES = ['', 'events', 'help', 'contact', 'terms', 'privacy'];
+    private const PAGES = ['', 'events', 'help', 'contact', 'terms', 'privacy', 'refunds'];
 
     public function __invoke(): Response
     {

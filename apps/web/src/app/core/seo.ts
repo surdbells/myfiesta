@@ -1,4 +1,4 @@
-import { DOCUMENT, Injectable, inject } from '@angular/core';
+import { DOCUMENT, Injectable, RESPONSE_INIT, inject } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
 import { EventDetail, OrganizerPage } from './api.types';
 import { formatMoney } from './money';
@@ -17,6 +17,15 @@ export class Seo {
   private readonly title = inject(Title);
   private readonly meta = inject(Meta);
   private readonly document = inject(DOCUMENT);
+
+  /**
+   * The response being rendered, while there is one.
+   *
+   * Only the server has it: Angular provides it while rendering a request and
+   * the browser gets null, because by the time the browser runs the status
+   * has long since been sent.
+   */
+  private readonly response = inject(RESPONSE_INIT, { optional: true });
 
   forEvent(event: EventDetail, url: string): void {
     const when = new Intl.DateTimeFormat('en-CA', {
@@ -75,6 +84,51 @@ export class Seo {
     this.title.setTitle(`${title} — myFiesta`);
     this.meta.updateTag({ name: 'robots', content: 'noindex, nofollow' }, 'name="robots"');
     this.jsonLd(null);
+  }
+
+  /**
+   * A page that is not there: an unpublished event, a mistyped slug, a path
+   * nothing answers to.
+   *
+   * The friendly page still renders — somebody who followed a stale link
+   * deserves a way on — but the server answers 404 instead of 200. A "not
+   * found" page that answers 200 is a soft 404: a search engine keeps it,
+   * under whatever the link said, and an unpublished event goes on turning up
+   * in results as a page announcing that it does not exist.
+   *
+   * noindex as well, for the browser: navigating here inside the app sends no
+   * status at all, and the tag is what is left.
+   */
+  notFound(title: string): void {
+    this.unlisted(title);
+    this.status(404);
+  }
+
+  /**
+   * A page that could not be built just now — the API was down or slow.
+   *
+   * 503, not 404. Telling a crawler an event is gone because the API had a bad
+   * minute is how every event page drops out of search at once; a 503 says
+   * come back later, and it will.
+   */
+  unavailable(title: string): void {
+    this.unlisted(title);
+    this.status(503);
+  }
+
+  /** A title, no index, and nothing left over from the page before. */
+  private unlisted(title: string): void {
+    this.title.setTitle(`${title} — myFiesta`);
+    this.meta.updateTag({ name: 'robots', content: 'noindex' }, 'name="robots"');
+    this.jsonLd(null);
+    // A canonical pointing at the last event would tell a crawler this page
+    // is that one.
+    this.document.querySelector('link[rel="canonical"]')?.remove();
+  }
+
+  /** Set the status of the response being rendered, on the server only. */
+  private status(code: number): void {
+    if (this.response) this.response.status = code;
   }
 
   /** Undo forPrivatePage when the app moves on to a public page. */

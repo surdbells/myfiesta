@@ -6,6 +6,7 @@ import {
   AccessUnlock,
   AnswerValue,
   Attendee,
+  ContactDetails,
   Discovery,
   EventDetail,
   EventSummary,
@@ -175,5 +176,10 @@ export class Api {
    */
   ticketsByToken(token: string): Observable<TicketAccess> {
     return this.http.get<TicketAccess>(`${this.base}/api/tickets/${token}`);
+  }
+
+  /** Who operates the platform, for the contact and legal pages. */
+  contact(): Observable<{ data: ContactDetails }> {
+    return this.http.get<{ data: ContactDetails }>(`${this.base}/api/contact`);
   }
 }

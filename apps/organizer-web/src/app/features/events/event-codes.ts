@@ -187,7 +187,7 @@ export class EventCodes implements OnInit {
     this.form.set({ ...this.form(), ticket_type_ids: next.length === all.length ? [] : next });
   }
 
-  /** "12 orders · 30 tickets · CA$1,200.00 sold · CA$240.00 off", per currency. */
+  /** "12 orders · 30 tickets · $1,200.00 sold · $240.00 off", per currency. */
   describeSales(sales: CodeSales): string {
     const money = (amount: number) => formatMoney({ amount, currency: sales.currency });
 
@@ -233,7 +233,7 @@ export class EventCodes implements OnInit {
     this.load();
   }
 
-  /** "20% off", "CA$5.00 off", or nothing when the code only attributes. */
+  /** "20% off", "$5.00 off", or nothing when the code only attributes. */
   describeDiscount(code: PromoCode): string {
     if (code.discount_type === 'percentage' && code.discount_value !== null) {
       // Basis points back to a percentage, trimmed so 2000 reads as 20% and

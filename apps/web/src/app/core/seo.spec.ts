@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Meta } from '@angular/platform-browser';
-import { DOCUMENT } from '@angular/core';
+import { DOCUMENT, RESPONSE_INIT } from '@angular/core';
 import { EventDetail, OrganizerPage } from './api.types';
 import { Seo } from './seo';
 
@@ -168,5 +168,59 @@ describe('Seo', () => {
     seo.forListing("What's on", 'Everything on sale.', 'https://myfiesta.ca/events');
 
     expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+  });
+
+  it('keeps a missing page out of search, and leaves nothing of the last event behind', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+    seo.notFound('Event not found');
+
+    expect(meta.getTag('name="robots"')?.content).toBe('noindex');
+    expect(document.title).toBe('Event not found — myFiesta');
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    // A canonical still naming the event would tell a crawler this is it.
+    expect(document.querySelector('link[rel="canonical"]')).toBeNull();
+  });
+
+  it('does nothing to a response in the browser, where there is none', () => {
+    // RESPONSE_INIT is only provided while rendering on the server.
+    expect(() => seo.notFound('Event not found')).not.toThrow();
+    expect(() => seo.unavailable('Event unavailable')).not.toThrow();
+  });
+});
+
+describe('Seo, while rendering on the server', () => {
+  let seo: Seo;
+  let response: ResponseInit;
+
+  beforeEach(() => {
+    response = { status: 200 };
+
+    TestBed.configureTestingModule({
+      providers: [{ provide: RESPONSE_INIT, useValue: response }],
+    });
+
+    seo = TestBed.inject(Seo);
+  });
+
+  it('answers 404 for a page that is not there', () => {
+    // A "not found" page that answers 200 is a soft 404, and search engines
+    // keep it under whatever the link said.
+    seo.notFound('Event not found');
+
+    expect(response.status).toBe(404);
+  });
+
+  it('answers 503 when the page could not be built, so crawlers come back', () => {
+    // A 404 here would drop every event out of search the first time the API
+    // had a bad minute.
+    seo.unavailable('Event unavailable');
+
+    expect(response.status).toBe(503);
+  });
+
+  it('leaves an ordinary page at 200', () => {
+    seo.forEvent(event(), 'https://myfiesta.ca/afrobeats-rooftop');
+
+    expect(response.status).toBe(200);
   });
 });

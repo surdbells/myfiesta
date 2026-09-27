@@ -301,6 +301,12 @@
             <p class="mt-3 text-center">
               <a class="text-sm text-text-muted" [routerLink]="embed.tickets(ev.slug)">Change tickets</a>
             </p>
+            <!-- [target], RouterLink's own input, and not [attr.target].
+                 RouterLink draws the attribute from that input, over anything
+                 bound to it, and reads it to decide whether to take the click:
+                 bound as an attribute, the link had no target at all and
+                 moved the venue's frame off the checkout. -->
+            <p class="mt-1 text-center"><a class="text-sm text-text-muted" routerLink="/refunds" [target]="embed.active() ? '_blank' : undefined">How refunds work</a></p>
           } @else if (quoteError(); as message) {
             <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
           } @else {
@@ -314,7 +320,7 @@
             <strong>Need help?</strong><br />
             Anything about the event itself — timings, door policy, refunds — is the
             organizer's call. For the order or payment,
-            <a class="font-medium" routerLink="/contact" [attr.target]="embed.active() ? '_blank' : null">contact us</a>.
+            <a class="font-medium" routerLink="/contact" [target]="embed.active() ? '_blank' : undefined">contact us</a>.
           </p>
         </div>
       </aside>

@@ -316,3 +316,19 @@ export interface Discovery {
   cities: { city: string; country: string; events: number }[];
   categories: { category: string; events: number }[];
 }
+
+/**
+ * Who operates the platform and how to reach them, from the API's config.
+ *
+ * Every field may be missing until the operator fills it in; `complete` says
+ * whether the legal pages have what they need, and they say so when not.
+ */
+export interface ContactDetails {
+  company_name: string | null;
+  company_number: string | null;
+  support_email: string | null;
+  privacy_email: string | null;
+  phone: string | null;
+  addresses: { country: string; address: string }[];
+  complete: boolean;
+}

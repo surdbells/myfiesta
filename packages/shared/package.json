@@ -2,7 +2,7 @@
   "name": "@myfiesta/shared",
   "private": true,
   "version": "0.0.0",
-  "description": "Framework-free helpers both the console and the phone app need to agree on: times in an event's own zone, and the places events happen.",
+  "description": "Framework-free helpers the site, the console and the phone app need to agree on: times in an event's own zone, the places events happen, and how money is written.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

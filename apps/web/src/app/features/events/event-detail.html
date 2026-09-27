@@ -2,6 +2,13 @@
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
     <h1>Event not found</h1>
     <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
+    <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
+  </section>
+} @else if (unavailable()) {
+  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+    <h1>This event could not be loaded</h1>
+    <p class="muted">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
+    <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (event(); as ev) {
   <article

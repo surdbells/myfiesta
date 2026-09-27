@@ -1,3 +1,8 @@
+import {
+  currencySymbol as symbolFor,
+  formatMoney as format,
+} from '@myfiesta/shared/money';
+
 /** An amount and its currency, never one without the other. */
 export interface Money {
   amount: number;
@@ -10,26 +15,19 @@ export interface Money {
  * Amounts travel as integers — cents, kobo — and are divided here, at the
  * edge, and nowhere else. A Lagos event listed beside a Toronto one is exactly
  * when a bare number becomes a wrong number.
+ *
+ * Written the same way as on the site and in the console — "$25.00",
+ * "₦5,000" — whatever language the phone is set to. The phone's locale still
+ * chooses the separators; it no longer turns dollars into "CA$" everywhere
+ * outside Canada, or naira into "NGN" inside it.
  */
 export function formatMoney(money: Money | null | undefined): string {
-  if (!money) return '—';
-
-  // The reader's locale decides how the symbol is written, exactly as in the
-  // two web apps: a phone set to Canada shows $, one set anywhere else shows
-  // CA$, and either way the currency is never dropped.
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: money.currency,
-  }).format(money.amount / 100);
+  return format(money);
 }
 
-/** Just the symbol, the way this phone writes it: "$", "CA$", "₦". */
+/** Just the symbol, as a price field's prefix: "$", "₦". */
 export function currencySymbol(currency: string): string {
-  const part = new Intl.NumberFormat(undefined, { style: 'currency', currency })
-    .formatToParts(0)
-    .find((piece) => piece.type === 'currency');
-
-  return part?.value ?? currency;
+  return symbolFor(currency);
 }
 
 /** Minor units as the decimal somebody types: 2500 → "25.00". */

@@ -51,6 +51,7 @@ describe('App shell', () => {
     expect(hrefs).toContain('/terms');
     expect(hrefs).toContain('/privacy');
     expect(hrefs).toContain('/contact');
+    expect(hrefs).toContain('/refunds');
   });
 });
 
@@ -61,7 +62,7 @@ describe('Routes', () => {
   it('matches the organizer paths before the event wildcard', () => {
     // An event lives at the root, so anything not listed above ':slug' is
     // treated as an event slug. That is how /register became "Event not found".
-    for (const path of ['register', 'sign-in', 'login', 'tickets', 'events', 'help', 'terms', 'privacy', 'contact']) {
+    for (const path of ['register', 'sign-in', 'login', 'tickets', 'events', 'help', 'terms', 'privacy', 'contact', 'refunds']) {
       expect(paths.indexOf(path), `${path} must come before :slug`).toBeGreaterThanOrEqual(0);
       expect(paths.indexOf(path), `${path} must come before :slug`).toBeLessThan(wildcard);
     }
@@ -71,5 +72,11 @@ describe('Routes', () => {
     const singleSegmentAfter = paths.slice(wildcard + 1).filter((path) => path && !path.includes('/'));
 
     expect(singleSegmentAfter).toEqual(singleSegmentAfter.filter((path) => path === '**'));
+  });
+
+  it('ends with a catch-all, so a longer unknown path still gets a page', () => {
+    // Without it the router failed to match, the server stopped rendering, and
+    // the visitor got a plain-text "Cannot GET".
+    expect(paths.at(-1)).toBe('**');
   });
 });

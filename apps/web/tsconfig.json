@@ -7,7 +7,9 @@
     // the same repository, so a built library between them would only add a
     // stale-artifact failure mode.
     "paths": {
-      "@myfiesta/ui": ["../../packages/ui/src/index.ts"]
+      "@myfiesta/ui": ["../../packages/ui/src/index.ts"],
+      // How money is written, shared with the console and the phone.
+      "@myfiesta/shared/*": ["../../packages/shared/src/*"]
     },
     "strict": true,
     "noImplicitOverride": true,

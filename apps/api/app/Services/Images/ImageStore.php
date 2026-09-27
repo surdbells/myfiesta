@@ -6,12 +6,15 @@ use App\Models\Event;
 use App\Models\EventImage;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\ImageInterface;
+use RuntimeException;
 
 /**
  * Taking a picture off a phone and putting it on an event page.
@@ -94,41 +97,57 @@ class ImageStore
         $disk = Storage::disk('public');
 
         $path = "{$directory}/{$stem}.jpg";
-        $disk->put($path, (string) $image->toJpeg(quality: 88));
+        $encoded = (string) $image->toJpeg(quality: 88);
+        $this->write($disk, $path, $encoded);
 
         $width = $image->width();
         $height = $image->height();
 
         // Released before any rendition is made. Renditions are derived by
-        // re-reading the file just written rather than by cloning what is in
+        // decoding the JPEG just written rather than by cloning what is in
         // memory: a clone per rendition means four full-size images live at
         // once, and four copies of a 2400-edge photo is most of a small
         // server's memory limit for one upload. Decoding again costs CPU we
         // have and saves memory we do not.
+        //
+        // From the encoded bytes, not from the disk. The disk may be a bucket,
+        // and a bucket has no local path to read back — asking it for one
+        // returns a key, and the banner fails after its original is stored.
         unset($image);
 
         $renditions = [];
 
-        foreach (self::RENDITIONS[$kind] ?? [] as $name => $spec) {
-            $source = $this->images->read($disk->path($path));
+        try {
+            foreach (self::RENDITIONS[$kind] ?? [] as $name => $spec) {
+                $source = $this->images->read($encoded);
 
-            $variant = $spec['fit'] === 'cover'
-                // Cropped to fill. A banner slot is a fixed shape and letterboxing
-                // it with grey bars looks like a mistake rather than a decision.
-                ? $source->cover($spec['w'], $spec['h'])
-                // Fitted inside. A gallery photo is somebody's picture, and
-                // cropping it to a square cuts people out of their own night.
-                : $source->scaleDown($spec['w'], $spec['h']);
+                $variant = $spec['fit'] === 'cover'
+                    // Cropped to fill. A banner slot is a fixed shape and letterboxing
+                    // it with grey bars looks like a mistake rather than a decision.
+                    ? $source->cover($spec['w'], $spec['h'])
+                    // Fitted inside. A gallery photo is somebody's picture, and
+                    // cropping it to a square cuts people out of their own night.
+                    : $source->scaleDown($spec['w'], $spec['h']);
 
-            $variantPath = "{$directory}/{$stem}-{$name}.jpg";
-            $disk->put($variantPath, (string) $variant->toJpeg(quality: 82));
+                $variantPath = "{$directory}/{$stem}-{$name}.jpg";
+                $this->write($disk, $variantPath, (string) $variant->toJpeg(quality: 82));
 
-            $renditions[$name] = $variantPath;
+                $renditions[$name] = $variantPath;
 
-            unset($source, $variant);
+                unset($source, $variant);
+            }
+        } catch (\Throwable $e) {
+            // Nothing will ever point at the files already written, so they go
+            // now rather than sit in a bucket nobody reads the listing of.
+            $disk->delete([$path, ...array_values($renditions)]);
+
+            throw $e;
         }
 
-        return DB::transaction(function () use ($event, $kind, $path, $renditions, $width, $height, $disk, $uploader, $caption) {
+        $byteSize = strlen($encoded);
+        unset($encoded);
+
+        return DB::transaction(function () use ($event, $kind, $path, $renditions, $width, $height, $byteSize, $uploader, $caption) {
             // Replacing the banner rather than adding a second one. The unique
             // index would refuse the insert; doing it here means the old files
             // go too, instead of being orphaned on disk forever.
@@ -143,7 +162,9 @@ class ImageStore
                 'renditions' => $renditions,
                 'width' => $width,
                 'height' => $height,
-                'byte_size' => $disk->size($path),
+                // Counted from the bytes in hand. Asking the disk would be a
+                // round trip to the bucket for a number already known.
+                'byte_size' => $byteSize,
                 'mime' => 'image/jpeg',
                 'caption' => $caption,
                 // Appended to the end. max()+1 rather than count(), so deleting
@@ -187,7 +208,7 @@ class ImageStore
         $disk = Storage::disk('public');
         $path = "organizations/{$organization->id}/".Str::lower(Str::random(16)).'.jpg';
 
-        $disk->put($path, (string) $image->toJpeg(quality: 86));
+        $this->write($disk, $path, (string) $image->toJpeg(quality: 86));
 
         unset($image);
 
@@ -228,7 +249,7 @@ class ImageStore
         $this->deleteExisting(collect([$image]));
     }
 
-    /** @param  \Illuminate\Support\Collection<int, EventImage>  $images */
+    /** @param  Collection<int, EventImage>  $images */
     private function deleteExisting($images): void
     {
         $disk = Storage::disk('public');
@@ -265,6 +286,21 @@ class ImageStore
         }
     }
 
+    /**
+     * Put the bytes on the disk, or say that it did not happen.
+     *
+     * The disk is configured not to throw, and put() answers false instead —
+     * which, unchecked, is a row in the database for a picture that is not
+     * there, and an event page with a broken image nobody is told about. With
+     * a bucket in the way that is a network call that can fail like any other.
+     */
+    private function write(Filesystem $disk, string $path, string $bytes): void
+    {
+        if (! $disk->put($path, $bytes)) {
+            throw new RuntimeException("The picture could not be written to the media disk at [{$path}].");
+        }
+    }
+
     /** Empty gallery starts at zero, not at one — max() of nothing is null. */
     private function nextGalleryPosition(Event $event): int
     {
@@ -283,5 +319,4 @@ class ImageStore
             throw ImageRejected::because('That file is not an image we can read.');
         }
     }
-
 }

@@ -9,7 +9,8 @@ import { Routes } from '@angular/router';
  * organizer has ever handed out.
  *
  * The wildcard sits last so real routes win, and any slug that does not resolve
- * renders the not-found state on the detail page itself.
+ * renders the not-found state on the detail page itself. Longer paths nothing
+ * claims fall to the catch-all after it. Both answer 404 from the server.
  */
 export const routes: Routes = [
   {
@@ -43,6 +44,13 @@ export const routes: Routes = [
   {
     path: 'contact',
     data: { page: 'contact' },
+    loadComponent: () => import('./features/info/info').then((m) => m.Info),
+  },
+  {
+    // How refunds actually work, linked from the terms, the footer and the
+    // pay button.
+    path: 'refunds',
+    data: { page: 'refunds' },
     loadComponent: () => import('./features/info/info').then((m) => m.Info),
   },
   {
@@ -134,5 +142,12 @@ export const routes: Routes = [
   {
     path: ':slug',
     loadComponent: () => import('./features/events/event-detail').then((m) => m.EventDetail),
+  },
+  {
+    // Everything longer than one segment that nothing above claims. Without
+    // it the router failed to match, the server gave up on rendering, and the
+    // visitor got a bare "Cannot GET" in plain text. Answers 404.
+    path: '**',
+    loadComponent: () => import('./features/info/not-found').then((m) => m.NotFound),
   },
 ];

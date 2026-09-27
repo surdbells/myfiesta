@@ -84,14 +84,14 @@ import {
 
       <h2 class="section">Figures</h2>
       <div class="grid">
-        <mf-stat class="span" lead label="Owed to you" value="CA$1,168.95" hint="Ask to be paid whenever you like" />
+        <mf-stat class="span" lead label="Owed to you" value="$1,168.95" hint="Ask to be paid whenever you like" />
         <mf-stat label="Sold" value="146" hint="of 200" [portion]="0.73" />
-        <mf-stat label="Earned" value="CA$5,840" hint="92 orders" />
+        <mf-stat label="Earned" value="$5,840" hint="92 orders" />
       </div>
 
       <h2 class="section">Lists</h2>
       <mf-list heading="Money" footer="Settlements are read-only here: paying out is done against a real bank.">
-        <mf-row label="Payouts" sub="CA$1,168.95 owed" [icon]="walletIcon" tone="brand" link="/ui" />
+        <mf-row label="Payouts" sub="$1,168.95 owed" [icon]="walletIcon" tone="brand" link="/ui" />
         <mf-row label="Orders" value="92" [icon]="cardIcon" link="/ui" />
         <mf-row label="Busy saving" [icon]="ticketIcon" action (pressed)="pulse()" />
       </mf-list>
@@ -309,9 +309,9 @@ export class Gallery {
   ];
 
   readonly tiers: MfOption[] = [
-    { value: 'early', label: 'Early Bird', hint: 'CA$40.00' },
-    { value: 'general', label: 'General', hint: 'CA$50.00' },
-    { value: 'vip', label: 'VIP table', hint: 'CA$400.00 · admits 6' },
+    { value: 'early', label: 'Early Bird', hint: '$40.00' },
+    { value: 'general', label: 'General', hint: '$50.00' },
+    { value: 'vip', label: 'VIP table', hint: '$400.00 · admits 6' },
   ];
 
   readonly audiences: MfChoice[] = [

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
@@ -41,6 +42,8 @@ export class Organizer {
 
   readonly organizer = signal<OrganizerPage | null>(null);
   readonly notFound = signal(false);
+  /** The API did not answer, which is not the same as there being nobody. */
+  readonly unavailable = signal(false);
   readonly shared = signal(false);
 
   /** Their mark when they have uploaded one; their initial when they have not. */
@@ -56,13 +59,19 @@ export class Organizer {
         this.organizer.set(data);
         this.seo.forOrganizer(data, `https://myfiesta.ca/o/${data.slug}`);
       },
-      error: () => {
-        this.notFound.set(true);
+      error: (error: HttpErrorResponse) => {
         // A page that says "not found" but answers 200 is one a search engine
-        // will happily index under the organizer's name. forPrivatePage is
-        // where the noindex lives; this is not private, it is simply not a
-        // page worth listing.
-        this.seo.forPrivatePage('Organizer not found');
+        // will happily index under the organizer's name, so the server answers
+        // 404 — but only when the API said so. An API that did not answer is
+        // a 503: the organizer is still there, and a crawler should come back
+        // rather than forget them.
+        if (error.status === 404) {
+          this.notFound.set(true);
+          this.seo.notFound('Organizer not found');
+        } else {
+          this.unavailable.set(true);
+          this.seo.unavailable('Organizer unavailable');
+        }
       },
     });
   }

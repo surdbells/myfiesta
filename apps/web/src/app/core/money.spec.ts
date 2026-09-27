@@ -9,9 +9,23 @@ describe('formatMoney', () => {
     expect(formatMoney({ amount: 2500, currency: 'CAD' })).toBe('$25.00');
   });
 
-  it('keeps the currency visible for naira, so the two are never confused', () => {
-    expect(formatMoney({ amount: 150000, currency: 'NGN' })).toContain('1,500.00');
-    expect(formatMoney({ amount: 150000, currency: 'NGN' })).toContain('NGN');
+  it('writes naira with the naira sign, the way Nigerian prices are written', () => {
+    // The plain Intl symbol in a Canadian locale is "NGN 5,000.00", which is
+    // not how anybody in Lagos reads a price.
+    expect(formatMoney({ amount: 500000, currency: 'NGN' })).toBe('₦5,000');
+    expect(formatMoney({ amount: 150000, currency: 'NGN' })).toBe('₦1,500');
+  });
+
+  it('keeps kobo when an amount has some, so a breakdown still adds up', () => {
+    // 7.5% VAT on ₦2,750 is ₦206.25. Rounding it to ₦206 would leave a total
+    // that is a quarter of a naira off its own lines.
+    expect(formatMoney({ amount: 20625, currency: 'NGN' })).toBe('₦206.25');
+    expect(formatMoney({ amount: 500050, currency: 'NGN' })).toBe('₦5,000.50');
+  });
+
+  it('keeps the two currencies apart at a glance', () => {
+    expect(formatMoney({ amount: 2500, currency: 'CAD' })).not.toContain('₦');
+    expect(formatMoney({ amount: 2500, currency: 'NGN' })).not.toContain('$');
   });
 
   it('says nothing rather than zero when there is no amount', () => {
@@ -27,10 +41,11 @@ describe('formatMoney', () => {
 describe('formatFrom', () => {
   it('shows the right symbol with a dash when nothing is on sale', () => {
     expect(formatFrom(null, 'CAD')).toBe('$—');
-    expect(formatFrom(null, 'NGN')).toContain('NGN');
+    expect(formatFrom(null, 'NGN')).toBe('₦—');
   });
 
   it('shows the lowest price otherwise', () => {
     expect(formatFrom({ amount: 2000, currency: 'CAD' }, 'CAD')).toBe('$20.00');
+    expect(formatFrom({ amount: 500000, currency: 'NGN' }, 'NGN')).toBe('₦5,000');
   });
 });

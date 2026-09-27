@@ -1,3 +1,51 @@
+<!--
+  Who operates the platform and how to reach them, from the API's config.
+  Written once and placed on each page that names the operator, so the terms
+  and the contact page can never give two different addresses.
+-->
+<ng-template #operator>
+  @if (contact(); as c) {
+    <dl class="details">
+      @if (c.company_name) {
+        <dt>Operated by</dt>
+        <dd>{{ c.company_name }}@if (c.company_number) {<span class="muted"> · {{ c.company_number }}</span>}</dd>
+      }
+      @if (c.support_email) {
+        <dt>Email</dt>
+        <dd><a [href]="'mailto:' + c.support_email">{{ c.support_email }}</a></dd>
+      }
+      @if (c.privacy_email && c.privacy_email !== c.support_email) {
+        <dt>Your data</dt>
+        <dd><a [href]="'mailto:' + c.privacy_email">{{ c.privacy_email }}</a></dd>
+      }
+      @if (c.phone) {
+        <dt>Phone</dt>
+        <dd><a [href]="'tel:' + c.phone">{{ c.phone }}</a></dd>
+      }
+      @for (office of c.addresses; track office.country) {
+        <dt>Post{{ c.addresses.length > 1 ? ' — ' + country(office.country) : '' }}</dt>
+        <dd>{{ office.address }}</dd>
+      }
+    </dl>
+
+    @if (!c.complete) {
+      <!-- For the operator as much as the reader: loud on the page, because
+           these pages go live the moment the site does. -->
+      <p class="note">
+        <strong>Contact details still to be filled in.</strong> The operator's
+        registered name, a support inbox and a postal address are set in the
+        API's configuration (the CONTACT_ settings) and are not all there yet —
+        both markets require a reachable operator.
+      </p>
+    }
+  } @else if (contactMissing()) {
+    <p class="note">
+      <strong>Our contact details could not be loaded just now.</strong> Reload
+      the page in a minute to see them.
+    </p>
+  }
+</ng-template>
+
 <article class="wrap prose">
   @switch (page()) {
     @case ('help') {
@@ -31,7 +79,8 @@
         Refunds are the organizer's decision, not ours — they set the terms for
         their own event. Contact them first. If an event is cancelled outright,
         the organizer refunds through us and the money returns the way it came,
-        which takes a few working days depending on your bank.
+        which takes a few working days depending on your bank. The
+        <a routerLink="/refunds">refund page</a> has the details.
       </p>
 
       <h2>Can I give my ticket to someone else?</h2>
@@ -75,11 +124,14 @@
 
       <h2>Refunds and cancellations</h2>
       <p>
-        Refund terms are set by the organizer and shown on the event page. If an
-        organizer cancels an event, they are responsible for refunding it, and
-        refunds are returned to the original payment method. We do not refund
-        our own fees on a change of mind, and we do refund them when an event is
-        cancelled.
+        Organizers decide refunds for their own events, and a refund is made
+        ticket by ticket, to the original payment method. When a ticket is
+        refunded, its share of our service fee is refunded with it. If an
+        organizer cancels an event, they are responsible for refunding it. If a
+        payment arrives after the last ticket has sold, no ticket is issued and
+        the whole payment is returned automatically. The
+        <a routerLink="/refunds">refund page</a> sets out exactly how each case
+        works.
       </p>
 
       <h2>Selling</h2>
@@ -98,6 +150,9 @@
         to launder money. We will withhold a payout and cancel an event where we
         have reason to believe any of those apply.
       </p>
+
+      <h2>Who we are</h2>
+      <ng-container [ngTemplateOutlet]="operator" />
     }
 
     @case ('privacy') {
@@ -160,10 +215,92 @@
         On servers we run, with backups. Some of the services above hold copies
         outside Canada and Nigeria as part of doing their job.
       </p>
+
+      <h2>Who is responsible for it</h2>
+      <ng-container [ngTemplateOutlet]="operator" />
+    }
+
+    @case ('refunds') {
+      <h1>Refunds</h1>
+
+      <p class="note">
+        <strong>Not yet reviewed by a lawyer.</strong> This describes how
+        refunds work on the platform today and is accurate about the mechanics,
+        but it must be reviewed against Canadian and Nigerian consumer law
+        before myFiesta takes real money.
+      </p>
+
+      <h2>Who decides</h2>
+      <p>
+        The organizer named on the event page. It is their event and their
+        money, so they decide whether a ticket is refunded, and they issue the
+        refund through us. If you want one, ask them first. myFiesta refunds on
+        its own only in the one case below where no ticket was ever issued.
+      </p>
+
+      <h2>What comes back</h2>
+      <p>
+        A refund is made ticket by ticket, never as a part-amount. For each
+        ticket refunded you get back its full share of what you paid: its price
+        after any discount, its share of any tax, and its share of our service
+        fee. The service fee is not kept back.
+      </p>
+      <p>
+        A refunded ticket stops working at the door straight away. A ticket that
+        has already been scanned can still be refunded if the organizer chooses
+        to. A free ticket has nothing to refund.
+      </p>
+
+      <h2>Where the money goes</h2>
+      <p>
+        Back to the card or account you paid with — through Stripe for Canadian
+        dollars and Paystack for naira. It cannot be sent anywhere else. Once it
+        is issued, the time it takes to appear depends on your bank or card
+        issuer, usually a few working days. If the payment processor turns a
+        refund down, your tickets stay valid until it goes through.
+      </p>
+
+      <h2>If an event is cancelled</h2>
+      <p>
+        Everybody holding a ticket is emailed, even if they have turned off
+        other emails. Cancelling an event offers the organizer the choice to
+        refund every paid order at the same moment, and that is the default. An
+        organizer who cancels without refunding is still responsible for
+        refunding under our <a routerLink="/terms">terms</a> — contact them, or
+        us, with your order reference.
+      </p>
+
+      <h2>If the tickets sold out while you were paying</h2>
+      <p>
+        If your payment arrives after the last ticket has gone, no ticket is
+        issued and the whole payment, service fee included, is sent back
+        automatically. You get an email saying so.
+      </p>
+
+      <h2>Giving a ticket back</h2>
+      <p>
+        Some organizers let you give a ticket back from the link in your
+        confirmation email, up to a cut-off before the doors that they set. The
+        ticket link offers it only where the organizer allows it. The ticket
+        stops working as soon as you give it back. When somebody else buys that
+        place, you are refunded what you paid for it, service fee included. If
+        nobody does, there is no refund — and until somebody does, you can take
+        the ticket back.
+      </p>
+
+      <h2>Asking about a refund</h2>
+      <p>
+        The organizer first, for anything about the event. For anything about a
+        payment, or if you cannot reach them, write to us with the order
+        reference from your confirmation email.
+      </p>
+      <ng-container [ngTemplateOutlet]="operator" />
     }
 
     @case ('contact') {
       <h1>Contact</h1>
+
+      <ng-container [ngTemplateOutlet]="operator" />
 
       <h2>About an order</h2>
       <p>
@@ -176,19 +313,15 @@
       <p>
         The organizer is the right person for anything about the event itself:
         the lineup, the timings, the door policy, or a refund. Their name is on
-        the event page.
+        the event page. How refunds work is on the <a routerLink="/refunds">refund page</a>.
       </p>
 
       <h2>About your data</h2>
       <p>
         Requests to see or remove what we hold about you go to the same address
-        and are answered within thirty days.
-      </p>
-
-      <p class="note">
-        <strong>Addresses still to be filled in.</strong> This page needs the
-        real support and privacy addresses, and a postal address — both markets
-        require a reachable operator on commercial email.
+        — or the one marked for your data above — and are answered within thirty
+        days. The <a routerLink="/privacy">privacy page</a> can send the request
+        for you.
       </p>
     }
   }
