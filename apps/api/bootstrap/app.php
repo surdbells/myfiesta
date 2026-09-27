@@ -2,6 +2,9 @@
 
 use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnforceTokenScope;
+use App\Http\Middleware\EnsureEmailIsVerified;
+use App\Http\Middleware\ImpersonationBoundary;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,7 +24,33 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'token.scope' => EnforceTokenScope::class,
             'api.key' => AuthenticateApiKey::class,
+            // An address somebody has proved they read, for the few actions
+            // that act in public or move money. See the class for which.
+            'verified.email' => EnsureEmailIsVerified::class,
         ]);
+
+        // myFiesta staff acting as an organization: on the whole api group,
+        // so an endpoint added later is inside the boundary without anybody
+        // listing it. Inert for every token that is not a staff session's.
+        $middleware->appendToGroup('api', ImpersonationBoundary::class);
+
+        /*
+         * Who a request came from, believed only from the proxies named in
+         * TRUSTED_PROXIES (config/trustedproxy.php).
+         *
+         * The address, the scheme and the port — what a load balancer in
+         * front of TLS actually knows. Not X-Forwarded-Host: the Host header
+         * already arrives intact through every proxy this runs behind, and a
+         * second, forwardable copy of it is only a way to put another site's
+         * name into the links this application builds.
+         */
+        $middleware->trustProxies(headers: Request::HEADER_X_FORWARDED_FOR
+            | Request::HEADER_X_FORWARDED_PORT
+            | Request::HEADER_X_FORWARDED_PROTO);
+
+        // Outermost, so every response carries them — including the ones the
+        // framework's own middleware answers before a route is reached.
+        $middleware->prepend(SecurityHeaders::class);
 
         // Webhooks carry no browser session, so there is no CSRF token to
         // present and nothing for one to protect. Their authentication is the
@@ -37,6 +66,13 @@ return Application::configure(basePath: dirname(__DIR__))
             // is the authorisation. Requiring CSRF would break the one path the
             // law is most specific about.
             'unsubscribe/*',
+            // The links that finish a sign-up and prove an address. The signed
+            // link is the whole credential, and the only thing a forged post
+            // could do with one is what its holder would have done anyway.
+            // A session cookie is exactly what a mail client's own browser is
+            // likeliest to lose, and a "page expired" there is a sign-up lost.
+            'sign-up/*',
+            'verify-email/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

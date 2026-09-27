@@ -4,14 +4,17 @@ use App\Http\Controllers\Api\AccessCodeController;
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DataRequestController;
 use App\Http\Controllers\Api\DiscoverController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\DoorPassController;
+use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\EventCategoryController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventViewController;
 use App\Http\Controllers\Api\FollowController;
+use App\Http\Controllers\Api\ImpersonationController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\OrderStatusController;
 use App\Http\Controllers\Api\Organizer\AddOnController;
@@ -62,6 +65,9 @@ Route::get('/sitemap.xml', SitemapController::class)->middleware('throttle:30,1'
 
 // The fixed list the console's category dropdown offers and the API accepts.
 Route::get('/event-categories', EventCategoryController::class);
+
+// Who operates the platform, for the site's contact and legal pages.
+Route::get('/contact', ContactController::class);
 Route::get('/events', [EventController::class, 'index']);
 Route::get('/events/{slug}', [EventController::class, 'show']);
 Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
@@ -206,6 +212,23 @@ Route::middleware(['auth:sanctum', 'token.scope:account'])->group(function () {
     Route::post('/auth/password', [AccountController::class, 'changePassword']);
     // Asks, never changes: the move happens when the new address opens its link.
     Route::post('/auth/email', [AccountController::class, 'requestEmailChange'])->middleware('throttle:10,1');
+    // A fresh link to prove the address the account already has. Limited per
+    // account inside as well; this only keeps a stuck button from hammering.
+    Route::post('/auth/email/verification', EmailVerificationController::class)->middleware('throttle:6,1');
+});
+
+/*
+ * myFiesta staff acting as an organization.
+ *
+ * Started in the admin panel, never here. The console trades the one-minute
+ * code from the link for the session's token, reads the session for its
+ * banner, and ends it. What the token may not do is refused by
+ * ImpersonationBoundary on the api group and by the permissions it withholds.
+ */
+Route::post('/impersonation/exchange', [ImpersonationController::class, 'exchange'])->middleware('throttle:10,1');
+Route::middleware(['auth:sanctum', 'token.scope:impersonation'])->group(function () {
+    Route::get('/impersonation', [ImpersonationController::class, 'show']);
+    Route::delete('/impersonation', [ImpersonationController::class, 'destroy']);
 });
 
 /*
@@ -232,10 +255,14 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // arrives rather than knowing which night it was.
         Route::get('/orders', [OrganizerOrderController::class, 'index']);
         Route::get('/orders/export', [OrganizerOrderController::class, 'export']);
-        Route::put('/payout-details', [PayoutController::class, 'update']);
+
+        // Where the money goes, and asking for it, wait for a proved address
+        // (verified.email): an account made under somebody else's address
+        // must not be able to point an organization's money anywhere.
+        Route::put('/payout-details', [PayoutController::class, 'update'])->middleware('verified.email');
 
         // Asking to be paid. Staff pay it, or say why not, in the admin panel.
-        Route::post('/payouts/requests', [PayoutController::class, 'requestPayout']);
+        Route::post('/payouts/requests', [PayoutController::class, 'requestPayout'])->middleware('verified.email');
         Route::delete('/payouts/requests/{payoutRequest}', [PayoutController::class, 'cancelRequest']);
 
         /*
@@ -291,7 +318,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/duplicate', [OrganizerEventController::class, 'duplicate']);
         Route::get('/events/{event:id}/cancellation', [OrganizerEventController::class, 'cancellationPreview']);
         Route::post('/events/{event:id}/cancel', [OrganizerEventController::class, 'cancel']);
-        Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish']);
+        // Putting a night on sale under a name waits for a proved address
+        // (verified.email). Taking it off sale, drafts, edits and everything
+        // else do not.
+        Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish'])->middleware('verified.email:published');
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
         Route::get('/events/{event:id}/sales', [OrganizerEventController::class, 'sales']);
 

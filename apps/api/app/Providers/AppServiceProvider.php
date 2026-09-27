@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Support\Preflight;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Intervention\Image\Drivers\Gd\Driver;
@@ -38,6 +41,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->refuseToServeMisconfigured();
+
         /*
          * Per key, not per address: two integrations behind one office NAT
          * are two budgets, and one key spread across servers is one.
@@ -59,5 +64,33 @@ class AppServiceProvider extends ServiceProvider
                 .'/reset-password?token='.$token
                 .'&email='.urlencode($user->getEmailForPasswordReset()),
         );
+    }
+
+    /**
+     * Production does not serve with a secret missing or a sender pretending.
+     *
+     * See Preflight for the list and why each one matters. A web request that
+     * boots into a bad configuration fails here, before a route runs; the
+     * worker and the scheduler fail as they start. Every other command is left
+     * to run — package:discover and config:cache happen at build time with no
+     * secrets at all, and an operator repairing a box needs artisan to work.
+     */
+    private function refuseToServeMisconfigured(): void
+    {
+        if (! $this->app->environment('production')) {
+            return;
+        }
+
+        if (! $this->app->runningInConsole()) {
+            Preflight::enforce();
+
+            return;
+        }
+
+        Event::listen(CommandStarting::class, function (CommandStarting $event) {
+            if (in_array($event->command, Preflight::SERVING_COMMANDS, true)) {
+                Preflight::enforce();
+            }
+        });
     }
 }

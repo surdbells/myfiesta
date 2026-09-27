@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Enums\TokenAbility;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\PersonalAccessToken;
+use Tests\Concerns\FinishesSignUps;
 use Tests\TestCase;
 
 /**
@@ -17,23 +19,29 @@ use Tests\TestCase;
  */
 class AttendeeRegistrationTest extends TestCase
 {
-    use RefreshDatabase;
+    use FinishesSignUps, RefreshDatabase;
 
-    private function register(array $body = [])
+    protected function setUp(): void
     {
-        return $this->postJson('/api/auth/register', array_merge([
+        parent::setUp();
+        Mail::fake();
+    }
+
+    private function attendee(array $body = []): array
+    {
+        return array_merge([
             'name' => 'Ada Obi',
             'email' => 'ada@example.com',
             'password' => 'correct horse battery staple 7',
             'password_confirmation' => 'correct horse battery staple 7',
             'attendee' => true,
             'device' => 'mobile',
-        ], $body));
+        ], $body);
     }
 
     public function test_an_attendee_signs_up_without_naming_an_events_page(): void
     {
-        $this->register()->assertCreated()->assertJsonPath('organizations', []);
+        $this->signUpAndConfirm($this->attendee());
 
         $this->assertDatabaseHas('users', ['email' => 'ada@example.com']);
         $this->assertSame(0, User::where('email', 'ada@example.com')->first()->organizations()->count());
@@ -41,7 +49,9 @@ class AttendeeRegistrationTest extends TestCase
 
     public function test_the_token_cannot_reach_the_organizer_screens(): void
     {
-        $token = $this->register()->json('token');
+        $this->signUpAndConfirm($this->attendee());
+
+        $token = $this->signIn('ada@example.com', 'correct horse battery staple 7', 'mobile')['token'];
 
         $stored = PersonalAccessToken::findToken($token);
 
@@ -68,13 +78,15 @@ class AttendeeRegistrationTest extends TestCase
 
     public function test_an_organizer_signup_is_unchanged(): void
     {
-        $body = $this->postJson('/api/auth/register', [
+        $this->signUpAndConfirm([
             'name' => 'Ada Obi',
             'email' => 'ada@example.com',
             'password' => 'correct horse battery staple 7',
             'password_confirmation' => 'correct horse battery staple 7',
             'organization' => 'Lagos Nights',
-        ])->assertCreated()->json();
+        ]);
+
+        $body = $this->signIn('ada@example.com', 'correct horse battery staple 7');
 
         $this->assertSame('Lagos Nights', $body['organizations'][0]['name']);
         $this->assertTrue(PersonalAccessToken::findToken($body['token'])->can(TokenAbility::Organizer->value));
@@ -86,7 +98,9 @@ class AttendeeRegistrationTest extends TestCase
 
         // Saying "that email is taken" turns sign-up into a way to test who
         // holds an account here.
-        $this->register()->assertStatus(202)->assertJsonPath('pending', true);
+        $this->postJson('/api/auth/register', $this->attendee())
+            ->assertStatus(202)
+            ->assertJsonPath('pending', true);
     }
 
     public function test_asking_for_a_reset_link_says_the_same_thing_either_way(): void

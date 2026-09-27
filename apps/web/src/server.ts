@@ -4,16 +4,41 @@ import {
   isMainModule,
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
+import { isDevMode } from '@angular/core';
 import express from 'express';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { framingHeaders } from './framing';
+import { securityHeaders } from './security-headers';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 
+// Nothing about the server, to anybody.
+app.disable('x-powered-by');
+
+/**
+ * A nonce for this response, and the headers that name it.
+ *
+ * First, so every response carries them — rendered pages, files and errors
+ * alike. The nonce goes to Angular with the request (see the handler at the
+ * bottom) and onto the inline scripts it writes into the page; see
+ * app.config.server.ts. Nothing but those may run inline.
+ */
 app.use((req, res, next) => {
-  for (const [name, value] of Object.entries(framingHeaders(req.path))) res.setHeader(name, value);
+  const nonce = randomBytes(16).toString('base64');
+  res.locals['cspNonce'] = nonce;
+
+  const headers = securityHeaders(req.path, {
+    nonce,
+    apiOrigin,
+    devServerHost: isDevMode() ? req.get('host') : undefined,
+    // Believed only to decide whether to insist on https, which a browser
+    // ignores over plain http anyway: a client that lies here fools itself.
+    https: req.get('x-forwarded-proto') === 'https',
+  });
+
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
   next();
 });
 
@@ -29,6 +54,30 @@ app.get('/embed.js', (_req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
   next();
 });
+
+/**
+ * The two files that let the phone app open this site's links.
+ *
+ * Apple and Google fetch these from /.well-known/ before a tap on an event
+ * link will open the app instead of this site (docs/STORE.md). Both insist on
+ * JSON at exactly this address — no redirect — and the Apple one has no
+ * extension to take a type from. The static handler below would not serve
+ * them at all: it ignores any path through a dot-directory. So they are
+ * answered here, by name, and nothing else under /.well-known/ is.
+ *
+ * An hour's cache: long enough for their crawlers, short enough that a fixed
+ * fingerprint is live the same afternoon.
+ */
+for (const name of ['apple-app-site-association', 'assetlinks.json']) {
+  app.get(`/.well-known/${name}`, (_req, res, next) => {
+    res.type('application/json');
+    res.sendFile(
+      join(browserDistFolder, '.well-known', name),
+      { dotfiles: 'allow', maxAge: '1h' },
+      (error) => error && next(error),
+    );
+  });
+}
 
 /**
  * Hosts this server will render for.
@@ -76,6 +125,12 @@ app.use(
  * about the artifact would show that had happened.
  */
 const apiBaseUrl = process.env['API_BASE_URL'] ?? 'http://127.0.0.1:8000';
+
+/**
+ * The same, as an origin, for the Content-Security-Policy. A source with a
+ * path in it matches that path only, and the site calls everything under it.
+ */
+const apiOrigin = new URL(apiBaseUrl).origin;
 
 /**
  * Where the organizer console lives, stamped for the same reason.
@@ -171,7 +226,9 @@ function siteOrigin(req: express.Request): string {
 
 app.use((req, res, next) => {
   angularApp
-    .handle(req)
+    // The nonce the first middleware put in this response's policy, for the
+    // inline scripts Angular is about to write (app.config.server.ts).
+    .handle(req, { cspNonce: res.locals['cspNonce'] })
     .then(async (response) => {
       if (!response) {
         return next();

@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\DataRequestPageController;
+use App\Http\Controllers\EmailVerificationPageController;
 use App\Http\Controllers\FollowLeaveController;
 use App\Http\Controllers\IdentityDocumentController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\SignUpPageController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WaitlistLeaveController;
 use App\Http\Controllers\Webhooks\InboundSmsController;
@@ -105,6 +107,32 @@ Route::post('/privacy/requests/{token}', [DataRequestPageController::class, 'con
 Route::get('/privacy/requests/{token}/download', [DataRequestPageController::class, 'download'])
     ->name('privacy.download')
     ->middleware('throttle:60,1');
+
+/*
+ * The link that finishes a sign-up, and the one that proves an existing
+ * account's address.
+ *
+ * Plain pages here for the reason the privacy pages are: no account, no
+ * session, often a mail client's own browser — and people signing up from the
+ * phone app have no console to land on. Signed, relative to this host, and
+ * checked inside each controller so a dead link gets a page that says so
+ * rather than a bare 403. The GET only shows what will happen; the POST acts.
+ */
+Route::get('/sign-up/{registration}', [SignUpPageController::class, 'show'])
+    ->name('sign-up.show')
+    ->middleware('throttle:60,1');
+
+Route::post('/sign-up/{registration}', [SignUpPageController::class, 'confirm'])
+    ->name('sign-up.confirm')
+    ->middleware('throttle:20,1');
+
+Route::get('/verify-email/{user}/{hash}', [EmailVerificationPageController::class, 'show'])
+    ->name('email.verify.show')
+    ->middleware('throttle:60,1');
+
+Route::post('/verify-email/{user}/{hash}', [EmailVerificationPageController::class, 'confirm'])
+    ->name('email.verify.confirm')
+    ->middleware('throttle:20,1');
 
 /*
  * A text coming back the other way, which in practice means STOP.

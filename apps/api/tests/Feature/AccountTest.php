@@ -9,11 +9,13 @@ use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\FinishesSignUps;
 use Tests\TestCase;
 
 /**
@@ -27,12 +29,13 @@ use Tests\TestCase;
  */
 class AccountTest extends TestCase
 {
-    use RefreshDatabase;
+    use FinishesSignUps, RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
         Notification::fake();
+        Mail::fake();
         RateLimiter::clear('register:127.0.0.1');
     }
 
@@ -51,43 +54,45 @@ class AccountTest extends TestCase
 
     public function test_signing_up_creates_a_person_and_their_organization(): void
     {
-        $this->postJson('/api/auth/register', $this->registration())
-            ->assertCreated()
-            ->assertJsonStructure(['token', 'user' => ['name', 'email'], 'organizations'])
-            ->assertJsonPath('organizations.0.name', 'Lagos Nights')
-            // Owner, not manager. Nobody else can hand that over.
-            ->assertJsonPath('organizations.0.role', Role::Owner->value);
+        $this->postJson('/api/auth/register', $this->registration())->assertStatus(202);
 
-        $this->assertSame(1, User::count());
-        $this->assertSame(1, Organization::count());
+        // Nothing until the address is proved.
+        $this->assertSame(0, User::count());
+        $this->assertSame(0, Organization::count());
+
+        $this->post($this->relative($this->signUpLink('ada@example.com')), ['password' => 'correct horse 7'])->assertOk();
+
+        $user = User::sole();
+        $this->assertSame('ada@example.com', $user->email);
+        $this->assertNotNull($user->email_verified_at);
+
+        $organization = Organization::sole();
+        $this->assertSame('Lagos Nights', $organization->name);
+        // Owner, not manager. Nobody else can hand that over.
+        $this->assertTrue($user->hasRoleIn($organization, Role::Owner));
     }
 
     public function test_the_password_is_stored_hashed_and_actually_works(): void
     {
-        $this->postJson('/api/auth/register', $this->registration())->assertCreated();
+        $this->signUpAndConfirm($this->registration());
 
         $user = User::first();
 
         $this->assertNotSame('correct horse 7', $user->password);
         $this->assertTrue(Hash::check('correct horse 7', $user->password));
 
-        // The model casts password => 'hashed'. Hashing again before assigning
-        // stores a hash of a hash, and every sign-in fails from then on — which
-        // is only visible at the next sign-in, never at registration.
-        $this->postJson('/api/auth/login', [
-            'email' => 'ada@example.com',
-            'password' => 'correct horse 7',
-        ])->assertOk();
+        // Hashed once, when the form was posted, and carried to the account as
+        // it was. Hashing again on the way stores a hash of a hash, and every
+        // sign-in fails from then on — visible only at the next sign-in.
+        $this->signIn('ada@example.com', 'correct horse 7');
     }
 
-    public function test_the_new_account_can_immediately_use_the_console(): void
+    public function test_the_new_account_signs_in_straight_to_the_console(): void
     {
-        $token = $this->postJson('/api/auth/register', $this->registration())
-            ->assertCreated()
-            ->json('token');
+        $this->signUpAndConfirm($this->registration());
 
-        // The point of returning a token is that signing up and being able to
-        // create an event are the same step.
+        $token = $this->signIn('ada@example.com', 'correct horse 7', 'organizer-console')['token'];
+
         $this->withToken($token)->getJson('/api/organizer/events')->assertOk();
     }
 
@@ -101,6 +106,7 @@ class AccountTest extends TestCase
         // whether a named venue holds an account here.
         $response->assertStatus(202);
         $response->assertJsonMissingPath('errors');
+        $response->assertJsonMissingPath('token');
         $this->assertStringNotContainsString('taken', $response->getContent());
 
         // And no second account was made.
@@ -128,11 +134,11 @@ class AccountTest extends TestCase
 
     public function test_two_organizations_with_the_same_name_get_different_slugs(): void
     {
-        $this->postJson('/api/auth/register', $this->registration())->assertCreated();
+        $this->signUpAndConfirm($this->registration());
         RateLimiter::clear('register:127.0.0.1');
-        $this->postJson('/api/auth/register', $this->registration([
+        $this->signUpAndConfirm($this->registration([
             'email' => 'chidi@example.com',
-        ]))->assertCreated();
+        ]));
 
         // A slug is a public URL. Two organizations cannot share one.
         $this->assertSame(2, Organization::distinct('slug')->count('slug'));

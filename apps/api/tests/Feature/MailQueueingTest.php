@@ -33,7 +33,10 @@ class MailQueueingTest extends TestCase
         'EmailChangeConfirm',
         'EmailChangeRequested',
         'EmailChanged',
+        'SignUpAddressInUse',
+        'SignUpConfirm',
         'TeamInvitationMail',
+        'VerifyEmailAddress',
     ];
 
     private const TELL = 'Which emails wait for the queue worker has changed. Update the list here, '

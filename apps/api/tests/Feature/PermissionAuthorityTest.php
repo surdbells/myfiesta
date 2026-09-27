@@ -10,8 +10,10 @@ use App\Models\Organization;
 use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\FinishesSignUps;
 use Tests\TestCase;
 
 /**
@@ -30,7 +32,7 @@ use Tests\TestCase;
  */
 class PermissionAuthorityTest extends TestCase
 {
-    use RefreshDatabase;
+    use FinishesSignUps, RefreshDatabase;
 
     private Organization $org;
 
@@ -246,38 +248,42 @@ class PermissionAuthorityTest extends TestCase
         );
     }
 
-    public function test_registering_returns_the_same_shape_as_signing_in(): void
+    public function test_an_account_made_by_signing_up_signs_in_as_its_owner(): void
     {
-        $response = $this->postJson('/api/auth/register', [
+        Mail::fake();
+
+        // Signing up answers "check your email" and nothing more; the account
+        // exists once the link is opened, and its first session is a sign-in.
+        $this->signUpAndConfirm([
             'name' => 'Ada Okafor',
             'email' => 'ada@example.com',
             'password' => 'correct horse 7',
             'password_confirmation' => 'correct horse 7',
             'organization' => 'Danforth Sessions',
-        ])->assertCreated();
+        ]);
 
-        // A payload that differs by entry point is a bug waiting for whichever
-        // path is tested less.
-        $this->assertSame(
-            Permission::namesForRole(Role::Owner),
-            $response->json('organizations.0.permissions'),
-        );
+        $session = $this->signIn('ada@example.com', 'correct horse 7');
 
-        $this->assertSame(['attendee', 'organizer'], $response->json('abilities'));
+        $this->assertSame(Permission::namesForRole(Role::Owner), $session['organizations'][0]['permissions']);
+        $this->assertSame(['attendee', 'organizer'], $session['abilities']);
     }
 
-    public function test_an_attendee_registering_is_told_it_is_only_an_attendee(): void
+    public function test_an_attendee_signing_up_is_told_it_is_only_an_attendee(): void
     {
-        $this->postJson('/api/auth/register', [
+        Mail::fake();
+
+        $this->signUpAndConfirm([
             'name' => 'Tunde Bello',
             'email' => 'tunde@example.com',
             'password' => 'correct horse 7',
             'password_confirmation' => 'correct horse 7',
             'attendee' => true,
-        ])
-            ->assertCreated()
-            ->assertJsonPath('abilities', ['attendee'])
-            ->assertJsonPath('organizations', []);
+        ]);
+
+        $session = $this->signIn('tunde@example.com', 'correct horse 7');
+
+        $this->assertSame(['attendee'], $session['abilities']);
+        $this->assertSame([], $session['organizations']);
     }
 
     public function test_the_me_endpoint_agrees_with_the_sign_in_payload(): void

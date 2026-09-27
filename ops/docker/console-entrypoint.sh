@@ -48,3 +48,18 @@ stamp api-base "$API_BASE_URL"
 stamp public-base "$PUBLIC_URL"
 
 echo "console: stamped api-base=$API_BASE_URL public-base=$PUBLIC_URL"
+
+# The API's origin, for the Content-Security-Policy in console.nginx.conf:
+# scheme, host and port, and nothing after — a source with a path in it
+# matches that one path only, and the console calls everything under it.
+API_ORIGIN=$(printf '%s' "$API_BASE_URL" | sed -E 's#^(https?://[^/?#]+).*$#\1#')
+
+# Written into nginx's configuration, so nothing but an address.
+if ! printf '%s' "$API_ORIGIN" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?$'; then
+    echo "console: API_BASE_URL is not an http(s) address — refusing to start" >&2
+    exit 1
+fi
+
+printf 'map $host $console_api_origin {\n    default "%s";\n}\n' "$API_ORIGIN" > /etc/nginx/conf.d/00-console-origin.conf
+
+echo "console: the policy allows the API at $API_ORIGIN"

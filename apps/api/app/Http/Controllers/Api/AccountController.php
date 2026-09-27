@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\Role;
-use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Mail\EmailChangeAddressInUse;
 use App\Mail\EmailChangeConfirm;
@@ -11,11 +9,12 @@ use App\Mail\EmailChanged;
 use App\Mail\EmailChangeRequested;
 use App\Models\EmailChange;
 use App\Models\EmailPreference;
-use App\Models\Organization;
+use App\Models\OrganizationInvitation;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Models\OrganizationInvitation;
+use App\Services\Accounts\SignUps;
 use App\Services\Door\DoorPasses;
+use App\Services\Impersonation\Impersonation;
 use App\Services\Team\TeamService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -56,7 +55,21 @@ class AccountController extends Controller
         return PasswordRule::min(10)->letters()->numbers();
     }
 
-    public function register(Request $request): JsonResponse
+    /**
+     * Ask for an account.
+     *
+     * The answer is the same for every address: check your email. The email
+     * is where the cases part — a link that makes the account, or a note that
+     * there already is one — and only whoever reads that inbox learns which.
+     * Answering with a session for a new address, as this used to, told
+     * anybody watching which addresses were not new: a token or no token says
+     * it louder than any message.
+     *
+     * The one exception is joining by invitation. That link was sent to the
+     * address and opened from it, which is the proof the email would have
+     * asked for, so the account is made there and then, signed in.
+     */
+    public function register(Request $request, SignUps $signUps): JsonResponse
     {
         // Keyed on origin. Registration is the cheapest way to fill a users
         // table with junk, and the only signal available before an account
@@ -119,64 +132,107 @@ class AccountController extends Controller
             }
         }
 
-        /*
-         * An address already in use is not reported as such.
-         *
-         * Saying "that email is taken" turns registration into a way to test
-         * whether somebody holds an account here — which for a platform whose
-         * organizers are named venues and promoters is a competitive
-         * intelligence tool. The person who genuinely owns it gets an email
-         * telling them so, which is the only channel that proves ownership.
-         */
-        if (User::where('email', $email)->exists()) {
-            RateLimiter::hit($key, 3600);
-
-            return response()->json([
-                'message' => 'Check your email to finish setting up your account.',
-                'pending' => true,
-            ], 202);
-        }
-
         RateLimiter::hit($key, 3600);
 
-        $user = DB::transaction(function () use ($data, $email, $invitation) {
-            $user = User::create([
-                'name' => trim($data['name']),
-                'email' => $email,
-                // Plain, not hashed. The model casts password => 'hashed', so
-                // hashing here would hash the hash and nothing would ever
-                // match — a failure that only shows up at the next sign-in.
-                'password' => $data['password'],
-            ]);
+        if ($invitation !== null) {
+            return $this->joinByInvitation($invitation, $data, $email)
+                ?? $this->checkYourEmail($signUps, $data, $email);
+        }
 
-            if ($invitation !== null) {
+        return $this->checkYourEmail($signUps, $data, $email);
+    }
+
+    /**
+     * The one answer every sign-up without an invitation gets.
+     *
+     * The password is hashed here whatever happens next, so a new address and
+     * a known one cost the same to answer; SignUps sends one email either way,
+     * during the request either way, for the same reason.
+     *
+     * The emails are limited per address as well as per origin, silently —
+     * the answer does not change — so the form cannot be pointed at one inbox
+     * from many places. The sign-up itself is still taken past that limit.
+     * Whoever asks counts against it, a stranger as much as the owner, and a
+     * sign-up dropped at the limit would be an owner kept out by somebody
+     * else's three requests an hour.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function checkYourEmail(SignUps $signUps, array $data, string $email): JsonResponse
+    {
+        $password = Hash::make($data['password']);
+        $perAddress = 'register-address:'.hash('sha256', $email);
+        $sendEmail = ! RateLimiter::tooManyAttempts($perAddress, 3);
+
+        if ($sendEmail) {
+            RateLimiter::hit($perAddress, 3600);
+        }
+
+        // An attendee account is declared, never inferred: a console form
+        // that lost its organization field fails validation above rather
+        // than quietly making somebody an account with no events page.
+        $signUps->begin(
+            $email,
+            trim($data['name']),
+            $password,
+            filter_var($data['attendee'] ?? false, FILTER_VALIDATE_BOOLEAN) || blank($data['organization'] ?? null)
+                ? null
+                : trim($data['organization']),
+            $sendEmail,
+        );
+
+        return response()->json([
+            'message' => 'Check your email to finish setting up your account.',
+            'pending' => true,
+        ], 202);
+    }
+
+    /**
+     * An account made from an invitation, signed in straight away.
+     *
+     * Only for an address nobody can sign in with yet: a new one, or one that
+     * bought tickets as a guest, whose tickets are then already in it. The
+     * address is verified on the way in — the invitation went to it, and it
+     * was opened. Null for an address that already has a working account;
+     * that owner signs in and accepts, and is told so by email like any other
+     * sign-up for a known address.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function joinByInvitation(OrganizationInvitation $invitation, array $data, string $email): ?JsonResponse
+    {
+        try {
+            $user = DB::transaction(function () use ($invitation, $data, $email) {
+                $user = User::withTrashed()->whereRaw('lower(email) = ?', [$email])->lockForUpdate()->first();
+
+                if ($user !== null && ($user->trashed() || ! $user->isUnclaimed())) {
+                    return null;
+                }
+
+                $user ??= new User(['email' => $email]);
+
+                $user->forceFill([
+                    'name' => trim($data['name']),
+                    // Plain, not hashed. The model casts password => 'hashed',
+                    // so hashing here would hash the hash and nothing would
+                    // ever match — a failure that only shows up at the next
+                    // sign-in.
+                    'password' => $data['password'],
+                    'email_verified_at' => now(),
+                ])->save();
+
                 app(TeamService::class)->accept($invitation, $user->load('organizations'));
 
                 return $user;
-            }
+            });
+        } catch (UniqueConstraintViolationException) {
+            // The same address, signed up twice at the same moment.
+            $user = null;
+        }
 
-            // An attendee account: no organization, and so no organizer
-            // ability when the token is minted below.
-            if (filled($data['attendee'] ?? null) || blank($data['organization'] ?? null)) {
-                return $user;
-            }
-
-            $organization = Organization::create([
-                'name' => trim($data['organization']),
-                'slug' => $this->slugFor($data['organization']),
-            ]);
-
-            // Owner, not manager. The person who created it is the only one
-            // who can hand that over, and an organization whose owner is a
-            // support ticket away is one nobody can actually run.
-            $organization->members()->attach($user->id, [
-                'id' => (string) Str::uuid(),
-                'role' => Role::Owner->value,
-                'accepted_at' => now(),
-            ]);
-
-            return $user;
-        });
+        if ($user === null) {
+            return null;
+        }
 
         $user->load('organizations');
 
@@ -269,6 +325,10 @@ class AccountController extends Controller
                 // opened yet, which deleting tokens alone would leave working.
                 app(DoorPasses::class)->endIssuedBy($user);
 
+                // And, for staff, a console link to an organization not yet
+                // opened — the same kind of thing.
+                app(Impersonation::class)->revokeFor($user, $user);
+
                 // And a move to a new address that is still waiting. This is
                 // what the warning sent to the old address tells somebody to
                 // do if the move was not theirs, and it would not help them if
@@ -340,6 +400,9 @@ class AccountController extends Controller
         // opened is one that has not signed in yet.
         $passes = $doorPasses->endIssuedBy($user);
 
+        // Staff sessions acting as an organization are other sign-ins too.
+        app(Impersonation::class)->revokeFor($user, $user);
+
         // A move to a new address still waiting is cancelled too. Somebody
         // who was warned that their address is about to change is told to do
         // exactly this, and the link at the other end must stop working when
@@ -371,6 +434,17 @@ class AccountController extends Controller
     public function requestEmailChange(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        // Staff sign in to the admin with a code sent to this address. If the
+        // password alone could move it, the password alone would choose where
+        // the codes go. Another administrator removes the role, the owner
+        // moves the address, and the role is granted again to the new one.
+        // (User::booted() takes the role away if an address moves any other way.)
+        if ($user->isPlatformStaff()) {
+            throw ValidationException::withMessages([
+                'email' => 'This account has myFiesta staff access, and its admin sign-in codes go to this address, so it cannot be changed here. Ask another administrator to remove your staff access first; they can give it back once the new address is confirmed.',
+            ]);
+        }
 
         // Keyed on the account, and counted whether or not the password was
         // right: otherwise this is an unthrottled way to guess it from a
@@ -554,6 +628,8 @@ class AccountController extends Controller
 
                 $passes = $doorPasses->endIssuedBy($user);
 
+                app(Impersonation::class)->revokeFor($user, $user);
+
                 return ['user' => $user, 'old' => $old, 'passes' => $passes];
             });
         } catch (UniqueConstraintViolationException) {
@@ -616,18 +692,5 @@ class AccountController extends Controller
             'reminders_opted_out_at' => $now->reminders_opted_out_at ?? $was->reminders_opted_out_at,
             'marketing_opted_out_at' => $now->marketing_opted_out_at ?? $was->marketing_opted_out_at,
         ])->save();
-    }
-
-    private function slugFor(string $name): string
-    {
-        $base = Str::slug($name) ?: 'organizer';
-        $slug = $base;
-        $n = 2;
-
-        while (Organization::where('slug', $slug)->exists()) {
-            $slug = $base.'-'.$n++;
-        }
-
-        return $slug;
     }
 }

@@ -23,6 +23,10 @@ COPY --from=build /repo/apps/organizer-web/dist/organizer-web/browser /usr/share
 COPY ops/docker/console.nginx.conf /etc/nginx/conf.d/default.conf
 COPY ops/docker/console-entrypoint.sh /docker-entrypoint.d/40-stamp-addresses.sh
 
-RUN chmod +x /docker-entrypoint.d/40-stamp-addresses.sh
+# Line endings stripped because a checkout on Windows writes CRLF, and a
+# shebang ending in a carriage return is a script that will not run. It also
+# writes the API's origin into the Content-Security-Policy (console.nginx.conf).
+RUN sed -i 's/\r$//' /docker-entrypoint.d/40-stamp-addresses.sh \
+    && chmod +x /docker-entrypoint.d/40-stamp-addresses.sh
 
 EXPOSE 80

@@ -38,6 +38,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Staff: signed in until they sign out
+    |--------------------------------------------------------------------------
+    |
+    | The admin panel is the only thing that signs anybody in to a browser
+    | session here — the apps use tokens — and staff asked not to be timed
+    | out. So a staff session outlives the ordinary lifetime above by a long
+    | way, and "keep me signed in" (ticked by default on the admin sign-in;
+    | its cookie is only issued after the emailed code) outlives that. Unticked,
+    | the session cookie ends when the browser closes. Signing out,
+    | changing the password, or losing the staff role ends both at once.
+    |
+    | Both are in minutes. The remember cookie is capped at 400 days by
+    | browsers whatever this says.
+    |
+    | staff_lifetime: how long a staff session may sit idle before the next
+    |                 visit quietly signs in again from the remember cookie.
+    | staff_remember: how long "keep me signed in" lasts from sign-in.
+    |
+    */
+
+    'staff_lifetime' => (int) env('SESSION_STAFF_LIFETIME', 60 * 24 * 30),
+
+    'staff_remember' => (int) env('SESSION_STAFF_REMEMBER', 60 * 24 * 400),
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Encryption
     |--------------------------------------------------------------------------
     |
@@ -167,9 +193,13 @@ return [
     | to the server if the browser has a HTTPS connection. This will keep
     | the cookie from being sent to you when it can't be done securely.
     |
+    | On by default in production. The session cookie is the admin panel's
+    | whole sign-in, and Laravel's own default — unset, so off — would send it
+    | over plain http to anybody on the same wifi as a member of staff.
+    |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV', 'production') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

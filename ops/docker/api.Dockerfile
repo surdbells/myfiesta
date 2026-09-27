@@ -58,8 +58,18 @@ COPY --from=vendor /var/www/api .
 # a redeploy does not take somebody's export with it.
 RUN chown -R www-data:www-data storage bootstrap/cache
 
+# php-fpm checks production is fit to run before it starts (app:preflight), and
+# the container stops with the list if it is not. Other commands pass straight
+# through, so artisan still works on a box that is being put right.
+# Line endings stripped because a checkout on Windows writes CRLF, and a
+# shebang ending in a carriage return is a script that will not run.
+COPY ops/docker/api-entrypoint.sh /usr/local/bin/myfiesta-entrypoint
+RUN sed -i 's/\r$//' /usr/local/bin/myfiesta-entrypoint \
+    && chmod 0755 /usr/local/bin/myfiesta-entrypoint
+
 USER www-data
 
 EXPOSE 9000
 
+ENTRYPOINT ["myfiesta-entrypoint"]
 CMD ["php-fpm"]

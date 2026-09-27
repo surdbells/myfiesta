@@ -26,6 +26,9 @@ x-api: &api
     # Private files: identity documents, data exports. On a volume so a
     # redeploy does not take somebody's export with it, and never in the image.
     - api-storage:/var/www/api/storage/app
+    # Uploaded pictures (MEDIA_DISK=local), on a volume of their own so that
+    # nginx can be given them without being given the private files above.
+    - api-media:/var/www/api/storage/app/public
   depends_on:
     api-migrate:
       condition: service_completed_successfully
@@ -33,6 +36,12 @@ x-api: &api
 services:
   # Runs once per deploy, before anything serves. A container that starts
   # against a schema it does not match is the worst five minutes of a release.
+  #
+  # It checks production is fit to run (app:preflight) before anything else,
+  # so a deployment with a secret missing or a sender pretending stops here,
+  # with the list, before the schema is touched. Said in the command because
+  # the image's entrypoint checks only in front of php-fpm: everything else
+  # it runs has to work on a box that is being put right.
   api-migrate:
     build:
       context: ../..
@@ -40,7 +49,8 @@ services:
     image: myfiesta/api:${TAG:-latest}
     env_file: [../../.env.production]
     command: >
-      sh -c "php artisan migrate --force
+      sh -c "php artisan app:preflight
+      && php artisan migrate --force
       && php artisan config:cache
       && php artisan route:cache
       && php artisan event:cache"
@@ -65,13 +75,35 @@ services:
     command: php artisan schedule:work
 
   api-web:
-    image: nginx:alpine
+    # Its own image: the API's public files (the admin panel's scripts and
+    # styles) are in it, and so is the step that reads TRUSTED_PROXIES.
+    build:
+      context: ../..
+      dockerfile: ops/docker/api-web.Dockerfile
+    image: myfiesta/api-web:${TAG:-latest}
     restart: unless-stopped
+    environment:
+      # Not optional. The addresses the load balancer connects from: only they
+      # may say who the client is, or that it was https. The API reads the same
+      # variable from .env.production.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?set the addresses the load balancer connects from}
+    # The uploaded pictures it serves at /storage/, read-only. Only these:
+    # identity documents and exports stay on api-storage, which this
+    # container never sees.
     volumes:
-      - ./api.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - api-media:/var/www/api/storage/app/public:ro
     depends_on: [api]
+    # On this host's loopback unless API_BIND says otherwise. A load balancer
+    # on this host reaches it through Docker's proxy and arrives from the
+    # network's gateway, which is why TRUSTED_PROXIES names the gateway then.
+    # But anything else that comes in through that proxy arrives from the
+    # gateway too — a visitor over IPv6, when this network has only IPv4 —
+    # and would be believed about its own address and about https. So the
+    # gateway is only ever trusted with the port on loopback. A balancer on
+    # another machine means API_BIND=0.0.0.0 and the balancer's own address
+    # in TRUSTED_PROXIES, never the gateway.
     ports:
-      - "${API_PORT:-8000}:80"
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:80"
 
   site:
     build:
@@ -107,3 +139,6 @@ services:
 
 volumes:
   api-storage:
+  # Posters, logos and gallery pictures when MEDIA_DISK=local. Unused, and
+  # harmless, when the pictures live in a bucket.
+  api-media:
