@@ -10,6 +10,7 @@ use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -73,7 +74,7 @@ class PromoteBannerTest extends TestCase
         ]);
     }
 
-    private function promote(EventImage $image): \Illuminate\Testing\TestResponse
+    private function promote(EventImage $image): TestResponse
     {
         return $this->patchJson(
             "/api/organizer/events/{$this->event->id}/images/{$image->id}",

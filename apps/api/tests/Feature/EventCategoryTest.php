@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Legacy\LegacyRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -32,7 +33,7 @@ class EventCategoryTest extends TestCase
         Sanctum::actingAs($owner->fresh()->load('organizations'), [TokenAbility::Organizer->value]);
     }
 
-    private function create(array $overrides = []): \Illuminate\Testing\TestResponse
+    private function create(array $overrides = []): TestResponse
     {
         return $this->postJson('/api/organizer/events', array_merge([
             'organization_id' => $this->org->id,

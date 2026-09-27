@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Enums\TokenAbility;
+use App\Models\Event;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,7 +160,7 @@ class BrandTest extends TestCase
         $this->patchJson('/api/organizer/brand', ['description' => 'Afrobeats since 2019.'])->assertOk();
         $this->postJson('/api/organizer/brand/logo', ['file' => $this->logo()])->assertOk();
 
-        $event = \App\Models\Event::factory()->published()->create([
+        $event = Event::factory()->published()->create([
             'organization_id' => $this->org->id,
             'slug' => 'afro-fest',
             'starts_at' => now()->addWeek(),
@@ -174,7 +175,7 @@ class BrandTest extends TestCase
     public function test_renaming_a_verified_organization_hides_the_tick(): void
     {
         $this->org->update(['verified_at' => now(), 'verified_name' => 'Lagos Nights']);
-        $event = \App\Models\Event::factory()->published()->create([
+        $event = Event::factory()->published()->create([
             'organization_id' => $this->org->id,
             'slug' => 'afro-fest',
             'starts_at' => now()->addWeek(),

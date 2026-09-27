@@ -13,6 +13,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -114,7 +115,7 @@ class ExportTest extends TestCase
     }
 
     /** @return array{0: string, 1: list<list<string>>} */
-    private function csv(\Illuminate\Testing\TestResponse $response): array
+    private function csv(TestResponse $response): array
     {
         $body = $response->streamedContent();
         $rows = array_map('str_getcsv', array_filter(preg_split("/\r?\n/", substr($body, 3))));

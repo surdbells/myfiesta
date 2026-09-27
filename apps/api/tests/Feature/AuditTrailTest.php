@@ -10,7 +10,9 @@ use App\Models\Organization;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -78,7 +80,7 @@ class AuditTrailTest extends TestCase
         return $user;
     }
 
-    private function entries(string $action): \Illuminate\Support\Collection
+    private function entries(string $action): Collection
     {
         return AuditLog::where('action', $action)->get();
     }
@@ -92,7 +94,7 @@ class AuditTrailTest extends TestCase
 
         // A log application code can rewrite is not evidence of anything. The
         // same guarantee the ledger has, enforced by the same mechanism.
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         DB::table('audit_logs')->update(['action' => 'something.else']);
     }
@@ -101,7 +103,7 @@ class AuditTrailTest extends TestCase
     {
         app(Auditor::class)->record('event.published', $this->event);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         DB::table('audit_logs')->delete();
     }

@@ -11,6 +11,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use App\Models\WaitlistEntry;
 use App\Services\Checkout\CheckoutService;
+use App\Services\Checkout\Fulfiller;
 use App\Services\Checkout\TicketIssuer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -121,7 +122,7 @@ class WaitlistTest extends TestCase
         $this->general->update(['quantity_available' => 2]);
 
         $order = app(CheckoutService::class)->reserve($this->event, [$this->general->id => 1], 'ADA@example.com', 'Ada');
-        app(\App\Services\Checkout\Fulfiller::class)->fulfilFree($order);
+        app(Fulfiller::class)->fulfilFree($order);
 
         $this->assertSame('purchased', WaitlistEntry::sole()->status);
     }

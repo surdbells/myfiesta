@@ -18,12 +18,14 @@ use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Payouts\PayoutRequestRefused;
 use App\Services\Payouts\PayoutRequests;
+use App\Services\Payouts\SettlementRecorder;
 use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -98,7 +100,7 @@ class PayoutRequestTest extends TestCase
         return (int) LedgerEntry::where('organization_id', $this->org->id)->where('currency', 'CAD')->sum('amount');
     }
 
-    private function ask(int $amount, ?User $as = null): \Illuminate\Testing\TestResponse
+    private function ask(int $amount, ?User $as = null): TestResponse
     {
         $this->actAs($as ?? $this->owner);
 
@@ -361,7 +363,7 @@ class PayoutRequestTest extends TestCase
         $this->expectException(SettlementRefused::class);
         $this->expectExceptionMessage('only possible when an administrator pays');
 
-        app(\App\Services\Payouts\SettlementRecorder::class)->record(
+        app(SettlementRecorder::class)->record(
             $this->org,
             new Money(20_000, 'CAD'),
             'interac',

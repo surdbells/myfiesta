@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Enums\TokenAbility;
+use App\Models\AuditLog;
 use App\Models\DoorPass;
 use App\Models\Event;
 use App\Models\Organization;
@@ -384,6 +385,6 @@ class DoorPassTest extends TestCase
 
         $this->assertDatabaseMissing('door_passes', ['secret_hash' => $secret]);
         $this->assertSame(hash('sha256', $secret), DoorPass::sole()->secret_hash);
-        $this->assertStringNotContainsString($secret, \App\Models\AuditLog::query()->get()->toJson());
+        $this->assertStringNotContainsString($secret, AuditLog::query()->get()->toJson());
     }
 }

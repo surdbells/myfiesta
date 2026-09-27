@@ -7,8 +7,8 @@ use App\Http\Resources\EventResource;
 use App\Http\Resources\EventSummaryResource;
 use App\Models\Event;
 use App\Services\Discovery\EventFilters;
-use App\Services\Events\CalendarFile;
 use App\Services\Discovery\EventSearch;
+use App\Services\Events\CalendarFile;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 

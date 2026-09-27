@@ -12,6 +12,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use App\Services\Checkout\TicketIssuer;
 use App\Services\Door\CheckInService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -232,7 +233,7 @@ class GuestsAndCodesTest extends TestCase
     {
         // The validation above is the sentence a person reads. This is the
         // floor underneath it, for anything reaching the table another way.
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         Code::create([
             'organization_id' => $this->org->id,

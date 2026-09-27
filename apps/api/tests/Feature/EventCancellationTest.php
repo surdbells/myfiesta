@@ -13,6 +13,7 @@ use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Events\EventCanceller;
 use App\Services\Reminders\ReminderDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -344,7 +345,7 @@ class EventCancellationTest extends TestCase
     {
         // A payment provider refusing one refund must not stop the rest, and an
         // organizer who is not told will hear it from the buyer instead.
-        $canceller = new \ReflectionClass(\App\Services\Events\EventCanceller::class);
+        $canceller = new \ReflectionClass(EventCanceller::class);
 
         $this->assertTrue(
             $canceller->hasMethod('cancel'),

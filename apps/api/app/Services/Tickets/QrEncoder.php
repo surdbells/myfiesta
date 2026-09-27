@@ -2,6 +2,7 @@
 
 namespace App\Services\Tickets;
 
+use BaconQrCode\Common\ErrorCorrectionLevel;
 use BaconQrCode\Encoder\Encoder;
 
 /**
@@ -36,7 +37,7 @@ class QrEncoder
 
     public function svg(string $code, int $size = 240, ?string $label = null): string
     {
-        $matrix = Encoder::encode($code, \BaconQrCode\Common\ErrorCorrectionLevel::valueOf(self::ECC))
+        $matrix = Encoder::encode($code, ErrorCorrectionLevel::valueOf(self::ECC))
             ->getMatrix();
 
         $width = $matrix->getWidth();

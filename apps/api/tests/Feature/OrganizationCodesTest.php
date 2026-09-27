@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Role;
 use App\Enums\TokenAbility;
 use App\Models\Code;
+use App\Models\CodeBatch;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\User;
@@ -111,7 +112,7 @@ class OrganizationCodesTest extends TestCase
     {
         $this->actAs(Role::Owner);
 
-        $batch = \App\Models\CodeBatch::create([
+        $batch = CodeBatch::create([
             'organization_id' => $this->org->id,
             'event_id' => $this->fest->id,
             'name' => 'Giveaway',

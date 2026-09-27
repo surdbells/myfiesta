@@ -32,7 +32,7 @@ class TicketTypeController extends Controller
 
     public function __construct(private readonly Auditor $auditor) {}
 
-public function index(Request $request, Event $event): JsonResponse
+    public function index(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
 

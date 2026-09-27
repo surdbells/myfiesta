@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -19,8 +20,8 @@ use Illuminate\Support\Facades\Storage;
 class OrganizerResource extends JsonResource
 {
     /**
-     * @param  \Illuminate\Support\Collection  $upcoming
-     * @param  \Illuminate\Support\Collection  $past
+     * @param  Collection  $upcoming
+     * @param  Collection  $past
      */
     public function __construct($resource, private $upcoming, private $past)
     {

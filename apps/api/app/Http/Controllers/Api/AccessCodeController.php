@@ -6,7 +6,6 @@ use App\Exceptions\CheckoutException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
-use App\Models\TicketType;
 use App\Services\Checkout\Pricer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

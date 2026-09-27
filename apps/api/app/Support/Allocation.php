@@ -21,7 +21,7 @@ final class Allocation
 {
     /**
      * @param  list<int>  $weights  relative shares, e.g. ticket prices
-     * @return list<int>  one part per weight, summing exactly to $amount
+     * @return list<int> one part per weight, summing exactly to $amount
      */
     public static function split(int $amount, array $weights): array
     {

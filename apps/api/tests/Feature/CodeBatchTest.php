@@ -16,6 +16,7 @@ use App\Services\Checkout\CheckoutService;
 use App\Services\Checkout\Fulfiller;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -48,7 +49,7 @@ class CodeBatchTest extends TestCase
         Sanctum::actingAs($owner->fresh()->load('organizations'), [TokenAbility::Organizer->value]);
     }
 
-    private function make(array $overrides = []): \Illuminate\Testing\TestResponse
+    private function make(array $overrides = []): TestResponse
     {
         return $this->postJson("/api/organizer/events/{$this->event->id}/code-batches", array_merge([
             'name' => 'Sponsor giveaway',

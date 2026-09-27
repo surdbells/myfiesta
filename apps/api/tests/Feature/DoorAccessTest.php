@@ -11,6 +11,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -87,7 +88,7 @@ class DoorAccessTest extends TestCase
         return $user->fresh()->load('organizations');
     }
 
-    private function scan(array $body = []): \Illuminate\Testing\TestResponse
+    private function scan(array $body = []): TestResponse
     {
         return $this->postJson(
             "/api/events/{$this->event->id}/scan",

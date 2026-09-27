@@ -207,7 +207,7 @@ class SeriesController extends Controller
         $day = strtoupper(substr($local->format('D'), 0, 2));
 
         $parts = match ($data['frequency']) {
-            'weekly' => ["FREQ=WEEKLY", "BYDAY={$day}"],
+            'weekly' => ['FREQ=WEEKLY', "BYDAY={$day}"],
             'fortnightly' => ['FREQ=WEEKLY', 'INTERVAL=2', "BYDAY={$day}"],
             'monthly' => [
                 'FREQ=MONTHLY',
