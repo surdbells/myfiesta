@@ -35,7 +35,7 @@ class EventImageController extends Controller
 
     public function index(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('view', $event);
+        $this->authorize('viewInConsole', $event);
 
         return response()->json([
             'banner' => $event->banner ? $this->present($event->banner) : null,

@@ -228,7 +228,7 @@ class EventController extends Controller
      */
     public function show(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('view', $event);
+        $this->authorize('viewInConsole', $event);
 
         $counted = $this->withInsights(Event::query()->whereKey($event->id))->firstOrFail();
 
@@ -299,7 +299,7 @@ class EventController extends Controller
      */
     public function duplicate(Request $request, Event $event, EventDuplicator $duplicator): JsonResponse
     {
-        $this->authorize('view', $event);
+        $this->authorize('viewInConsole', $event);
         $this->authorize('create', [Event::class, $event->organization_id]);
 
         // A copy would carry no takedown, and publish() only refuses the

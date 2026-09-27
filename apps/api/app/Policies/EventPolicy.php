@@ -29,6 +29,27 @@ class EventPolicy
         return $user !== null && $user->isStaffOf($event->organization_id);
     }
 
+    /**
+     * The event as the console shows it: its sales figures, its reminders,
+     * its images and its series.
+     *
+     * Only to the organization's own people. `view` answers for the public
+     * page, where a published event is anybody's to read, and the console's
+     * endpoints used to ask it too — so any organizer could read any other
+     * organization's orders, tickets issued, arrivals and page views for any
+     * published event, by id. Door staff are members and keep the event they
+     * work, as before; a draft stays with the roles that may act for the
+     * organization.
+     */
+    public function viewInConsole(User $user, Event $event): bool
+    {
+        if (! $user->hasPermissionIn($event->organization_id, Permission::EventsView)) {
+            return false;
+        }
+
+        return $event->status === 'published' || $user->isStaffOf($event->organization_id);
+    }
+
     public function create(User $user, string $organizationId): bool
     {
         return $user->hasPermissionIn($organizationId, Permission::EventsCreate);

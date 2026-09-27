@@ -25,7 +25,7 @@ class ReminderController extends Controller
 
     public function index(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('view', $event);
+        $this->authorize('viewInConsole', $event);
 
         return response()->json([
             'data' => $event->reminders->map(fn (EventReminder $r) => $this->present($r))->values(),

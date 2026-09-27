@@ -27,7 +27,7 @@ class SeriesController extends Controller
 
     public function show(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('view', $event);
+        $this->authorize('viewInConsole', $event);
 
         $series = $event->series;
 
