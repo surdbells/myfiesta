@@ -292,14 +292,28 @@
                 <dd class="m-0 text-right tabular-nums">−{{ formatMoney(q.discount) }}</dd>
               }
 
-              @if (q.service_charge.amount > 0) {
-                <dt class="text-text-muted">Service fee</dt>
-                <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.service_charge) }}</dd>
+              <!-- Each tax on its own line, and the fee's own tax under the
+                   fee, in the receipt's order: what is on this bill is what
+                   the receipt will say, line for line. A tax that came to
+                   nothing is left off, as it always was here. -->
+              @for (tax of ticketTaxes(); track $index) {
+                <dt class="text-text-muted">{{ taxLabel(tax) }}</dt>
+                <dd class="m-0 text-right tabular-nums">{{ formatMoney(tax.amount) }}</dd>
+              } @empty {
+                @if (q.tax.amount > 0) {
+                  <dt class="text-text-muted">{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
+                  <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.tax) }}</dd>
+                }
               }
 
-              @if (q.tax.amount > 0) {
-                <dt class="text-text-muted">{{ q.tax_label ?? 'Tax' }}{{ q.tax_inclusive ? ' (included)' : '' }}</dt>
-                <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.tax) }}</dd>
+              @if (q.service_charge.amount > 0) {
+                <dt class="text-text-muted">Service fee</dt>
+                <dd class="m-0 text-right tabular-nums">{{ formatMoney(serviceFee()) }}</dd>
+              }
+
+              @for (tax of feeTaxes(); track $index) {
+                <dt class="text-text-muted">{{ taxLabel(tax) }}</dt>
+                <dd class="m-0 text-right tabular-nums">{{ formatMoney(tax.amount) }}</dd>
               }
 
               <dt class="mt-2 border-t border-border pt-3 text-lg font-semibold text-text">Total</dt>

@@ -99,13 +99,13 @@ class AnalyticsScreensTest extends TestCase
         $this->signIn($this->staffMember(PlatformRole::Finance));
 
         Livewire::test(PlatformKpis::class, ['pageFilters' => self::WEEK])
-            ->assertSee('CA$392.70')                // gross
-            ->assertSee('CA$3.00')                  // net platform take
-            ->assertSee('CA$9.50')                  // gateway fees
+            ->assertSee('$392.70')                  // gross
+            ->assertSee('$3.00')                    // net platform take
+            ->assertSee('$9.50')                    // gateway fees
             ->assertSee('1 payment not yet settled')
             ->assertSee('+565.6%')                  // 392.70 against 59.00
             ->assertSee('15.0% of gross sales')     // 59.00 refunded of 392.70
-            ->assertSee('CA$190.00')                // owed to organizers
+            ->assertSee('$190.00')                  // owed to organizers
             ->assertSee('data-stat="disputes-open"', false)
             ->assertDontSee('₦');
     }
@@ -115,9 +115,13 @@ class AnalyticsScreensTest extends TestCase
         $this->seedTrade();
         $this->signIn($this->staffMember(PlatformRole::Admin));
 
-        Livewire::test(PlatformKpis::class, ['pageFilters' => ['currency' => 'NGN', 'period' => '7d']])
-            ->assertSee('₦11,250.00')
-            ->assertDontSee('CA$');
+        $html = Livewire::test(PlatformKpis::class, ['pageFilters' => ['currency' => 'NGN', 'period' => '7d']])
+            ->assertSee('₦11,250')
+            ->html();
+
+        // No dollar amount at all. Not "$" alone: the page's own scripts
+        // write that.
+        $this->assertDoesNotMatchRegularExpression('/\$[\d,]+\.\d\d/', $html);
     }
 
     public function test_every_chart_on_the_dashboard_draws_the_week(): void
@@ -130,22 +134,22 @@ class AnalyticsScreensTest extends TestCase
         $trend = $html(SalesTrend::class);
         $this->assertSame(1, substr_count($trend, 'class="mf-line"'));
         $this->assertSame(7, substr_count($trend, 'class="mf-hit"'), 'One hover target per day of the week.');
-        $this->assertStringContainsString('Sep 17 — Gross sales: CA$106.70', $trend);
+        $this->assertStringContainsString('Sep 17 — Gross sales: $106.70', $trend);
 
         $volume = $html(OrderVolume::class);
         $this->assertSame(8, substr_count($volume, 'class="mf-bar '), 'Four days with orders, each with an orders and a tickets bar.');
 
         $split = $html(RevenueSplit::class);
         $this->assertSame(4, substr_count($split, 'class="mf-seg '));
-        $this->assertStringContainsString('Organizers keep: CA$290.00 (73.8%)', $split);
+        $this->assertStringContainsString('Organizers keep: $290.00 (73.8%)', $split);
         $this->assertStringContainsString('data-chart="stacked-bar"', $split);
         // O4, sold on the 16th, was refunded in full the next day: nothing of it was kept.
-        $this->assertStringContainsString('Sep 16 — Organizers: CA$0.00; Service charge: CA$0.00; Tax: CA$0.00', $split);
-        $this->assertStringContainsString('Sep 17 — Organizers: CA$90.00; Service charge: CA$5.00; Tax: CA$11.70', $split);
+        $this->assertStringContainsString('Sep 16 — Organizers: $0.00; Service charge: $0.00; Tax: $0.00', $split);
+        $this->assertStringContainsString('Sep 17 — Organizers: $90.00; Service charge: $5.00; Tax: $11.70', $split);
 
         $channels = $html(SalesByChannel::class);
-        $this->assertStringContainsString('Online: CA$342.70', $channels);
-        $this->assertStringContainsString('At the door: CA$50.00', $channels);
+        $this->assertStringContainsString('Online: $342.70', $channels);
+        $this->assertStringContainsString('At the door: $50.00', $channels);
 
         $organizers = $html(TopOrganizers::class);
         $this->assertSame(1, substr_count($organizers, 'class="mf-bar"'));
@@ -176,8 +180,8 @@ class AnalyticsScreensTest extends TestCase
             ->assertDontSee('Earned and paid out')
             ->set('filters.organization', $this->toronto->id)
             ->assertSee('Earned and paid out')
-            ->assertSee('CA$190.00')                // owed now
-            ->assertSee('Payout of CA$50.00 requested')
+            ->assertSee('$190.00')                  // owed now
+            ->assertSee('Payout of $50.00 requested')
             ->assertSee('Paid out in period')
             ->assertSee('33.3%')                    // repeat buyers
             // ada@ ordered twice this week and never before: more than once, not "before".
@@ -204,27 +208,27 @@ class AnalyticsScreensTest extends TestCase
 
         Livewire::test(PlatformKpis::class, ['pageFilters' => self::WEEK])
             ->assertSee('Payout requests waiting')
-            ->assertDontSee('CA$50.00');
+            ->assertDontSee('$50.00');
 
         Livewire::test(OrganizerPerformance::class)
             ->set('filters.currency', 'CAD')
             ->set('filters.period', '7d')
             ->set('filters.organization', $this->toronto->id)
-            ->assertSee('CA$190.00')                // owed now: the balance support already sees
+            ->assertSee('$190.00')                  // owed now: the balance support already sees
             ->assertSee('A payout has been requested')
-            ->assertDontSee('CA$50.00 requested')   // CA$50.00 itself is Sep 16's net on the sales chart
+            ->assertDontSee('$50.00 requested')     // $50.00 itself is Sep 16's net on the sales chart
             ->assertDontSee('Paid out')
             ->assertDontSee('Earned and paid out')
             ->assertTableColumnHidden('paid_out');
 
         Livewire::test(OperationsHealth::class)
             ->assertSee('1 in CAD')
-            ->assertDontSee('CA$50.00');
+            ->assertDontSee('$50.00');
 
         $this->signIn($this->staffMember(PlatformRole::Finance));
 
         Livewire::test(PlatformKpis::class, ['pageFilters' => self::WEEK])
-            ->assertSee('CA$50.00 asked for');
+            ->assertSee('$50.00 asked for');
     }
 
     public function test_the_organizer_listing_sorts_searches_and_filters(): void
@@ -234,8 +238,8 @@ class AnalyticsScreensTest extends TestCase
 
         $quiet = Organization::factory()->create(['name' => 'Quiet Rooms']);
 
-        // A second dollar organizer: CA$200.00 sold this week, CA$100.00 of it
-        // refunded — less than Toronto's CA$392.70 but a higher refund rate
+        // A second dollar organizer: $200.00 sold this week, $100.00 of it
+        // refunded — less than Toronto's $392.70 but a higher refund rate
         // (50% against 15%). Lagos sold nothing in dollars and Quiet Rooms
         // nothing at all, so both have no refund rate.
         $second = Organization::factory()->create(['name' => 'Second House']);
@@ -261,8 +265,8 @@ class AnalyticsScreensTest extends TestCase
             ->set('filters.currency', 'CAD')
             ->set('filters.period', '7d')
             ->assertCanSeeTableRecords([$this->toronto, $this->lagos, $quiet, $second])
-            ->assertTableColumnFormattedStateSet('gross', 'CA$392.70', $this->toronto)
-            ->assertTableColumnFormattedStateSet('gross', 'CA$200.00', $second)
+            ->assertTableColumnFormattedStateSet('gross', '$392.70', $this->toronto)
+            ->assertTableColumnFormattedStateSet('gross', '$200.00', $second)
             ->assertTableColumnFormattedStateSet('refund_rate', '15.0%', $this->toronto)
             ->assertTableColumnFormattedStateSet('refund_rate', '50.0%', $second)
             ->sortTable('gross', 'desc')
@@ -299,7 +303,7 @@ class AnalyticsScreensTest extends TestCase
         $html = Livewire::test(EventPerformance::class)
             ->set('filters.event', $this->night->id)
             ->assertSee('Sales pace')
-            ->assertSee('CA$451.70')
+            ->assertSee('$451.70')
             ->assertSee('EARLY')
             ->assertSee('People admitted')
             ->assertSee($this->orders['O4']->reference)
@@ -325,12 +329,12 @@ class AnalyticsScreensTest extends TestCase
 
         Livewire::test(EventPerformance::class)
             ->assertCanSeeTableRecords([$this->night, $this->upcoming, $this->lagosNight])
-            ->assertTableColumnFormattedStateSet('gross', 'CA$451.70', $this->night)
-            ->assertTableColumnFormattedStateSet('gross', '₦11,250.00', $this->lagosNight)
+            ->assertTableColumnFormattedStateSet('gross', '$451.70', $this->night)
+            ->assertTableColumnFormattedStateSet('gross', '₦11,250', $this->lagosNight)
             ->assertTableColumnFormattedStateSet('check_in_rate', '66.7%', $this->night)
             // Money ranks inside each market, never kobo against cents: the
-            // ₦11,250.00 night is 1,125,000 minor units and would otherwise
-            // lead a CA$451.70 one.
+            // ₦11,250 night is 1,125,000 minor units and would otherwise
+            // lead a $451.70 one.
             ->sortTable('gross', 'desc')
             ->assertCanSeeTableRecords([$this->night, $this->upcoming, $this->lagosNight], inOrder: true)
             ->sortTable('gross', 'asc')
@@ -519,12 +523,12 @@ class AnalyticsScreensTest extends TestCase
         $this->signIn($this->staffMember(PlatformRole::Admin));
         Livewire::test(OperationsHealth::class)
             ->assertSee('Payout requests waiting')
-            ->assertSee('1 in CAD (CA$50.00)');
+            ->assertSee('1 in CAD ($50.00)');
 
         $this->signIn($this->staffMember(PlatformRole::Support));
         Livewire::test(OperationsHealth::class)
             ->assertSee('1 in CAD')
-            ->assertDontSee('CA$50.00');
+            ->assertDontSee('$50.00');
     }
 
     /** A failed job as the queue worker would have recorded it; returns its uuid. */

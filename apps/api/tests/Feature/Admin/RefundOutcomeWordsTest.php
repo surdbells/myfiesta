@@ -76,7 +76,7 @@ class RefundOutcomeWordsTest extends TestCase
 
         $said = OrderActions::saidAbout($order->fresh(), Refund::sole());
 
-        $this->assertSame('CA$113.00 is on its way back to the buyer through Stripe. The 2 tickets it was for no longer get in.', $said);
+        $this->assertSame('$113.00 is on its way back to the buyer through Stripe. The 2 tickets it was for no longer get in.', $said);
     }
 
     public function test_a_refund_waiting_for_an_answer_is_neither_done_nor_failed(): void
@@ -146,7 +146,7 @@ class RefundOutcomeWordsTest extends TestCase
 
         $this->assertInstanceOf(Notification::class, $said);
         $this->assertStringContainsString('Stripe turned this refund down (Charge has already been refunded)', $said->getBody());
-        $this->assertStringContainsString('It had already refunded CA$113.00 of this payment, made in its own dashboard', $said->getBody());
+        $this->assertStringContainsString('It had already refunded $113.00 of this payment, made in its own dashboard', $said->getBody());
         $this->assertStringContainsString('the tickets no longer get in', $said->getBody());
         $this->assertStringNotContainsString('No money moved', $said->getBody());
     }

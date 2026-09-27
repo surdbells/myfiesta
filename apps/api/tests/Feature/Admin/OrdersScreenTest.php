@@ -140,12 +140,12 @@ class OrdersScreenTest extends TestCase
         $cadEvent = $this->event($this->organization());
         $ngnEvent = $this->event($this->organization('Eko Live'), ['currency' => 'NGN']);
 
-        // 2 × 50.00 + 13% = CA$113.00; 1 × ₦5,000.00 + 13% = ₦5,650.00.
+        // 2 × 50.00 + 13% = $113.00; 1 × ₦5,000 + 13% = ₦5,650.
         $this->paidOrder($cadEvent, $this->ticketType($cadEvent));
         $this->paidOrder($ngnEvent, $this->ticketType($ngnEvent, ['price_amount' => 500000]), 1);
 
         Livewire::test(ListOrders::class)
-            ->assertSee('CA$113.00 · ₦5,650.00')
+            ->assertSee('$113.00 · ₦5,650')
             ->sortTable('total_amount', 'desc')
             ->assertSuccessful();
     }
@@ -162,7 +162,7 @@ class OrdersScreenTest extends TestCase
             ->assertSee($order->reference)
             ->assertSee('Highlife Night')
             ->assertSee('Early Bird')
-            ->assertSee('CA$113.00');
+            ->assertSee('$113.00');
 
         $tickets = Livewire::test(TicketsRelationManager::class, ['ownerRecord' => $order, 'pageClass' => ViewOrder::class])
             ->assertCanSeeTableRecords($order->tickets);

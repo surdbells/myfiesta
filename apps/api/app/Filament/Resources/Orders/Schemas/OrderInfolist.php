@@ -13,6 +13,9 @@ use App\Models\Order;
 use App\Models\OrderAnswer;
 use App\Models\OrderLine;
 use App\Models\Refund;
+use App\Services\Checkout\TaxLine;
+use App\Services\Receipts\Receipt;
+use App\Services\Settings\SellerOfRecord;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -84,9 +87,30 @@ class OrderInfolist
                             self::money('discount_amount', 'Discount'),
                             self::money('tax_amount', 'Tax')
                                 ->helperText(fn (Order $record) => $record->tax_inclusive ? 'Included in the prices' : 'Added at checkout'),
-                            self::money('service_charge_amount', 'Service charge'),
+                            self::money('service_charge_amount', 'Service charge')
+                                // The figure is what the buyer paid for it, its
+                                // tax inside, so the column still adds up to the
+                                // total. How much of it is tax is said beneath.
+                                ->helperText(fn (Order $record) => $record->service_charge_tax_amount > 0
+                                    ? 'Includes '.Listing::format((int) $record->service_charge_tax_amount, $record->currency).' of tax'
+                                    : null),
                             self::money('total_amount', 'Total charged')->weight('semibold'),
                             self::money('net_revenue_amount', 'Organizer earned'),
+                            // Each tax on its own, the way the buyer's receipt
+                            // shows it. A buyer asking why Quebec charged them
+                            // twice is asking about GST and QST, and "Tax" above
+                            // is the two added together.
+                            TextEntry::make('each_tax')
+                                ->label('Each tax')
+                                ->state(fn (Order $record) => self::taxLines($record))
+                                ->listWithLineBreaks()
+                                ->placeholder('No tax on this order'),
+                            TextEntry::make('seller_of_record')
+                                ->label('Sold by')
+                                ->inlineLabel()
+                                ->alignEnd()
+                                ->state(fn (Order $record) => (SellerOfRecord::tryFrom((string) $record->seller_of_record) ?? SellerOfRecord::Organizer)->label())
+                                ->helperText('In law, and so who files the tax on the tickets'),
                             self::money('gateway_fee_amount', 'Processor fee')->placeholder('Not settled yet'),
                             TextEntry::make('refunded_total')
                                 ->label('Refunded so far')
@@ -286,6 +310,27 @@ class OrderInfolist
 
             AuditTrail::section(fn (Order $record) => AuditTrail::about($record)),
         ]);
+    }
+
+    /**
+     * "GST 5% on the tickets: $10.00", "VAT 7.5% on the service charge, included: ₦11.16".
+     *
+     * Read the way the receipt reads them, older orders included. Not a tax
+     * that came to nothing: an order keeps the rate whatever it was charged
+     * on, so free tickets in Toronto carry HST at $0.00, and "No tax on this
+     * order" says that better than a line of zeros.
+     *
+     * @return list<string>
+     */
+    private static function taxLines(Order $record): array
+    {
+        return array_values(array_map(
+            fn (TaxLine $line) => $line->name.' '.$line->percent().'% on the '
+                .($line->on === TaxLine::ON_SERVICE_CHARGE ? 'service charge' : 'tickets')
+                .($line->inclusive ? ', included' : '')
+                .': '.$line->amount->format(),
+            array_filter(Receipt::taxes($record), fn (TaxLine $line) => $line->amount->amount > 0),
+        ));
     }
 
     private static function money(string $name, string $label): TextEntry

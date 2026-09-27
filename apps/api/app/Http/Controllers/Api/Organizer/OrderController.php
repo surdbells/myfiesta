@@ -7,7 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
+use App\Services\Checkout\TaxLine;
 use App\Services\Disputes\RiskSignals;
+use App\Services\Receipts\Receipt;
+use App\Services\Settings\SellerOfRecord;
 use App\Support\Csv;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -99,7 +102,9 @@ class OrderController extends Controller
         $filters = $this->filters($request);
 
         $query = $this->filtered($organization, $filters)
-            ->with('event:id,title,timezone')
+            // The rate, for an order from before orders kept their own tax
+            // lines: its one tax is named from the row it points at.
+            ->with(['event:id,title,timezone', 'taxRate'])
             ->withCount('tickets')
             ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
             ->orderByDesc('paid_at')
@@ -142,15 +147,46 @@ class OrderController extends Controller
                     // What the organizer is paid for this order: the ticket
                     // money, before tax and before the buyer's service charge.
                     Csv::money($order->net_revenue_amount),
+                    // New columns go after the old ones, so a spreadsheet or
+                    // an import built on the columns above still lines up.
+                    //
+                    // The part of Service charge that is tax. Inside that
+                    // figure, not beside it: the sum of the columns above is
+                    // unchanged.
+                    Csv::money((int) $order->service_charge_tax_amount),
+                    // Each tax with its rate, as the receipt shows it — GST
+                    // and QST are filed separately, and one Tax figure cannot
+                    // be taken apart again.
+                    Csv::text(self::taxLines($order)),
+                    // Who sold the tickets in law, and so who files their tax.
+                    (SellerOfRecord::tryFrom((string) $order->seller_of_record) ?? SellerOfRecord::Organizer)->value,
                 ];
             }
         })();
 
         return Csv::download(
             'myfiesta-orders-'.now()->format('Y-m-d').'.csv',
-            ['Reference', 'Paid at', 'Time zone', 'Event', 'Buyer', 'Email', 'Status', 'Tickets', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Service charge', 'Total paid', 'Refunded', 'Owed to organizer'],
+            ['Reference', 'Paid at', 'Time zone', 'Event', 'Buyer', 'Email', 'Status', 'Tickets', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Service charge', 'Total paid', 'Refunded', 'Owed to organizer', 'Tax in service charge', 'Tax lines', 'Seller of record'],
             $rows,
         );
+    }
+
+    /**
+     * "GST 5%: 10.00; QST 9.975%: 19.95; GST 5% on the service charge: 0.80"
+     *
+     * In one cell, because how many taxes an order has depends on where the
+     * event was, and a column per tax would move the columns about from one
+     * export to the next. Amounts are written like every other money column,
+     * without a symbol; the currency is in its own column.
+     */
+    private static function taxLines(Order $order): string
+    {
+        return collect(Receipt::taxes($order))
+            ->map(fn (TaxLine $line) => $line->name.' '.$line->percent().'%'
+                .($line->on === TaxLine::ON_SERVICE_CHARGE ? ' on the service charge' : '')
+                .($line->inclusive ? ', included' : '')
+                .': '.Csv::money($line->amount->amount))
+            ->implode('; ');
     }
 
     /** @return array<string, mixed> */

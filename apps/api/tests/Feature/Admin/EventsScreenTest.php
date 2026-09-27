@@ -132,7 +132,7 @@ class EventsScreenTest extends TestCase
         $cad = $this->event($this->organization());
         $ngn = $this->event($this->organization('Eko Live'), ['currency' => 'NGN']);
 
-        // 2 × 50.00 + 13% = CA$113.00; 1 × ₦5,000.00 + 13% = ₦5,650.00.
+        // 2 × 50.00 + 13% = $113.00; 1 × ₦5,000 + 13% = ₦5,650.
         $this->paidOrder($cad, $this->ticketType($cad, ['quantity_available' => 150]));
         $this->paidOrder($ngn, $this->ticketType($ngn, ['price_amount' => 500000, 'quantity_available' => null]), 1);
 
@@ -141,7 +141,7 @@ class EventsScreenTest extends TestCase
             ->assertTableColumnStateSet('sold_count', 1, $ngn)
             ->assertSee('of 150')
             ->assertSee('of unlimited')
-            ->assertSee('CA$113.00 · ₦5,650.00')
+            ->assertSee('$113.00 · ₦5,650')
             ->sortTable('sold_count', 'desc')
             ->assertSuccessful()
             ->sortTable('gross_amount', 'desc')
@@ -159,7 +159,7 @@ class EventsScreenTest extends TestCase
             ->assertSee('Highlife Night')
             ->assertSee('Toronto Sound')
             ->assertSee('Early Bird')
-            ->assertSee('CA$113.00')
+            ->assertSee('$113.00')
             ->assertDontSee($order->tickets->first()->code);
     }
 

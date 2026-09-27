@@ -8,9 +8,10 @@ use App\Support\Money;
  * Numbers as a chart prints them.
  *
  * Exact where a person reads a value — a tooltip, a table, a tile — and
- * compact on an axis, where "CA$12.5K" is a tick and "CA$12,500.00" is a
+ * compact on an axis, where "$12.5K" is a tick and "$12,500.00" is a
  * collision. Money is always minor units in and a currency's own symbol out,
- * one currency at a time.
+ * one currency at a time — Money's symbol, so a tick and the tooltip above it
+ * write the same currency the same way.
  */
 final class Format
 {
@@ -23,20 +24,16 @@ final class Format
 
     public static function symbol(string $currency): string
     {
-        return match (strtoupper($currency)) {
-            'CAD' => 'CA$',
-            'NGN' => '₦',
-            default => strtoupper($currency).' ',
-        };
+        return Money::symbol($currency);
     }
 
-    /** "CA$1,250.00" — exact. */
+    /** "$1,250.00", "₦45,000" — exact. */
     public static function money(int|float $minor, string $currency): string
     {
         return Money::of((int) round($minor), $currency)->format();
     }
 
-    /** "CA$12.5K" — for an axis or a label with no room. */
+    /** "$12.5K" — for an axis or a label with no room. */
     public static function moneyCompact(int|float $minor, string $currency): string
     {
         $major = $minor / 100;

@@ -171,9 +171,13 @@ final readonly class Receipt
      * one tax on its tickets and none on its service charge, and its rate is
      * still on the row it points at — superseded rows keep their rate.
      *
+     * Public because the spreadsheet, the webhook and the admin's order page
+     * show the same taxes as the receipt, and none of them should have its
+     * own idea of how an older order was taxed.
+     *
      * @return list<TaxLine>
      */
-    private static function taxes(Order $order): array
+    public static function taxes(Order $order): array
     {
         if (is_array($order->tax_lines)) {
             return array_map(

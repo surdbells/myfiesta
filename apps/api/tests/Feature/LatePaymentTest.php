@@ -277,7 +277,7 @@ class LatePaymentTest extends TestCase
 
         $this->assertStringContainsString('sold out while you were paying', $html);
         $this->assertStringContainsString('every', $html);
-        $this->assertStringContainsString('CA$'.number_format($late->total_amount / 100, 2), $html);
+        $this->assertStringContainsString('$'.number_format($late->total_amount / 100, 2), $html);
         $this->assertStringContainsString($late->reference, $html);
     }
 
@@ -735,7 +735,7 @@ class LatePaymentTest extends TestCase
             $html = $said($why);
 
             $this->assertStringNotContainsString('sold out', $html);
-            $this->assertStringContainsString('CA$'.number_format($late->total_amount / 100, 2), $html);
+            $this->assertStringContainsString('$'.number_format($late->total_amount / 100, 2), $html);
             $this->assertStringContainsString($late->reference, $html);
         }
 

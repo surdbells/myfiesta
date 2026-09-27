@@ -46,11 +46,169 @@ const QUOTE: Quote = {
   total: cad(2700),
   tax_inclusive: false,
   tax_label: null,
+  tax_lines: [],
+  service_charge_tax: cad(0),
   code_applied: null,
   access_code_applied: null,
   code_applies_to: null,
   requires_payment: true,
 };
+
+/**
+ * The bill before payment, with each tax on a line of its own.
+ *
+ * It used to say "GST + QST" against one figure and fold the service fee's
+ * own tax into the fee, unsaid. The receipt that follows the payment shows
+ * every tax with its rate; this page now reads the same, line for line, and
+ * the lines still add up to the total.
+ */
+describe('Checkout, the bill', () => {
+  const ngn = (amount: number): Money => ({ amount, currency: 'NGN' });
+
+  /** Two 100.00 tickets in Montréal, with QST collected and the service fee taxed. */
+  const QUEBEC: Quote = {
+    ...QUOTE,
+    subtotal: cad(20000),
+    tax: cad(2995),
+    service_charge: cad(1840),
+    net_revenue: cad(20000),
+    total: cad(24835),
+    tax_label: 'GST + QST',
+    tax_lines: [
+      { name: 'GST', rate: '5', on: 'tickets', included: false, amount: cad(1000) },
+      { name: 'QST', rate: '9.975', on: 'tickets', included: false, amount: cad(1995) },
+      { name: 'GST', rate: '5', on: 'service_charge', included: false, amount: cad(80) },
+      { name: 'QST', rate: '9.975', on: 'service_charge', included: false, amount: cad(160) },
+    ],
+    service_charge_tax: cad(240),
+  };
+
+  /** Two ₦1,075 tickets in Lagos: VAT inside the prices, and inside the fee. */
+  const LAGOS: Quote = {
+    ...QUOTE,
+    subtotal: ngn(215000),
+    tax: ngn(15000),
+    service_charge: ngn(16000),
+    net_revenue: ngn(200000),
+    total: ngn(231000),
+    tax_inclusive: true,
+    tax_label: 'VAT',
+    tax_lines: [
+      { name: 'VAT', rate: '7.5', on: 'tickets', included: true, amount: ngn(15000) },
+      { name: 'VAT', rate: '7.5', on: 'service_charge', included: true, amount: ngn(1116) },
+    ],
+    service_charge_tax: ngn(1116),
+  };
+
+  async function bill(quote: Quote): Promise<[string, string][]> {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: ':slug/checkout', component: Checkout },
+          { path: ':slug/tickets', component: Elsewhere },
+        ]),
+        { provide: Api, useValue: { event: () => of({ data: EVENT }), quote: () => of(quote) } },
+      ],
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/afro/checkout', Checkout);
+    harness.detectChanges();
+
+    const list = harness.routeNativeElement!.querySelector('dl')!;
+    const terms = Array.from(list.querySelectorAll('dt')).map((dt) => dt.textContent!.trim());
+    const figures = Array.from(list.querySelectorAll('dd')).map((dd) => dd.textContent!.trim());
+
+    return terms.map((term, i) => [term, figures[i]]);
+  }
+
+  beforeEach(() =>
+    sessionStorage.setItem('myfiesta.basket.afro', JSON.stringify({ items: { general: 2 }, addOns: {}, code: '' })),
+  );
+
+  afterEach(() => sessionStorage.clear());
+
+  it('shows GST and QST apart, and the tax on the service fee beneath the fee', async () => {
+    expect(await bill(QUEBEC)).toEqual([
+      ['Subtotal', '$200.00'],
+      ['GST 5%', '$10.00'],
+      ['QST 9.975%', '$19.95'],
+      ['Service fee', '$16.00'],
+      ['GST 5% on the service fee', '$0.80'],
+      ['QST 9.975% on the service fee', '$1.60'],
+      ['Total', '$248.35'],
+    ]);
+  });
+
+  it('keeps VAT inside the prices and the fee, and says so', async () => {
+    expect(await bill(LAGOS)).toEqual([
+      ['Subtotal', '₦2,150'],
+      ['VAT 7.5%, included', '₦150'],
+      ['Service fee', '₦160'],
+      ['VAT 7.5% on the service fee, included', '₦11.16'],
+      ['Total', '₦2,310'],
+    ]);
+  });
+
+  it('still shows one tax line for a quote that did not itemise its taxes', async () => {
+    expect(await bill({ ...QUEBEC, tax_lines: [], service_charge: cad(1600), service_charge_tax: cad(0), total: cad(24595) })).toEqual([
+      ['Subtotal', '$200.00'],
+      ['GST + QST', '$29.95'],
+      ['Service fee', '$16.00'],
+      ['Total', '$245.95'],
+    ]);
+  });
+
+  /*
+   * The server lists a rate whatever it was charged on, so a basket that
+   * comes to nothing in Toronto still carries HST against it. The bill never
+   * showed a tax of $0.00, and a free basket should not start to.
+   */
+  it('leaves off a tax that came to nothing on the tickets', async () => {
+    expect(
+      await bill({
+        ...QUOTE,
+        subtotal: cad(5000),
+        discount: cad(5000),
+        tax: cad(0),
+        service_charge: cad(0),
+        net_revenue: cad(0),
+        total: cad(0),
+        tax_label: 'HST',
+        tax_lines: [{ name: 'HST', rate: '13', on: 'tickets', included: false, amount: cad(0) }],
+        requires_payment: false,
+      }),
+    ).toEqual([
+      ['Subtotal', '$50.00'],
+      ['Discount', '−$50.00'],
+      ['Total', '$0.00'],
+    ]);
+  });
+
+  it('leaves off a tax that came to nothing on the service fee', async () => {
+    // A 25¢ ticket: 13% of the 2¢ fee rounds to nothing.
+    expect(
+      await bill({
+        ...QUOTE,
+        subtotal: cad(25),
+        tax: cad(3),
+        service_charge: cad(2),
+        net_revenue: cad(25),
+        total: cad(30),
+        tax_label: 'HST',
+        tax_lines: [
+          { name: 'HST', rate: '13', on: 'tickets', included: false, amount: cad(3) },
+          { name: 'HST', rate: '13', on: 'service_charge', included: false, amount: cad(0) },
+        ],
+      }),
+    ).toEqual([
+      ['Subtotal', '$0.25'],
+      ['HST 13%', '$0.03'],
+      ['Service fee', '$0.02'],
+      ['Total', '$0.30'],
+    ]);
+  });
+});
 
 /**
  * The links on the checkout that lead away from it.

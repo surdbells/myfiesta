@@ -3,7 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { AnswerValue, EventDetail, Quote } from '../../core/api.types';
+import { AnswerValue, EventDetail, Money, Quote, ReceiptTax } from '../../core/api.types';
 import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout-answers';
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, rememberPayment } from '../../core/embed';
@@ -92,6 +92,37 @@ export class Checkout {
   readonly slots = computed(() => slotsFor(this.quote()?.lines ?? []));
 
   /**
+   * Each tax on the tickets, on a line of its own: GST and QST side by side
+   * in Quebec rather than one figure labelled "GST + QST", so the bill here
+   * reads line for line like the receipt that follows it.
+   *
+   * Not a tax that came to nothing. The server lists the rate whatever it
+   * was charged on, so free tickets in Toronto still carry "HST 13%" against
+   * nothing; this page never showed a tax of $0.00 and does not start now.
+   */
+  readonly ticketTaxes = computed(() => this.taxesOn('tickets'));
+
+  /** The tax on the service fee, where it is taxed. It used to be in the fee's figure, unsaid. */
+  readonly feeTaxes = computed(() => this.taxesOn('service_charge'));
+
+  /**
+   * The service fee before any tax added to it, which has its own line
+   * beneath — as on the receipt, so the lines still add up to the total.
+   * Tax inside the fee, the way Nigerian prices hold VAT, stays in the figure
+   * and is shown as included.
+   */
+  readonly serviceFee = computed<Money | null>(() => {
+    const quote = this.quote();
+    if (!quote) return null;
+
+    const added = this.feeTaxes()
+      .filter((tax) => !tax.included)
+      .reduce((sum, tax) => sum + tax.amount.amount, 0);
+
+    return { amount: quote.service_charge.amount - added, currency: quote.service_charge.currency };
+  });
+
+  /**
    * Whether every question that has to be answered has been.
    *
    * The server decides; this is the same rule applied early, so the answer
@@ -118,6 +149,15 @@ export class Checkout {
       this.answersComplete() &&
       this.quote() !== null,
   );
+
+  private taxesOn(on: ReceiptTax['on']): ReceiptTax[] {
+    return (this.quote()?.tax_lines ?? []).filter((tax) => tax.on === on && tax.amount.amount > 0);
+  }
+
+  /** "GST 5%", "QST 9.975%", "VAT 7.5%, included" — worded as the receipt words it. */
+  taxLabel(tax: ReceiptTax): string {
+    return `${tax.name} ${tax.rate}%${tax.on === 'service_charge' ? ' on the service fee' : ''}${tax.included ? ', included' : ''}`;
+  }
 
   /** What has been said so far, for one question in one place. */
   answerFor(questionId: string, slotKey = ''): AnswerValue | null {

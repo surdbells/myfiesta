@@ -218,6 +218,15 @@ export interface Quote {
   /** Whether tax was already inside the displayed price, or added at checkout. */
   tax_inclusive: boolean;
   tax_label: string | null;
+  /**
+   * Each tax on its own, the way the receipt will show it: GST and QST side
+   * by side in Quebec, and the service charge's own, marked
+   * `on: 'service_charge'`, where it is taxed. The ticket ones add up to
+   * `tax`.
+   */
+  tax_lines: ReceiptTax[];
+  /** How much of `service_charge` is tax on it. Zero unless it is taxed. */
+  service_charge_tax: Money;
   code_applied: string | null;
   /** The presale code that opened a locked ticket in this basket. */
   access_code_applied: string | null;

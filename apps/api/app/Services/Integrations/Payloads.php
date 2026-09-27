@@ -6,6 +6,9 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Ticket;
+use App\Services\Checkout\TaxLine;
+use App\Services\Receipts\Receipt;
+use App\Services\Settings\SellerOfRecord;
 
 /**
  * What another system is told about an order, an event, or a person at a door.
@@ -59,6 +62,24 @@ class Payloads
             // What the organizer earned, the figure a finance system cares
             // about: the ticket price after their own discount, net of tax.
             'net_revenue' => $money((int) $order->net_revenue_amount),
+            // Each tax on its own, as the receipt shows it: GST and QST side
+            // by side in Quebec, and the tax on the service charge where that
+            // is taxed. Added beside the figures above rather than changing
+            // them — `tax` is still the tickets' tax alone and
+            // `service_charge` still has its own tax inside it — so nothing
+            // an integration already adds up moves.
+            'tax_lines' => array_map(fn (TaxLine $line) => [
+                'name' => $line->name,
+                'rate' => $line->percent(),
+                'on' => $line->on,
+                'included' => $line->inclusive,
+                'amount' => $money($line->amount->amount),
+            ], Receipt::taxes($order)),
+            // How much of `service_charge` is tax.
+            'service_charge_tax' => $money((int) $order->service_charge_tax_amount),
+            // Who sold the tickets, in law, and so who files their tax: the
+            // organizer, or the platform on their behalf.
+            'seller_of_record' => (SellerOfRecord::tryFrom((string) $order->seller_of_record) ?? SellerOfRecord::Organizer)->value,
             // The discount code the buyer typed, never a ticket's.
             'discount_code' => $order->code?->code,
             'ref' => $order->ref_slug,

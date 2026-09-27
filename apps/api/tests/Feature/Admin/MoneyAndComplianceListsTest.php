@@ -133,7 +133,7 @@ class MoneyAndComplianceListsTest extends TestCase
 
         Livewire::test(ListDisputes::class)
             ->assertCanSeeTableRecords([$urgent, $later, $lost])
-            ->assertSee('CA$66.50 · ₦5,650.00')
+            ->assertSee('$66.50 · ₦5,650')
             ->searchTable($ngnOrder->reference)
             ->assertCanSeeTableRecords([$later])
             ->assertCanNotSeeTableRecords([$urgent, $lost])
@@ -288,7 +288,7 @@ class MoneyAndComplianceListsTest extends TestCase
             // Waiting by default.
             ->assertCanSeeTableRecords([$cad, $ngn])
             ->assertCanNotSeeTableRecords([$rejected])
-            ->assertSee('CA$125.00 · ₦50,000.00')
+            ->assertSee('$125.00 · ₦50,000')
             ->searchTable('afro fest')
             ->assertCanSeeTableRecords([$cad])
             ->assertCanNotSeeTableRecords([$ngn])
@@ -333,8 +333,8 @@ class MoneyAndComplianceListsTest extends TestCase
 
         Livewire::test(ListSettlements::class)
             ->assertCanSeeTableRecords([$cad, $ngn, $old])
-            ->assertSee('CA$200.00 · ₦25,000.00')
-            ->assertSee('CA$150.00')
+            ->assertSee('$200.00 · ₦25,000')
+            ->assertSee('$150.00')
             ->searchTable('Eko')
             ->assertCanSeeTableRecords([$ngn])
             ->assertCanNotSeeTableRecords([$cad, $old])

@@ -139,7 +139,7 @@ class PayoutRequestTest extends TestCase
 
         $this->ask(10_001)
             ->assertStatus(422)
-            ->assertJsonPath('message', 'You can ask for up to CA$100.00, which is what you are owed right now.');
+            ->assertJsonPath('message', 'You can ask for up to $100.00, which is what you are owed right now.');
 
         $this->assertSame(0, PayoutRequest::count());
     }

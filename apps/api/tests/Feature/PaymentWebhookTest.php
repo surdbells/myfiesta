@@ -391,9 +391,10 @@ class PaymentWebhookTest extends TestCase
      *
      * The dispute has an id of its own and no `reference`; the transaction it
      * is about sits inside it, and transaction_reference is null. The same id
-     * comes with the opening and the resolution.
+     * comes with the opening and the resolution. The deadline is dueAt, in
+     * camel case among snake case, written the way Paystack writes it.
      */
-    private function paystackDispute(Order $order, string $event, ?string $resolution = null): TestResponse
+    private function paystackDispute(Order $order, string $event, ?string $resolution = null, ?string $dueAt = null): TestResponse
     {
         return $this->paystack($event, [
             'id' => 358950,
@@ -416,7 +417,7 @@ class PaymentWebhookTest extends TestCase
             'category' => 'chargeback',
             'bin' => '123412',
             'last4' => '1234',
-            'dueAt' => now()->addDay()->toIso8601String(),
+            'dueAt' => $dueAt ?? now()->addDay()->utc()->format('Y-m-d\TH:i:s.v\Z'),
             'resolvedAt' => $resolution === null ? null : now()->toIso8601String(),
             'created_at' => now()->toIso8601String(),
         ]);
@@ -434,6 +435,18 @@ class PaymentWebhookTest extends TestCase
         $this->assertSame($order->id, $dispute->order_id);
         $this->assertSame('open', $dispute->status);
         $this->assertNotNull($order->fresh()->disputed_at);
+    }
+
+    public function test_a_paystack_dispute_says_when_it_must_be_answered_by(): void
+    {
+        $order = $this->paidOnPaystack();
+
+        // Read as due_at, which Paystack never sends, every Paystack
+        // chargeback arrived with no deadline — the one date that decides
+        // whether it can still be won.
+        $this->paystackDispute($order, 'charge.dispute.create', dueAt: '2026-10-02T18:00:00.000Z')->assertOk();
+
+        $this->assertSame('2026-10-02 18:00:00', Dispute::sole()->evidence_due_at?->utc()->format('Y-m-d H:i:s'));
     }
 
     public function test_a_paystack_dispute_resolution_is_not_taken_for_a_repeat_of_its_opening(): void

@@ -16,6 +16,9 @@ use InvalidArgumentException;
  */
 final readonly class Money
 {
+    /** Currencies whose prices are written in whole units unless there is a remainder. */
+    private const WHOLE_UNITS = ['NGN'];
+
     public function __construct(
         public int $amount,
         public string $currency,
@@ -76,20 +79,45 @@ final readonly class Money
     }
 
     /**
-     * For a sentence a person reads: "CA$1,250.00", "₦45,000.00".
+     * For a sentence a person reads: "$1,250.00", "₦45,000", "₦206.25".
      *
-     * Both currencies this platform sells in have two minor-unit digits. Not
-     * for anything a machine reads back.
+     * Written the way the three apps write it (packages/shared/src/money.ts),
+     * because an email is read next to the screen it links to, and a receipt
+     * that says "CA$113.00" above a ticket that says "$113.00" reads as two
+     * different amounts. So: the symbol each market writes by hand, and naira
+     * without kobo when there are none — Nigerian prices are set and written
+     * in whole naira. An amount that does carry kobo keeps both digits, so
+     * nothing is rounded where somebody could add it up. Dollars always show
+     * cents.
+     *
+     * Not for anything a machine reads back.
      */
     public function format(): string
     {
-        $symbol = match ($this->currency) {
-            'CAD' => 'CA$',
-            'NGN' => '₦',
-            default => $this->currency.' ',
-        };
+        $minor = abs($this->amount);
+        $units = number_format(intdiv($minor, 100));
 
-        return ($this->amount < 0 ? '-' : '').$symbol.number_format(abs($this->amount) / 100, 2);
+        $text = in_array($this->currency, self::WHOLE_UNITS, true) && $minor % 100 === 0
+            ? $units
+            : $units.'.'.str_pad((string) ($minor % 100), 2, '0', STR_PAD_LEFT);
+
+        return ($this->amount < 0 ? '-' : '').self::symbol($this->currency).$text;
+    }
+
+    /**
+     * "$", "₦" — the symbol alone, for a chart's axis.
+     *
+     * "$" alone is only ambiguous where US dollars are also on sale, and
+     * nothing here is sold in anything but CAD and NGN. Anything else is
+     * written as its code, so it is never mistaken for either.
+     */
+    public static function symbol(string $currency): string
+    {
+        return match (strtoupper($currency)) {
+            'CAD' => '$',
+            'NGN' => '₦',
+            default => strtoupper($currency).' ',
+        };
     }
 
     private function assertSameCurrency(self $other): void

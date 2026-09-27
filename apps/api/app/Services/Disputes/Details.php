@@ -35,10 +35,16 @@ final readonly class Details
 
         $reference = $stripe['id'] ?? $paystack['id'] ?? $event->reference;
 
+        // Paystack writes the deadline as dueAt, in camel case beside the
+        // snake-cased rest of the dispute (resolvedAt is the same). Read only
+        // as due_at, it was never found, and every Paystack chargeback came
+        // in with no date to answer it by. due_at is still read, in case the
+        // spelling is ever made consistent.
         $due = $stripe['evidence_details']['due_by'] ?? null;
+        $paystackDue = $paystack['dueAt'] ?? $paystack['due_at'] ?? null;
         $dueAt = $due
             ? CarbonImmutable::createFromTimestamp((int) $due)
-            : (isset($paystack['due_at']) ? CarbonImmutable::parse($paystack['due_at']) : null);
+            : (is_string($paystackDue) && $paystackDue !== '' ? CarbonImmutable::parse($paystackDue) : null);
 
         return new self(
             reference: (string) $reference,

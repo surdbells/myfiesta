@@ -610,11 +610,11 @@ class TaxAndReceiptsTest extends TestCase
         $this->assertStringContainsString('General', $html);
         $this->assertStringContainsString('GST 5%', $html);
         $this->assertStringContainsString('QST 9.975%', $html);
-        $this->assertStringContainsString('CA$19.95', $html, 'QST on 200.00 at 9.975%.');
+        $this->assertStringContainsString('$19.95', $html, 'QST on 200.00 at 9.975%.');
         $this->assertStringContainsString('GST 5% on the service charge', $html);
         $this->assertStringContainsString('Service charge', $html);
-        $this->assertStringContainsString('CA$16.00', $html);
-        $this->assertStringContainsString(Str::of('CA$')->append(number_format($order->total_amount / 100, 2))->toString(), $html);
+        $this->assertStringContainsString('$16.00', $html);
+        $this->assertStringContainsString(Str::of('$')->append(number_format($order->total_amount / 100, 2))->toString(), $html);
         $this->assertStringContainsString('Tickets sold by', $html);
         $this->assertStringContainsString('Lagos Nights', $html);
         $this->assertStringContainsString('Fiesta Tickets Inc.', $html);

@@ -59,12 +59,12 @@ class AdminChartKitTest extends TestCase
         // Accessible name and description, and a tooltip per point.
         $this->assertSame('img', $xpath->query('/s:svg/@role')->item(0)->nodeValue);
         $this->assertSame('Sales', $xpath->query('/s:svg/s:title')->item(0)->textContent);
-        $this->assertStringContainsString('Gross: total CA$475.50', $xpath->query('/s:svg/s:desc')->item(0)->textContent);
-        $this->assertStringContainsString('Sep 4 — Gross: CA$125.50; Net: CA$100.00', $svg);
+        $this->assertStringContainsString('Gross: total $475.50', $xpath->query('/s:svg/s:desc')->item(0)->textContent);
+        $this->assertStringContainsString('Sep 4 — Gross: $125.50; Net: $100.00', $svg);
 
         // Axis from zero with round money ticks.
-        $this->assertStringContainsString('>CA$0<', $svg);
-        $this->assertStringContainsString('>CA$300<', $svg);
+        $this->assertStringContainsString('>$0<', $svg);
+        $this->assertStringContainsString('>$300<', $svg);
 
         // A legend for two series, and the numbers as a table.
         $this->assertStringContainsString('class="mf-legend"', $html);
@@ -112,7 +112,7 @@ class AdminChartKitTest extends TestCase
         [$xpath, $svg] = $this->svg($html);
 
         $this->assertSame(5, $this->marks($xpath, 'mf-bar', 'path'));
-        $this->assertStringContainsString('Aug · Platform: ₦500.00', $svg);
+        $this->assertStringContainsString('Aug · Platform: ₦500', $svg);
         $this->assertStringContainsString('data-chart="stacked-bar"', $html);
     }
 
@@ -131,8 +131,8 @@ class AdminChartKitTest extends TestCase
         $this->assertSame(2, $this->marks($xpath, 'mf-bar', 'path'), 'A zero is a row with no bar.');
         $this->assertSame(3, $xpath->query('//*[contains(@class, "mf-row")]')->length);
         $this->assertSame(1, $xpath->query('//s:a[@href="https://example.test/a"]')->length, 'A row with a url is a link.');
-        $this->assertStringContainsString('CA$2,500.00', $svg);
-        $this->assertStringContainsString('Toronto Collective With A Very Long Name Indeed: CA$1,250.00', $svg, 'The full label is in the tooltip.');
+        $this->assertStringContainsString('$2,500.00', $svg);
+        $this->assertStringContainsString('Toronto Collective With A Very Long Name Indeed: $1,250.00', $svg, 'The full label is in the tooltip.');
     }
 
     public function test_a_ranking_against_capacity_draws_a_track_behind_each_bar(): void
@@ -165,9 +165,9 @@ class AdminChartKitTest extends TestCase
         [$xpath, $svg] = $this->svg($html);
 
         $this->assertSame(3, $this->marks($xpath, 'mf-seg', 'path'));
-        $this->assertStringContainsString('Organizer: CA$80.00 (80.0%)', $svg);
-        $this->assertStringContainsString('>CA$100<', $svg, 'The middle states the whole.');
-        $this->assertStringContainsString('Gross CA$100.00', $xpath->query('/s:svg/s:desc')->item(0)->textContent);
+        $this->assertStringContainsString('Organizer: $80.00 (80.0%)', $svg);
+        $this->assertStringContainsString('>$100<', $svg, 'The middle states the whole.');
+        $this->assertStringContainsString('Gross $100.00', $xpath->query('/s:svg/s:desc')->item(0)->textContent);
     }
 
     public function test_a_whole_ring_is_still_a_closed_shape(): void
@@ -244,9 +244,9 @@ class AdminChartKitTest extends TestCase
 
     public function test_money_is_compact_on_an_axis_and_exact_elsewhere(): void
     {
-        $this->assertSame('CA$12.5K', Format::moneyCompact(1_250_000, 'CAD'));
+        $this->assertSame('$12.5K', Format::moneyCompact(1_250_000, 'CAD'));
         $this->assertSame('₦2.5M', Format::moneyCompact(250_000_000, 'NGN'));
-        $this->assertSame('CA$12,500.00', Format::money(1_250_000, 'CAD'));
+        $this->assertSame('$12,500.00', Format::money(1_250_000, 'CAD'));
         $this->assertSame('12.5%', Format::percent(0.125));
         $this->assertSame('—', Format::percent(null));
         $this->assertSame('−3.0%', Format::delta(-0.03));
