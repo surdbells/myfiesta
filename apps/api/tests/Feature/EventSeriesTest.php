@@ -38,6 +38,12 @@ class EventSeriesTest extends TestCase
         parent::setUp();
         Storage::fake('public');
 
+        // Today, pinned to a month before the first night. The dates below are
+        // fixed because the clock change is, and the series view and ending a
+        // series both count from now. Left on the real clock, two of these
+        // fail from 31 October 2026, when the first Friday becomes last Friday.
+        $this->travelTo(CarbonImmutable::parse('2026-09-26 12:00:00', 'UTC'));
+
         $this->org = Organization::create(['name' => 'Lagos Nights', 'slug' => 'lagos-nights']);
 
         // A Friday, in October, before Toronto's clock goes back.

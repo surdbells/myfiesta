@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use Carbon\Carbon;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Disputes\RiskSignals;
 use App\Support\Csv;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -165,6 +165,11 @@ class OrderController extends Controller
             // inclusive because that is what a person means by "to the 14th".
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
+            // Whose days those are. The console and the phone count "Today"
+            // on the reader's own calendar, so they say which calendar that
+            // is. Old names too (America/Montreal, Etc/UTC), because that is
+            // what some browsers still report.
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
     }
@@ -198,14 +203,24 @@ class OrderController extends Controller
              * Not paid_at alone: a pending order has none, and filtering it
              * out of a date range is how an organizer misses the one payment
              * stuck confirming — which is the order they were looking for.
+             *
+             * Each end is a whole day in the zone the reader named, turned
+             * back into Greenwich because that is how the rows are written.
+             * Read as Greenwich days instead, "Today" for a Toronto organizer
+             * ended in the early evening, and in Lagos it began at one in the
+             * morning. No zone means Greenwich, as it always did.
              */
             ->when(
                 $filters['from'] ?? null,
-                fn ($q, $from) => $q->whereRaw('coalesce(paid_at, created_at) >= ?', [Carbon::parse($from)->startOfDay()]),
+                fn ($q, $from) => $q->whereRaw('coalesce(paid_at, created_at) >= ?', [
+                    Carbon::parse($from, $filters['timezone'] ?? 'UTC')->startOfDay()->utc(),
+                ]),
             )
             ->when(
                 $filters['to'] ?? null,
-                fn ($q, $to) => $q->whereRaw('coalesce(paid_at, created_at) <= ?', [Carbon::parse($to)->endOfDay()]),
+                fn ($q, $to) => $q->whereRaw('coalesce(paid_at, created_at) <= ?', [
+                    Carbon::parse($to, $filters['timezone'] ?? 'UTC')->endOfDay()->utc(),
+                ]),
             )
             ->when($filters['q'] ?? null, function ($q, $term) {
                 // Three ways in, because support is handed whichever one the

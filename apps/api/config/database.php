@@ -125,6 +125,15 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            /*
+             * The session's zone, pinned to the application's own (UTC in
+             * app.php). Timestamps are written without an offset, so Postgres
+             * reads them in whatever zone the session has, and left alone that
+             * is the server's default: a Postgres installed on a machine set
+             * to Lagos stores every instant an hour early, and the tests about
+             * dates passed or failed on which database they ran against.
+             */
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [

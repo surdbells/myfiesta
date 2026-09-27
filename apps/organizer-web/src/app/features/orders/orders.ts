@@ -14,6 +14,7 @@ import {
   UiSkeleton,
   UiDateRange,
   UiFilterBar,
+  rangeZone,
   type DateRange,
   type FilterChip,
   type SelectOption,
@@ -149,8 +150,10 @@ export class Orders {
     }
 
     if (from || to) {
+      // Written out in Greenwich, where a yyyy-mm-dd is read as midnight;
+      // in Toronto's zone the chip said 31 Jan for a range from 1 Feb.
       const day = (value: string | null) =>
-        value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date(value)) : null;
+        value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(value)) : null;
 
       chips.push({
         key: 'range',
@@ -190,6 +193,19 @@ export class Orders {
     this.refine();
   }
 
+  /**
+   * The chosen days, and whose days they are.
+   *
+   * The picker counts "Today" on the reader's calendar. Sent without a zone,
+   * the server reads the same dates in Greenwich, and "Today" in Toronto
+   * lost every order after the early evening.
+   */
+  private days(): { from: string; to: string; timezone: string } {
+    const { from, to } = this.range();
+
+    return { from: from ?? '', to: to ?? '', timezone: from || to ? rangeZone() : '' };
+  }
+
   private readonly requests = new Subject<void>();
 
   constructor() {
@@ -207,8 +223,7 @@ export class Orders {
             q: this.query(),
             event_id: this.eventId(),
             status: this.status(),
-            from: this.range().from ?? '',
-            to: this.range().to ?? '',
+            ...this.days(),
             page: this.page(),
           }),
         ),
@@ -271,8 +286,7 @@ export class Orders {
         q: this.query(),
         event_id: this.eventId(),
         status: this.status(),
-        from: this.range().from ?? '',
-        to: this.range().to ?? '',
+        ...this.days(),
       })
       .subscribe({
         next: (file) => {

@@ -27,8 +27,13 @@ describe('money', () => {
     const cad = formatMoney({ amount: 151_780, currency: 'CAD' });
     const ngn = formatMoney({ amount: 4_500_000, currency: 'NGN' });
 
-    expect(cad).toContain('1,517.80');
-    expect(ngn).toContain('45,000.00');
+    // The phone's locale chooses the separators — "1,517.80" in Toronto,
+    // "1 517,80" on a phone set to French — so only the digits are pinned.
+    // Pinning the punctuation made this pass or fail on the language of
+    // whichever machine ran it.
+    expect(cad.replace(/\D/g, '')).toBe('151780');
+    // Whole naira — ₦45,000, the way Nigerian prices are written.
+    expect(ngn.replace(/\D/g, '')).toBe('45000');
 
     // Two currencies must never format alike: a Lagos price beside a Toronto
     // one is exactly where a bare number becomes a wrong number.

@@ -33,7 +33,7 @@ export { UiTable, UiSortHeader, type Sort, type SortDirection } from './table';
 
 // --- filtering and reading a table ---------------------------------------
 export { UiFilterBar, type FilterChip } from './filter-bar';
-export { UiDateRange, type DateRange } from './date-range';
+export { UiDateRange, rangeZone, type DateRange } from './date-range';
 export { UiStat } from './stat';
 export { UiPagination } from './pagination';
 

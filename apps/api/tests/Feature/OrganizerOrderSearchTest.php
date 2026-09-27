@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -225,5 +226,72 @@ class OrganizerOrderSearchTest extends TestCase
         // Refused rather than emptied: an order list with the totals stripped
         // out is still a list of names and addresses.
         $this->getJson('/api/organizer/orders')->assertForbidden();
+    }
+
+    /**
+     * "Today" is the day the organizer is living in, all evening.
+     *
+     * Nine at night in a Toronto February is already tomorrow in Greenwich.
+     * Read as a Greenwich day, the console's "Today" lost everything sold
+     * after seven and took in the late sales of last night instead.
+     */
+    public function test_today_in_toronto_is_torontos_day_all_evening(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $this->travelTo(CarbonImmutable::parse('2026-02-07 21:00', 'America/Toronto')->utc());
+
+        $afternoon = $this->order(['paid_at' => CarbonImmutable::parse('2026-02-07 14:00', 'America/Toronto')->utc()]);
+        $tonight = $this->order(['paid_at' => CarbonImmutable::parse('2026-02-07 20:30', 'America/Toronto')->utc()]);
+        // Still confirming, so it is dated by when it was placed: just now.
+        $confirming = $this->order(['status' => 'pending', 'paid_at' => null]);
+        $this->order(['paid_at' => CarbonImmutable::parse('2026-02-06 22:00', 'America/Toronto')->utc()]);
+
+        $today = ['from' => '2026-02-07', 'to' => '2026-02-07', 'timezone' => 'America/Toronto'];
+        $expected = collect([$afternoon, $tonight, $confirming])->pluck('reference')->sort()->values()->all();
+
+        $found = collect($this->orders($today)['data'])->pluck('reference')->sort()->values()->all();
+        $this->assertSame($expected, $found);
+
+        // The spreadsheet is the same filter, so it holds the same evening.
+        $csv = $this->get('/api/organizer/orders/export?'.http_build_query($today))->assertOk()->streamedContent();
+        foreach ($expected as $reference) {
+            $this->assertStringContainsString($reference, $csv);
+        }
+        $this->assertSame(count($expected) + 1, count(array_filter(explode("\n", trim($csv)))));
+    }
+
+    /** And in Lagos it starts at midnight, not at one in the morning. */
+    public function test_today_in_lagos_starts_at_lagos_midnight(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $this->travelTo(CarbonImmutable::parse('2026-02-08 00:30', 'Africa/Lagos')->utc());
+
+        $justNow = $this->order(['paid_at' => CarbonImmutable::parse('2026-02-08 00:10', 'Africa/Lagos')->utc()]);
+        $this->order(['paid_at' => CarbonImmutable::parse('2026-02-07 23:50', 'Africa/Lagos')->utc()]);
+
+        $found = $this->orders(['from' => '2026-02-08', 'to' => '2026-02-08', 'timezone' => 'Africa/Lagos'])['data'];
+
+        $this->assertSame([$justNow->reference], collect($found)->pluck('reference')->all());
+    }
+
+    /**
+     * A range that names no zone is read in Greenwich, as it always was, and
+     * a zone nobody has heard of is refused rather than guessed at.
+     */
+    public function test_a_range_without_a_zone_is_greenwich_days(): void
+    {
+        $this->signedInAs(Role::Owner);
+
+        // Half past eight at night in Toronto on the 7th; the 8th in Greenwich.
+        $late = $this->order(['paid_at' => '2026-02-08T01:30:00Z']);
+        $greenwich = ['from' => '2026-02-08', 'to' => '2026-02-08'];
+
+        $this->assertSame([$late->reference], collect($this->orders($greenwich)['data'])->pluck('reference')->all());
+        // The old name some browsers still report for it means the same.
+        $this->assertSame([$late->reference], collect($this->orders($greenwich + ['timezone' => 'Etc/UTC'])['data'])->pluck('reference')->all());
+
+        $this->getJson('/api/organizer/orders?'.http_build_query($greenwich + ['timezone' => 'Mars/Olympus_Mons']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('timezone');
     }
 }

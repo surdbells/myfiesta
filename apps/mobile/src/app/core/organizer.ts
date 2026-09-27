@@ -97,11 +97,12 @@ export class Organizer {
     return this.get('/overview');
   }
 
-  orders(filters: { q?: string; event_id?: string; status?: string; from?: string; to?: string; page?: number }): Promise<OrganizationOrderPage> {
+  /** from and to are days in timezone; without one the server reads Greenwich days. */
+  orders(filters: { q?: string; event_id?: string; status?: string; from?: string; to?: string; timezone?: string; page?: number }): Promise<OrganizationOrderPage> {
     return this.get('/orders', query(filters));
   }
 
-  exportOrders(filters: { q?: string; event_id?: string; status?: string; from?: string; to?: string }): Promise<string> {
+  exportOrders(filters: { q?: string; event_id?: string; status?: string; from?: string; to?: string; timezone?: string }): Promise<string> {
     return this.api.download('/api/organizer/orders/export', query(filters));
   }
 

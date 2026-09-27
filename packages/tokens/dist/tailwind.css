@@ -1,0 +1,103 @@
+/* GENERATED FROM tokens.json — DO NOT EDIT. Run: npm run build */
+
+@theme {
+  /* No colour from outside the system compiles. */
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-brand-50: #f1f8f4;
+  --color-brand-100: #dbf0e4;
+  --color-brand-200: #b7e1c9;
+  --color-brand-300: #7ecea0;
+  --color-brand-400: #34b26a;
+  --color-brand-500: #198f4c;
+  --color-brand-600: #0e753b;
+  --color-brand-700: #0a5c2e;
+  --color-brand-800: #084522;
+  --color-brand-900: #062d17;
+  --color-gold-50: #fcfced;
+  --color-gold-100: #f6f5ca;
+  --color-gold-200: #ebe88e;
+  --color-gold-300: #deda54;
+  --color-gold-400: #d0cb29;
+  --color-gold-500: #afab1d;
+  --color-gold-600: #8a8614;
+  --color-gold-700: #68650d;
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f6f8f6;
+  --color-neutral-100: #ecefec;
+  --color-neutral-200: #dce1dc;
+  --color-neutral-300: #c3cac3;
+  --color-neutral-400: #99a199;
+  --color-neutral-500: #6f776f;
+  --color-neutral-600: #545b54;
+  --color-neutral-700: #3d433d;
+  --color-neutral-800: #232823;
+  --color-neutral-900: #131713;
+  --color-neutral-950: #0b0f0c;
+  --color-semantic-success: #0e753b;
+  --color-semantic-success-light: #72ca98;
+  --color-semantic-warning: #b45309;
+  --color-semantic-warning-light: #e8a33d;
+  --color-semantic-danger: #c0392b;
+  --color-semantic-danger-light: #ec7263;
+  --color-semantic-info: #1d6fa5;
+  --color-semantic-info-light: #6db4e0;
+
+  --radius-*: initial;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 9999px;
+
+  --font-sans: 'General Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* text-sm is font-size-sm, not nearly it. */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 48px;
+  --text-5xl: 60px;
+}
+
+/* Semantic roles, inlined as var() so utilities follow the runtime theme.
+   Shadows and the focus ring are not mapped — their token names collide
+   with Tailwind's namespaces, and utilities reach them directly as
+   shadow-(--shadow-card). */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-inset: var(--surface-inset);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-field-border: var(--field-border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-inverse: var(--text-inverse);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-text: var(--primary-text);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-text: var(--primary-soft-text);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-border-subtle: var(--border-subtle);
+  --color-surface-hover: var(--surface-hover);
+  --color-danger-text: var(--danger-text);
+}

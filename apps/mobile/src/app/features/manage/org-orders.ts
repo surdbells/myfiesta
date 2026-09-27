@@ -252,7 +252,13 @@ export class OrgOrders implements OnInit {
     void this.fetch((this.page()?.meta.current_page ?? 1) + 1);
   }
 
-  /** The filters as the API reads them; dates are the phone's own days. */
+  /**
+   * The filters as the API reads them.
+   *
+   * Dates are the phone's own days, so the phone's zone goes with them: the
+   * server reads a bare date as a day in Greenwich, and "Today" in Toronto
+   * would start the evening before.
+   */
   private filters() {
     const day = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const back = (days: number) => day(new Date(Date.now() - days * 86_400_000));
@@ -263,6 +269,7 @@ export class OrgOrders implements OnInit {
       event_id: this.eventId() || undefined,
       status: this.status() || undefined,
       from: range === 'today' ? back(0) : range === 'week' ? back(6) : range === 'month' ? back(29) : undefined,
+      timezone: range ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined,
     };
   }
 

@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   UiDateRange,
   UiField,
@@ -8,6 +8,7 @@ import {
   UiPagination,
   UiSelect,
   UiSortHeader,
+  rangeZone,
   type DateRange,
   type FilterChip,
   type Sort,
@@ -471,6 +472,31 @@ class DateRangeHost {
 }
 
 /**
+ * Runs as a reader in another zone would see it.
+ *
+ * Node re-reads TZ whenever it is assigned, so this holds on any machine.
+ * Afterwards the zone that was in force is assigned back by name, not by
+ * deleting TZ: on Windows, where TZ is normally unset, Node does not look
+ * the machine's zone up again when it goes, so every later spec file in the
+ * worker would have run in Toronto.
+ */
+function inZone(zone: string, run: () => void): void {
+  const before = process.env['TZ'];
+  const was = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  process.env['TZ'] = zone;
+
+  try {
+    run();
+  } finally {
+    process.env['TZ'] = before ?? was;
+  }
+}
+
+/** A February day, the way this machine's language writes it. */
+const dayLabel = (day: number) =>
+  new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 1, day));
+
+/**
  * A range that reads back as what was chosen.
  *
  * The button is the only thing on screen once the panel closes, so if it says
@@ -515,10 +541,78 @@ describe('UiDateRange', () => {
     view.fixture.detectChanges();
 
     const { from, to } = view.fixture.componentInstance.value();
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    expect(to).toBe(new Date().toISOString().slice(0, 10));
+    expect(to).toBe(today);
     expect((Date.parse(to!) - Date.parse(from!)) / 86_400_000).toBe(6);
     expect(view.label()).toContain('Last 7 days');
+  });
+
+  /**
+   * Today is the reader's today.
+   *
+   * Taken from Greenwich it was tomorrow in Toronto every evening and
+   * yesterday in Lagos just after midnight, so "Today" filtered for a day
+   * with nothing in it. Both zones are set here rather than inherited from
+   * the machine, which is UTC on CI and would never show it.
+   */
+  it('ends a preset on the reader’s own day, not Greenwich’s', () => {
+    const cases = [
+      // Nine in the evening in Toronto: already the 8th in Greenwich.
+      { zone: 'America/Toronto', at: '2026-02-08T02:00:00Z', today: '2026-02-07' },
+      // Half past midnight in Lagos: still the 7th in Greenwich.
+      { zone: 'Africa/Lagos', at: '2026-02-07T23:30:00Z', today: '2026-02-08' },
+    ];
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+
+    try {
+      for (const { zone, at, today } of cases) {
+        inZone(zone, () => {
+          vi.setSystemTime(new Date(at));
+
+          const view = mount();
+          view.open();
+          Array.from(view.element.querySelectorAll<HTMLButtonElement>('.presets button'))
+            .find((button) => button.textContent?.includes('Today'))!
+            .click();
+          view.fixture.detectChanges();
+
+          expect(view.fixture.componentInstance.value()).toEqual({ from: today, to: today });
+          expect(view.label()).toContain('Today');
+        });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('writes a day as that day wherever the reader is', () => {
+    // A yyyy-mm-dd is midnight in Greenwich. Written out in Toronto's zone it
+    // was the day before, so a range from the 1st read "31 Jan".
+    inZone('America/Toronto', () => {
+      const view = mount();
+
+      view.set({ from: '2026-02-01', to: '2026-02-07' });
+
+      expect(view.label()).toContain(`${dayLabel(1)} – ${dayLabel(7)}`);
+    });
+  });
+
+  it('hands the zone back as it found it, so later files run where they say they do', () => {
+    // Spec files share a worker, so a zone left behind here is the zone the
+    // next file quietly runs in, whatever the run was started with.
+    const was = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    inZone(was === 'America/Toronto' ? 'Africa/Lagos' : 'America/Toronto', () => undefined);
+
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(was);
+  });
+
+  it('sends the reader’s zone with the days, so the server counts the same hours', () => {
+    inZone('America/Toronto', () => expect(rangeZone()).toBe('America/Toronto'));
+    inZone('Africa/Lagos', () => expect(rangeZone()).toBe('Africa/Lagos'));
   });
 
   it('closes the panel once a preset is taken', () => {
@@ -569,7 +663,9 @@ describe('UiDateRange', () => {
     view.set({ from: '2026-02-01', to: '2026-02-07' });
 
     expect(view.label()).not.toContain('Last 7 days');
-    expect(view.label()).toContain('Feb');
+    // The dates as this machine's language writes them: "Feb 1" in English,
+    // "1 févr." in French.
+    expect(view.label()).toContain(dayLabel(1));
   });
 
   it('says which end is open when only one is set', () => {

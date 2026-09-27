@@ -18,6 +18,33 @@ interface Preset {
 }
 
 /**
+ * A day on the calendar of whoever is looking, as yyyy-mm-dd.
+ *
+ * Not toISOString, which gives the day in Greenwich: in Toronto by the evening
+ * that is already tomorrow, so "Today" asked for a day nothing had been sold
+ * on yet. The phone app has always sent its own days; this is the
+ * console doing the same.
+ */
+function localDay(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The zone a range's days belong to: the reader's own, as the browser names it.
+ *
+ * A yyyy-mm-dd is a different stretch of hours in Toronto and in Lagos, and
+ * the server reads one without a zone as a day in Greenwich. So whatever
+ * sends a range on sends this beside it, or "Today" in Toronto ends in the
+ * early evening.
+ */
+export function rangeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
  * "When" as a filter, which every list of money eventually needs.
  *
  * Presets first and a custom range behind them, because the honest split of
@@ -26,8 +53,8 @@ interface Preset {
  * the only case is how a filter ends up being two date fields nobody fills in.
  *
  * Dates, not timestamps. An organizer thinking about Friday is not thinking
- * about 00:00:00Z, and the server treats both ends as whole days in the
- * event's own zone.
+ * about 00:00:00Z. The days are the reader's, and the server treats both
+ * ends as whole days in the zone it is sent with them (rangeZone).
  */
 @Component({
   selector: 'ui-date-range',
@@ -186,7 +213,7 @@ export class UiDateRange {
 
   readonly open = signal(false);
 
-  readonly today = new Date().toISOString().slice(0, 10);
+  readonly today = localDay(new Date());
 
   protected readonly calendarIcon = CalendarDays;
   protected readonly chevronIcon = ChevronDown;
@@ -217,8 +244,11 @@ export class UiDateRange {
     const preset = this.presets.find((p) => p.key === this.chosen());
     if (preset && preset.key !== 'all') return preset.label;
 
+    // A yyyy-mm-dd reads as midnight in Greenwich, so it is written out in
+    // Greenwich too. In the reader's zone, west of London, "2026-02-01" came
+    // out as 31 Jan.
     const show = (value: string | null) =>
-      value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date(value)) : null;
+      value ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(value)) : null;
 
     if (from && to) return `${show(from)} – ${show(to)}`;
 
@@ -258,6 +288,6 @@ export class UiDateRange {
     const date = new Date();
     date.setDate(date.getDate() - days);
 
-    return date.toISOString().slice(0, 10);
+    return localDay(date);
   }
 }

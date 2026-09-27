@@ -20,6 +20,10 @@ vendor/
 
 # --- Build output ---
 dist/
+# Except the tokens' CSS, which every app imports as a file and CI checks for
+# drift. Ignored, a fresh checkout had nothing to import and none of the three
+# apps built.
+!/packages/tokens/dist/
 build/
 out/
 .angular/

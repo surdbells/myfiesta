@@ -3,6 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Event } from './event';
 import { Discover, EventPage, TicketTypeCard } from '../../core/discovery';
+import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
 
 vi.mock('@capacitor/browser', () => ({ Browser: { open: async () => undefined } }));
@@ -120,7 +121,9 @@ describe('Event page', () => {
 
     expect(page.soldOut()).toBe(false);
     expect(page.anyTickets()).toBe(true);
-    expect(page.from(showing)).toContain('30.00');
+    // Against the formatter rather than a spelled-out "$30.00", which is only
+    // how an English phone writes it.
+    expect(page.from(showing)).toBe(`From ${formatMoney({ amount: 3000, currency: 'CAD' })}`);
   });
 
   it('calls it sold out only when there were tickets to sell', async () => {
