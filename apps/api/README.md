@@ -37,10 +37,13 @@ php artisan tinker --execute="echo DB::table('jobs')->count();"
 ```
 
 A few go out while the request is answered instead: a password reset, a team
-invitation, and the link that moves an account to a new address. Each carries
-a token that exists nowhere else, and a queued email is a copy of it sitting in
-`jobs`. The other emails about moving an account go with that link, so the
-owner's warning never waits on a worker the link did not. That makes these the
+invitation, the link that moves an account to a new address, the link that
+finishes a sign-up and the one that confirms an address. Each carries a token
+or a signed link that works on its own, and a queued email is a copy of it
+sitting in `jobs`. The other emails about moving an account go with that link,
+so the owner's warning never waits on a worker the link did not; the note that
+an address already has an account goes with the sign-up link, so how long the
+sign-up form takes to answer says nothing about which was sent. That makes these the
 wrong ones to test the worker with — they arrive without it — and it means the
 API process itself has to reach the mail server, not only the worker.
 `MailQueueingTest` fails if an email changes sides.
@@ -73,7 +76,7 @@ its own ticket.
 
 ## The scheduler
 
-Seven commands, and one of them touches stock:
+Eight commands, and one of them touches stock:
 
 | Command | When | What happens without it |
 | ------- | ---- | ----------------------- |
@@ -84,6 +87,7 @@ Seven commands, and one of them touches stock:
 | `webhooks:prune` | 04:00 daily | copies of what was sent to organizers' systems — buyers' names inside — pile up past their thirty days |
 | `campaigns:send` | every 5 minutes | a scheduled campaign never goes out |
 | `privacy:prune` | 04:30 daily | data exports sit on disk past their week, and unproved requests stay open |
+| `impersonation:close-lapsed` | every 5 minutes | a staff session that ran out has no end in the audit trail (its token has stopped working regardless) |
 
 In production that is one cron entry running `schedule:run` every minute, the
 standard Laravel arrangement. In development `schedule:work` does the same
@@ -130,6 +134,34 @@ transfer — and a door sale carries who took it and on which pass. The platform
 charges nothing on money it never touched, and the ledger records the sale and
 then removes the organizer's share with a `collected` entry, because they are
 holding it already.
+
+## The admin
+
+Staff sign in at `/admin` with their password and then a six-digit code emailed
+to their verified address — every time, for everybody; it cannot be switched
+off. "Keep me signed in" is ticked by default, so after that they stay signed
+in until they sign out; unticked, closing the browser signs them out.
+Signing out, changing the password, or losing the staff role ends it; the role
+is re-checked on every request, and a session that never passed the code is
+signed out. A staff account's address cannot be changed from the account
+screens, and one changed any other way loses its staff role: the codes go to
+that address, so it must stay the one the role was granted on. To move a staff
+member to a new address, revoke, let them move it, and grant again.
+
+Nobody is staff until somebody makes them staff. The first administrator comes
+from the server, to an account that already exists with a verified address:
+
+```bash
+php artisan staff:grant ada@example.com admin     # admin, finance or support
+php artisan staff:revoke ada@example.com
+```
+
+After that, administrators manage everybody else from the admin's Staff
+screen. Both routes refuse to remove the last administrator, nobody can change
+their own role, and every change is in the audit trail — from the console,
+marked as such. Deactivated accounts that still hold a role can be revoked
+too (the screen shows them behind its "Deactivated accounts" filter), so
+reactivating one later does not bring the admin back with it.
 
 ## Tests
 
