@@ -126,6 +126,17 @@
         </label>
 
         <!--
+          The refund policy in one sentence, where it is read before paying:
+          a dispute is judged on what the buyer was shown. The same words sit
+          by Stripe's pay button, and both come from the copy the API keeps
+          for the terms in force (apps/api/resources/legal) — LegalCopiesTest
+          fails if these drift from it.
+        -->
+        <p class="refund-summary mb-0 mt-2 ml-[30px] text-sm leading-[1.5] text-text-muted">
+          Refunds are up to the organizer, except that you are owed one if the event is cancelled.
+        </p>
+
+        <!--
           What the organizer asked.
 
           Between the buyer's details and the payment step, which is where a

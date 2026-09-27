@@ -71,6 +71,10 @@ class ProcessorRefundsTest extends TestCase
         Mail::fake();
         Sleep::fake();
 
+        // A dispute opening asks the processor about it (DisputeDesk); nothing
+        // here may reach a real one.
+        Http::fake(['api.stripe.com/v1/disputes/*' => Http::response(['error' => ['message' => 'Not asked in this test.']], 404)]);
+
         Http::fake([
             'api.stripe.com/v1/refunds*' => fn (Request $request) => $this->processorSilent
                 ? (Http::failedConnection())($request)

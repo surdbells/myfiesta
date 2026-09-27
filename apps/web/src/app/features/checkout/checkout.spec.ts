@@ -423,6 +423,17 @@ describe('Checkout, agreeing to the terms', () => {
     expect(placed).toHaveLength(1);
     expect(placed[0].accept_terms).toBe(true);
   });
+
+  // The words themselves are held to the API's copy of the policy by
+  // LegalCopiesTest; this is that they are on the page, by the box.
+  it('says the refund policy in one sentence beside the box', async () => {
+    const { harness } = await open();
+    const summary = (harness.routeNativeElement as HTMLElement).querySelector('.refund-summary');
+
+    expect(summary?.textContent?.trim()).toBe(
+      'Refunds are up to the organizer, except that you are owed one if the event is cancelled.',
+    );
+  });
 });
 
 /**

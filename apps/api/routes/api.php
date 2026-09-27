@@ -111,6 +111,10 @@ Route::get('/organizers/{slug}', [OrganizerController::class, 'show']);
  */
 Route::get('/tickets/{token}', TicketAccessController::class)->middleware('throttle:60,1');
 
+// The night as a calendar file, from the ticket page, on the same credential:
+// so that adding it to a diary is in the order's ticket history.
+Route::get('/tickets/{token}/calendar.ics', [TicketAccessController::class, 'calendar'])->middleware('throttle:60,1');
+
 // Giving one back, on the same credential as the tickets themselves.
 Route::post('/tickets/{token}/resale/{ticket}', [ResaleController::class, 'store'])->middleware('throttle:20,1');
 Route::delete('/tickets/{token}/resale/{ticket}', [ResaleController::class, 'destroy'])->middleware('throttle:20,1');

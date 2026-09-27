@@ -274,6 +274,127 @@ tickets and scans. The ledger and the audit log refuse updates and deletes in
 the database itself. `PruneScheduleTest` runs every clean-up against
 years-old records of each and counts them afterwards.
 
+### Dispute evidence
+
+What is kept to answer a chargeback ([DECISIONS.md](DECISIONS.md), "A
+chargeback is answered from records") runs on three schedules of its own:
+
+| Command | When | Does |
+| ------- | ---- | ---- |
+| `disputes:collect-evidence` | every 5 minutes | asks Stripe or Paystack for its record of each payment that has landed, and keeps it in `payment_evidence` |
+| `disputes:record-completions` | hourly | writes each finished night into `event_completions`, half a day after its door closed |
+| `disputes:prune-evidence` | 05:25 UTC | 18 months after each night: clears `purchase_ip` and `purchase_user_agent` on its orders, deletes its `ticket_activity` (whenever each row was written) and `payment_evidence` |
+
+A processor that cannot answer is asked again after 5, 15, 60, 360 and 1440
+minutes (`config/disputes.php`); nothing about the order waits on it. After
+the last try the row reads `gave_up` with the processor's last answer in
+`last_error`, and a warning is logged. To ask again, once the processor is
+answering:
+
+```sh
+fiesta exec api php artisan tinker --execute="App\Models\PaymentEvidence::where('status','gave_up')->update(['status'=>'pending','attempts'=>0,'next_attempt_at'=>now()])"
+```
+
+`ticket_activity`, `event_completions` and a captured `payment_evidence` row
+refuse updates in the database. `ticket_activity` and `payment_evidence` take
+a delete only from inside `disputes:prune-evidence`, which sets
+`myfiesta.retention_prune` for its own transaction; `event_completions` never
+takes one. `DisputeEvidenceRetentionTest` holds the prune away from orders,
+tickets, scans, the ledger and the audit log. An order whose dispute is still
+open keeps its evidence past the 18 months, until the dispute closes. Once a
+night is past the 18 months nothing new is written about it: opening its
+tickets, or seeing them in the app, leaves no row.
+
+What counts as the tickets being opened: the ticket page, the signed order
+link, the calendar file and the app drawing the QR. The page a buyer lands on
+after paying is not one — it shows no ticket, and the site's own server asks
+it while drawing the page — so it writes nothing. A ticket passed on to
+somebody else is written as shown in their app, without their address or
+browser. The same thing opened again from the same address within 10 minutes
+is one row, whatever the browser calls itself.
+
+## Chargebacks
+
+When Stripe (`charge.dispute.created`) or Paystack (`charge.dispute.create`)
+opens a dispute, it is recorded on the order and, a moment later, answered in
+draft: the platform asks the processor about the dispute, writes the evidence
+from its own records, and emails every Admin and Finance member of staff with
+the amount, the reason, the night, the deadline and a link. Organizers hear
+through the `order.disputed` webhook, as before. **Nothing is sent to the
+processor until one of you sends it.**
+
+### How to respond
+
+1. Open **Money → Chargebacks**. Open, unanswered disputes are at the top,
+   soonest deadline first; a deadline within three days is red. Filter by
+   deadline, reason, processor or where the answer stands.
+2. On the dispute's page, read **Before you answer** first. When the records
+   say the buyer is right — a cancelled night nobody refunded, a second charge
+   for one order — use **Accept the dispute** and say why. The buyer keeps the
+   money; when the processor confirms, the chargeback comes off the
+   organizer's balance and the tickets stop working, as for any lost dispute.
+3. Otherwise read **What the records hold**, then the fields under **What will
+   be sent**. Correct what is wrong and add what you know to be true — never
+   what you do not — and **Save draft**. Open the documents to read them.
+4. **Submit evidence**. It is final: each processor takes one answer. Stripe
+   gets each document through its Files API, then every field with
+   `submit=true`; Paystack gets its evidence, one document with everything in
+   it, and a `declined` resolution. Paystack refuses evidence without the
+   buyer's phone number, which the order may not have; ask the organizer.
+5. If the processor refuses, the page says why and nothing is marked sent.
+   What it already has is kept, so trying again uploads nothing twice. A try
+   Stripe answered with a refusal is tried again under new idempotency keys,
+   since Stripe gives an old key its old answer for a day; one that heard
+   nothing back is tried under the same keys. Words corrected after Paystack
+   already took the evidence go to Paystack as new evidence, and the answer
+   names that one.
+
+**Check with Stripe** (or Paystack) asks the processor again — the page says
+"Not asked yet" when it did not answer at opening. **Rebuild from the
+records** replaces the draft, edits and all, with a fresh one.
+
+Admin and Finance answer; Support can read every dispute but cannot send,
+accept or open the documents. Every save, send, acceptance and refusal of
+either is in the audit trail: who, when, which fields went and how long each
+was, each file's name, SHA-256 and the processor's id for it — including a
+file that left on a try the processor then refused — not the words or the
+files. `disputes:remind` (hourly) emails Admin and Finance when an unanswered
+dispute has five days left and again at two, each once; one that opens inside
+five days is announced with its deadline and only reminded at two.
+
+### What wins each reason
+
+| Their reason | What wins it | Accept instead when |
+| ------------ | ------------ | ------------------- |
+| Fraudulent, unrecognised | the card's bank authenticated the payment (3D Secure — the loss then moves to the bank), CVC and postcode passed, the order's internet address the same one that opened the tickets, the tickets used, earlier undisputed orders; Visa Compelling Evidence 3.0 when Stripe lists it and the records establish it | the bank did not authenticate it and nothing ties the tickets to the cardholder |
+| Not received | issued, emailed, opened, scanned in at the door, the night recorded as having taken place | the night was cancelled or never happened, or no ticket was issued |
+| Refund not received, not as described, general | the refund policy as the buyer's version showed it, how it was shown and accepted, that no refund was due — or that it was made; the night as listed | a refund was owed and not made |
+| Charged twice | the other order, its own charge and its own tickets | there is only one order |
+
+Compelling Evidence 3.0 needs two earlier undisputed payments on the same card,
+120 to 365 days before the dispute, matching on the account and the internet
+address. **Today no dispute can qualify.** The checkout reads no sign-in, so
+no order records the account it was placed on — even a buyer with an account
+checks out without one — and no device is identified, on purpose. The page
+says so and the ordinary evidence goes. The account a buyer's tickets are
+kept in is made from the address typed at checkout, and is not offered to
+Visa as the account the order was placed on.
+
+### What is kept, and for how long
+
+- On the dispute, for good like the order: the processor's status and the
+  network's reason code, whether and when it was answered and by whom, when
+  staff were told and reminded.
+- `dispute_evidence`: the processor's account of the dispute (never the
+  card's first six digits Paystack sends), the fields, the checklist, and what
+  was sent. Deleted by `disputes:prune-evidence` 18 months after the night,
+  once the dispute has closed.
+- The documents that were sent: on the private disk under `disputes/<id>/`,
+  deleted with their row. Previews are made on the spot and not stored. The
+  private disk has to be the one volume every API container shares
+  (`api-storage`), as it already is for exports.
+- The audit trail, for good, without the words or the files.
+
 ## Errors
 
 Each app reports to its own Sentry project, and only when its DSN is set:

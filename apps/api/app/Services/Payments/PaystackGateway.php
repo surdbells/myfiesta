@@ -2,13 +2,19 @@
 
 namespace App\Services\Payments;
 
+use App\Contracts\Payments\AnswersDisputes;
 use App\Contracts\Payments\CheckoutOptions;
 use App\Contracts\Payments\CheckoutSession;
+use App\Contracts\Payments\DescribesPayments;
+use App\Contracts\Payments\EvidencePackage;
 use App\Contracts\Payments\FindsRefunds;
 use App\Contracts\Payments\PaymentEvent;
 use App\Contracts\Payments\PaymentGateway;
+use App\Contracts\Payments\PaymentRecord;
+use App\Contracts\Payments\ProcessorDispute;
 use App\Contracts\Payments\RefundNotice;
 use App\Contracts\Payments\RefundResult;
+use App\Models\Dispute;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
@@ -28,7 +34,7 @@ use RuntimeException;
  * Amounts are in kobo, which happens to match the minor-unit convention used
  * throughout this codebase — no conversion, and none should be introduced.
  */
-class PaystackGateway implements FindsRefunds, PaymentGateway
+class PaystackGateway implements AnswersDisputes, DescribesPayments, FindsRefunds, PaymentGateway
 {
     private const BASE = 'https://api.paystack.co';
 
@@ -47,6 +53,15 @@ class PaystackGateway implements FindsRefunds, PaymentGateway
         return strtoupper($currency) === 'NGN';
     }
 
+    /**
+     * Nothing here matches what Stripe's checkout is given to answer a
+     * dispute with (StripeGateway::answeringDisputes). Paystack takes no
+     * statement line per payment — its dashboard sets one for the business —
+     * no request to check the cardholder, which the card's bank decides with
+     * Paystack, no terms box and no text by its pay button. What the buyer
+     * agreed to is kept on the order, and what Paystack says about the
+     * payment is asked for once it lands (describePayment).
+     */
     public function createCheckout(Order $order, CheckoutOptions $options): CheckoutSession
     {
         $response = Http::withToken($this->secretKey)
@@ -71,6 +86,267 @@ class PaystackGateway implements FindsRefunds, PaymentGateway
             reference: $response->json('data.reference'),
             redirectUrl: $response->json('data.authorization_url'),
         );
+    }
+
+    /**
+     * Paystack's record of an order's payment, from its verify endpoint,
+     * reduced to what answers a dispute.
+     *
+     * Kept: the transaction's id, reference, amount, status, when it was
+     * paid and the channel it came through; the address Paystack saw the
+     * payment made from, since Paystack keeps it and a bank will ask; the
+     * fees; and, from the authorization, which card or bank it was — the
+     * card's type, brand, bank and last four, whether it can be charged again,
+     * and its signature, which is how Paystack says two payments were one card.
+     *
+     * Left out on purpose: the authorization code, which would let the card be
+     * charged again; the first six digits (the bin), which are the start of
+     * the card number; the expiry; the account name; and everything about the
+     * customer but the address the receipt went to.
+     */
+    public function describePayment(Order $order): PaymentRecord
+    {
+        if ($order->gateway_reference === null) {
+            throw new RuntimeException('The order has no Paystack transaction to ask about.');
+        }
+
+        $response = Http::withToken($this->secretKey)
+            ->timeout(15)
+            ->get(self::BASE.'/transaction/verify/'.rawurlencode($order->gateway_reference))
+            ->throw();
+
+        $data = $response->json('data');
+
+        if ($response->json('status') !== true || ! is_array($data)) {
+            throw new RuntimeException('Paystack would not describe the payment: '.$response->json('message', 'no reason given'));
+        }
+
+        $authorization = is_array($data['authorization'] ?? null) ? $data['authorization'] : [];
+        $email = $data['customer']['email'] ?? null;
+
+        return new PaymentRecord(
+            reference: (string) ($data['reference'] ?? $order->gateway_reference),
+            facts: [
+                'processor' => 'paystack',
+                'livemode' => ($data['domain'] ?? null) === 'live',
+                'transaction' => [
+                    'id' => $data['id'] ?? null,
+                    'reference' => $data['reference'] ?? null,
+                    'status' => $data['status'] ?? null,
+                    'amount' => isset($data['amount']) ? (int) $data['amount'] : null,
+                    'currency' => isset($data['currency']) ? strtoupper((string) $data['currency']) : null,
+                    'channel' => $data['channel'] ?? null,
+                    'gateway_response' => $data['gateway_response'] ?? null,
+                    'paid_at' => $data['paid_at'] ?? $data['paidAt'] ?? null,
+                    'created_at' => $data['created_at'] ?? $data['createdAt'] ?? null,
+                    'ip_address' => $data['ip_address'] ?? null,
+                    'fees' => isset($data['fees']) ? (int) $data['fees'] : null,
+                ],
+                'authorization' => [
+                    'channel' => $authorization['channel'] ?? null,
+                    'card_type' => $authorization['card_type'] ?? null,
+                    'brand' => $authorization['brand'] ?? null,
+                    'bank' => $authorization['bank'] ?? null,
+                    'last4' => $authorization['last4'] ?? null,
+                    'reusable' => $authorization['reusable'] ?? null,
+                    'signature' => $authorization['signature'] ?? null,
+                ],
+            ],
+            receiptEmail: is_string($email) && $email !== '' ? $email : null,
+        );
+    }
+
+    /** The dispute as Paystack has it (GET /dispute/:id). */
+    public function describeDispute(Dispute $dispute): ProcessorDispute
+    {
+        return $this->disputeFrom($this->disputeCall('get', '/dispute/'.rawurlencode($dispute->gateway_reference)));
+    }
+
+    /**
+     * Paystack's three steps, each remembered as it is done, since Paystack
+     * takes no idempotency key and a step done twice is done twice:
+     *
+     *   the evidence itself (POST /dispute/:id/evidence) — the buyer's name,
+     *   address and phone, what they were sold and when it was delivered;
+     *   one document, uploaded to the address Paystack gives for it
+     *   (GET /dispute/:id/upload_url, then a PUT there) — every document in
+     *   one, since the answer carries one;
+     *   and the answer (PUT /dispute/:id/resolve, declined), naming both.
+     *
+     * The evidence is remembered with a digest of its words. Words corrected
+     * after a try that got as far as giving Paystack the evidence are not the
+     * words Paystack has, so they go as new evidence and the answer names
+     * that — never the old evidence under the new words, which would leave
+     * the record of what was sent saying something Paystack was never told.
+     */
+    public function submitDisputeEvidence(Dispute $dispute, EvidencePackage $package): ProcessorDispute
+    {
+        $path = '/dispute/'.rawurlencode($dispute->gateway_reference);
+
+        $fields = array_filter(array_intersect_key($package->fields, array_flip([
+            'customer_email', 'customer_name', 'customer_phone', 'service_details', 'delivery_address', 'delivery_date',
+        ])), fn ($value) => $value !== '');
+        $sorted = $fields;
+        ksort($sorted);
+        $words = hash('sha256', (string) json_encode($sorted));
+
+        $evidence = $package->uploaded('paystack_evidence', $words);
+
+        if ($evidence === null) {
+            $created = $this->disputeCall('post', $path.'/evidence', $fields);
+            $evidence = isset($created['id']) ? (string) $created['id'] : throw new RuntimeException('Paystack took the evidence but did not say what it called it.');
+
+            $package->remember('paystack_evidence', $evidence, null, $words);
+        }
+
+        $file = $package->uploaded('evidence_pack') ?? $this->uploadEvidence($dispute, $package, 'evidence_pack');
+
+        return $this->disputeFrom($this->disputeCall('put', $path.'/resolve', [
+            'resolution' => 'declined',
+            'message' => $package->message,
+            'refund_amount' => 0,
+            'uploaded_filename' => $file,
+            'evidence' => (int) $evidence,
+        ]));
+    }
+
+    /**
+     * Accept the buyer's claim: Paystack refunds them the disputed amount and
+     * charge.dispute.resolve follows as merchant-accepted, which is a loss
+     * (DisputeService). Paystack wants a note and a file with any answer, so
+     * the receipt goes with it.
+     */
+    public function acceptDispute(Dispute $dispute, EvidencePackage $package): ProcessorDispute
+    {
+        $file = $package->uploaded('receipt') ?? $this->uploadEvidence($dispute, $package, 'receipt');
+
+        return $this->disputeFrom($this->disputeCall('put', '/dispute/'.rawurlencode($dispute->gateway_reference).'/resolve', [
+            'resolution' => 'merchant-accepted',
+            'message' => $package->message,
+            'refund_amount' => (int) $dispute->amount,
+            'uploaded_filename' => $file,
+        ]));
+    }
+
+    /**
+     * Paystack's dispute, reduced to what answers it.
+     *
+     * Left out: the card's first six digits (bin), which Paystack sends with
+     * every dispute and which are the start of the card number; and who wrote
+     * each message, which is an email address. What the messages say is kept —
+     * it is the only place Paystack gives the buyer's reason in their words.
+     * The phone number Paystack holds for the buyer is kept, because Paystack
+     * will not take evidence without one.
+     *
+     * The transaction is an object on a fetched dispute and a bare id on a
+     * resolved one; both are read.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function disputeFrom(array $data): ProcessorDispute
+    {
+        $transaction = is_array($data['transaction'] ?? null) ? $data['transaction'] : ['id' => $data['transaction'] ?? null];
+        $customer = is_array($data['customer'] ?? null) ? $data['customer'] : [];
+        $due = $data['dueAt'] ?? $data['due_at'] ?? null;
+        $amount = $data['refund_amount'] ?? $transaction['amount'] ?? null;
+
+        return new ProcessorDispute(
+            reference: (string) ($data['id'] ?? ''),
+            status: isset($data['status']) ? (string) $data['status'] : null,
+            reason: isset($data['category']) ? (string) $data['category'] : null,
+            networkReasonCode: null,
+            amount: is_numeric($amount) ? (int) $amount : null,
+            currency: isset($data['currency']) ? strtoupper((string) $data['currency']) : null,
+            dueAt: is_string($due) && $due !== '' ? CarbonImmutable::parse($due)->utc() : null,
+            facts: [
+                'processor' => 'paystack',
+                'id' => $data['id'] ?? null,
+                'status' => $data['status'] ?? null,
+                'resolution' => $data['resolution'] ?? null,
+                'category' => $data['category'] ?? null,
+                'refund_amount' => is_numeric($amount) ? (int) $amount : null,
+                'currency' => $data['currency'] ?? null,
+                'domain' => $data['domain'] ?? null,
+                'due_at' => $due,
+                'resolved_at' => $data['resolvedAt'] ?? $data['resolved_at'] ?? null,
+                'created_at' => $data['createdAt'] ?? $data['created_at'] ?? null,
+                'last4' => $data['last4'] ?? null,
+                'note' => $data['note'] ?? null,
+                'transaction' => [
+                    'id' => $transaction['id'] ?? null,
+                    'reference' => $transaction['reference'] ?? $data['transaction_reference'] ?? null,
+                    'amount' => isset($transaction['amount']) ? (int) $transaction['amount'] : null,
+                    'channel' => $transaction['channel'] ?? null,
+                    'paid_at' => $transaction['paid_at'] ?? $transaction['paidAt'] ?? null,
+                ],
+                'customer_phone' => $customer['phone'] ?? $customer['international_format_phone'] ?? null,
+                'messages' => array_values(array_map(
+                    fn (array $message) => ['body' => (string) ($message['body'] ?? ''), 'at' => $message['createdAt'] ?? null],
+                    array_filter((array) ($data['messages'] ?? []), 'is_array'),
+                )),
+                'history' => array_values(array_map(
+                    fn (array $step) => ['status' => $step['status'] ?? null, 'at' => $step['createdAt'] ?? null],
+                    array_filter((array) ($data['history'] ?? []), 'is_array'),
+                )),
+            ],
+        );
+    }
+
+    /**
+     * One document, to the address Paystack gives for it.
+     *
+     * The address is a storage bucket's signed link, so the file goes there
+     * as it is and without our key.
+     */
+    private function uploadEvidence(Dispute $dispute, EvidencePackage $package, string $kind): string
+    {
+        $file = $package->file($kind);
+
+        $upload = $this->disputeCall('get', '/dispute/'.rawurlencode($dispute->gateway_reference).'/upload_url', [
+            'upload_filename' => $file->name,
+        ]);
+
+        $signed = $upload['signedUrl'] ?? null;
+        $name = $upload['fileName'] ?? null;
+
+        if (! is_string($signed) || $signed === '' || ! is_string($name) || $name === '') {
+            throw new RuntimeException('Paystack did not give an address to upload the evidence to.');
+        }
+
+        $sent = Http::withBody($file->bytes, $file->mimeType)->timeout(60)->put($signed);
+
+        if ($sent->failed()) {
+            throw new RuntimeException("Paystack's file store would not take {$file->name} (it answered {$sent->status()}).");
+        }
+
+        $package->remember($kind, $name, $file);
+
+        return $name;
+    }
+
+    /**
+     * A call to Paystack's dispute API, with its own words when it says no.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function disputeCall(string $method, string $path, array $body = []): array
+    {
+        $request = Http::withToken($this->secretKey)->timeout(30);
+
+        $response = match ($method) {
+            'get' => $request->get(self::BASE.$path, $body),
+            'put' => $request->put(self::BASE.$path, $body),
+            default => $request->post(self::BASE.$path, $body),
+        };
+
+        if ($response->failed() || $response->json('status') !== true) {
+            throw new RuntimeException('Paystack said: '.$response->json('message', 'it answered '.$response->status().'.'));
+        }
+
+        $data = $response->json('data');
+
+        return is_array($data) ? $data : [];
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\TicketType;
 use App\Services\Audit\Auditor;
+use App\Services\Disputes\ActivityLog;
 use App\Services\Integrations\Payloads;
 use App\Services\Integrations\Webhooks;
 use App\Services\Payments\GatewayFee;
@@ -112,7 +113,12 @@ class Fulfiller
                     : GatewayFee::on($locked->total, $locked->gateway)->amount,
             ]);
 
-            $this->issuer->issueFor($locked);
+            $tickets = $this->issuer->issueFor($locked);
+
+            // Into the ticket history, in the same transaction as the
+            // tickets, so it says they were issued exactly when they were.
+            app(ActivityLog::class)->issued($locked, $tickets);
+
             $this->writeLedger($locked);
             $this->releaseHolds($locked);
 

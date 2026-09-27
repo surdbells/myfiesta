@@ -24,8 +24,25 @@ return [
     | beside them; an environment variable could be left behind on a server
     | and go on naming words that are no longer on the page.
     |
+    | Each version also has a copy of its refund policy, and of the sentence
+    | shown by the pay button, in resources/legal/<version>: a dispute is
+    | judged on what the buyer was shown, and the page itself only ever says
+    | what it says now. A new version gets a new directory (see its README).
+    |
+    | 2026-09-27.2: the privacy page says the order keeps the address it came
+    | from and the browser, and the ticket history and payment record kept to
+    | answer a disputed payment, until 18 months after the event. The last
+    | version told people neither was kept, so it is not something they can be
+    | taken to have agreed to already. It also says what is sent to Stripe or
+    | Paystack for the bank when a disputed payment is answered — written
+    | before this version was ever in force, so it needs no version of its own.
+    | So is a narrowing, also before it was in force: the page you return to
+    | after paying is no longer noted, and a ticket passed on is noted in its
+    | new holder's app without their address. Both keep less than the words
+    | first said, so what anybody agreed to still covers what is done.
+    |
     */
 
-    'version' => '2026-09-27',
+    'version' => '2026-09-27.2',
 
 ];

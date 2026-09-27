@@ -54,9 +54,16 @@ Set in the admin's Platform settings or in `.env.production`
 - A lawyer's review of the terms, privacy policy and refund policy. Every page
   says "Not yet reviewed by a lawyer" until then, deliberately.
 - Whether an unticked checkbox plus a stored version and date is enough
-  evidence of acceptance under Canadian and Nigerian consumer law, and whether
-  IP address or browser should be kept too (the privacy page must say so
-  first; today it says they are not).
+  evidence of acceptance under Canadian and Nigerian consumer law. The
+  address and browser an online order came from are now kept on the order,
+  with the ticket history and the processor's payment record, to answer a
+  disputed payment, and deleted 18 months after the event — the privacy page
+  says so (terms version `2026-09-27.2`). The lawyer should confirm that
+  retention, and that keeping it through an erasure request until then is
+  allowed.
+- The one-line refund summary shown beside the terms box and on Stripe's
+  pay button (`apps/api/resources/legal/<version>/refund-summary.txt`),
+  alongside the refund policy it summarises.
 - When the text of any of the three pages changes in substance, bump
   `version` in `apps/api/config/terms.php` in the same commit, so people are
   asked again.
@@ -74,6 +81,46 @@ Set in the admin's Platform settings or in `.env.production`
   live. The Stripe refund reason and the Paystack refund and dispute payloads
   follow the processors' documentation and have not been tried against live
   accounts.
+- In Stripe's dashboard (Settings → Business → Public details): the
+  shortened descriptor, the prefix every card charge starts with, set to
+  the same value as `STRIPE_STATEMENT_DESCRIPTOR_PREFIX` (default
+  `MYFIESTA`, 2–10 characters). Each charge adds the night's name after it
+  so buyers recognise it on their statement; a dashboard prefix longer than
+  the setting makes Stripe refuse checkouts for long night names.
+- Also there: the terms of service URL (`https://myfiesta.ca/terms`). Until
+  it is set, leave `STRIPE_COLLECT_TERMS_CONSENT` off — Stripe refuses every
+  checkout that asks for its own terms box without one. With it set, switch
+  the setting on and Stripe keeps its own record that the buyer ticked it.
+- 3D Secure is requested as Stripe judges (`STRIPE_REQUEST_THREE_D_SECURE=automatic`).
+  `any` asks on every card that supports it — fewer fraud chargebacks, one
+  more step at checkout; decide once the first month's disputes are in. The
+  Radar rules for 3D Secure in Stripe's dashboard apply either way.
+- A test-mode payment on each processor, then `php artisan
+  disputes:collect-evidence`, and a look at the `payment_evidence` row: the
+  field names follow the processors' documentation and have not been read
+  from a live account.
+- A test-mode dispute on each processor, answered from **Money →
+  Chargebacks** (docs/OPERATIONS.md, "Chargebacks"): Stripe's test card that
+  opens a dispute, and Paystack's test dispute. The dispute, evidence, upload
+  and resolve calls follow each processor's API reference and have not been
+  tried against a live account — Paystack's in particular, whose upload
+  address and resolve fields are the least documented.
+- Radar rules in Stripe's dashboard, to consider once there is a month of
+  sales to judge them by: ask for 3D Secure when Radar's risk is elevated
+  (a payment the bank authenticated is one the bank answers for as fraud),
+  block when it is highest, block a failed CVC check, and review several
+  charges from one email address within an hour. None of this is in the code;
+  Radar applies it before a payment reaches us.
+- Stripe's own dispute tools, where the account offers them: Smart Disputes
+  (Stripe answering disputes itself) and dispute prevention (Visa's Rapid
+  Dispute Resolution and Order Insight, Mastercard's Ethoca alerts, which
+  refund or answer an enquiry before it becomes a chargeback). Decide before
+  launch whether to use them. If Stripe answers a dispute itself, the
+  dispute's page shows it under "What the processor says", and Stripe will
+  refuse a second answer from Submit.
+- Paystack's dashboard: the statement line for the business (Paystack takes
+  none per payment), and who there is emailed about disputes — Paystack's
+  deadlines are days, not weeks.
 - `TRUSTED_PROXIES`: the addresses the load balancer connects from
   ([DEPLOYMENT.md](DEPLOYMENT.md#behind-the-load-balancer)).
 
@@ -127,7 +174,11 @@ All in [STORE.md](STORE.md):
 - Store review accounts with a confirmed address that are not the only owner of
   any organization, remade after each review, since reviewers may delete them.
 - Privacy label (App Store) and Data safety (Play) answers, which must match
-  the privacy manifest in the app; STORE.md has the answers to give.
+  the privacy manifest in the app; STORE.md has the answers to give. Since
+  those answers were written, the API keeps the address and browser each time
+  the app shows a ticket, as dispute evidence for 18 months; decide whether
+  the answers should say so (nothing is worked out from the address, so no
+  location is collected).
 
 ## Known and chosen
 

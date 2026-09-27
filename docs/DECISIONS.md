@@ -203,8 +203,10 @@ the agreement on it too (`Terms` is ready for that), but it has to place the
 order for that account in the same change. Door sales are not asked: the
 person paying is in front of the organizer's staff, gives nothing, has no
 screen of ours to read on, and the organizer selling agreed when they signed
-up. No IP address or browser is kept with the agreement, because the privacy
-page does not say we hold either.
+up. The agreement itself is the version and the moment; the address and
+browser an online order came from are kept on the order for a different
+reason — answering a disputed payment — and the privacy page says so (see
+"A chargeback is answered from records").
 
 ## Clients
 
@@ -627,6 +629,92 @@ refund is sent to Stripe with a session id where a payment intent belongs.
 against you in June" is something an organizer can check and act on. A number
 out of a hundred is something they refuse a stranger over, built from
 behaviour we would have to follow people around to collect.
+
+**A chargeback is answered from records, not reconstructed.** On the old
+platform buyers disputed tickets with their bank after the night had passed,
+and every one was lost: nothing had been kept that a bank would accept. So the
+facts are written as they happen, from sources a bank trusts, into tables
+nothing can edit, and a dispute months later is answered by reading them:
+
+- the order keeps the address it came from and the browser (online only —
+  a door sale's request is the organizer's phone);
+- the processor's own record of the payment is fetched once it lands, never
+  during the notice that issues the tickets, and fixed once kept — for Stripe,
+  whether the card's bank checked it was the cardholder (3D Secure), Radar's
+  outcome, the CVC and postcode checks, and the card by brand, last four and
+  fingerprint; for Paystack, the channel, the card or bank by brand and last
+  four, and the address it saw. Never a card number, and nothing that could
+  charge the card again;
+- the ticket history (`ticket_activity`): issued, each email with the mail
+  provider's own id, each opening of the ticket link, the app drawing the QR
+  and the calendar file, each transfer by reference. The door is not copied
+  into it — `ticket_scans` is the door's record. The page that waits for the
+  payment is not in it: it shows no ticket, needs only the reference, and is
+  asked by the site's own server as it draws the page, so writing it down
+  would tell a bank the tickets were opened when they were not. A ticket
+  passed on is written as shown in its new holder's app, without their
+  address: the dispute is the buyer's, and nothing about the friend is the
+  bank's business;
+- once the door has closed and the offline phones have caught up, the night
+  itself, with the listing as it stood and the door's counts, so an organizer
+  editing the event afterwards changes nothing a bank is shown — the evidence
+  describes the night from this record once it exists, and from the listing
+  only before;
+- the refund policy each terms version showed, in `resources/legal`, because
+  a dispute is judged on what the buyer was shown and the site only shows
+  today's words.
+
+It is kept proportionate on purpose. There is still no device fingerprinting
+and no location: an address is what every request carries anyway, kept as the
+application believes it (`TRUSTED_PROXIES`) and read by nothing but people
+answering a bank — never by the fraud signals. Everything about a person here
+goes 18 months after the night (`disputes:prune-evidence`), which is past the
+longest window any card network gives for a dispute, and not before one still
+open is settled — a row written after the night goes with the rest rather
+than its own 18 months later, and nothing more is written about a night past
+the window. The note that a night took place names nobody and stays.
+
+**The statement names the night.** "I don't recognise this charge" is usually
+true of a line reading MYFIESTA and nothing else, six weeks on. Each Stripe
+charge carries the night's name after the prefix, in the letters, digits and
+spaces Stripe allows, cut at a word to fit its 22 characters. Paystack takes
+no suffix per payment; its statement line is set once for the business.
+
+**A chargeback is answered by a person, from an answer already written.**
+When a processor opens a dispute, the platform asks it about the dispute,
+writes the answer from the records above — field by field in the processor's
+own terms, with a receipt, the delivery and entry record, the refund policy
+as the buyer's version said it, and the emails we sent them, as PDFs — and
+tells Admin and Finance. It never sends anything itself. Some disputes are
+fair (a cancelled night nobody refunded, a second charge for one order), and
+contesting those loses anyway, with a fee on top; so the page sets out what
+suggests the buyer is right above the answer, and a person sends it or
+accepts. Every sentence is built from a record and says only what the record
+says: a missing record leaves its sentence out and its line on the checklist
+unticked, rather than something that sounds right. Visa's Compelling
+Evidence 3.0 is claimed only when Stripe says a dispute could qualify and our
+records establish it — two earlier undisputed payments on the same card
+matching on account and internet address. Today that is never: the checkout
+reads no sign-in, so no order records the account it was placed on, and
+there is no device fingerprinting to match on instead — nor will there be one
+to win a chargeback. The account a buyer's tickets are kept in is not offered
+in its place; it is made from the address typed at checkout, and calling it
+the account the order was placed on would claim a sign-in that never
+happened. The page says so plainly. A checkout that records the signed-in
+account would make it work with no change to the evidence.
+
+What that keeps, and for how long: on the dispute, which is a record kept for
+good, only the processor's status and reason code and when and how it was
+answered and by whom. The answer itself — the processor's account, the words,
+what was sent — and the PDFs that went with it (on the private disk, never a
+public one) name the buyer, so they go with the rest of the evidence 18 months
+after the night once the dispute has closed. Paystack sends the card's first
+six digits with every dispute; they are never kept. The audit trail records
+who saved, sent or accepted, when, which fields and files went and each
+file's checksum and the processor's id for it — not the words or the files,
+because the trail outlives both. Admin and Finance answer; Support reads, the
+same split as refunds. The organizer hears through the `order.disputed`
+webhook, as before; nothing about it is sent to the buyer.
 
 **A text is for the two things somebody paid for, and nothing else.** The
 ticket, and the reminder on the day. Marketing by text needs consent neither

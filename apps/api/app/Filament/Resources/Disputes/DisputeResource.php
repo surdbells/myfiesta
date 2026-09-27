@@ -3,21 +3,28 @@
 namespace App\Filament\Resources\Disputes;
 
 use App\Filament\Resources\Disputes\Pages\ListDisputes;
+use App\Filament\Resources\Disputes\Pages\ViewDispute;
 use App\Filament\Resources\Disputes\Tables\DisputesTable;
 use App\Models\Dispute;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * Chargebacks, and who is answering them.
+ * Chargebacks, and answering them.
  *
- * The evidence is submitted in the processor's own dashboard — Stripe and
- * Paystack both want the files there, and duplicating that here would be a
- * second place to keep in step. What this screen is for is knowing a dispute
- * exists at all, which organizer it belongs to, and how long is left to
- * answer it.
+ * When a processor opens a dispute the answer is already put together from
+ * the records (DisputeDesk), and this is where staff read it, correct it and
+ * send it before the deadline — or accept it, when the buyer is right. The
+ * list is ordered by what needs answering first.
+ *
+ * Every member of staff can read it: Support is often who the buyer or the
+ * organizer rings. Only Admin and Finance can send evidence, accept a dispute
+ * or open the documents, the same split as refunds; the page hides what a
+ * role cannot do and DisputeDesk refuses it again behind the button.
  */
 class DisputeResource extends Resource
 {
@@ -53,7 +60,14 @@ class DisputeResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->platform_role?->canSettle() ?? false;
+        $user = auth()->user();
+
+        return $user instanceof User && $user->isPlatformStaff() && $user->deleted_at === null;
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return static::canViewAny();
     }
 
     public static function canCreate(): bool
@@ -80,6 +94,7 @@ class DisputeResource extends Resource
     {
         return [
             'index' => ListDisputes::route('/'),
+            'view' => ViewDispute::route('/{record}'),
         ];
     }
 }

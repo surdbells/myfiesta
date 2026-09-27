@@ -14,6 +14,7 @@ use App\Models\TicketType;
 use App\Services\Checkout\CheckoutService;
 use Database\Seeders\TaxRateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -48,6 +49,13 @@ class PaymentWebhookTest extends TestCase
 
         // Rebuild so the adapters pick up the test credentials.
         $this->app->forgetInstance(PaymentGatewayRegistry::class);
+
+        // A dispute opening asks the processor about it (DisputeDesk). Not
+        // here, and never the real one: DisputeAnswerTest covers the asking.
+        Http::fake([
+            'api.stripe.com/v1/disputes/*' => Http::response(['error' => ['message' => 'Not asked in this test.']], 404),
+            'api.paystack.co/dispute/*' => Http::response(['status' => false, 'message' => 'Not asked in this test.'], 404),
+        ]);
     }
 
     private function order(string $currency = 'CAD', int $price = 10000): Order

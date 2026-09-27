@@ -10,6 +10,40 @@ return [
         'secret_key' => env('STRIPE_SECRET_KEY'),
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+
+        /*
+         * The shortened descriptor set in Stripe's dashboard (Settings →
+         * Business → Public details), which every card charge starts with.
+         *
+         * Stripe adds "* " and the night's name after it, and the whole line
+         * on a bank statement may be 22 characters, so this is what decides
+         * how much of the name fits (StatementDescriptor). Keep it the same
+         * as the dashboard's: a longer one here only shortens the name, a
+         * shorter one makes Stripe refuse the checkout as too long.
+         */
+        'statement_descriptor_prefix' => env('STRIPE_STATEMENT_DESCRIPTOR_PREFIX', 'MYFIESTA'),
+
+        /*
+         * Whether to ask the buyer's bank to check it is them (3D Secure).
+         *
+         * `automatic` lets Stripe ask when the bank or the rules want it;
+         * `any` asks on every card that supports it. A payment the bank
+         * checked is one a bank rarely lets its customer dispute as fraud —
+         * the liability moves to them — at the cost of a step at checkout.
+         * `challenge` asks for the step every time, which only makes sense
+         * while a run of fraud is being dealt with.
+         */
+        'request_three_d_secure' => env('STRIPE_REQUEST_THREE_D_SECURE', 'automatic'),
+
+        /*
+         * Stripe's own terms box on its payment page, as well as ours.
+         *
+         * Off until the terms page address is set in Stripe's dashboard
+         * (Settings → Business → Public details), since Stripe refuses every
+         * checkout that asks without one. On, Stripe keeps its own record
+         * that the box was ticked, which sits beside ours in a dispute.
+         */
+        'collect_terms_consent' => (bool) env('STRIPE_COLLECT_TERMS_CONSENT', false),
     ],
 
     'paystack' => [

@@ -127,11 +127,50 @@ return [
      */
     'by_email' => [
 
+        // The address and browser an online order came from go with the
+        // buyer: kept to answer a disputed payment, and a person who has
+        // asked to be forgotten is no longer somebody an order is traced to.
         'orders' => [
             'strategy' => 'anonymise',
             'key' => 'buyer_email',
-            'columns' => ['buyer_email', 'buyer_name', 'buyer_phone'],
+            'columns' => ['buyer_email', 'buyer_name', 'buyer_phone', 'purchase_ip', 'purchase_user_agent'],
             'reason' => 'Financial record. Amounts, tax, and commission are retained; the buyer is detached.',
+        ],
+
+        /*
+         * What happened to an order's tickets, and the processor's record of
+         * its payment: kept to answer a bank that is asked to take the money
+         * back, and deleted 18 months after the event (disputes:prune-evidence),
+         * past every card network's window for a dispute.
+         *
+         * Kept through an erasure until then. Both tables are append-only, so
+         * the database would refuse to blank them anyway; and both laws permit
+         * keeping what is needed to answer a legal claim for as long as one
+         * can be made. The order they point at loses its buyer like any other.
+         *
+         * Found by the address an email went to, and the address a receipt
+         * went to. The rows that are an opening of a ticket link are tied to
+         * the order rather than to an address, and go with the rest.
+         */
+        'ticket_activity' => [
+            'strategy' => 'retain',
+            'key' => 'recipient_email',
+            'reason' => 'A record of the ticket emails sent to you and of your ticket links being opened, kept to answer your bank if a payment is disputed. Nobody can edit it, and it is deleted 18 months after the event.',
+        ],
+
+        'payment_evidence' => [
+            'strategy' => 'retain',
+            'key' => 'receipt_email',
+            'reason' => 'The payment processor\'s own record of your payment — card brand and last four digits, never the number, and whether your bank checked it was you — kept to answer your bank if the payment is disputed, and deleted 18 months after the event.',
+        ],
+
+        // What was said to a bank about a payment the buyer disputed: made
+        // from the two tables above and the order, kept for the same reason
+        // and deleted with them once the dispute has closed.
+        'dispute_evidence' => [
+            'strategy' => 'retain',
+            'key' => 'customer_email',
+            'reason' => 'What we sent your bank, through Stripe or Paystack, when you disputed a payment: kept while the dispute is open and after it as the record of what was said, and deleted 18 months after the event.',
         ],
 
         'tickets' => [

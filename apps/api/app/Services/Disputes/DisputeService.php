@@ -3,6 +3,7 @@
 namespace App\Services\Disputes;
 
 use App\Contracts\Payments\PaymentEvent;
+use App\Jobs\PrepareDisputeAnswer;
 use App\Models\Dispute;
 use App\Models\LedgerEntry;
 use App\Models\Order;
@@ -27,6 +28,10 @@ use Illuminate\Support\Facades\Log;
  *
  * Neither outcome is a refund. A refund is the organizer deciding; this is a
  * bank deciding, and the two are told apart everywhere they are counted.
+ *
+ * Answering one is not here: it is put together once the notice is recorded
+ * and sent, or conceded, by staff (DisputeDesk). Whoever decided it, the loss
+ * is written here, when the processor says the dispute has closed.
  */
 class DisputeService
 {
@@ -46,6 +51,7 @@ class DisputeService
                     'currency' => $details->currency ?: $order->currency,
                     'reason' => $details->reason,
                     'status' => 'open',
+                    'processor_status' => $details->status,
                     'opened_at' => now(),
                     'evidence_due_at' => $details->evidenceDueAt,
                 ],
@@ -75,6 +81,12 @@ class DisputeService
             'reason' => $dispute->reason,
         ]);
 
+        // The answer is put together, and Admin and Finance told, once the
+        // notice has been recorded — never inside it, where a slow processor
+        // would hold the notice up and a failure would have it sent again
+        // (PrepareDisputeAnswer, DisputeDesk::prepare).
+        DB::afterCommit(fn () => PrepareDisputeAnswer::dispatch($dispute->id));
+
         return $dispute;
     }
 
@@ -95,10 +107,13 @@ class DisputeService
             return $dispute;
         }
 
-        return DB::transaction(function () use ($dispute, $order, $lost) {
+        return DB::transaction(function () use ($dispute, $order, $lost, $details) {
             $dispute->update([
                 'status' => $lost ? 'lost' : 'won',
                 'closed_at' => now(),
+                // The processor's own word for how it ended — won, lost, a
+                // network enquiry closed, merchant-accepted — shown beside ours.
+                'processor_status' => $details->status ?? ($lost ? 'lost' : 'won'),
             ]);
 
             if (! $lost) {

@@ -173,3 +173,44 @@ Schedule::command('model:prune')
     ->dailyAt('05:20')
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Answering a chargeback (config/disputes.php).
+ *
+ * The processor's own record of each payment, asked for after the payment
+ * rather than during it, so a slow processor never holds up somebody's
+ * tickets: every five minutes, trying each again on a widening gap.
+ *
+ * Each night that is over, written down once from its door where nobody can
+ * edit it. Hourly; a night is only due half a day after its door closed, so
+ * the offline phones' scans are in.
+ *
+ * And, 18 months after each night, the address and browser on its orders,
+ * its ticket history and its payment records let go — past every card
+ * network's window for a dispute. Orders, tickets, scans, the ledger and the
+ * audit trail are records and it never touches them (DisputeEvidenceRetentionTest).
+ */
+Schedule::command('disputes:collect-evidence')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('disputes:record-completions')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('disputes:prune-evidence')
+    ->dailyAt('05:25')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+/*
+ * Chargebacks nobody has answered: Admin and Finance are emailed with five
+ * days left and again with two, each once (DisputeDesk::remindDue). Hourly,
+ * so a deadline is never met by a reminder a day late.
+ */
+Schedule::command('disputes:remind')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();

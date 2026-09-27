@@ -32,7 +32,10 @@ jobs:
             # must both reproduce. tools/check-ci-filters.cjs fails when a
             # filter leaves one out. The three Angular apps install from the
             # one lockfile at the root, so a change to it is a change to each.
-            api:        ['apps/api/**', 'packages/contract/**', 'packages/api-types/**']
+            # The API's mirror tests read the site: the refund policy and checkout
+            # wording it keeps a copy of (LegalCopiesTest) and the route words
+            # events may not take as a slug (ReservedSlugMirrorTest).
+            api:        ['apps/api/**', 'packages/contract/**', 'packages/api-types/**', 'apps/web/src/app/features/info/**', 'apps/web/src/app/features/checkout/**', 'apps/web/src/app/app.routes.ts']
             web:        ['apps/web/**', 'packages/tokens/**', 'packages/ui/**', 'packages/shared/**', 'package.json', 'package-lock.json']
             organizer:  ['apps/organizer-web/**', 'packages/tokens/**', 'packages/door/**', 'packages/ui/**', 'packages/shared/**', 'packages/api-types/**', 'packages/contract/**', 'package.json', 'package-lock.json']
             mobile:     ['apps/mobile/**', 'packages/tokens/**', 'packages/door/**', 'packages/shared/**', 'packages/api-types/**', 'package.json', 'package-lock.json']

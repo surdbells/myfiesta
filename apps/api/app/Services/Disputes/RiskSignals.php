@@ -15,9 +15,12 @@ use Illuminate\Support\Facades\DB;
  * hunch the platform manufactured; "this address had a chargeback in June" is
  * something they can check, argue with, and act on.
  *
- * What is not here, on purpose: anything about the card, which we never see,
- * and anything about a device or a location, which would mean building the
- * tracking the rest of this platform refuses to do.
+ * What is not here, on purpose: anything about the card — the processor's
+ * record of it is kept to answer a bank (ProcessorEvidence), not to judge the
+ * next buyer — and anything about a device or a location, which would mean
+ * building the tracking the rest of this platform refuses to do. The address
+ * and browser an order came from are kept for the same bank, and read by
+ * nothing here.
  */
 class RiskSignals
 {

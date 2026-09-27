@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DataRequestPageController;
+use App\Http\Controllers\DisputeFileController;
 use App\Http\Controllers\EmailVerificationPageController;
 use App\Http\Controllers\FollowLeaveController;
 use App\Http\Controllers\IdentityDocumentController;
@@ -24,6 +25,17 @@ Route::get('/', fn () => redirect('/admin'));
 Route::get('/identity-documents/{document}', [IdentityDocumentController::class, 'show'])
     ->middleware(['auth', 'signed'])
     ->name('identity-documents.show');
+
+/*
+ * A dispute's documents — the receipt, delivery and entry, the refund policy
+ * as shown, the emails — for Admin and Finance to preview or download before
+ * sending. The same guard as identity documents: signed, minutes long, and a
+ * role check inside.
+ */
+Route::get('/disputes/{dispute}/documents/{file}', DisputeFileController::class)
+    ->middleware(['auth', 'signed'])
+    ->whereIn('file', ['receipt', 'service_documentation', 'refund_policy', 'customer_communication', 'evidence_pack'])
+    ->name('disputes.document');
 
 /*
  * Payment webhooks.

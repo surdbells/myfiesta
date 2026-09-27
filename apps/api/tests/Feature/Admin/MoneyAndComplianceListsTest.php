@@ -51,7 +51,9 @@ class MoneyAndComplianceListsTest extends TestCase
     {
         $expected = [
             DataRequestResource::class => [PlatformRole::Admin, PlatformRole::Finance, PlatformRole::Support],
-            DisputeResource::class => [PlatformRole::Admin, PlatformRole::Finance],
+            // Support reads chargebacks — the buyer and the organizer ring
+            // them — and cannot answer one (DisputeScreenTest).
+            DisputeResource::class => [PlatformRole::Admin, PlatformRole::Finance, PlatformRole::Support],
             OrganizationIdentityDocumentResource::class => [PlatformRole::Admin, PlatformRole::Support],
             PayoutDetailResource::class => [PlatformRole::Admin, PlatformRole::Finance],
             PayoutRequestResource::class => [PlatformRole::Admin, PlatformRole::Finance],
@@ -156,7 +158,7 @@ class MoneyAndComplianceListsTest extends TestCase
             ->assertCanSeeTableRecords([$urgent, $lost])
             ->assertCanNotSeeTableRecords([$later])
             ->resetTableFilters()
-            ->filterTable('due_soon', true)
+            ->filterTable('deadline', 'week')
             ->assertCanSeeTableRecords([$urgent])
             ->assertCanNotSeeTableRecords([$later, $lost])
             ->resetTableFilters()

@@ -44,7 +44,13 @@ class TicketAccessPayload
                 'min_age' => $event->min_age,
                 'id_required' => $event->id_required,
                 'organizer' => $event->organization->name,
-                'calendar' => app(CalendarFile::class)->links($event),
+                // The file through this order's own link rather than the
+                // event's, so that adding the night to a calendar goes into
+                // the order's ticket history (TicketAccessController).
+                'calendar' => [
+                    ...app(CalendarFile::class)->links($event),
+                    'ics_url' => url('/api/tickets/'.rawurlencode($order->access_token).'/calendar.ics'),
+                ],
             ],
             /*
              * What else is on the order.

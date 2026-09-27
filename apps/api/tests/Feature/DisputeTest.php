@@ -52,6 +52,11 @@ class DisputeTest extends TestCase
         Config::set('payments.stripe.webhook_secret', self::SECRET);
         Config::set('payments.stripe.secret_key', 'sk_test');
 
+        // A dispute opening asks Stripe about it (DisputeDesk). Not here:
+        // these tests are about the ledger and the tickets, and nothing may
+        // reach the real Stripe. DisputeAnswerTest covers the asking.
+        Http::fake(['api.stripe.com/v1/disputes/*' => Http::response(['error' => ['message' => 'Not asked in this test.']], 404)]);
+
         $this->org = Organization::create(['name' => 'Lagos Nights', 'slug' => 'lagos-nights']);
 
         $this->event = Event::create([

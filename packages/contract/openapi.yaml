@@ -381,6 +381,32 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/tickets/{token}/calendar.ics:
+    get:
+      operationId: getTicketsCalendar
+      summary: The night as an iCalendar file, from the ticket page
+      description: |
+        The same file as /api/events/{slug}/calendar.ics, fetched on the
+        ticket link's own credential so that adding the night to a calendar is
+        kept in the order's ticket history, as dispute evidence. The ticket
+        page's `event.calendar.ics_url` points here. Not cached by anybody but
+        the browser that asked.
+      tags: [Tickets]
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: One VEVENT.
+          content:
+            text/calendar:
+              schema: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/me/tickets:
     get:
       operationId: listMyTickets

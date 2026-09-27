@@ -61,6 +61,16 @@ class ZeptoMailTransport extends AbstractTransport
         // what the previous implementation did, means a ticket that never
         // arrived leaves no trace anyone will look at.
         $response->throw();
+
+        // ZeptoMail's own id for the send, in place of the one made up for
+        // the Message-ID header: it is what ZeptoMail's logs are searched by
+        // when a buyer says their tickets never came, and it is what the
+        // ticket history keeps (RecordTicketMail).
+        $id = $response->json('request_id');
+
+        if (is_string($id) && $id !== '') {
+            $message->setMessageId($id);
+        }
     }
 
     /** @param  array<Address>  $addresses */

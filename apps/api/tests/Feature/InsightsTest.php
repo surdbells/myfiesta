@@ -14,6 +14,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -203,6 +204,14 @@ class InsightsTest extends TestCase
 
     public function test_an_order_placed_inside_the_widget_is_marked(): void
     {
+        // Whatever the processor would say, it is not asked: a test that reaches
+        // the real Stripe passes or fails on the network, not on this code.
+        Http::fake(['*' => Http::response([
+            'id' => 'cs_test_insights',
+            'object' => 'checkout.session',
+            'url' => 'https://checkout.stripe.com/c/pay/cs_test_insights',
+        ])]);
+
         $response = $this->postJson('/api/events/afro-fest/orders', [
             'items' => [['ticket_type_id' => $this->event->ticketTypes()->value('id'), 'quantity' => 1]],
             'buyer' => ['name' => 'Ada', 'email' => 'ada@example.com'],

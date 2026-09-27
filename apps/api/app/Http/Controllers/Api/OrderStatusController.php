@@ -18,6 +18,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * Deliberately thin. It confirms whether payment landed and nothing else; the
  * tickets themselves come through the signed link, which is what a guest with
  * no account has.
+ *
+ * Nothing here goes into the order's ticket history (TicketActivity has why):
+ * it shows no ticket, needs no credential beyond the reference, and is asked
+ * by the site's own server as well as by the buyer's browser.
  */
 class OrderStatusController extends Controller
 {

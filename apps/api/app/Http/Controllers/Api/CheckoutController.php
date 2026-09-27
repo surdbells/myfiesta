@@ -72,6 +72,9 @@ class CheckoutController extends Controller
                 answers: $request->orderAnswers(),
                 attendees: $request->attendees(),
                 addOns: $request->addOnQuantities(),
+                // Kept to answer a disputed payment; see CheckoutService.
+                purchaseIp: $request->ip(),
+                purchaseUserAgent: $request->userAgent(),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);

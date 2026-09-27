@@ -2,22 +2,27 @@
 
 namespace App\Filament\Resources\Disputes\Tables;
 
+use App\Filament\Resources\Disputes\DisputeResource;
+use App\Filament\Resources\Disputes\Schemas\DisputeInfolist;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Support\Listing;
 use App\Models\Dispute;
+use App\Services\Disputes\Reasons;
 use Filament\Actions\Action;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * The chargeback list: who, how much, why, and how long is left.
+ * The chargeback list: what needs answering first, and how long is left.
  *
- * Amounts in the currency the buyer disputed in; the total at the foot is one
- * figure per currency, never a sum across them.
+ * Open, unanswered disputes come first, soonest deadline first, and any due
+ * within three days has its deadline in red — after the deadline the
+ * processor takes nothing. Amounts in the currency the buyer disputed in; the
+ * total at the foot is one figure per currency, never a sum across them.
  */
 class DisputesTable
 {
@@ -28,6 +33,15 @@ class DisputesTable
         'withdrawn' => 'Withdrawn',
     ];
 
+    /** Where the answer to each stands. */
+    public const ANSWERS = [
+        'none' => 'Not put together',
+        'draft' => 'Put together, not sent',
+        'edited' => 'Edited, not sent',
+        'submitted' => 'Evidence sent',
+        'accepted' => 'Accepted',
+    ];
+
     public static function configure(Table $table): Table
     {
         return Listing::defaults($table, 'chargebacks')
@@ -35,14 +49,38 @@ class DisputesTable
                 'organization:id,name',
                 'order:id,reference,buyer_name,buyer_email',
                 'event:id,title',
+                'evidence:id,dispute_id,edited_at',
             ]))
-            ->defaultSort('opened_at', 'desc')
+            // What needs answering first: open and unanswered, by deadline.
+            ->defaultSort(fn (Builder $query) => $query
+                ->orderByRaw("case when status = 'open' and response is null then 0 else 1 end")
+                ->orderByRaw('evidence_due_at asc nulls last')
+                ->orderByDesc('opened_at'))
             ->searchPlaceholder('Order, buyer, organizer or event')
+            ->recordUrl(fn (Dispute $record) => DisputeResource::getUrl('view', ['record' => $record]))
             ->columns([
-                TextColumn::make('opened_at')
-                    ->label('Raised')
+                // The only date that can still be acted on. Red inside three
+                // days, and once it has gone.
+                TextColumn::make('evidence_due_at')
+                    ->label('Answer by')
                     ->dateTime('j M Y, H:i')
+                    ->placeholder('—')
+                    ->color(fn (Dispute $record) => DisputeInfolist::urgency($record))
+                    ->weight(fn (Dispute $record) => DisputeInfolist::urgency($record) === 'danger' ? FontWeight::Bold : null)
+                    ->icon(fn (Dispute $record) => DisputeInfolist::urgency($record) === 'danger' ? Heroicon::OutlinedExclamationCircle : null)
+                    ->description(fn (Dispute $record) => DisputeInfolist::timeLeft($record))
                     ->sortable(),
+
+                TextColumn::make('answer')
+                    ->label('Our answer')
+                    ->badge()
+                    ->state(fn (Dispute $record) => self::ANSWERS[self::answer($record)])
+                    ->color(fn (Dispute $record) => match (self::answer($record)) {
+                        'none' => 'danger',
+                        'draft', 'edited' => 'warning',
+                        'submitted' => 'info',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('organization.name')
                     ->label('Organizer')
@@ -60,8 +98,7 @@ class DisputesTable
                     ->searchable()
                     ->fontFamily('mono')
                     ->copyable()
-                    ->description(fn (Dispute $record) => $record->order?->buyer_email)
-                    ->url(fn (Dispute $record) => $record->order ? OrderResource::getUrl('view', ['record' => $record->order]) : null),
+                    ->description(fn (Dispute $record) => $record->order?->buyer_email),
 
                 // Searchable but hidden: the address a caller gives is often
                 // the only thing they know about the order.
@@ -75,7 +112,7 @@ class DisputesTable
 
                 TextColumn::make('reason')
                     ->label('Their reason')
-                    ->formatStateUsing(fn (?string $state) => $state ? str_replace('_', ' ', $state) : '—')
+                    ->formatStateUsing(fn (?string $state) => Reasons::label($state))
                     ->placeholder('—')
                     ->wrap(),
 
@@ -90,6 +127,12 @@ class DisputesTable
                     })
                     ->sortable(),
 
+                TextColumn::make('opened_at')
+                    ->label('Raised')
+                    ->dateTime('j M Y, H:i')
+                    ->sortable()
+                    ->toggleable(),
+
                 TextColumn::make('gateway')
                     ->label('Processor')
                     ->formatStateUsing(fn (?string $state) => $state ? ucfirst($state) : '—')
@@ -101,18 +144,6 @@ class DisputesTable
                     ->copyable()
                     ->fontFamily('mono')
                     ->toggleable(isToggledHiddenByDefault: true),
-
-                // The only date that can still be acted on. After it, nobody
-                // can do anything about this one.
-                TextColumn::make('evidence_due_at')
-                    ->label('Answer by')
-                    ->dateTime('j M Y')
-                    ->placeholder('—')
-                    ->color(fn (Dispute $record) => $record->isOpen() && $record->evidence_due_at?->isPast() ? 'danger' : 'gray')
-                    ->description(fn (Dispute $record) => $record->isOpen() && $record->evidence_due_at?->isFuture()
-                        ? $record->evidence_due_at->diffForHumans()
-                        : null)
-                    ->sortable(),
 
                 TextColumn::make('closed_at')
                     ->label('Closed')
@@ -126,9 +157,62 @@ class DisputesTable
                     ->multiple()
                     ->options(self::STATUSES),
 
+                SelectFilter::make('reason')
+                    ->label('Their reason')
+                    ->multiple()
+                    ->options(fn () => Dispute::query()
+                        ->whereNotNull('reason')
+                        ->distinct()
+                        ->orderBy('reason')
+                        ->pluck('reason')
+                        ->mapWithKeys(fn (string $reason) => [$reason => Reasons::label($reason)])
+                        ->all()),
+
                 SelectFilter::make('gateway')
                     ->label('Processor')
                     ->options(['stripe' => 'Stripe', 'paystack' => 'Paystack']),
+
+                // Open and unanswered, by how long is left: the ones somebody
+                // should be chasing today are the first two.
+                SelectFilter::make('deadline')
+                    ->label('Deadline')
+                    ->options([
+                        'overdue' => 'Past its deadline, unanswered',
+                        'three_days' => 'Due within 3 days',
+                        'week' => 'Due within 7 days',
+                        'later' => 'More than 7 days left',
+                        'none' => 'No deadline given',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        $query->where('status', 'open')->whereNull('response');
+
+                        return match ($value) {
+                            'overdue' => $query->where('evidence_due_at', '<', now()),
+                            'three_days' => $query->whereBetween('evidence_due_at', [now(), now()->addDays(DisputeInfolist::URGENT_DAYS)]),
+                            'week' => $query->whereBetween('evidence_due_at', [now(), now()->addDays(7)]),
+                            'later' => $query->where('evidence_due_at', '>', now()->addDays(7)),
+                            'none' => $query->whereNull('evidence_due_at'),
+                            default => $query,
+                        };
+                    }),
+
+                SelectFilter::make('answer')
+                    ->label('Our answer')
+                    ->options(self::ANSWERS)
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'none' => $query->whereNull('response')->whereDoesntHave('evidence'),
+                        'draft' => $query->whereNull('response')->whereHas('evidence'),
+                        'edited' => $query->whereNull('response')->whereHas('evidence', fn (Builder $evidence) => $evidence->whereNotNull('edited_at')),
+                        'submitted' => $query->where('response', Dispute::SUBMITTED),
+                        'accepted' => $query->where('response', Dispute::ACCEPTED),
+                        default => $query,
+                    }),
 
                 Listing::currency(),
 
@@ -136,27 +220,14 @@ class DisputesTable
                     ->relationship('organization', 'name', fn (Builder $query) => $query->withTrashed())
                     ->searchable(),
 
-                // Open, with the processor's deadline inside a week or already
-                // gone: the ones somebody should be chasing today.
-                TernaryFilter::make('due_soon')
-                    ->label('Deadline')
-                    ->trueLabel('Open, answer due within 7 days or overdue')
-                    ->falseLabel('Open, more than 7 days left')
-                    ->queries(
-                        true: fn (Builder $query) => $query
-                            ->where('status', 'open')
-                            ->whereNotNull('evidence_due_at')
-                            ->where('evidence_due_at', '<=', now()->addDays(7)),
-                        false: fn (Builder $query) => $query
-                            ->where('status', 'open')
-                            ->where(fn (Builder $q) => $q
-                                ->whereNull('evidence_due_at')
-                                ->orWhere('evidence_due_at', '>', now()->addDays(7))),
-                    ),
-
                 Listing::dateRange('raised', 'opened_at', 'Raised'),
             ])
             ->recordActions([
+                Action::make('open')
+                    ->label('Answer')
+                    ->icon(Heroicon::OutlinedDocumentText)
+                    ->url(fn (Dispute $record) => DisputeResource::getUrl('view', ['record' => $record])),
+
                 Action::make('openOrder')
                     ->label('Open order')
                     ->icon(Heroicon::OutlinedShoppingBag)
@@ -165,5 +236,17 @@ class DisputesTable
                     ->url(fn (Dispute $record) => OrderResource::getUrl('view', ['record' => $record->order_id])),
             ])
             ->toolbarActions([]);
+    }
+
+    /** One of ANSWERS' keys. */
+    public static function answer(Dispute $record): string
+    {
+        return match (true) {
+            $record->response === Dispute::SUBMITTED => 'submitted',
+            $record->response === Dispute::ACCEPTED => 'accepted',
+            $record->evidence === null => 'none',
+            $record->evidence->edited_at !== null => 'edited',
+            default => 'draft',
+        };
     }
 }

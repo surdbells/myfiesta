@@ -22,6 +22,13 @@ final readonly class Details
         public string $currency,
         public ?string $reason,
         public ?CarbonImmutable $evidenceDueAt,
+        /**
+         * The processor's own word for where the dispute is: Stripe's
+         * needs_response, won, lost or warning_closed; for a resolved Paystack
+         * dispute, how it was resolved (merchant-accepted, declined), which
+         * says more than its bare "resolved".
+         */
+        public ?string $status = null,
     ) {}
 
     public static function from(PaymentEvent $event): self
@@ -54,6 +61,12 @@ final readonly class Details
             // Paystack gives the buyer's own words under category.
             reason: $stripe['reason'] ?? $paystack['category'] ?? null,
             evidenceDueAt: $dueAt,
+            status: self::word($stripe['status'] ?? $paystack['resolution'] ?? $paystack['status'] ?? null),
         );
+    }
+
+    private static function word(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? mb_substr($value, 0, 40) : null;
     }
 }

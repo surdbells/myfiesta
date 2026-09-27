@@ -82,12 +82,14 @@ class SupportScreensRenderTest extends TestCase
     {
         $this->actingAs($this->staff(PlatformRole::Support));
 
+        // Chargebacks are read by Support, and answered only by Admin and
+        // Finance (DisputeScreenTest).
         foreach ([UserResource::class, OrderResource::class, TicketResource::class, EventResource::class,
-            DataRequestResource::class, OrganizationIdentityDocumentResource::class, TaxRateResource::class] as $resource) {
+            DataRequestResource::class, OrganizationIdentityDocumentResource::class, TaxRateResource::class, DisputeResource::class] as $resource) {
             $this->get($resource::getUrl('index'))->assertSuccessful();
         }
 
-        foreach ([DisputeResource::class, PayoutDetailResource::class, PayoutRequestResource::class, SettlementResource::class] as $resource) {
+        foreach ([PayoutDetailResource::class, PayoutRequestResource::class, SettlementResource::class] as $resource) {
             $this->get($resource::getUrl('index'))->assertForbidden();
         }
 

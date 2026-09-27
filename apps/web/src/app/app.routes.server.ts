@@ -32,6 +32,24 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Server,
   },
   {
+    // A buyer's own tickets and order: private, never unfurled or indexed,
+    // so nothing is gained by rendering them on the server — and something
+    // is lost. Rendered there, the ticket codes went into the server's HTML
+    // and its transfer cache, and the API recorded every "tickets opened"
+    // as our own server's address instead of the buyer's, which is the one
+    // fact a bank asks about when a buyer says they never got them.
+    path: 'tickets/:token',
+    renderMode: RenderMode.Client,
+  },
+  {
+    path: 'order/:reference',
+    renderMode: RenderMode.Client,
+  },
+  {
+    path: 'embed/order/:reference',
+    renderMode: RenderMode.Client,
+  },
+  {
     path: '**',
     renderMode: RenderMode.Server,
   },

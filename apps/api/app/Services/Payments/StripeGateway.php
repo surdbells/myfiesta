@@ -2,21 +2,30 @@
 
 namespace App\Services\Payments;
 
+use App\Contracts\Payments\AnswersDisputes;
 use App\Contracts\Payments\CheckoutOptions;
 use App\Contracts\Payments\CheckoutSession;
+use App\Contracts\Payments\DescribesPayments;
+use App\Contracts\Payments\EvidencePackage;
 use App\Contracts\Payments\FindsCheckouts;
 use App\Contracts\Payments\FindsRefunds;
 use App\Contracts\Payments\PaymentEvent;
 use App\Contracts\Payments\PaymentGateway;
+use App\Contracts\Payments\PaymentRecord;
+use App\Contracts\Payments\ProcessorDispute;
 use App\Contracts\Payments\RefundNotice;
 use App\Contracts\Payments\RefundResult;
 use App\Contracts\Payments\TotalsRefunds;
+use App\Models\Dispute;
 use App\Models\Order;
+use App\Services\Disputes\RefundPolicy;
+use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -28,7 +37,7 @@ use Throwable;
  * guest checkout is the primary path. Using it here would mean adopting its
  * shape without its benefits.
  */
-class StripeGateway implements FindsCheckouts, FindsRefunds, PaymentGateway, TotalsRefunds
+class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckouts, FindsRefunds, PaymentGateway, TotalsRefunds
 {
     /**
      * How long Stripe's payment page stays open.
@@ -81,7 +90,7 @@ class StripeGateway implements FindsCheckouts, FindsRefunds, PaymentGateway, Tot
                 ]],
                 'metadata' => ['order_id' => $order->id, 'reference' => $order->reference]
                     + $options->metadata,
-            ]);
+            ] + $this->answeringDisputes($order));
 
         $response->throw();
 
@@ -92,6 +101,364 @@ class StripeGateway implements FindsCheckouts, FindsRefunds, PaymentGateway, Tot
                 ? (new \DateTimeImmutable)->setTimestamp($response->json('expires_at'))
                 : null,
         );
+    }
+
+    /**
+     * What the payment page says and asks so that a dispute later has
+     * something to be answered with.
+     *
+     * The night's name on the bank statement, so the charge is recognised
+     * (StatementDescriptor). The refund policy in one sentence by the pay
+     * button — the same sentence as beside the terms box on our own
+     * checkout, from the copy kept for the terms in force (RefundPolicy) —
+     * because a dispute is judged on what the buyer was shown. The card's
+     * bank asked to check it is the cardholder as configured: a payment
+     * that passed that check is one the bank, not the organizer, answers
+     * for as fraud. And, once the terms page is set in Stripe's dashboard,
+     * Stripe's own terms box, so Stripe keeps its own record of the
+     * agreement beside ours.
+     *
+     * @return array<string, mixed>
+     */
+    private function answeringDisputes(Order $order): array
+    {
+        $suffix = StatementDescriptor::suffix(
+            (string) $order->event->title,
+            config('payments.stripe.statement_descriptor_prefix'),
+        );
+
+        $threeDSecure = config('payments.stripe.request_three_d_secure');
+        $consent = (bool) config('payments.stripe.collect_terms_consent');
+        $site = rtrim((string) config('app.public_url'), '/');
+
+        // Left off rather than refusing the sale when the version in force
+        // has no summary; LegalCopiesTest is what stops that reaching a deploy.
+        $summary = app(RefundPolicy::class)->summary();
+
+        $options = [
+            'payment_method_options' => ['card' => [
+                // Anything else is refused by Stripe, and with it the whole
+                // checkout; a mistyped setting falls back to Stripe's own
+                // judgement rather than to no sale.
+                'request_three_d_secure' => in_array($threeDSecure, ['automatic', 'any', 'challenge'], true)
+                    ? $threeDSecure
+                    : 'automatic',
+            ]],
+            'custom_text' => array_filter([
+                'submit' => $summary === null ? null : ['message' => $summary],
+                'terms_of_service_acceptance' => $consent
+                    ? ['message' => "I accept the [terms]({$site}/terms), the [privacy policy]({$site}/privacy) and the [refund policy]({$site}/refunds)."]
+                    : null,
+            ]),
+        ];
+
+        if ($suffix !== null) {
+            $options['payment_intent_data'] = ['statement_descriptor_suffix' => $suffix];
+        }
+
+        if ($consent) {
+            $options['consent_collection'] = ['terms_of_service' => 'required'];
+        }
+
+        return $options;
+    }
+
+    /**
+     * Stripe's record of an order's payment: the payment intent and its most
+     * recent charge, reduced to what answers a dispute.
+     *
+     * Kept, with the reason for each:
+     *   the charge's id, amount and time        which payment this was
+     *   3D Secure's result, version and flow    whether the card's bank checked
+     *                                           it was the cardholder; with a
+     *                                           result of authenticated, fraud
+     *                                           is the bank's to answer for
+     *   the network's status and Radar's        what the card network and
+     *   outcome, level and score                Stripe's fraud checks said
+     *   the CVC, postcode and street checks     whether what was typed matched
+     *                                           what the bank holds
+     *   brand, last four, fingerprint, wallet   which card, without its number;
+     *                                           the fingerprint is how Stripe
+     *                                           says two payments were one card
+     *   the statement line                      what the buyer's bank showed
+     *   the receipt address                     where Stripe sent its receipt
+     *
+     * Nothing else — not the billing name or address, not the card's expiry
+     * or country — and never a card number, which Stripe does not give out.
+     *
+     * Read with whatever API version the account is on: the charge is
+     * `latest_charge` on current versions and the first of `charges` on older
+     * ones, and both are handled rather than one being pinned.
+     */
+    public function describePayment(Order $order): PaymentRecord
+    {
+        $intentId = $order->gateway_payment_reference ?? $this->intentOf($order);
+
+        if ($intentId === null) {
+            throw new RuntimeException('Stripe has no payment for this checkout yet.');
+        }
+
+        $intent = $this->fetch('payment_intents/'.rawurlencode($intentId));
+        $charge = $intent['latest_charge'] ?? null;
+
+        if (is_string($charge) && $charge !== '') {
+            $charge = $this->fetch('charges/'.rawurlencode($charge));
+        } elseif (! is_array($charge)) {
+            $charge = $intent['charges']['data'][0] ?? null;
+        }
+
+        if (! is_array($charge)) {
+            throw new RuntimeException('Stripe has no charge on this payment yet.');
+        }
+
+        $details = $charge['payment_method_details'] ?? [];
+        $card = is_array($details['card'] ?? null) ? $details['card'] : null;
+        $secure = is_array($card['three_d_secure'] ?? null) ? $card['three_d_secure'] : null;
+        $outcome = is_array($charge['outcome'] ?? null) ? $charge['outcome'] : [];
+
+        return new PaymentRecord(
+            reference: $intentId,
+            facts: [
+                'processor' => 'stripe',
+                'livemode' => (bool) ($intent['livemode'] ?? $charge['livemode'] ?? false),
+                'payment_intent' => [
+                    'id' => $intent['id'] ?? $intentId,
+                    'status' => $intent['status'] ?? null,
+                    'amount' => isset($intent['amount']) ? (int) $intent['amount'] : null,
+                    'currency' => isset($intent['currency']) ? strtoupper((string) $intent['currency']) : null,
+                    'created' => $this->time($intent['created'] ?? null),
+                ],
+                'charge' => [
+                    'id' => $charge['id'] ?? null,
+                    'status' => $charge['status'] ?? null,
+                    'paid' => $charge['paid'] ?? null,
+                    'captured' => $charge['captured'] ?? null,
+                    'amount' => isset($charge['amount']) ? (int) $charge['amount'] : null,
+                    'currency' => isset($charge['currency']) ? strtoupper((string) $charge['currency']) : null,
+                    'created' => $this->time($charge['created'] ?? null),
+                    'statement_descriptor' => $charge['calculated_statement_descriptor'] ?? null,
+                    'payment_method_type' => $details['type'] ?? null,
+                    'outcome' => [
+                        'network_status' => $outcome['network_status'] ?? null,
+                        'type' => $outcome['type'] ?? null,
+                        'reason' => $outcome['reason'] ?? null,
+                        'risk_level' => $outcome['risk_level'] ?? null,
+                        // Only on accounts with Radar for Fraud Teams.
+                        'risk_score' => $outcome['risk_score'] ?? null,
+                    ],
+                    'card' => $card === null ? null : [
+                        'brand' => $card['brand'] ?? null,
+                        'network' => $card['network'] ?? null,
+                        'last4' => $card['last4'] ?? null,
+                        'fingerprint' => $card['fingerprint'] ?? null,
+                        'wallet' => $card['wallet']['type'] ?? null,
+                        'checks' => [
+                            'cvc_check' => $card['checks']['cvc_check'] ?? null,
+                            'address_postal_code_check' => $card['checks']['address_postal_code_check'] ?? null,
+                            'address_line1_check' => $card['checks']['address_line1_check'] ?? null,
+                        ],
+                        'three_d_secure' => $secure === null ? null : array_filter([
+                            'result' => $secure['result'] ?? null,
+                            'result_reason' => $secure['result_reason'] ?? null,
+                            // Older API versions say it as a yes or no.
+                            'authenticated' => $secure['authenticated'] ?? null,
+                            'version' => $secure['version'] ?? null,
+                            'authentication_flow' => $secure['authentication_flow'] ?? null,
+                            // The card network's own word on how far the
+                            // check went: 05 or 02 fully, 06 or 01 attempted.
+                            'electronic_commerce_indicator' => $secure['electronic_commerce_indicator'] ?? null,
+                            'exemption_indicator' => $secure['exemption_indicator'] ?? null,
+                            // Not a field Stripe documents today; kept if it
+                            // ever says so in as many words.
+                            'liability_shift' => $secure['liability_shift'] ?? null,
+                        ], fn ($value) => $value !== null),
+                    ],
+                ],
+            ],
+            receiptEmail: is_string($charge['receipt_email'] ?? null) ? $charge['receipt_email'] : null,
+        );
+    }
+
+    /**
+     * The dispute as Stripe has it: its reason, the network's code, when the
+     * evidence is due, how many times it has been answered, and whether Stripe
+     * says it could be answered with more (enhanced_eligibility_types — Visa's
+     * Compelling Evidence 3.0 among them).
+     */
+    public function describeDispute(Dispute $dispute): ProcessorDispute
+    {
+        return $this->disputeFrom($this->fetch('disputes/'.rawurlencode($dispute->gateway_reference)));
+    }
+
+    /**
+     * Upload each document to Stripe's Files API, then send every field with
+     * submit=true, which is Stripe's "this is our answer, decide it".
+     *
+     * Only at submission: nothing is handed to Stripe while staff are still
+     * reading the draft. Each file is remembered as soon as Stripe has it, and
+     * the fields go under a key made from what they say, so a second try after
+     * a timeout is answered with the first try's answer and uploads nothing
+     * twice. A try Stripe refused spends its keys (EvidencePackage::spent), so
+     * pressing again is asked afresh rather than told the refusal again.
+     */
+    public function submitDisputeEvidence(Dispute $dispute, EvidencePackage $package): ProcessorDispute
+    {
+        $evidence = $package->fields;
+
+        foreach ($package->files as $kind) {
+            $evidence[$kind] = $package->uploaded($kind) ?? $this->uploadEvidence($package, $kind);
+        }
+
+        if ($package->enhanced !== []) {
+            $evidence['enhanced_evidence'] = $package->enhanced;
+        }
+
+        // Stripe reads a boolean from the words true and false.
+        $body = ['evidence' => $evidence, 'submit' => 'true'];
+
+        return $this->disputeFrom($this->answer($package, 'disputes/'.rawurlencode($dispute->gateway_reference), $body, $package->key('submit', $body)));
+    }
+
+    /**
+     * Close the dispute, which is Stripe's word for conceding it: the buyer
+     * keeps the money, and charge.dispute.closed follows as a loss, which is
+     * what takes it off the organizer's balance (DisputeService).
+     */
+    public function acceptDispute(Dispute $dispute, EvidencePackage $package): ProcessorDispute
+    {
+        return $this->disputeFrom($this->answer($package, 'disputes/'.rawurlencode($dispute->gateway_reference).'/close', [], $package->key('close')));
+    }
+
+    /**
+     * Stripe's dispute, reduced to what answers it.
+     *
+     * The network's reason code is on the dispute on current API versions and
+     * on its card details on others; either is read. Nothing about the card
+     * beyond its brand is kept here — PaymentRecord already has the rest.
+     *
+     * @param  array<string, mixed>  $dispute
+     */
+    public function disputeFrom(array $dispute): ProcessorDispute
+    {
+        $details = is_array($dispute['evidence_details'] ?? null) ? $dispute['evidence_details'] : [];
+        $card = is_array($dispute['payment_method_details']['card'] ?? null) ? $dispute['payment_method_details']['card'] : [];
+        $charge = $dispute['charge'] ?? null;
+        $network = $dispute['network_reason_code'] ?? $card['network_reason_code'] ?? null;
+        $enhanced = array_values(array_filter((array) ($dispute['enhanced_eligibility_types'] ?? []), 'is_string'));
+        $due = $details['due_by'] ?? null;
+
+        return new ProcessorDispute(
+            reference: (string) ($dispute['id'] ?? ''),
+            status: isset($dispute['status']) ? (string) $dispute['status'] : null,
+            reason: isset($dispute['reason']) ? (string) $dispute['reason'] : null,
+            networkReasonCode: is_scalar($network) && $network !== '' ? (string) $network : null,
+            amount: isset($dispute['amount']) ? (int) $dispute['amount'] : null,
+            currency: isset($dispute['currency']) ? strtoupper((string) $dispute['currency']) : null,
+            dueAt: is_numeric($due) ? CarbonImmutable::createFromTimestamp((int) $due, 'UTC') : null,
+            facts: [
+                'processor' => 'stripe',
+                'id' => $dispute['id'] ?? null,
+                'charge' => is_array($charge) ? ($charge['id'] ?? null) : $charge,
+                'payment_intent' => is_array($dispute['payment_intent'] ?? null) ? ($dispute['payment_intent']['id'] ?? null) : ($dispute['payment_intent'] ?? null),
+                'status' => $dispute['status'] ?? null,
+                'reason' => $dispute['reason'] ?? null,
+                'network_reason_code' => is_scalar($network) ? $network : null,
+                'amount' => isset($dispute['amount']) ? (int) $dispute['amount'] : null,
+                'currency' => isset($dispute['currency']) ? strtoupper((string) $dispute['currency']) : null,
+                'created' => $this->time($dispute['created'] ?? null),
+                'livemode' => (bool) ($dispute['livemode'] ?? false),
+                'is_charge_refundable' => $dispute['is_charge_refundable'] ?? null,
+                'evidence_details' => [
+                    'due_by' => $this->time($due),
+                    'has_evidence' => $details['has_evidence'] ?? null,
+                    'past_due' => $details['past_due'] ?? null,
+                    'submission_count' => isset($details['submission_count']) ? (int) $details['submission_count'] : null,
+                    'enhanced_eligibility' => is_array($details['enhanced_eligibility'] ?? null) ? $details['enhanced_eligibility'] : null,
+                ],
+                'enhanced_eligibility_types' => $enhanced,
+                'card' => ['brand' => $card['brand'] ?? null, 'case_type' => $card['case_type'] ?? null],
+            ],
+            enhancedEligibility: $enhanced,
+        );
+    }
+
+    /** One document to Stripe's Files API, marked as evidence for a dispute. */
+    private function uploadEvidence(EvidencePackage $package, string $kind): string
+    {
+        $file = $package->file($kind);
+
+        $response = Http::withToken($this->secretKey)
+            ->withHeaders(['Idempotency-Key' => $package->key('file-'.$kind, ['sha256' => $file->sha256()])])
+            ->timeout(60)
+            ->attach('file', $file->bytes, $file->name, ['Content-Type' => $file->mimeType])
+            ->post('https://files.stripe.com/v1/files', ['purpose' => 'dispute_evidence']);
+
+        $id = $response->json('id');
+
+        if ($response->failed() || ! is_string($id) || $id === '') {
+            $package->spent();
+
+            throw new RuntimeException("Stripe would not take {$file->name}: ".($response->json('error.message') ?? 'it answered '.$response->status().'.'));
+        }
+
+        $package->remember($kind, $id, $file);
+
+        return $id;
+    }
+
+    /**
+     * A request that answers a dispute, under its idempotency key.
+     *
+     * A refusal spends the key; no answer at all (a timeout, a dropped
+     * connection) leaves it, so the next try learns what the first did.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function answer(EvidencePackage $package, string $path, array $body, string $key): array
+    {
+        $response = Http::withToken($this->secretKey)
+            ->withHeaders(['Idempotency-Key' => $key])
+            ->timeout(30)
+            ->asForm()
+            ->post('https://api.stripe.com/v1/'.$path, $body);
+
+        if ($response->failed()) {
+            $package->spent();
+
+            throw new RuntimeException('Stripe said: '.($response->json('error.message') ?? 'it answered '.$response->status().'.'));
+        }
+
+        return (array) $response->json();
+    }
+
+    /** The payment made on the order's checkout, when the order was never told it. */
+    private function intentOf(Order $order): ?string
+    {
+        if ($order->gateway_reference === null) {
+            return null;
+        }
+
+        $intent = $this->fetch('checkout/sessions/'.rawurlencode($order->gateway_reference))['payment_intent'] ?? null;
+
+        return is_string($intent) && $intent !== '' ? $intent : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function fetch(string $path): array
+    {
+        return (array) Http::withToken($this->secretKey)
+            ->timeout(15)
+            ->get('https://api.stripe.com/v1/'.$path)
+            ->throw()
+            ->json();
+    }
+
+    private function time(mixed $timestamp): ?string
+    {
+        return is_numeric($timestamp)
+            ? CarbonImmutable::createFromTimestamp((int) $timestamp, 'UTC')->toIso8601String()
+            : null;
     }
 
     /**

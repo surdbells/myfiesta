@@ -7,6 +7,7 @@ use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\TicketTransfer;
 use App\Models\User;
+use App\Services\Disputes\ActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,10 @@ class TicketController extends Controller
             // from an order placed without an account.
             ->withExists('transfers')
             ->paginate(50);
+
+        // The app draws each of these as a QR, so each goes into its ticket
+        // history: the ticket was on this person's phone (ActivityLog).
+        app(ActivityLog::class)->shownInApp($tickets->getCollection(), $request);
 
         return TicketResource::collection($tickets);
     }

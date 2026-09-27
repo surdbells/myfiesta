@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\ProcessedWebhook;
 use App\Services\Checkout\Fulfiller;
 use App\Services\Disputes\DisputeService;
+use App\Services\Disputes\ProcessorEvidence;
 use App\Services\Refunds\ProcessorRefunds;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -288,5 +289,12 @@ class PaymentWebhookController extends Controller
         }
 
         $this->fulfiller->fulfil($order);
+
+        // The processor's own record of this payment, for a dispute later:
+        // noted once this has committed, and fetched by the next sweep
+        // (ProcessorEvidence). Nothing about it can hold up the tickets above
+        // or fail this notice; a note that cannot be written is reported, and
+        // the sweep finds the order anyway.
+        DB::afterCommit(fn () => rescue(fn () => app(ProcessorEvidence::class)->expect($order->fresh() ?? $order, $event)));
     }
 }

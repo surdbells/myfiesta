@@ -12,9 +12,10 @@ use App\Models\User;
  * later: which version of the words, and when. The box on each screen starts
  * unticked; a box ticked for somebody is not somebody agreeing.
  *
- * Only the version and the moment are kept. Not the address the request came
- * from and not the browser: the privacy page does not say we hold either, and
- * that page is written from what the platform actually holds.
+ * Only the version and the moment are kept with the agreement. The address and
+ * browser an online order came from are kept on the order for another reason
+ * — answering a disputed payment (CheckoutService) — and the privacy page,
+ * which is written from what the platform actually holds, says so.
  */
 class Terms
 {

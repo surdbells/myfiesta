@@ -126,6 +126,16 @@ class CheckoutService
         ?string $paymentMethod = null,
         ?User $soldBy = null,
         ?string $doorPassId = null,
+        /*
+         * Where an online order came from: the address the request came from,
+         * as the application believes it (TRUSTED_PROXIES), and the browser's
+         * name for itself. Kept on the order to catch fraud and to answer a
+         * disputed payment, and cleared 18 months after the night
+         * (EvidenceRetention). Never for a door sale, whose request is the
+         * organizer's phone and says nothing about the person paying.
+         */
+        ?string $purchaseIp = null,
+        ?string $purchaseUserAgent = null,
     ): Order {
         // A suspended organization sells nothing, here or at the door. Read
         // from the row now: its events come off sale in the same moment, but
@@ -145,9 +155,12 @@ class CheckoutService
         // going to be created is stock nobody else can buy until it runs out.
         $checkedAnswers = $this->answers->check($event, $answers, $attendees, $quantities);
 
+        $online = $channel !== 'door';
+
         return DB::transaction(function () use (
             $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone,
-            $accessInput, $checkedAnswers, $addOns, $channel, $paymentMethod, $soldBy, $doorPassId
+            $accessInput, $checkedAnswers, $addOns, $channel, $paymentMethod, $soldBy, $doorPassId,
+            $online, $purchaseIp, $purchaseUserAgent
         ) {
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
@@ -205,6 +218,8 @@ class CheckoutService
                 'payment_method' => $paymentMethod,
                 'sold_by_user_id' => $soldBy?->id,
                 'door_pass_id' => $doorPassId,
+                'purchase_ip' => $online && filled($purchaseIp) ? substr($purchaseIp, 0, 45) : null,
+                'purchase_user_agent' => $online && filled($purchaseUserAgent) ? mb_substr($purchaseUserAgent, 0, 512) : null,
             ]);
 
             /*
