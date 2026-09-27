@@ -16,7 +16,25 @@
     </style>
 
 
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+    <!--
+      What shows between the tap and the first frame: the icon on the app's
+      dark ground, the same on every Android version.
+
+      Android 12 and up draw this themselves from these three values, and the
+      compat library draws the same thing on older phones. Left unset, the
+      library's default icon is the generic Android robot, which is what the
+      template shipped. The old full-screen splash image is gone: on Android
+      12 it showed after the system's own splash, a second launch screen in
+      a different place.
+
+      The icon is the adaptive foreground on the icon's white, so it reads as
+      the launcher icon grown larger. #0b0f0c is capacitor.config.ts's
+      backgroundColor, so the splash hands over to the WebView without a
+      flash of white at a dark door.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
     </style>
 </resources>

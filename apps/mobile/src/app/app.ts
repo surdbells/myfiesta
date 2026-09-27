@@ -6,6 +6,7 @@ import { MfDialogHost, MfTabs, MfToasts, SheetStack } from './ui';
 import { SessionStore } from './core/session';
 import { Navigation } from './core/navigation';
 import { Chrome } from './core/chrome';
+import { DeepLinks } from './core/deep-links';
 
 /**
  * The shell: the stage screens slide across, the bottom bar, the app's toasts,
@@ -126,6 +127,10 @@ export class App {
     });
 
     this.wireBackButton();
+
+    // Links to the site, opened here. After the door check above, so a door
+    // pass is already locked when the first one arrives.
+    inject(DeepLinks).listen();
   }
 
   /**

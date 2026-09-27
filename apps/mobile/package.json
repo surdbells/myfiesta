@@ -1,6 +1,7 @@
 {
   "name": "mobile",
-  "version": "0.0.0",
+  "version": "18.0.0",
+  "buildNumber": 1800,
   "private": true,
   "description": "myFiesta on a phone: Angular in a Capacitor shell.",
   "scripts": {
@@ -8,7 +9,8 @@
     "start": "ng serve",
     "build": "ng build",
     "test": "ng test",
-    "sync": "ng build && node ../../tools/stamp-mobile-api-base.cjs && cap sync",
+    "assets": "node resources/native-assets.cjs",
+    "sync": "ng build && node ../../tools/stamp-mobile-api-base.cjs && node ../../tools/stamp-mobile-version.cjs && cap sync",
     "android": "npm run sync && cap open android",
     "ios": "npm run sync && cap open ios"
   },

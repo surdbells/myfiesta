@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+      No backup and no transfer to a new phone: everything the app keeps is a
+      credential (the session token, a door pass) or a copy of the server's
+      (the tickets, with their codes). res/xml/data_extraction_rules.xml says
+      why in full; it is the part that still holds on Android 12 and up, where
+      allowBackup alone no longer stops the phone-to-phone copy.
+
+      Cleartext is off, as it is by default for this targetSdk — written out
+      so a plugin's manifest cannot quietly merge it back on.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -20,6 +34,46 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              Links to the public site that open here instead of the browser:
+              an event (/{slug}), an organizer (/o/{slug}) and the listing
+              (/events). Verified against the site's
+              /.well-known/assetlinks.json, so Android opens them without
+              asking which app — see docs/STORE.md.
+
+              The host is the appLinkHost Gradle property (gradle.properties).
+
+              An event slug is one path segment, which only the advanced
+              pattern can say; Android 11 and older ignore it and open event
+              links in the browser, while /o/ and /events still come here.
+              On Android 12 and up the pattern also takes in the site's own
+              one-word pages (/privacy, /help, /refunds) and a promoter's
+              /{slug}?ref= link. core/deep-links.ts knows them and hands them
+              straight on to the browser, so the Play listing's deletion link
+              still reaches the form and the ref still reaches the checkout.
+
+              They are not excluded here because that cannot be done: the
+              uri-relative-filter-group blocks Android 15 added are an
+              alternative to the ordinary paths in the same filter, not a
+              subtraction from them (IntentFilter.matchData tries the paths
+              first), and moving every path into groups would leave Android
+              14 and older, which ignore groups, claiming the whole site,
+              checkout included.
+
+              A buyer's tickets, orders and the checkout are two segments and
+              never match: the app sends people to the checkout on purpose.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${appLinkHost}" />
+                <data android:pathPrefix="/o/" />
+                <data android:path="/events" />
+                <data android:pathAdvancedPattern="/[a-z0-9][a-z0-9-]*" />
             </intent-filter>
 
         </activity>
@@ -47,4 +101,15 @@
          Requested when reminders are switched on, not at first launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- The camera permission implies autofocus as well as a camera, and an
+         implied feature is a required one: Play would hide the app from a
+         tablet with a fixed-focus camera, which can still type codes. -->
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- @capacitor/local-notifications asks for exact alarms in its own
+         manifest. Reminders are three hours ahead and are not exact alarms
+         (the app's README says why), Play restricts the permission, and the
+         plugin falls back to an ordinary alarm without it. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

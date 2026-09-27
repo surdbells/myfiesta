@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Universal Links: links to the public site open in the app when it is
+  installed. APP_LINK_DOMAIN is a build setting on the App target (myfiesta.ca;
+  a staging build overrides it), and iOS only honours it once
+  https://<domain>/.well-known/apple-app-site-association names this app's
+  Team ID and bundle id. The App ID needs the Associated Domains capability
+  in the developer account. docs/STORE.md has the steps.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(APP_LINK_DOMAIN)</string>
+	</array>
+</dict>
+</plist>

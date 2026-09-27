@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and up: nothing goes to a Google backup, and nothing moves to a
+  new phone in the transfer at set-up.
+
+  Everything this app keeps is either a credential or a copy of what the
+  server holds. SharedPreferences ("CapacitorStorage", written by
+  @capacitor/preferences) carries the session token, the tickets somebody
+  holds with their codes, and a door pass while one is open; the WebView's
+  storage under the app's root carries the door's offline list. A restored
+  token is a signed-in account on a phone nobody signed in on, and a restored
+  door pass outlives the night it was issued for. The rest — the theme, the
+  reminders switch — sits in the same file and is one tap to set again.
+
+  allowBackup="false" stops the cloud backup on every version, but on Android
+  12 and up it no longer stops the phone-to-phone transfer. These rules do.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

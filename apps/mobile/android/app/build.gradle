@@ -7,9 +7,16 @@ android {
         applicationId "myfiesta.os.ca"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Written by tools/stamp-mobile-version.cjs from apps/mobile/package.json,
+        // which is the one place to change them. `npm run sync` runs it.
+        versionCode 1800
+        versionName "18.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // The site whose links open in the app (AndroidManifest.xml). Set in
+        // gradle.properties; a staging build passes -PappLinkHost=... instead,
+        // and that host must serve its own /.well-known/assetlinks.json.
+        manifestPlaceholders["appLinkHost"] = project.property("appLinkHost")
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
