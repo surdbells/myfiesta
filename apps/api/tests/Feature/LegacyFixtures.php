@@ -185,7 +185,7 @@ trait LegacyFixtures
                 // without a usable password.
                 'id' => 31, 'first_name' => 'Bem', 'last_name' => 'Tar',
                 'email_address' => 'bem@example.test', 'phone_number' => null,
-                'password' => '356a192b7913b04c54574d18c28d46e6395428ab',
+                'password' => '356a192b7913b04c54574d18c28d46e6395428ab', // sha1("1"), a textbook value; gitleaks:allow
                 '_registered' => '2023-06-01 09:00:00',
             ],
         ]);

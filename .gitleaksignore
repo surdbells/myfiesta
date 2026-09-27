@@ -1,0 +1,11 @@
+# Findings the secret scan may pass, one per line: commit:file:rule:line.
+#
+# Each is checked by hand before it goes here. Anything that could be a real
+# credential is removed from history and rotated instead, never listed.
+#
+# The legacy importer's fixtures model the old platform's two generations of
+# password hash. This one is the SHA-1 of the string "1" (sha1sum of "1"):
+# a textbook value, standing for an account that must arrive with no usable
+# password. It is not a password anybody has.
+c166d32a16e32c1d97e7f9c163e459fc43d39c70:apps/api/tests/Feature/LegacyImportTest.php:generic-api-key:184
+614d854a1777b3fc2a83de80ceb9b8ffb66e5972:apps/api/tests/Feature/LegacyFixtures.php:generic-api-key:188
