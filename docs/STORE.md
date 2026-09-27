@@ -126,7 +126,7 @@ One place: `apps/mobile/package.json`.
 `tools/stamp-mobile-version.cjs` writes them into `android/app/build.gradle`
 (`versionName`, `versionCode`) and the Xcode project (`MARKETING_VERSION`,
 `CURRENT_PROJECT_VERSION`), and `npm run sync` runs it. `--check` fails if
-either project disagrees, for CI.
+either project disagrees; `npm run check` and CI's agreements job run it.
 
 Why these numbers, read 2026-09-26:
 

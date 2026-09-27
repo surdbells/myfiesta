@@ -96,13 +96,15 @@ the API refuses to run with any of them wrong, and says which:
 | `MAIL_MAILER` | `log` or `array`, or SMTP with no host | tickets and links reported sent and delivered to nobody |
 | `SMS_DRIVER` | `log`, or a provider without its credentials and `SMS_INBOUND_SECRET`, while `SMS_COUNTRIES` names a country | every text reported sent and none arriving; STOP not working |
 | `TRUSTED_PROXIES` | empty, or a wildcard | see the next section |
+| `BACKUP_ENCRYPTION_KEY` | empty, or not a key `php artisan backup:key` made | every nightly backup would hold every buyer's details in the clear, or fail every night |
 
 `php artisan app:preflight` prints the whole list at once. `api-migrate` runs
 it before it migrates, so a deployment that is not ready fails there and
-nothing is migrated or served. The API image runs it again before php-fpm
-starts (`ops/docker/api-entrypoint.sh`). The worker and the scheduler refuse
-to start on their own, and a web request that reaches php-fpm without the
-check having run is answered with an error rather than served.
+nothing is migrated or served. The API image runs it again as php-fpm, the
+worker and the scheduler start (`ops/docker/api-entrypoint.sh`). The worker
+and the scheduler would also refuse to start on their own, and a web request
+that reaches php-fpm without the check having run is answered with an error
+rather than served.
 
 Every other command runs. Build-time commands — `package:discover`,
 `config:cache` and the rest — work with no secrets at all, and so does anything
@@ -243,7 +245,8 @@ overwritten.
 
 Moving an existing deployment from local to a bucket is a copy, then the
 switch: sync `storage/app/public` to the bucket with the same paths, set
-`MEDIA_DISK=s3`, rebuild the config cache. No rows change.
+`MEDIA_DISK=s3`, and recreate the API's containers (`up -d`), which rebuild
+their config caches as they start. No rows change.
 
 If pictures 404: with `local`, `api-web` is missing the `api-media` mount or
 `APP_URL` is not the address people reach the API on; with `s3`, `AWS_URL` is
@@ -289,16 +292,33 @@ here, because none of them are ours to know.
 1. Build the images from the repository root: the API, its nginx
    (`api-web`), the site and the console.
 2. Run migrations once, before anything serves the new code
-   (`api-migrate` in the compose file does this and then caches config, routes
-   and events). It checks the configuration first (`app:preflight`) and stops
-   there if production is not ready.
+   (`api-migrate` in the compose file does this). It checks the configuration
+   first (`app:preflight`) and stops there if production is not ready, and
+   after migrating it builds the config, route and event caches once, so a
+   release that cannot cache stops there too, before anything is replaced.
 3. Start or replace the containers.
 4. `php artisan queue:restart`, so workers pick up the new code between jobs
    rather than mid-job.
 
 Migrations are additive and are written to be safe to run while the previous
-release is still serving. The one thing to know: `config:cache` means a change
-to `.env` does nothing until the cache is rebuilt.
+release is still serving.
+
+### The config, route and event caches
+
+Each container has a filesystem of its own, so the caches `api-migrate` builds
+go when it does. `api`, `worker` and `scheduler` each build their own as they
+start, after the check and before php-fpm, `queue:work` or `schedule:work`
+takes over (`ops/docker/api-entrypoint.sh`), from the environment that
+container was started with. One-off commands (`fiesta run --rm api php artisan
+…`) build none and read the configuration fresh.
+
+So a change to `.env.production` reaches a container when it is recreated —
+`up -d` recreates each one whose environment changed — and never half-way.
+`restart` is not enough: a container keeps the environment it was created
+with, and rebuilds its caches from that. On a host without containers
+(`ops/systemd/`), run `php artisan config:cache`, `route:cache` and
+`event:cache` after each deploy and each change to `.env`, then restart php-fpm
+and `queue:restart`.
 
 Every release has a tag (the short git hash will do): the images are tagged
 with it and it is baked into each as the release Sentry reports. The one that

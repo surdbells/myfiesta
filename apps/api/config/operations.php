@@ -57,7 +57,8 @@ return [
          * that is not this server and not the bucket — a backup and the key
          * that opens it in the same place protect nothing, and a key that is
          * lost with the server makes every backup useless. Empty stores the
-         * dump as pg_dump wrote it, and backup:run says so every night.
+         * dump as pg_dump wrote it, and backup:run says so every night;
+         * production refuses to start that way (App\Support\Preflight).
          */
         'encryption_key' => env('BACKUP_ENCRYPTION_KEY') ?: null,
 

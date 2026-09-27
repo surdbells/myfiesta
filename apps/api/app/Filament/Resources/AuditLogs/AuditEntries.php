@@ -4,11 +4,13 @@ namespace App\Filament\Resources\AuditLogs;
 
 use App\Filament\Resources\Events\EventResource;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Organizations\OrganizationResource;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\Order;
+use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\User;
 use Throwable;
@@ -25,12 +27,18 @@ final class AuditEntries
 {
     public const NEVER_SHOWN = '/token|password|secret|ticket_code|scanned_code|account_number/i';
 
-    /** Subjects with a page of their own in the admin, and the resource that has it. */
+    /**
+     * Subjects with a page of their own in the admin, and the resource that
+     * has it. An organization's is where what an entry about one records — a
+     * suspension, a change to its team, staff acting as it — can be read
+     * alongside everything else about it, and acted on.
+     */
     private const PAGES = [
         Order::class => OrderResource::class,
         Event::class => EventResource::class,
         Ticket::class => TicketResource::class,
         User::class => UserResource::class,
+        Organization::class => OrganizationResource::class,
     ];
 
     public static function redact(mixed $value, ?string $key = null): mixed

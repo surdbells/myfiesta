@@ -36,6 +36,13 @@ tags:
     description: Retrieval and transfer, by the holder.
   - name: Door
     description: Check-in. Reachable only by an event-scoped door token.
+  - name: Account
+    description: |
+      Getting an account, proving its address, agreeing to the terms and
+      deleting it. Everything signed in here takes any token that speaks for a
+      person, attendee or organizer; a door pass is refused.
+  - name: Organizer
+    description: The console. An organizer token, checked against membership of the organization.
 
 security: []
 
@@ -58,6 +65,59 @@ paths:
                   status:
                     type: string
                     const: ok
+
+  /api/health/ready:
+    get:
+      operationId: healthReady
+      summary: Whether an order can be taken and seen through
+      description: |
+        For an uptime monitor, never a load balancer: a stopped queue worker is
+        a reason to page somebody, not to take the site away from the people
+        buying on it. `/api/health` and `/up` only say the process answered.
+
+        Asks each part in turn — the database answers, the cache keeps what it
+        is given, both disks take a file, a worker has run a job lately and
+        the scheduler has run lately — and answers 503 when any does not.
+        What a failing check says is a fixed sentence, never an exception's
+        message, a host name or a count: anybody may ask. Never cached.
+      tags: [Discovery]
+      security: []
+      responses:
+        '200':
+          description: Every part answered.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '429':
+          description: Asked more than 30 times in a minute from one address.
+        '503':
+          description: At least one part did not answer. Which, and a sentence about it, are in `checks`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+
+  /api/contact:
+    get:
+      operationId: getContact
+      summary: Who operates the platform, and how to reach them
+      description: |
+        For the site's contact and legal pages. Set once per deployment, so
+        staging never shows production's details. Anything not set is null
+        rather than a placeholder, and `complete` is false until a registered
+        name, a support inbox and one postal address are all set — the pages
+        show a notice while it is. Cached for five minutes.
+      tags: [Discovery]
+      security: []
+      responses:
+        '200':
+          description: The operator's details, as far as they are set.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Contact' }
 
   /api/events:
     get:
@@ -946,6 +1006,333 @@ paths:
         '410': { description: 'Already opened on another device, taken back, or expired.' }
         '429': { description: 'Too many attempts.' }
 
+  /api/auth/register:
+    post:
+      operationId: signUp
+      summary: Ask for an account
+      description: |
+        From the console or the phone. The answer is the same for every
+        address — 202, check your email — because a session for a new address
+        and none for a known one would tell anybody watching which addresses
+        are taken. The emailed link makes the account.
+
+        The one exception is joining by invitation: that link was sent to the
+        address and opened from it, so the account is made there and then and
+        answered 201 with a session, in the same shape signing in gives.
+
+        `accept_terms` is refused with a 422 when it is not true, for every
+        address alike and before anything is looked up.
+      tags: [Account]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignUpRequest' }
+      responses:
+        '201':
+          description: Joined by invitation, and signed in.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '202':
+          description: Every other sign-up, known address or not.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignUpPending' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          description: Too many sign-ups from this network address in the last hour. Said against `email`, like a validation error.
+
+  /api/auth/email/verification:
+    post:
+      operationId: sendEmailVerification
+      summary: Send a fresh link to prove the account's address
+      description: |
+        Only ever to the address the signed-in account already has, so saying
+        where it went tells nobody anything. Until the address is proved,
+        putting an event on sale, asking to be paid and changing where payouts
+        go are refused with a 403 whose code is `email_unverified`.
+
+        The link opens `/verify-email/{user}/{hash}`, a page on this host.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: The address is already proved. Nothing was sent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailVerificationAnswer' }
+        '202':
+          description: A link is on its way.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailVerificationAnswer' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          description: A link went a moment ago. The message says when to ask again.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+                  verified: { type: boolean, const: false }
+
+  /verify-email/{user}/{hash}:
+    parameters:
+      - name: user
+        in: path
+        required: true
+        description: The account's id.
+        schema: { type: string, format: uuid }
+      - name: hash
+        in: path
+        required: true
+        description: Ties the link to the address it was sent to. A link to an address the account has since moved from is dead.
+        schema: { type: string }
+      - name: expires
+        in: query
+        required: true
+        schema: { type: integer }
+      - name: signature
+        in: query
+        required: true
+        schema: { type: string }
+    get:
+      operationId: showEmailVerificationPage
+      summary: The page the emailed link opens
+      description: |
+        A page, not an API: plain HTML on this host, because it is usually
+        opened in a mail client's own browser with nobody signed in. Listed so
+        the link an email carries is part of the contract; no client calls it.
+
+        Only shows what will happen, because mail scanners follow links.
+      tags: [Account]
+      security: []
+      responses:
+        '200':
+          description: Asks for the account's password, or says the address is already proved.
+          content:
+            text/html:
+              schema: { type: string }
+        '410':
+          description: The link has expired, was tampered with, or is for an address the account no longer has.
+          content:
+            text/html:
+              schema: { type: string }
+    post:
+      operationId: confirmEmailVerificationPage
+      summary: Prove the address, with the account's password
+      description: |
+        The form on the page above, posted back to the same signed address.
+        The password is asked for because an account can have been made with
+        somebody else's address, and that inbox's owner clicking a button must
+        not be what lets it publish events or point payouts somewhere.
+        Five wrong passwords in an hour and it stops listening.
+      tags: [Account]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: The address is proved.
+          content:
+            text/html:
+              schema: { type: string }
+        '410':
+          description: The link has expired, was tampered with, or is for an address the account no longer has.
+          content:
+            text/html:
+              schema: { type: string }
+        '422':
+          description: Not the account's password. The page asks again.
+          content:
+            text/html:
+              schema: { type: string }
+        '429':
+          description: Too many wrong passwords. Try again in an hour.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /api/auth/terms:
+    get:
+      operationId: getTermsStanding
+      summary: Whether the signed-in account agreed to the terms in force now
+      description: |
+        The terms, the privacy policy and the refund policy, as one version.
+        Signing up and checking out ask; this is for the accounts that never
+        were — made before sign-up asked, or brought over from the previous
+        platform — and for new words. Refused to a staff session and to a door
+        pass: neither is anybody agreeing for themselves.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: Where the account stands.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TermsStanding' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: acceptTerms
+      summary: Agree to the terms in force now
+      description: |
+        The box, ticked. Agreeing again to words already agreed to changes
+        nothing: the moment kept is when this account first agreed to them.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accept_terms]
+              properties:
+                accept_terms:
+                  type: boolean
+                  const: true
+                  description: Refused with a 422 when it is not true.
+      responses:
+        '200':
+          description: Where the account stands now.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TermsStanding' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/auth/erasure:
+    get:
+      operationId: previewAccountErasure
+      summary: What deleting the signed-in account would do
+      description: |
+        Shown beside the button, before anybody types a password: the
+        organizations the person would leave, and any they are the only owner
+        of, which stop it. The same erasure as the privacy page's form.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: What would happen.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountErasurePreview' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: eraseAccount
+      summary: Delete the signed-in account
+      description: |
+        Deleting an account from inside the app that made it, which the App
+        Store requires. The password is asked for, as it is before the address
+        can be moved: a phone left unlocked is signed in, and must not be
+        enough to erase the person it belongs to. Five tries an hour, right or
+        wrong.
+
+        A proved address is deleted there and then, and every device is
+        signed out, this one included. Any other is sent the privacy page's
+        link first, and nothing changes until it is opened. Orders and the
+        ledger are kept for the years the preview says, with nobody's name on
+        them.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password]
+              properties:
+                current_password: { type: string }
+      responses:
+        '200':
+          description: Deleted, and signed out everywhere.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountErasureResult' }
+        '202':
+          description: A link went to the address. Nothing changes until it is opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountErasureResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Refused, and nothing changed — the only owner of an organization, or somebody with myFiesta staff access.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountErasureResult' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          description: Too many tries at the password in the last hour. Said against `current_password`, like a validation error.
+
+  /api/organizer/standing:
+    get:
+      operationId: getOrganizationStanding
+      summary: Whether the platform is selling for this organization
+      description: |
+        For the console's suspension banner. Asked on its own rather than read
+        from the sign-in, because a suspension lands while people are signed
+        in. Any member may ask. The reason is only there when myFiesta chose to
+        share it.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Where the organization stands.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationStanding' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1670,4 +2057,247 @@ components:
                 type: { type: [string, 'null'] }
                 admits: { type: integer }
                 admitted_count: { type: integer }
+            - type: 'null'
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, failing] }
+        checks:
+          type: object
+          description: One entry per part, in the order they are asked.
+          required: [database, cache, queue, storage, scheduler]
+          properties:
+            database: { $ref: '#/components/schemas/ReadinessCheck' }
+            cache: { $ref: '#/components/schemas/ReadinessCheck' }
+            queue:
+              description: A worker has run the heartbeat job in the last ten minutes, and fewer than ten jobs failed in the last hour.
+              allOf:
+                - $ref: '#/components/schemas/ReadinessCheck'
+            storage: { $ref: '#/components/schemas/ReadinessCheck' }
+            scheduler:
+              description: The scheduler has run in the last three minutes.
+              allOf:
+                - $ref: '#/components/schemas/ReadinessCheck'
+
+    ReadinessCheck:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        detail:
+          type: string
+          description: |
+            A fixed sentence, only when `ok` is false. Never an exception's
+            message, a host name or a count of anything.
+
+    Contact:
+      type: object
+      description: Every field but `addresses` and `complete` is null when it is not set.
+      required: [company_name, company_number, support_email, privacy_email, phone, addresses, complete]
+      properties:
+        company_name:
+          type: [string, 'null']
+          description: The registered legal name, not the brand.
+        company_number:
+          type: [string, 'null']
+          description: A Canadian corporation number, a CAC RC number — shown as written.
+        support_email: { type: [string, 'null'], format: email }
+        privacy_email:
+          type: [string, 'null']
+          format: email
+          description: For requests about personal data. The support inbox when there is no other.
+        phone:
+          type: [string, 'null']
+          description: Null rather than a number nobody answers.
+        addresses:
+          type: array
+          description: Where post reaches the operator, one per market that has one.
+          items:
+            type: object
+            required: [country, address]
+            properties:
+              country: { type: string, enum: [CA, NG] }
+              address: { type: string }
+        complete:
+          type: boolean
+          description: |
+            A registered name, a support inbox and at least one address are
+            all set. The legal pages show a notice while it is false.
+
+    SignUpRequest:
+      type: object
+      required: [name, email, password, password_confirmation, accept_terms]
+      properties:
+        name: { type: string, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 190 }
+        password:
+          type: string
+          minLength: 10
+          description: At least ten characters, with letters and numbers.
+        password_confirmation: { type: string }
+        organization:
+          type: [string, 'null']
+          maxLength: 120
+          description: |
+            The events page to open. Required unless `attendee` is true or
+            this is joining by `invitation`.
+        invitation:
+          type: [string, 'null']
+          maxLength: 64
+          description: The token from an invitation to join an organization. The email must be the one it was sent to.
+        attendee:
+          type: [boolean, 'null']
+          description: Going out rather than putting something on. Said, never inferred from a missing organization.
+        device:
+          type: [string, 'null']
+          maxLength: 64
+          description: Names the session a joined-by-invitation sign-up is answered with.
+        accept_terms:
+          type: boolean
+          const: true
+          description: |
+            The box on the form: the terms, the privacy policy and the refund
+            policy, agreed to. Refused with a 422 without it. The account keeps
+            which version was agreed to, and when.
+
+    SignUpPending:
+      type: object
+      required: [message, pending]
+      properties:
+        message: { type: string }
+        pending: { type: boolean, const: true }
+
+    Session:
+      type: object
+      description: The same shape signing in answers with, whichever way the session started.
+      required: [token, user, abilities, organizations]
+      properties:
+        token: { type: string }
+        user:
+          type: object
+          required: [name, email]
+          properties:
+            name: { type: string }
+            email: { type: string, format: email }
+        abilities:
+          type: array
+          description: Decided by the server from what the account is. The phone opens its attendee or organizer half from these.
+          items: { type: string }
+        organizations:
+          type: array
+          items: { $ref: '#/components/schemas/Membership' }
+
+    Membership:
+      type: object
+      required: [id, name, slug, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        role: { type: string, enum: [owner, manager, finance, marketing, door] }
+        permissions:
+          type: array
+          description: Resolved by the server from the role. Clients read this and never derive it.
+          items: { type: string }
+
+    EmailVerificationAnswer:
+      type: object
+      required: [message, verified]
+      properties:
+        message:
+          type: string
+          description: Written for the person, naming the address the link went to.
+        verified: { type: boolean }
+
+    TermsStanding:
+      type: object
+      required: [current, accepted, accepted_version, accepted_at]
+      properties:
+        current:
+          type: string
+          description: The version in force now.
+        accepted:
+          type: boolean
+          description: Whether this account agreed to that version. An older one does not count.
+        accepted_version:
+          type: [string, 'null']
+          description: What it last agreed to, or null when it never has.
+        accepted_at:
+          type: [string, 'null']
+          format: date-time
+          description: When it first agreed to `accepted_version`.
+
+    AccountErasurePreview:
+      type: object
+      required: [email, email_verified, refused, organizations, kept_for_years, history_kept]
+      properties:
+        email: { type: string, format: email }
+        email_verified:
+          type: boolean
+          description: A proved address is deleted on the password; any other is sent a link first.
+        refused:
+          type: [string, 'null']
+          description: |
+            Why it cannot be deleted yet, written for the person: the only
+            owner of an organization, until it has another owner or is closed,
+            or myFiesta staff access, until another administrator removes it.
+            Null when nothing stands in the way.
+        organizations:
+          type: array
+          description: The organizations the person would leave.
+          items:
+            type: object
+            required: [id, name, slug, role, only_owner]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              slug: { type: string }
+              role: { type: string, enum: [owner, manager, finance, marketing, door] }
+              only_owner: { type: boolean }
+        kept_for_years:
+          type: integer
+          description: How long orders and the ledger are kept after, with nobody's name on them.
+        history_kept:
+          type: boolean
+          description: |
+            Whether the audit trail names them — a refund sent, a price
+            changed. That stays under the name they had then: nobody can edit
+            that trail.
+
+    AccountErasureResult:
+      type: object
+      required: [status, message]
+      properties:
+        status: { type: string, enum: [completed, pending, refused] }
+        message:
+          type: string
+          description: Written for the person. `completed` has signed out every device, this one included.
+
+    OrganizationStanding:
+      type: object
+      required: [organization, suspended, suspension]
+      properties:
+        organization:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        suspended: { type: boolean }
+        suspension:
+          description: Null while the organization is in good standing.
+          oneOf:
+            - type: object
+              required: [since, reason, support_email]
+              properties:
+                since: { type: [string, 'null'], format: date-time }
+                reason:
+                  type: [string, 'null']
+                  description: Only when myFiesta chose to share it.
+                support_email:
+                  type: [string, 'null']
+                  format: email
+                  description: Null when the deployment has none.
             - type: 'null'

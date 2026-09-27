@@ -10,8 +10,11 @@ use App\Models\User;
 use App\Services\Analytics\Charts\Format;
 use App\Services\Analytics\FailedJobs;
 use App\Services\Analytics\OperationsHealth as Health;
+use App\Support\Operations\Heartbeat;
 use BackedEnum;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
+use Carbon\CarbonInterval;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
@@ -34,11 +37,13 @@ use UnitEnum;
 /**
  * Whether the machinery behind the platform is keeping up.
  *
- * Queue jobs that gave up, webhook deliveries that failed, numbers that said
- * STOP, and the queues of work waiting on a person — privacy requests,
- * identity documents, payout requests — with the schedule the background
- * jobs run to. Only what the platform records; where it records nothing, as
- * with when the scheduler last ran, the page says so.
+ * When the scheduler and the queue worker were last seen running, first,
+ * because neither says anything when it stops. Then queue jobs that gave up,
+ * webhook deliveries that failed, numbers that said STOP, and the queues of
+ * work waiting on a person — privacy requests, identity documents, payout
+ * requests — with the schedule the background jobs run to. Only what the
+ * platform records; where it records nothing, as with when each scheduled job
+ * last ran, the page says so.
  *
  * Administrators and support may read it. Only administrators may retry or
  * forget a failed job, and each time is written to the audit trail.
@@ -114,6 +119,7 @@ class OperationsHealth extends Page implements HasTable
             ->implode(' · ');
 
         return [
+            'processes' => self::processes($s['heartbeats']),
             'tiles' => [
                 [
                     'label' => 'Failed queue jobs',
@@ -156,6 +162,55 @@ class OperationsHealth extends Page implements HasTable
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * The scheduler and the queue worker, as a person reads them: when each
+     * was last seen, how long before that is late, and whether it is.
+     *
+     * The worker is only sent its heartbeat by the scheduler, so while the
+     * scheduler is late the worker's row says that is the likelier reason.
+     *
+     * @param  array<string, array{readable: bool, seen: bool, seconds_ago: ?int, last_seen_at: ?string, late_after: int, late: bool}>  $beats
+     * @return list<array{name: string, label: string, what: string, last_seen: string, last_seen_at: ?string, late_after: string, state: string, late: bool, note: ?string}>
+     */
+    private static function processes(array $beats): array
+    {
+        $about = [
+            Heartbeat::SCHEDULER => ['Scheduler', 'Runs the scheduled jobs below. Seen each minute it runs.'],
+            Heartbeat::QUEUE => ['Queue worker', 'Sends every email and runs every other queued job. Seen each time it runs the job the scheduler sends it every minute.'],
+        ];
+
+        $rows = [];
+
+        foreach ($about as $name => [$label, $what]) {
+            $beat = $beats[$name];
+
+            $rows[] = [
+                'name' => $name,
+                'label' => $label,
+                'what' => $what,
+                'last_seen' => match (true) {
+                    ! $beat['readable'] => 'The cache could not be read',
+                    ! $beat['seen'] => 'Never',
+                    default => CarbonImmutable::parse((string) $beat['last_seen_at'])->diffForHumans(['options' => CarbonInterface::JUST_NOW]),
+                },
+                'last_seen_at' => $beat['last_seen_at'],
+                'late_after' => CarbonInterval::seconds($beat['late_after'])->cascade()->forHumans(),
+                'state' => match (true) {
+                    ! $beat['readable'] => 'Unknown',
+                    ! $beat['seen'] => 'Never seen',
+                    $beat['late'] => 'Late',
+                    default => 'Running',
+                },
+                'late' => $beat['late'],
+                'note' => $name === Heartbeat::QUEUE && $beat['late'] && ($beats[Heartbeat::SCHEDULER]['late'] ?? false)
+                    ? 'The scheduler is late too, and it is what sends this job: start there.'
+                    : null,
+            ];
+        }
+
+        return $rows;
     }
 
     /** @return array<string, mixed> */

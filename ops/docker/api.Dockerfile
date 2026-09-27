@@ -77,9 +77,13 @@ RUN mkdir -p /var/backups/myfiesta \
 ARG RELEASE=
 ENV SENTRY_RELEASE=${RELEASE}
 
-# php-fpm checks production is fit to run before it starts (app:preflight), and
-# the container stops with the list if it is not. Other commands pass straight
-# through, so artisan still works on a box that is being put right.
+# php-fpm, the worker and the scheduler check production is fit to run before
+# they start (app:preflight), and the container stops with the list if it is
+# not; then each caches its configuration, routes and events in its own
+# container, which is the only place a cache can reach it. None is baked in
+# here: the configuration is the environment the container is started with.
+# Other commands pass straight through, so artisan still works on a box that
+# is being put right.
 # Line endings stripped because a checkout on Windows writes CRLF, and a
 # shebang ending in a carriage return is a script that will not run.
 COPY ops/docker/api-entrypoint.sh /usr/local/bin/myfiesta-entrypoint

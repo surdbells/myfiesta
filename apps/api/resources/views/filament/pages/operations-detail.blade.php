@@ -43,7 +43,7 @@
 
     <x-filament::section
         heading="Scheduled jobs"
-        description="What the scheduler is set to run, and when each is next due (UTC). When each last ran is not recorded anywhere, so it is not shown."
+        description="What the scheduler is set to run, and when each is next due (UTC). Whether the scheduler itself is running is at the top of the page; when each job last ran is not recorded anywhere, so it is not shown."
     >
         @if ($schedule['error'])
             <div class="mf-empty" role="note">{{ $schedule['error'] }}</div>

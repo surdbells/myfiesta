@@ -2,12 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Enums\TokenAbility;
 use App\Http\Requests\CreateOrderRequest;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\TicketType;
+use App\Models\User;
 use Database\Seeders\TaxRateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
@@ -183,6 +189,101 @@ class ContractConformanceTest extends TestCase
             $this->assertArrayHasKey('amount', $body[$field], "{$field} has no amount.");
             $this->assertArrayHasKey('currency', $body[$field], "{$field} has no currency.");
             $this->assertIsInt($body[$field]['amount'], "{$field} amount must be minor units, not a float.");
+        }
+    }
+
+    public function test_the_readiness_answer_carries_what_the_contract_promises(): void
+    {
+        // Disks of the test's own: every check writes a file to each.
+        Storage::fake('private');
+        Storage::fake('public');
+
+        // No heartbeat has been written here, so it answers 503. The shape is
+        // the same either way, and the contract declares both.
+        $response = $this->getJson('/api/health/ready');
+        $this->assertContains($response->status(), [200, 503]);
+
+        foreach ($this->propertiesOf('Readiness') as $field) {
+            $this->assertArrayHasKey($field, $response->json(), "Readiness declares '{$field}' and the API does not return it.");
+        }
+
+        // Every part, in the order it is asked.
+        $this->assertSame(
+            array_keys($this->spec['components']['schemas']['Readiness']['properties']['checks']['properties']),
+            array_keys($response->json('checks')),
+        );
+
+        foreach ($response->json('checks') as $name => $check) {
+            $this->assertIsBool($check['ok'] ?? null, "{$name} has no ok.");
+        }
+    }
+
+    public function test_the_contact_details_carry_what_the_contract_promises(): void
+    {
+        $body = $this->getJson('/api/contact')->assertOk()->json('data');
+
+        foreach ($this->propertiesOf('Contact') as $field) {
+            $this->assertArrayHasKey($field, $body, "Contact declares '{$field}' and the API does not return it.");
+        }
+    }
+
+    /**
+     * A sign-up built from nothing but what the spec declares is one the API
+     * takes, the box on the terms included — and without the box it is
+     * refused, as the spec says.
+     */
+    public function test_a_sign_up_built_from_the_contract_is_taken(): void
+    {
+        Mail::fake();
+
+        $body = [
+            'name' => 'Ada Contract',
+            'email' => 'ada@contract.test',
+            'password' => 'contract-password-42',
+            'password_confirmation' => 'contract-password-42',
+            'organization' => 'Ada Nights',
+            'accept_terms' => true,
+        ];
+
+        $this->assertSame([], array_values(array_diff(array_keys($body), $this->propertiesOf('SignUpRequest'))), 'The body sends something the spec does not declare.');
+        $this->assertSame([], array_values(array_diff($this->spec['components']['schemas']['SignUpRequest']['required'], array_keys($body))), 'The body leaves out something the spec requires.');
+
+        $answer = $this->postJson('/api/auth/register', $body)->assertStatus(202)->json();
+
+        foreach ($this->propertiesOf('SignUpPending') as $field) {
+            $this->assertArrayHasKey($field, $answer, "SignUpPending declares '{$field}' and the API does not return it.");
+        }
+
+        $this->postJson('/api/auth/register', [...$body, 'email' => 'grace@contract.test', 'accept_terms' => false])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('accept_terms');
+    }
+
+    public function test_the_signed_in_account_and_its_organization_answer_as_the_contract_says(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->create(['email_verified_at' => null]);
+        $this->event->organization->members()->attach($user->id, ['id' => (string) Str::uuid(), 'role' => 'owner', 'accepted_at' => now()]);
+        Sanctum::actingAs($user->fresh(), [TokenAbility::Attendee->value, TokenAbility::Organizer->value]);
+
+        foreach ([
+            ['GET', '/api/auth/terms', 'TermsStanding'],
+            ['GET', '/api/auth/erasure', 'AccountErasurePreview'],
+            ['POST', '/api/auth/email/verification', 'EmailVerificationAnswer'],
+            ['GET', '/api/organizer/standing', 'OrganizationStanding'],
+        ] as [$method, $path, $schema]) {
+            $body = $this->json($method, $path)->assertSuccessful()->json();
+
+            foreach ($this->propertiesOf($schema) as $field) {
+                $this->assertArrayHasKey($field, $body, "{$schema} declares '{$field}' and {$method} {$path} does not return it.");
+            }
+
+            if ($schema === 'AccountErasurePreview') {
+                foreach (array_keys($this->spec['components']['schemas'][$schema]['properties']['organizations']['items']['properties']) as $field) {
+                    $this->assertArrayHasKey($field, $body['organizations'][0], "{$schema}.organizations declares '{$field}' and the API does not return it.");
+                }
+            }
         }
     }
 

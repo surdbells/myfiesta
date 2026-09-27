@@ -14,11 +14,12 @@
   ],
   "scripts": {
     "tokens": "npm run build --workspace @myfiesta/tokens",
-    "check": "npm run check --workspace @myfiesta/tokens && npm run check:runtime && npm run check:native",
+    "check": "npm run check --workspace @myfiesta/tokens && npm run check:runtime && npm run check:native && npm run check:version",
     "shots": "node tools/screenshot.cjs",
     "audit:fields": "node tools/audit-fields.cjs",
     "check:runtime": "node tools/check-runtime-config.cjs",
-    "check:native": "node tools/check-native-plugins.cjs"
+    "check:native": "node tools/check-native-plugins.cjs",
+    "check:version": "node tools/stamp-mobile-version.cjs --check"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

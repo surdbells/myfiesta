@@ -39,7 +39,19 @@ class PreflightTest extends TestCase
             'sms.termii.key' => 'termii-key',
             'sms.inbound_secret' => 'inbound-secret',
             'trustedproxy.proxies' => ['10.0.0.0/8'],
+            'operations.backup.encryption_key' => self::backupKey(),
         ]);
+    }
+
+    /**
+     * 32 bytes of base64, the shape `php artisan backup:key` prints.
+     *
+     * Built as the test runs, never written out: a key-shaped string in source
+     * is exactly what the secret scan on every push stops, test or not.
+     */
+    private static function backupKey(): string
+    {
+        return base64_encode(str_repeat('b', SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES));
     }
 
     public function test_a_complete_configuration_has_nothing_to_report(): void
@@ -112,6 +124,30 @@ class PreflightTest extends TestCase
         $this->assertArrayHasKey('TRUSTED_PROXIES', Preflight::problems());
     }
 
+    public function test_backups_without_a_key_or_with_a_broken_one_are_named(): void
+    {
+        $this->ready();
+
+        // Every production takes a nightly backup, to the volume unless a
+        // bucket is named, and with no key each one is every buyer's details
+        // in the clear.
+        foreach (['volume', 's3'] as $target) {
+            config(['operations.backup.target' => $target, 'operations.backup.encryption_key' => null]);
+
+            $this->assertSame(['BACKUP_ENCRYPTION_KEY'], array_keys(Preflight::problems()), $target);
+            $this->assertStringContainsString('is empty', Preflight::problems()['BACKUP_ENCRYPTION_KEY']);
+        }
+
+        // There and wrong is not "no key": backup:run refuses it, so every
+        // night would fail.
+        config(['operations.backup.encryption_key' => 'not-a-key']);
+        $this->assertStringContainsString('not 32 bytes', Preflight::problems()['BACKUP_ENCRYPTION_KEY']);
+        $this->assertStringNotContainsString('not-a-key', Preflight::problems()['BACKUP_ENCRYPTION_KEY']);
+
+        config(['operations.backup.encryption_key' => 'base64:'.self::backupKey()]);
+        $this->assertSame([], Preflight::problems());
+    }
+
     public function test_enforcing_lists_every_problem_at_once_and_no_secret(): void
     {
         $this->ready();
@@ -179,6 +215,7 @@ class PreflightTest extends TestCase
             'TERMII_API_KEY' => 'termii-key',
             'SMS_INBOUND_SECRET' => 'inbound-secret',
             'TRUSTED_PROXIES' => '10.0.0.0/8',
+            'BACKUP_ENCRYPTION_KEY' => self::backupKey(),
             'LOG_CHANNEL' => 'stderr',
             'DB_DATABASE' => (string) config('database.connections.pgsql.database'),
             // Never this checkout's own caches: a config cache left behind
@@ -217,6 +254,20 @@ class PreflightTest extends TestCase
         $this->assertStringNotContainsString('sk_live_ready', $check->getOutput());
     }
 
+    public function test_production_will_not_start_with_its_backups_unencrypted(): void
+    {
+        $check = $this->production(['artisan', 'app:preflight'], ['BACKUP_ENCRYPTION_KEY' => '']);
+
+        $this->assertSame(1, $check->getExitCode(), $check->getOutput().$check->getErrorOutput());
+        $this->assertStringContainsString('BACKUP_ENCRYPTION_KEY', $check->getOutput());
+
+        // Whatever the target: the bucket is somebody else's disk, which is
+        // more reason for a key, not less.
+        $bucket = $this->production(['artisan', 'app:preflight'], ['BACKUP_ENCRYPTION_KEY' => '', 'BACKUP_TARGET' => 's3']);
+        $this->assertSame(1, $bucket->getExitCode());
+        $this->assertStringContainsString('BACKUP_ENCRYPTION_KEY', $bucket->getOutput());
+    }
+
     public function test_the_worker_refuses_to_start(): void
     {
         $worker = $this->production(
@@ -249,6 +300,7 @@ class PreflightTest extends TestCase
             'PAYSTACK_SECRET_KEY' => '',
             'SMS_DRIVER' => 'log',
             'TRUSTED_PROXIES' => '',
+            'BACKUP_ENCRYPTION_KEY' => '',
         ];
 
         // An image is built with none of these, and config:cache,
@@ -266,9 +318,11 @@ class PreflightTest extends TestCase
      * ops/docker/api-entrypoint.sh, with php and docker-php-entrypoint stood
      * in for by scripts that say what they were asked to do. The stand-in php
      * fails whatever it is asked, as app:preflight does in a production that
-     * is not ready.
+     * is not ready — or, when $ready, does whatever it is asked.
+     *
+     * @param  list<string>  $command
      */
-    private function entrypoint(string ...$command): Process
+    private function entrypoint(array $command, bool $ready = false): Process
     {
         $sh = (new ExecutableFinder)->find('sh');
 
@@ -278,7 +332,7 @@ class PreflightTest extends TestCase
 
         $bin = storage_path('framework/cache/entrypoint-'.bin2hex(random_bytes(4)));
         mkdir($bin);
-        file_put_contents("{$bin}/php", "#!/bin/sh\necho \"php \$*\"\nexit 1\n");
+        file_put_contents("{$bin}/php", "#!/bin/sh\necho \"php \$*\"\nexit ".($ready ? 0 : 1)."\n");
         file_put_contents("{$bin}/docker-php-entrypoint", "#!/bin/sh\necho \"started \$*\"\n");
         chmod("{$bin}/php", 0755);
         chmod("{$bin}/docker-php-entrypoint", 0755);
@@ -304,27 +358,63 @@ class PreflightTest extends TestCase
         return $process;
     }
 
-    public function test_the_image_checks_before_php_fpm_and_lets_artisan_through(): void
+    /** The three that serve, as compose.prod.yml starts them. */
+    private const SERVING = [
+        ['php-fpm'],
+        ['-F'],
+        ['php', 'artisan', 'queue:work', '--tries=3', '--max-time=3600', '--sleep=1'],
+        ['php', 'artisan', 'schedule:work'],
+    ];
+
+    public function test_the_image_checks_before_anything_serves_and_lets_artisan_through(): void
     {
-        // php-fpm, asked for by name or by an option for it, does not start
-        // in a production that is not ready…
-        foreach ([['php-fpm'], ['-F']] as $command) {
-            $run = $this->entrypoint(...$command);
+        // php-fpm, asked for by name or by an option for it, and the worker
+        // and the scheduler do not start in a production that is not ready,
+        // and nothing is cached for them…
+        foreach (self::SERVING as $command) {
+            $run = $this->entrypoint($command);
 
             $this->assertNotSame(0, $run->getExitCode(), $run->getOutput().$run->getErrorOutput());
             $this->assertStringContainsString('php artisan app:preflight', $run->getOutput());
+            $this->assertStringNotContainsString('config:cache', $run->getOutput());
             $this->assertStringNotContainsString('started', $run->getOutput());
         }
 
         // …but artisan runs there unchecked, because that is how a box is put
         // right — including the key:generate the check itself tells the
-        // operator to run. The worker and the scheduler check themselves as
-        // they start (test_the_worker_refuses_to_start).
-        $repair = $this->entrypoint('php', 'artisan', 'key:generate', '--show');
+        // operator to run. Nor does it build caches: a one-off command in a
+        // container of its own has nobody to build them for, and cron's
+        // schedule:run would build three of them a minute.
+        foreach ([['key:generate', '--show'], ['tinker'], ['schedule:run']] as $command) {
+            $repair = $this->entrypoint(['php', 'artisan', ...$command]);
 
-        $this->assertSame(0, $repair->getExitCode(), $repair->getOutput().$repair->getErrorOutput());
-        $this->assertStringNotContainsString('app:preflight', $repair->getOutput());
-        $this->assertStringContainsString('started php artisan key:generate --show', $repair->getOutput());
+            $this->assertSame(0, $repair->getExitCode(), $repair->getOutput().$repair->getErrorOutput());
+            $this->assertStringNotContainsString('app:preflight', $repair->getOutput());
+            $this->assertStringNotContainsString(':cache', $repair->getOutput());
+            $this->assertStringContainsString('started php artisan '.implode(' ', $command), $repair->getOutput());
+        }
+    }
+
+    /**
+     * The caches api-migrate builds die with api-migrate: every container has
+     * a filesystem of its own. So each one that serves builds its own, from
+     * its own environment, after the check and before the process starts.
+     */
+    public function test_each_container_that_serves_caches_config_routes_and_events_as_it_starts(): void
+    {
+        foreach (self::SERVING as $command) {
+            $run = $this->entrypoint($command, ready: true);
+            $said = implode(' ', $command);
+
+            $this->assertSame(0, $run->getExitCode(), $said.': '.$run->getOutput().$run->getErrorOutput());
+            $this->assertSame([
+                'php artisan app:preflight',
+                'php artisan config:cache',
+                'php artisan route:cache',
+                'php artisan event:cache',
+                "started {$said}",
+            ], preg_split('/\r?\n/', trim($run->getOutput())), $said);
+        }
     }
 
     public function test_the_migration_checks_before_it_touches_the_schema(): void
@@ -335,6 +425,13 @@ class PreflightTest extends TestCase
         // and asks first: a bad deployment stops before the schema changes.
         $this->assertMatchesRegularExpression(
             '/api-migrate:.*?command:\s*>\s*sh -c "php artisan app:preflight\s+&& php artisan migrate --force/s',
+            $compose,
+        );
+
+        // And builds each cache once, so a release that cannot cache stops
+        // here, before any container that serves is replaced.
+        $this->assertMatchesRegularExpression(
+            '/api-migrate:.*?migrate --force\s+&& php artisan config:cache\s+&& php artisan route:cache\s+&& php artisan event:cache"/s',
             $compose,
         );
     }

@@ -3,11 +3,13 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\PlatformRole;
+use App\Filament\Resources\AuditLogs\AuditEntries;
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\AuditLogs\Pages\ListAuditLogs;
 use App\Filament\Resources\AuditLogs\Pages\ListSensitiveDataAccesses;
 use App\Filament\Resources\AuditLogs\Pages\ViewAuditLog;
 use App\Filament\Resources\AuditLogs\SensitiveDataAccessResource;
+use App\Filament\Resources\Organizations\OrganizationResource;
 use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
@@ -160,6 +162,35 @@ class AuditLogScreenTest extends TestCase
             ->assertSee('[not shown]')
             ->assertDontSee('abc-secret-value')
             ->assertDontSee('TCK-SHOULD-NOT-SHOW');
+    }
+
+    public function test_an_entry_about_an_organization_links_to_its_page(): void
+    {
+        $admin = $this->signIn($this->staffMember(PlatformRole::Admin));
+        $organization = Organization::factory()->create(['name' => 'Ibadan Beats']);
+        $entry = app(Auditor::class)->record('organization.suspended', $organization, $admin, $organization->id, ['reason' => 'Chargebacks']);
+
+        $page = OrganizationResource::getUrl('view', ['record' => $organization]);
+
+        $this->assertSame($page, AuditEntries::subjectUrl($entry));
+        $this->assertSame('Organization · '.substr($organization->id, 0, 8), AuditEntries::subject($entry));
+
+        // On the list and on the entry itself, both of which read it from here.
+        Livewire::test(ListAuditLogs::class)
+            ->assertCanSeeTableRecords([$entry])
+            ->assertSee($page, false);
+
+        $this->get(AuditLogResource::getUrl('view', ['record' => $entry]))
+            ->assertSuccessful()
+            ->assertSee($page, false);
+
+        // Finance reads the trail and may open every organization, so is
+        // linked too. The link is only ever for somebody who may open it.
+        $this->signIn($this->staffMember(PlatformRole::Finance));
+        $this->assertSame($page, AuditEntries::subjectUrl($entry));
+
+        $this->signIn(User::factory()->create(['email_verified_at' => now()]));
+        $this->assertNull(AuditEntries::subjectUrl($entry));
     }
 
     public function test_sensitive_data_reads_name_whose_record_was_read(): void

@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Services\Backups\BackupCipher;
+use RuntimeException;
+
 /**
  * What production must not start without.
  *
@@ -80,6 +83,7 @@ final class Preflight
         $problems += self::mail();
         $problems += self::texts();
         $problems += self::proxies();
+        $problems += self::backups();
 
         return $problems;
     }
@@ -188,5 +192,34 @@ final class Preflight
         }
 
         return [];
+    }
+
+    /**
+     * Backups sealed before they leave the machine.
+     *
+     * The nightly backup runs in every production, with nothing to turn it
+     * off: to the backups volume, or to a bucket when BACKUP_TARGET says so.
+     * Without a key it stores the database as pg_dump wrote it — every
+     * buyer's name, email and phone number, readable by whoever can read the
+     * volume or the bucket. backup:run says so each night, in a log nobody
+     * reads until something has already gone wrong.
+     *
+     * A key that is there and malformed is named too. backup:run refuses it
+     * rather than store a plain dump, so every night would fail, and the
+     * first anybody heard would be the restore that had nothing to restore.
+     *
+     * @return array<string, string>
+     */
+    private static function backups(): array
+    {
+        try {
+            $key = BackupCipher::key(config('operations.backup.encryption_key'));
+        } catch (RuntimeException) {
+            return ['BACKUP_ENCRYPTION_KEY' => 'is not 32 bytes of base64, so every nightly backup would fail. Make one with `php artisan backup:key`.'];
+        }
+
+        return $key === null
+            ? ['BACKUP_ENCRYPTION_KEY' => 'is empty, so every nightly backup would hold every buyer\'s details unencrypted. Make one with `php artisan backup:key`, and keep a copy away from this server and the backups.']
+            : [];
     }
 }

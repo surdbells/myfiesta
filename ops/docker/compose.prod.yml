@@ -59,8 +59,13 @@ services:
   # It checks production is fit to run (app:preflight) before anything else,
   # so a deployment with a secret missing or a sender pretending stops here,
   # with the list, before the schema is touched. Said in the command because
-  # the image's entrypoint checks only in front of php-fpm: everything else
-  # it runs has to work on a box that is being put right.
+  # the image's entrypoint checks only in front of what serves: everything
+  # else it runs has to work on a box that is being put right.
+  #
+  # The caches it builds are thrown away with it — each container has its
+  # own filesystem, and api, worker and scheduler build their own as they
+  # start (ops/docker/api-entrypoint.sh). They are built here as well so a
+  # release that cannot cache stops before any of those is replaced.
   api-migrate:
     build:
       context: ../..

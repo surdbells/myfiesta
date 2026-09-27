@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\Support\Operations\Heartbeat;
 use Carbon\CarbonImmutable;
 use Cron\CronExpression;
 use Illuminate\Database\Query\Builder;
@@ -15,11 +16,12 @@ use Throwable;
 /**
  * Whether the machinery behind the platform is keeping up.
  *
- * Only what the platform actually records. Failed queue jobs, webhook
- * deliveries that gave up, numbers that said STOP, privacy requests and
- * identity documents waiting on a person, payout requests waiting on money,
- * and the schedule the jobs run to. Where something is not recorded — the
- * scheduler writes no heartbeat — this says so rather than inventing one.
+ * Only what the platform actually records. When the scheduler and the queue
+ * worker were last seen running, failed queue jobs, webhook deliveries that
+ * gave up, numbers that said STOP, privacy requests and identity documents
+ * waiting on a person, payout requests waiting on money, and the schedule the
+ * jobs run to. Where something is not recorded — when each scheduled job
+ * last ran — this says so rather than inventing one.
  *
  * Read fresh on every visit: these are queues somebody is about to work
  * through, and a two-minute-old count of them is the wrong number. The one
@@ -32,6 +34,7 @@ class OperationsHealth
     public function snapshot(): array
     {
         return [
+            'heartbeats' => $this->heartbeats(),
             'failed_jobs' => $this->failedJobs(),
             'webhooks' => $this->webhooks(),
             'sms' => $this->smsSuppression(),
@@ -39,6 +42,56 @@ class OperationsHealth
             'identity' => $this->identityDocuments(),
             'payouts' => $this->payoutRequests(),
         ];
+    }
+
+    /**
+     * When the scheduler and the queue worker were last seen running, and
+     * whether that was longer ago than it should have been.
+     *
+     * Read from the heartbeats app:heartbeat writes every minute, and held to
+     * the limits the readiness check holds them to, so this page and the
+     * uptime monitor never disagree about whether one of them has stopped.
+     * Never seen counts as late: a platform that has just started has not
+     * shown either of them working yet.
+     *
+     * The worker's heartbeat is a job the scheduler sends, so a stopped
+     * scheduler takes it late as well; the page says so rather than showing
+     * two failures where there may be one.
+     *
+     * @return array<string, array{readable: bool, seen: bool, seconds_ago: ?int, last_seen_at: ?string, late_after: int, late: bool}>
+     */
+    public function heartbeats(): array
+    {
+        $now = CarbonImmutable::now('UTC');
+        $limits = [
+            Heartbeat::SCHEDULER => (int) config('operations.health.scheduler_stale_after'),
+            Heartbeat::QUEUE => (int) config('operations.health.queue_stale_after'),
+        ];
+
+        $beats = [];
+
+        foreach ($limits as $name => $limit) {
+            try {
+                $seconds = Heartbeat::secondsSince($name);
+            } catch (Throwable) {
+                // They live in the cache. With the cache down nothing is
+                // known about either, which is not the same as fine.
+                $beats[$name] = ['readable' => false, 'seen' => false, 'seconds_ago' => null, 'last_seen_at' => null, 'late_after' => $limit, 'late' => true];
+
+                continue;
+            }
+
+            $beats[$name] = [
+                'readable' => true,
+                'seen' => $seconds !== null,
+                'seconds_ago' => $seconds,
+                'last_seen_at' => $seconds === null ? null : $now->subSeconds($seconds)->format('Y-m-d H:i:sP'),
+                'late_after' => $limit,
+                'late' => $seconds === null || $seconds > $limit,
+            ];
+        }
+
+        return $beats;
     }
 
     public function failedJobsTable(): string
@@ -298,8 +351,9 @@ class OperationsHealth
      * with a deploy, so it is kept for ten minutes; when each task is next
      * due is worked out from it on every visit, so an every-minute task never
      * shows a time already gone. When each task last ran is not recorded
-     * anywhere — there is no heartbeat — so it is reported as unknown rather
-     * than guessed from the next due time.
+     * anywhere — the scheduler's heartbeat says it is running, not which tasks
+     * it ran — so it is reported as unknown rather than guessed from the next
+     * due time.
      *
      * @return array{tasks: list<array{command: string, expression: string, next_due: ?string, description: ?string}>, last_run_recorded: bool, error: ?string}
      */

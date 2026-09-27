@@ -115,7 +115,8 @@ winter; 07:30 in Lagos), by
   written to a manifest beside the dump, with a checksum of the stored file and
   the release that made it.
 - Sealed before it leaves the server with `BACKUP_ENCRYPTION_KEY`
-  (XChaCha20-Poly1305, libsodium). On S3 the bucket also encrypts it at rest
+  (XChaCha20-Poly1305, libsodium). Production will not start with the key
+  empty or malformed (`app:preflight`). On S3 the bucket also encrypts it at rest
   when `BACKUP_S3_SSE` is set (`AES256` or `aws:kms`; R2 always does).
 - Written to `BACKUP_TARGET`: `s3`, a private S3-compatible bucket of its own,
   or `volume`, the `api-backups` volume on the application host. The volume is

@@ -89,6 +89,11 @@ jobs:
       # actually links. One that is not linked never fails; the feature that
       # needed it simply does nothing on a device.
       - run: node tools/check-native-plugins.cjs
+      # The phone app's version and build number, written once in
+      # apps/mobile/package.json, against both native projects. A store
+      # refuses a build number it has seen, and nothing else would say so
+      # until the upload.
+      - run: node tools/stamp-mobile-version.cjs --check
       # The path filters above against what each app reads out of packages/.
       # A package a filter leaves out is a change to it that runs none of the
       # builds or tests using it, and still comes back green.
