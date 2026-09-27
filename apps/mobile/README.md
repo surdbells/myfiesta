@@ -26,11 +26,17 @@ npm start --workspace mobile     # http://localhost:4330 in a browser
 The API it talks to is read at runtime from `<meta name="api-base">` in
 `src/index.html`, so one build serves staging and production. Nothing but the
 packaging step can write it — there is no server here to stamp it while
-rendering — so `npm run sync` fills it in from `API_BASE_URL`:
+rendering — so `npm run sync` fills it in from `API_BASE_URL`, and the public
+site's address (`<meta name="site-base">`: the checkout, shared links, and which
+tapped links the app opens) from `PUBLIC_URL`:
 
 ```bash
-API_BASE_URL=https://api.myfiesta.ca npm run sync --workspace mobile
+API_BASE_URL=https://api.myfiesta.ca PUBLIC_URL=https://myfiesta.ca npm run sync --workspace mobile
 ```
+
+Without `PUBLIC_URL` the app guesses the site by dropping `api.` from the API
+address, which only works for an `api.<site>` host; `sync` refuses an https API
+of any other shape without it.
 
 Without it the tag ships empty and the app falls back to the address that means
 "the machine this emulator is running on", which is right for development and

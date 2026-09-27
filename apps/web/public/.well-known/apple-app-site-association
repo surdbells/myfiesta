@@ -9,7 +9,6 @@
           { "/": "/events", "comment": "The listing: Browse in the app." },
           { "/": "/*/*", "exclude": true, "comment": "Tickets, orders, checkout and embeds stay on the site. The app sends buyers to the checkout on purpose." },
           { "/": "/*.*", "exclude": true, "comment": "Files. Slugs never contain a dot." },
-          { "/": "/?*", "?": { "ref": "?*" }, "exclude": true, "comment": "A promoter's link stays on the site until the app's checkout carries the ref through." },
           { "/": "/help", "exclude": true },
           { "/": "/terms", "exclude": true },
           { "/": "/privacy", "exclude": true },

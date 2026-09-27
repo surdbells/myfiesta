@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\Organizer\WaitlistController;
+use App\Http\Controllers\Api\TermsController;
 use App\Models\Event;
 use App\Services\Follows\Announcements;
 use Illuminate\Http\Request;
@@ -197,6 +198,12 @@ final class WhileImpersonating
         // than renaming it.
         DataRequestController::class.'@preview' => self::OWN_ACCOUNT,
         DataRequestController::class.'@erase' => self::OWN_ACCOUNT,
+        // Agreeing to the terms is somebody agreeing for themselves. The
+        // token is the staff member's, so an agreement made here would be
+        // theirs, on their own account, made by clicking through somebody
+        // else's console.
+        TermsController::class.'@show' => self::OWN_ACCOUNT,
+        TermsController::class.'@accept' => self::OWN_ACCOUNT,
     ];
 
     /**

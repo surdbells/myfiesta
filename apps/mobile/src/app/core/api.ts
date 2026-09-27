@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import type { DoorList, OfflineScan, ScanResult, SyncResult } from '@myfiesta/door';
-import type { Account, AccountErasurePreview, AccountErasureResult, Receipt, SignUp } from '@myfiesta/api-types';
+import type { Account, AccountErasurePreview, AccountErasureResult, Receipt, SignUp, TermsStanding } from '@myfiesta/api-types';
 import type { Money } from './money';
 
 /** A refusal with a sentence worth showing, and the status it came with. */
@@ -422,6 +422,16 @@ export class Api {
    */
   resendVerification(): Promise<{ message: string; verified: boolean }> {
     return this.send('POST', '/api/auth/email/verification', { body: {} });
+  }
+
+  /** Whether this account has agreed to the terms in force now. */
+  terms(): Promise<TermsStanding> {
+    return this.send('GET', '/api/auth/terms');
+  }
+
+  /** The box, ticked: kept on the account with the version and the moment. */
+  acceptTerms(): Promise<TermsStanding> {
+    return this.send('POST', '/api/auth/terms', { body: { accept_terms: true } });
   }
 
   /** What deleting this account would do, and what would stop it. Changes nothing. */

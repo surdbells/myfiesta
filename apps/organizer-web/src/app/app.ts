@@ -7,6 +7,7 @@ import { SessionStore } from './core/session';
 import { StaffBanner } from './features/impersonation/staff-banner';
 import { SuspensionBanner } from './features/suspension/suspension-banner';
 import { VerifyEmail } from './features/account/verify-email';
+import { TermsPrompt } from './features/account/terms-prompt';
 
 /** One entry in the sidebar. */
 interface NavItem {
@@ -21,7 +22,7 @@ const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner, SuspensionBanner, VerifyEmail],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner, SuspensionBanner, VerifyEmail, TermsPrompt],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

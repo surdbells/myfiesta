@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\ReadinessController;
 use App\Http\Controllers\Api\ResaleController;
 use App\Http\Controllers\Api\SavedEventController;
 use App\Http\Controllers\Api\SitemapController;
+use App\Http\Controllers\Api\TermsController;
 use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\V1\ReadController;
@@ -230,6 +231,13 @@ Route::middleware(['auth:sanctum', 'token.scope:account'])->group(function () {
     // would do first, then doing it with the account's password.
     Route::get('/auth/erasure', [DataRequestController::class, 'preview']);
     Route::post('/auth/erasure', [DataRequestController::class, 'erase'])->middleware('throttle:10,1');
+
+    // The terms, the privacy policy and the refund policy: whether this
+    // account agreed to the words in force now, and agreeing. For accounts
+    // that were never asked — made before sign-up asked, or brought over —
+    // and for new words.
+    Route::get('/auth/terms', [TermsController::class, 'show']);
+    Route::post('/auth/terms', [TermsController::class, 'accept'])->middleware('throttle:10,1');
 });
 
 /*

@@ -24,6 +24,7 @@ import type {
   MessageAudience,
   OrganizationCode,
   OrganizationOrderPage,
+  OrganizationStanding,
   OrganizerEvent,
   OrganizerEventDetail,
   Overview,
@@ -95,6 +96,11 @@ export class Organizer {
 
   overview(): Promise<Overview> {
     return this.get('/overview');
+  }
+
+  /** Whether myFiesta is selling for the organization: the suspension strip's question. */
+  standing(): Promise<OrganizationStanding> {
+    return this.get('/standing');
   }
 
   /** from and to are days in timezone; without one the server reads Greenwich days. */

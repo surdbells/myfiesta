@@ -65,10 +65,13 @@ describe('appRouteFor', () => {
     expect(appRouteFor('https://myfiesta.ca/events?city=Toronto', SITE)).toBe('/browse');
   });
 
-  it("leaves a promoter's link to the site, where the checkout picks up the ref", () => {
-    expect(appRouteFor('https://myfiesta.ca/afro-fest?ref=dj-kay', SITE)).toBeNull();
-    expect(appRouteFor('https://myfiesta.ca/afro-fest?utm_source=ig&ref=spring-mail', SITE)).toBeNull();
-    expect(appRouteFor('https://myfiesta.ca/afro-fest?ref=%3Cscript%3E', SITE)).toBeNull();
+  it("opens a promoter's link on the event screen with its ref, which the ticket page is then given", () => {
+    expect(appRouteFor('https://myfiesta.ca/afro-fest?ref=dj-kay', SITE)).toBe('/e/afro-fest?ref=dj-kay');
+    // The ref alone: the tracking tag beside it is the site's business.
+    expect(appRouteFor('https://myfiesta.ca/afro-fest?utm_source=ig&ref=spring-mail', SITE)).toBe('/e/afro-fest?ref=spring-mail');
+    // Carried as it came, still encoded: it is a value, never a path or a tag.
+    expect(appRouteFor('https://myfiesta.ca/afro-fest?ref=%3Cscript%3E', SITE)).toBe('/e/afro-fest?ref=%3Cscript%3E');
+    expect(appRouteFor('https://myfiesta.ca/afro-fest?ref=a%26b%3Dc', SITE)).toBe('/e/afro-fest?ref=a%26b%3Dc');
   });
 
   it('drops any other query, and a ref with nothing in it', () => {
@@ -208,12 +211,13 @@ describe('DeepLinks', () => {
     expect(router.url).toBe('/browse');
   });
 
-  it("opens a promoter's link in the browser with its ref, not on the event screen without it", async () => {
+  it("opens a promoter's link on the event screen, keeping its ref", async () => {
     await router.navigateByUrl('/browse');
 
-    expect(links.open('https://myfiesta.ca/afro-fest?ref=dj-kay')).toBe(false);
-    expect(plugin.browsed).toEqual(['https://myfiesta.ca/afro-fest?ref=dj-kay']);
-    expect(router.url).toBe('/browse');
+    expect(links.open('https://myfiesta.ca/afro-fest?ref=dj-kay')).toBe(true);
+    await vi.waitFor(() => expect(router.url).toBe('/e/afro-fest?ref=dj-kay'));
+    expect(router.parseUrl(router.url).queryParams).toEqual({ ref: 'dj-kay' });
+    expect(plugin.browsed).toEqual([]);
   });
 
   it('does not hand the same page over again when Android bounces it straight back', () => {

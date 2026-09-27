@@ -103,8 +103,10 @@ export class Discover {
    * Where the public site lives — the checkout, and any link worth sharing.
    *
    * Read from a meta tag like the API base, so one build serves staging and
-   * production. Without one it is derived from the API host, which on this
-   * platform is the same host with an api. prefix.
+   * production; `npm run sync` stamps it from PUBLIC_URL
+   * (tools/stamp-mobile-api-base.cjs). Without one it is derived from the API
+   * host, which on this platform is the same host with an api. prefix — and
+   * the stamp refuses a store build whose API is shaped otherwise.
    */
   siteBase(): string {
     const meta = this.document.querySelector<HTMLMetaElement>('meta[name="site-base"]');

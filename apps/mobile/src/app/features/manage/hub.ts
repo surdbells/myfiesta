@@ -36,6 +36,7 @@ import {
 } from '../../ui';
 import { MfEventRow } from './event-row';
 import { MfVerifyEmail } from './verify-email';
+import { MfAcceptTerms } from './accept-terms';
 
 /**
  * The organizer's tab: everything they run, from the phone in their pocket.
@@ -50,7 +51,7 @@ import { MfVerifyEmail } from './verify-email';
  */
 @Component({
   selector: 'mf-manage-hub',
-  imports: [MfScreen, MfIconButton, MfButton, MfCard, MfEmpty, MfSkeleton, MfStat, MfSpark, MfList, MfRow, MfIcon, MfEventRow, MfVerifyEmail],
+  imports: [MfScreen, MfIconButton, MfButton, MfCard, MfEmpty, MfSkeleton, MfStat, MfSpark, MfList, MfRow, MfIcon, MfEventRow, MfVerifyEmail, MfAcceptTerms],
   template: `
     <mf-screen title="Manage" [subtitle]="session.organization()?.name ?? null" large refreshable [busy]="loading()" (refresh)="load()">
       @if (session.organizations().length > 1) {
@@ -62,6 +63,8 @@ import { MfVerifyEmail } from './verify-email';
 
       <!-- Until the address is proved: what waits for it, and another link. -->
       <mf-verify-email />
+      <!-- Until the account has accepted the terms in force: asked, never in the way. -->
+      <mf-accept-terms />
 
       @if (overview(); as o) {
         @if (o.attention.length > 0) {

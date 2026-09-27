@@ -63,15 +63,6 @@ for a web link to it.
 
 ## Not in the app yet
 
-**A promoter's ref through the app's checkout.** A promoter's link
-(`/{slug}?ref=…`) opens the site in the browser on both platforms, not the
-app's event screen, because the app's Buy button opens the site's ticket page
-and nothing carries the ref there. The ref is what credits the promoter, gives
-their discount and unlocks their presale tiers. To bring these links into the
-app, the event screen would pass the ref to `/{slug}/tickets?ref=…` and the
-site's ticket page would read it into the checkout; then take the `ref`
-exclusion out of `apple-app-site-association` and `core/deep-links.ts`.
-
 **The session on iOS is in backups.** The session token, the tickets held on
 the phone (with their codes) and an open door pass are kept through
 `@capacitor/preferences`, which on iOS is `UserDefaults`. iOS copies that into
@@ -190,7 +181,7 @@ Instagram or an email opens it in the app rather than the browser.
 | Site address | In the app | iOS | Android 12+ | Android 7–11 |
 | ------------ | ---------- | --- | ----------- | ------------ |
 | `/{slug}` | `/e/{slug}` | yes | yes | browser |
-| `/{slug}?ref=…` | nothing | browser | the app, which hands it to the browser | browser |
+| `/{slug}?ref=…` | `/e/{slug}?ref=…` | yes | yes | browser |
 | `/o/{slug}` | `/o/{slug}` | yes | yes | yes |
 | `/events` | Browse | yes | yes | yes |
 | `/privacy`, `/help`, `/terms`, `/refunds`, … | nothing | browser | the app, which hands it to the browser | browser |
@@ -215,20 +206,25 @@ The pieces, all of which must agree:
 - **The app** decides in `apps/mobile/src/app/core/deep-links.ts`, which knows
   the site's own pages. A link it has a screen for opens there; any other
   address on the site goes on to the system browser; a link to anywhere else
-  is ignored. It takes the site's host from the `site-base` meta tag, or from
-  the API address with its `api.` dropped — so an API that is not
-  `api.<site>` needs `site-base` stamped at packaging too, which nothing does
-  yet.
+  is ignored. It takes the site's host from the `site-base` meta tag, which
+  `npm run sync` stamps from `PUBLIC_URL` (`tools/stamp-mobile-api-base.cjs`);
+  without it, it guesses from the API address with its `api.` dropped, and
+  the stamp refuses an https API that is not `api.<site>` with no
+  `PUBLIC_URL` to say where the site is.
+- **A promoter's ref** rides through: `/{slug}?ref=…` opens `/e/{slug}?ref=…`,
+  whose Get tickets button opens the site's `/{slug}/tickets?ref=…`, and the
+  ticket page keeps the ref for the order as the site's event page does. It
+  is what credits the promoter, gives their discount and opens their presale
+  tiers.
 
 What the Android manifest cannot say:
 
 - An event slug is "one path segment", which only Android 12's advanced
   pattern can express; older phones open event links in the browser.
 - It cannot leave out the site's one-word pages (`/privacy`, `/help`,
-  `/refunds`) or a promoter's `?ref=` link, so on Android 12 and up those open
-  the app, which passes them straight to the browser with the query intact —
-  the ref reaches the checkout and the deletion link reaches the form. iOS
-  excludes them in `apple-app-site-association` and never opens the app.
+  `/refunds`), so on Android 12 and up those open the app, which passes them
+  straight to the browser — the deletion link reaches the form. iOS excludes
+  them in `apple-app-site-association` and never opens the app.
   Android 15's `uri-relative-filter-group` blocks do not help: they are tried
   only when no ordinary path in the filter matched, so they cannot take
   anything out of the one-word pattern, and moving every path into groups
@@ -238,7 +234,8 @@ What the Android manifest cannot say:
   none, the hand-off goes out as an ordinary link and Android sends it back
   to the app. The app opens a given page in the browser once in a few
   seconds, so that ends with the app open where it was rather than a loop.
-  Check with a promoter link and the `/privacy` link on the test track.
+  Check with the `/privacy` link on the test track, and that a promoter link
+  opens the event screen and its Get tickets page still shows `?ref=`.
 
 Also true: a door-pass link lives on the console's domain
 (`/door-pass/{secret}`), not the site's, so it opens the console in the
@@ -374,16 +371,20 @@ library.
 
 ## Building a release
 
-Everything starts from the repository root with the production API address:
+Everything starts from the repository root with the production API and site
+addresses:
 
 ```bash
 npm install
-API_BASE_URL=https://api.myfiesta.ca npm run sync --workspace mobile
+API_BASE_URL=https://api.myfiesta.ca PUBLIC_URL=https://myfiesta.ca npm run sync --workspace mobile
 ```
 
-`sync` builds the app, writes the API address and the version into the
-native projects, and copies the build in. Without `API_BASE_URL` it says so and
-the app talks to a developer's laptop.
+`sync` builds the app, writes the API and site addresses and the version into
+the native projects, and copies the build in. Without `API_BASE_URL` it says so
+and the app talks to a developer's laptop. Without `PUBLIC_URL` the app guesses
+the site from the API address by dropping `api.`, and the stamp refuses an
+https API that guess cannot work for; the site address is where links open,
+where the checkout is and what every shared link points at.
 
 **Android** (Android Studio, JDK 21):
 

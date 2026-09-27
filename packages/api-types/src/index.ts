@@ -282,6 +282,26 @@ export interface AccountErasureResult {
 }
 
 /**
+ * The signed-in account and the terms, the privacy policy and the refund
+ * policy: GET /api/auth/terms, and the answer to POST /api/auth/terms with
+ * `{ accept_terms: true }`, which a 422 refuses without the box ticked.
+ *
+ * For accounts nobody asked — made before sign-up asked, brought over from
+ * the previous platform — and for new words. Refused to a staff session and
+ * to a door pass: neither is anybody agreeing for themselves.
+ */
+export interface TermsStanding {
+  /** The version in force now. */
+  current: string;
+  /** Whether this account agreed to that version. An older one does not count. */
+  accepted: boolean;
+  /** What it last agreed to, or null when it never has. */
+  accepted_version: string | null;
+  /** ISO 8601. When it first agreed to `accepted_version`. */
+  accepted_at: string | null;
+}
+
+/**
  * The states an event can actually be in.
  *
  * review and scheduled were in the schema and unreachable by any code path.

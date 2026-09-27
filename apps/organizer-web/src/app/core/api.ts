@@ -69,6 +69,7 @@ import {
   Account,
   AccountErasurePreview,
   AccountErasureResult,
+  TermsStanding,
 } from './api.types';
 import { EmailVerification } from './email-verification';
 import { isEmailUnverified } from './errors';
@@ -314,6 +315,16 @@ export class Api {
    */
   resendVerification(): Observable<{ message: string; verified: boolean }> {
     return this.http.post<{ message: string; verified: boolean }>(`${this.base}/api/auth/email/verification`, {});
+  }
+
+  /** Whether this account has agreed to the terms in force now. */
+  terms(): Observable<TermsStanding> {
+    return this.http.get<TermsStanding>(`${this.base}/api/auth/terms`);
+  }
+
+  /** The box, ticked: kept on the account with the version and the moment. */
+  acceptTerms(): Observable<TermsStanding> {
+    return this.http.post<TermsStanding>(`${this.base}/api/auth/terms`, { accept_terms: true });
   }
 
   /** What deleting this account would do, and what would stop it. Changes nothing. */

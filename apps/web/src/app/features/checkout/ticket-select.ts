@@ -192,6 +192,14 @@ export class TicketSelect {
 
     this.store.loadFor(this.slug);
 
+    // A promoter's ref, kept for the order as the event page keeps it. A link
+    // can land here without passing the event page — the phone app sends
+    // buyers straight to /{slug}/tickets?ref=… — and the promoter is owed the
+    // sale all the same. Only when there is one: arriving from the event page,
+    // its ref is kept already and the link to here does not repeat it.
+    const ref = this.route.snapshot.queryParamMap.get('ref');
+    if (ref) this.store.ref.set(ref);
+
     // A presale link: /{slug}/tickets?access=CODE opens the tiers straight away.
     const shared = this.route.snapshot.queryParamMap.get('access');
     if (shared && shared.toUpperCase() !== this.store.access()?.code) {

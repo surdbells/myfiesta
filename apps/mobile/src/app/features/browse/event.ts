@@ -542,6 +542,17 @@ export class Event {
   /** From the route. */
   readonly slug = input.required<string>();
 
+  /**
+   * A promoter's ref, from `?ref=` on the link that opened this screen.
+   *
+   * It credits the promoter, gives their discount and opens their presale
+   * tiers, and none of that happens in here: the checkout is the site's. So
+   * it is only carried — to the ticket page when somebody buys, and through
+   * a sign-in that interrupts them — the way the site's own event page
+   * carries it to its checkout.
+   */
+  readonly ref = input<string | null | undefined>(null);
+
   readonly event = signal<EventPage | null>(null);
   readonly loading = signal(true);
   readonly failed = signal<string | null>(null);
@@ -658,7 +669,7 @@ export class Event {
 
     if (!this.session.signedIn()) {
       this.toasts.show('Sign in to keep this for later.');
-      await this.router.navigate(['/sign-in'], { queryParams: { next: `/e/${night.slug}` } });
+      await this.router.navigate(['/sign-in'], { queryParams: { next: this.here() } });
 
       return;
     }
@@ -688,7 +699,7 @@ export class Event {
 
     if (!this.session.signedIn()) {
       this.toasts.show('Sign in to follow this organizer.');
-      await this.router.navigate(['/sign-in'], { queryParams: { next: `/e/${this.slug()}` } });
+      await this.router.navigate(['/sign-in'], { queryParams: { next: this.here() } });
 
       return;
     }
@@ -713,13 +724,14 @@ export class Event {
    * Not an in-app WebView pretending to be the app: a payment page needs its
    * own address bar and the phone's saved cards, and putting it inside the app
    * is how a buyer cannot tell whether the page asking for a card is the real
-   * one.
+   * one. A promoter's ref goes with it, which the ticket page reads into the
+   * order exactly as the site's event page would have.
    */
   async buy(night: EventPage): Promise<void> {
     this.opening.set(true);
 
     try {
-      await Browser.open({ url: this.siteUrl(`/${night.slug}/tickets`), presentationStyle: 'popover' });
+      await Browser.open({ url: this.siteUrl(`/${night.slug}/tickets${this.refQuery()}`), presentationStyle: 'popover' });
     } catch {
       this.toasts.show('Could not open checkout. Try the website.', 'danger');
     } finally {
@@ -777,9 +789,22 @@ export class Event {
     }
   }
 
+  /** `?ref=…` when a promoter's link opened this screen, and nothing otherwise. */
+  private refQuery(): string {
+    const ref = this.ref()?.trim();
+
+    return ref ? `?ref=${encodeURIComponent(ref)}` : '';
+  }
+
+  /** This screen's own address, ref and all, for a sign-in to come back to. */
+  private here(): string {
+    return `/e/${this.slug()}${this.refQuery()}`;
+  }
+
   private siteUrl(path: string): string {
-    // The public site sits beside the API: api.myfiesta.ca -> myfiesta.ca in
-    // production, and the dev ports in development.
+    // Wherever the packaged site-base says, or beside the API when nothing
+    // was stamped: api.myfiesta.ca -> myfiesta.ca, and the dev ports in
+    // development.
     const base = this.discover.siteBase();
 
     return base + path;

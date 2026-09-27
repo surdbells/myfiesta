@@ -6,7 +6,15 @@ import { Discover, EventPage, TicketTypeCard } from '../../core/discovery';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
 
-vi.mock('@capacitor/browser', () => ({ Browser: { open: async () => undefined } }));
+const browser = vi.hoisted(() => ({ opened: [] as string[] }));
+
+vi.mock('@capacitor/browser', () => ({
+  Browser: {
+    open: async ({ url }: { url: string }) => {
+      browser.opened.push(url);
+    },
+  },
+}));
 vi.mock('@capacitor/share', () => ({ Share: { share: async () => undefined } }));
 
 const tier = (over: Partial<TicketTypeCard> = {}): TicketTypeCard => ({
@@ -105,10 +113,12 @@ describe('Event page', () => {
     });
   });
 
-  async function open(event: EventPage) {
+  async function open(event: EventPage, ref?: string) {
     showing = event;
     const fixture = TestBed.createComponent(Event);
     fixture.componentRef.setInput('slug', event.slug);
+    // As the router binds `?ref=` from the address, when there is one.
+    if (ref !== undefined) fixture.componentRef.setInput('ref', ref);
     fixture.autoDetectChanges();
     await fixture.whenStable();
     page = fixture.componentInstance;
@@ -234,6 +244,57 @@ describe('Event page', () => {
       // And comes back here afterwards rather than dropping them on a tickets
       // screen they did not ask for.
       expect(TestBed.inject(Router).url).toContain('/sign-in?next=%2Fe%2Fafro-fest');
+    });
+  });
+
+  /**
+   * A promoter's link opens this screen with `?ref=`, and the checkout is
+   * the site's. Dropping the ref on the way to the ticket page is a
+   * promoter not paid for the sale, a discount not given and a presale tier
+   * that stays shut — so it goes with the buyer, and through a sign-in.
+   */
+  describe("a promoter's ref", () => {
+    beforeEach(() => {
+      browser.opened = [];
+    });
+
+    it('goes with the buyer to the ticket page', async () => {
+      await open(night(), 'dj-kay');
+
+      await page.buy(showing);
+
+      expect(browser.opened).toEqual(['https://myfiesta.test/afro-fest/tickets?ref=dj-kay']);
+    });
+
+    it('is carried as a value, whatever it has in it', async () => {
+      await open(night(), 'a&b=c <x>');
+
+      await page.buy(showing);
+
+      const opened = new URL(browser.opened[0]);
+      expect(opened.pathname).toBe('/afro-fest/tickets');
+      expect(opened.searchParams.get('ref')).toBe('a&b=c <x>');
+      expect([...opened.searchParams.keys()]).toEqual(['ref']);
+    });
+
+    it('adds nothing when no promoter sent them', async () => {
+      await open(night());
+      await page.buy(showing);
+
+      await open(night(), '  ');
+      await page.buy(showing);
+
+      expect(browser.opened).toEqual(['https://myfiesta.test/afro-fest/tickets', 'https://myfiesta.test/afro-fest/tickets']);
+    });
+
+    it('survives a sign-in that interrupts them', async () => {
+      signedIn = false;
+      await open(night(), 'dj-kay');
+
+      await page.toggleSave();
+
+      const next = TestBed.inject(Router).parseUrl(TestBed.inject(Router).url).queryParams['next'];
+      expect(next).toBe('/e/afro-fest?ref=dj-kay');
     });
   });
 

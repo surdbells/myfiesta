@@ -51,15 +51,18 @@ const HANDED_ON_MS = 3000;
  * Where in the app a link to the public site belongs, or null when the app
  * has no screen for it.
  *
- * - `/{slug}` is an event, and opens `/e/{slug}`.
+ * - `/{slug}` is an event, and opens `/e/{slug}`. A promoter's link,
+ *   `/{slug}?ref=…`, opens `/e/{slug}?ref=…`: the ref is what credits the
+ *   sale, unlocks a presale tier and gives the promoter's discount, and the
+ *   event screen passes it on to the site's ticket page when somebody buys.
  * - `/o/{slug}` is an organizer, and opens the same address here.
  * - `/events`, the listing, opens Browse.
  *
  * Everything else is the site's: a buyer's tickets and orders (the address is
  * the credential, and the site is where a guest with no account sees them),
- * the checkout steps, the embeds, the help, privacy and refund pages, and a
- * promoter's link to an event. Those are null, and DeepLinks hands the ones on
- * the site's host to the browser rather than guessing.
+ * the checkout steps, the embeds, and the help, privacy and refund pages.
+ * Those are null, and DeepLinks hands the ones on the site's host to the
+ * browser rather than guessing.
  *
  * Only links on the site's own host count — with or without `www.` — because
  * the operating system hands the app whatever it was asked to, and a URL for
@@ -78,14 +81,11 @@ export function appRouteFor(link: string, siteBase: string): string | null {
   if (parts.length === 2 && parts[0] === 'o' && SLUG.test(parts[1])) return `/o/${parts[1]}`;
 
   if (parts.length === 1 && SLUG.test(parts[0]) && !SITE_PAGES.has(parts[0])) {
-    // A promoter's link stays the site's. Its ref is what credits the sale,
-    // unlocks a presale tier and gives the promoter's discount, and the site's
-    // event page is where the checkout picks it up; the app's event screen
-    // sends buyers to the ticket page, which does not read it. iOS leaves
-    // these links to the site for the same reason (apple-app-site-association).
-    if (url.searchParams.get('ref')) return null;
+    // The ref and nothing else: a tracking tag means nothing to the app, and
+    // a ref left behind here is a promoter who is not paid for the sale.
+    const ref = url.searchParams.get('ref');
 
-    return `/e/${parts[0]}`;
+    return ref ? `/e/${parts[0]}?ref=${encodeURIComponent(ref)}` : `/e/${parts[0]}`;
   }
 
   return null;
@@ -134,10 +134,9 @@ function bare(hostname: string): string {
  *
  * Some of the site's own pages arrive anyway. On Android 12 and up the app
  * claims every one-word address, because an event's is one word, and that
- * takes in /privacy, /help, /refunds and a promoter's /{slug}?ref= link too.
- * Those go on to the browser. Staying put would leave somebody who tapped the
- * account-deletion link in the Play listing, or a promoter's link in a chat,
- * looking at whatever screen the app was last on.
+ * takes in /privacy, /help and /refunds too. Those go on to the browser.
+ * Staying put would leave somebody who tapped the account-deletion link in
+ * the Play listing looking at whatever screen the app was last on.
  */
 @Injectable({ providedIn: 'root' })
 export class DeepLinks {

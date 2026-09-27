@@ -68,7 +68,7 @@ and `npm run check` holds the pieces to the same shape.
 | API | `.env` | `APP_URL`, `PUBLIC_URL`, `CONSOLE_URL`, `CORS_ALLOWED_ORIGINS` |
 | Site | environment, stamped into the page as it renders | `ALLOWED_HOSTS`, `API_BASE_URL`, `CONSOLE_URL`, `PUBLIC_URL` |
 | Console | environment, stamped into `index.html` at start-up | `API_BASE_URL`, `PUBLIC_URL` |
-| Phone app | stamped into the build before packaging | `API_BASE_URL` |
+| Phone app | stamped into the build before packaging | `API_BASE_URL`, `PUBLIC_URL` |
 
 Two of these fail silently if forgotten, so both now refuse instead. The
 console's entrypoint will not start without its addresses, and the site

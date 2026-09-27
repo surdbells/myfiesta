@@ -146,6 +146,53 @@ if (!/<meta name="api-base"/.test(mobileTemplate)) {
   problems.push('mobile api-base: nothing stamps it before cap sync, so a packaged app would ship pointing at localhost');
 }
 
+/*
+ * And where the public site is, by the same script: the checkout, every link
+ * the app shares, and which tapped links are its own. Left to the app, it
+ * guesses the site from the API by dropping "api.", which is right for one
+ * shape of address and localhost for every other.
+ */
+const mobileStamp = readFileSync(join(ROOT, 'tools/stamp-mobile-api-base.cjs'), 'utf8');
+
+if (!/<meta name="site-base"/.test(mobileTemplate)) {
+  problems.push('mobile site-base: the phone app has no such meta tag, so it cannot be told where the public site is');
+} else if (!/'site-base'/.test(mobileStamp) || !mobileStamp.includes(`address('PUBLIC_URL')`)) {
+  problems.push('mobile site-base: stamp-mobile-api-base.cjs does not fill it from PUBLIC_URL, so the app guesses the site from the API address');
+}
+
+/*
+ * And whatever address it is given has to come back out of the page as that
+ * address. The URL parser keeps a `"` in a host name and `$&` or `$'` in a
+ * path. Pasted into the tag as they stand, the first ends the attribute early
+ * and the others have replace() copy the tag itself, or the rest of the page,
+ * into it. So the real stamp is run over the template with exactly those.
+ */
+const { address, stamp } = require(join(ROOT, 'tools/stamp-mobile-api-base.cjs'));
+const AWKWARD = ['https://my"fiesta.ca', 'https://myfiesta.ca/$&', "https://myfiesta.ca/$'x", 'https://myfiesta.ca/a&amp;b'];
+
+for (const name of ['api-base', 'site-base']) {
+  const tag = new RegExp(`<meta name="${name}"[^>]*>`);
+  const filled = new RegExp(`<meta name="${name}" content="([^"]*)">`);
+
+  if (!tag.test(mobileTemplate)) continue;
+
+  for (const raw of AWKWARD) {
+    const value = address(name, raw);
+    const page = stamp(mobileTemplate, name, value, 'the address is');
+    const read = page
+      .match(filled)?.[1]
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+
+    if (read !== value || page.replace(filled, '') !== mobileTemplate.replace(tag, '')) {
+      problems.push(`mobile ${name}: stamping ${raw} does not read back as that address, or changes the page around the tag`);
+      break;
+    }
+  }
+}
+
 // Where its errors go, and which store build it is: written in the same way.
 const MOBILE_SENTRY = ['sentry-dsn', 'sentry-environment', 'sentry-release'];
 
@@ -173,5 +220,5 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `runtime config: ${STAMPED.length + CONSOLE_STAMPED.length + 1 + MOBILE_SENTRY.length} values stamped into a page and read back out, across the site, the console and the phone app`,
+  `runtime config: ${STAMPED.length + CONSOLE_STAMPED.length + 2 + MOBILE_SENTRY.length} values stamped into a page and read back out, across the site, the console and the phone app`,
 );

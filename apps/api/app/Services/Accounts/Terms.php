@@ -38,7 +38,8 @@ class Terms
      * An older version does not count. Changed words are what an account is
      * asked about again — once, at its next checkout that knows who is
      * buying. The public checkout does not today (CreateOrderRequest), so
-     * there everybody is asked, every time.
+     * there everybody is asked, every time. The console and the phone's
+     * organizer screens ask too, for somebody who never buys (TermsController).
      */
     public function acceptedBy(?User $user): bool
     {
