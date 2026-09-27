@@ -2,6 +2,7 @@
 
 namespace App\Filament\Support;
 
+use App\Filament\Resources\AuditLogs\AuditEntries;
 use App\Models\AuditLog;
 use Closure;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -80,9 +81,15 @@ final class AuditTrail
             ->where('subject_id', $record->getKey());
     }
 
+    /**
+     * "amount: ₦5,000 · currency: NGN · rail: interac".
+     *
+     * Amounts as money rather than the minor units they are recorded in, so
+     * a settlement on an organization's page reads as what was paid.
+     */
     private static function describe(array $metadata): string
     {
-        return collect($metadata)
+        return collect(AuditEntries::withMoneyWritten($metadata))
             ->reject(fn ($value, $key) => preg_match(self::NEVER_SHOWN, (string) $key) === 1)
             ->map(fn ($value, $key) => str_replace('_', ' ', (string) $key).': '.match (true) {
                 $value === null => '—',

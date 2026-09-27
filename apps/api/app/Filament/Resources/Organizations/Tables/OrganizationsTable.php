@@ -154,7 +154,9 @@ class OrganizationsTable
                  *
                  * Never a single figure. An organization running events in
                  * Toronto and Lagos has two balances, and adding CAD to NGN
-                 * would produce a number that means nothing.
+                 * would produce a number that means nothing. Each is written
+                 * as the organizer's console writes it — "$190.00", "₦5,000"
+                 * — so the figure read out on a call is the one on screen.
                  */
                 TextColumn::make('balances')
                     ->label('Owed')
@@ -167,7 +169,7 @@ class OrganizationsTable
 
                         return collect($balances)
                             ->reject(fn (Money $m) => $m->isZero())
-                            ->map(fn (Money $m) => $m->currency.' '.number_format($m->amount / 100, 2))
+                            ->map(fn (Money $m) => $m->format())
                             ->implode("\n") ?: '—';
                     })
                     ->badge()
@@ -280,19 +282,24 @@ class OrganizationsTable
 
                                 return collect($balances)
                                     ->mapWithKeys(fn (Money $m, string $code) => [
-                                        $code => $code.' — '.number_format($m->amount / 100, 2).' owed',
+                                        $code => $code.' — '.$m->format().' owed',
                                     ])
                                     ->all();
                             })
                             ->helperText('Balances are held separately per currency.'),
 
+                        // Typed in dollars or naira, as it left the bank; the
+                        // symbol appears once the currency is chosen.
                         TextInput::make('amount')
                             ->label('Amount paid')
                             ->required()
                             ->numeric()
                             ->minValue(0.01)
                             ->step('0.01')
-                            ->helperText('What actually left the account, in major units. Up to what is owed — to pay more, pay the organizer’s payout request.'),
+                            ->prefix(fn (Get $get) => Listing::prefix($get('currency')))
+                            ->helperText(fn (Get $get) => 'What actually left the account, in '
+                                .(filled($get('currency')) ? Listing::unitName($get('currency')) : 'dollars or naira')
+                                .'. Up to what is owed — to pay more, pay the organizer’s payout request.'),
 
                         Select::make('rail')
                             ->label('Paid via')

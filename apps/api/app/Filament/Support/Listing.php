@@ -130,6 +130,13 @@ final class Listing
             });
     }
 
+    /**
+     * An amount as the rest of the product writes it: "$1,250.00", "₦5,000".
+     *
+     * Money::format(), which the apps and the emails also use — an organizer
+     * on the phone reads their console's figure out loud, and support should
+     * be looking at the same string, not "CAD 1,250.00".
+     */
     public static function format(int $minorUnits, ?string $currency): string
     {
         $currency = strtoupper(trim((string) $currency));
@@ -139,5 +146,37 @@ final class Listing
         }
 
         return (new Money($minorUnits, $currency))->format();
+    }
+
+    /**
+     * "$", "₦" — the prefix on a field an amount is typed into, or none until
+     * the form knows the currency.
+     *
+     * The symbol the figure will be read back with, so the field and the
+     * balance above it name the currency the same way.
+     */
+    public static function prefix(?string $currency): ?string
+    {
+        $currency = strtoupper(trim((string) $currency));
+
+        return preg_match('/^[A-Z]{3}$/', $currency) ? trim(Money::symbol($currency)) : null;
+    }
+
+    /**
+     * "dollars", "naira" — what an amount field is typed in, for the words
+     * under it.
+     *
+     * Staff type what left the bank, which is dollars and cents or naira and
+     * kobo, never the minor units the ledger keeps.
+     */
+    public static function unitName(?string $currency): string
+    {
+        $currency = strtoupper(trim((string) $currency));
+
+        return match ($currency) {
+            'CAD' => 'dollars',
+            'NGN' => 'naira',
+            default => $currency !== '' ? $currency : 'the currency paid in',
+        };
     }
 }

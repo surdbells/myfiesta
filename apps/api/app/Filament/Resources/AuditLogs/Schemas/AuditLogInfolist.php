@@ -50,6 +50,13 @@ final class AuditLogInfolist
                 Section::make('Details')
                     ->description('The metadata as it was written. Anything named like a credential, a ticket code or an account number is not shown.')
                     ->schema([
+                        // The figures in it as money: amounts are recorded in
+                        // minor units, and "500000" beside "NGN" is ₦5,000.
+                        TextEntry::make('amounts')
+                            ->label('Amounts in it')
+                            ->state(fn (AuditLog $record): array => AuditEntries::amounts($record->metadata))
+                            ->listWithLineBreaks()
+                            ->visible(fn (AuditLog $record): bool => AuditEntries::amounts($record->metadata) !== []),
                         TextEntry::make('metadata')
                             ->hiddenLabel()
                             ->state(fn (AuditLog $record): string => AuditEntries::json($record->metadata))

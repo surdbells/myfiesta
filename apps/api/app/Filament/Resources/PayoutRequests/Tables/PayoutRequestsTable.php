@@ -203,12 +203,15 @@ class PayoutRequestsTable
                     ->minValue(0.01)
                     ->step('0.01')
                     ->live(onBlur: true)
+                    // The symbol the request above is written in, not its
+                    // code: "$" beside "Asked for $50.00", never "CAD".
+                    ->prefix(Listing::prefix($record->currency))
                     ->helperText(function (Get $get) use ($record) {
                         $paying = (int) round(((float) $get('amount')) * 100);
                         $owed = self::owed($record);
 
                         if ($paying <= $owed->amount) {
-                            return 'What actually left the account, in '.$record->currency.'.';
+                            return 'What actually left the account, in '.Listing::unitName($record->currency).'.';
                         }
 
                         $over = (new Money($paying - $owed->amount, $record->currency))->format();
