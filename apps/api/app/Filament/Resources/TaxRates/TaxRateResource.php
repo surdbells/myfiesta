@@ -15,6 +15,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Tax rates, administered per jurisdiction.
@@ -75,6 +77,26 @@ class TaxRateResource extends Resource
     public static function canDeleteAny(): bool
     {
         return false;
+    }
+
+    /**
+     * The same answers for the buttons as for the pages.
+     *
+     * Filament asks this, not the can* methods above, when it decides whether
+     * to show New, Edit or Delete — and with no policy for tax rates it would
+     * otherwise say yes to anybody on staff, and to deleting a rate at all.
+     */
+    public static function getAuthorizationResponse(string $action, ?Model $record = null): Response
+    {
+        $user = auth()->user();
+
+        $allowed = match ($action) {
+            'viewAny', 'view' => $user instanceof User && $user->isPlatformStaff(),
+            'create', 'update' => self::canBeManagedBy($user instanceof User ? $user : null),
+            default => false,
+        };
+
+        return $allowed ? Response::allow() : Response::deny();
     }
 
     public static function getPages(): array

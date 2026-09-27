@@ -55,6 +55,13 @@ class SeriesController extends Controller
             ], 422);
         }
 
+        // Each occurrence is a copy with no takedown on it (EventModeration).
+        if ($event->taken_down_at !== null) {
+            return response()->json([
+                'message' => 'myFiesta has taken this event off sale, so it cannot repeat until that is lifted.',
+            ], 422);
+        }
+
         $data = $request->validate([
             'frequency' => ['required', ValidationRule::in(['weekly', 'fortnightly', 'monthly'])],
             // Stops after this many, counting the one that already exists.

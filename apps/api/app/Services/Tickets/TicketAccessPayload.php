@@ -61,7 +61,10 @@ class TicketAccessPayload
                 ])
                 ->values(),
 
-            'tickets' => $order->tickets
+            // Only the tickets the buyer still holds. One handed to somebody
+            // else is theirs now, and after a reissue its new code must not
+            // reach this link (BuyersTickets).
+            'tickets' => BuyersTickets::of($order, $order->tickets)
                 // Refunded tickets are not shown. A QR that will be turned away
                 // at the door is worse than no QR, because the holder does not
                 // find out until they are at the front of the queue.

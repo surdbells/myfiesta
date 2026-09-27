@@ -64,7 +64,9 @@ class TicketController extends Controller
         }
 
         $recipient = DB::transaction(function () use ($ticket, $validated, $request) {
-            $recipient = User::firstOrCreate(
+            // Deactivated accounts included: one keeps its address, and a
+            // second row for it would break the unique index on email.
+            $recipient = User::withTrashed()->firstOrCreate(
                 ['email' => strtolower(trim($validated['email']))],
                 ['name' => $validated['name'], 'password' => null],
             );

@@ -3,12 +3,14 @@
 namespace App\Filament\Resources\PayoutRequests\Tables;
 
 use App\Enums\PlatformRole;
+use App\Filament\Support\Listing;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
 use App\Services\Payouts\PayoutRequestRefused;
 use App\Services\Payouts\PayoutRequests;
 use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -18,8 +20,11 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use WeakMap;
 
 /**
  * The payout request queue.
@@ -31,20 +36,35 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class PayoutRequestsTable
 {
+    public const STATUSES = [
+        'pending' => 'Waiting',
+        'paid' => 'Paid',
+        'rejected' => 'Rejected',
+        'cancelled' => 'Withdrawn',
+    ];
+
+    /** @var WeakMap<PayoutRequest, Money>|null */
+    private static ?WeakMap $owed = null;
+
+    /** @var WeakMap<PayoutRequest, array{detail: OrganizationPayoutDetail|null}>|null */
+    private static ?WeakMap $destinations = null;
+
     public static function configure(Table $table): Table
     {
-        return $table
+        return Listing::defaults($table, 'payout requests')
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['organization:id,name', 'requester:id,name,email', 'decider:id,name']))
+            ->searchPlaceholder('Organization, who asked, or their note')
             ->columns([
                 TextColumn::make('organization.name')
                     ->label('Organization')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->weight('medium'),
 
-                TextColumn::make('amount')
-                    ->label('Asked for')
-                    ->state(fn (PayoutRequest $record) => $record->money()->format())
-                    ->description(fn (PayoutRequest $record) => $record->note),
+                Listing::money('amount', 'Asked for')
+                    ->description(fn (PayoutRequest $record) => $record->note)
+                    ->searchable(['note'])
+                    ->summarize(Listing::totalsPerCurrency('amount')),
 
                 TextColumn::make('owed_now')
                     ->label('Owed now')
@@ -63,10 +83,19 @@ class PayoutRequestsTable
 
                 TextColumn::make('requester.name')
                     ->label('Asked by')
-                    ->description(fn (PayoutRequest $record) => $record->created_at?->diffForHumans()),
+                    ->searchable(['name', 'email'])
+                    ->description(fn (PayoutRequest $record) => $record->requester?->email)
+                    ->placeholder('A former member'),
+
+                TextColumn::make('created_at')
+                    ->label('Asked')
+                    ->since()
+                    ->dateTimeTooltip('j M Y, H:i')
+                    ->sortable(),
 
                 TextColumn::make('status')
                     ->badge()
+                    ->formatStateUsing(fn (string $state) => self::STATUSES[$state] ?? $state)
                     ->color(fn (string $state) => match ($state) {
                         'pending' => 'warning',
                         'paid' => 'success',
@@ -74,21 +103,44 @@ class PayoutRequestsTable
                         default => 'gray',
                     })
                     ->description(fn (PayoutRequest $record) => match ($record->status) {
-                        'paid' => (new Money((int) $record->paid_amount, $record->currency))->format().' by '.($record->decider?->name ?? 'staff'),
+                        'paid' => Listing::format((int) $record->paid_amount, $record->currency).' by '.($record->decider?->name ?? 'staff'),
                         'rejected' => $record->decision_note,
                         default => null,
-                    }),
+                    })
+                    ->sortable(),
+
+                TextColumn::make('decided_at')
+                    ->label('Decided')
+                    ->dateTime('j M Y, H:i')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')
-                    ->options([
-                        'pending' => 'Waiting',
-                        'paid' => 'Paid',
-                        'rejected' => 'Rejected',
-                        'cancelled' => 'Withdrawn',
-                    ])
+                    ->options(self::STATUSES)
                     ->default('pending'),
+
+                Listing::currency(),
+
+                SelectFilter::make('organization')
+                    ->relationship('organization', 'name', fn (Builder $query) => $query->withTrashed())
+                    ->searchable(),
+
+                // Whether there is a checked destination to send this to. The
+                // same match the pay form makes: this organization, this
+                // currency.
+                TernaryFilter::make('destination_verified')
+                    ->label('Payout details')
+                    ->trueLabel('Verified details on file')
+                    ->falseLabel('Unverified, or none')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereExists(self::verifiedDestination()),
+                        false: fn (Builder $query) => $query->whereNotExists(self::verifiedDestination()),
+                    ),
+
+                Listing::dateRange('asked', 'created_at', 'Asked'),
             ])
             ->recordActions([
                 self::pay(),
@@ -229,16 +281,43 @@ class PayoutRequestsTable
             });
     }
 
+    /**
+     * What the organization is owed in this currency, read once per row.
+     *
+     * Three columns and the pay form ask; each asking is a ledger sum. Kept
+     * against the row object, so a page is fresh when it is loaded again —
+     * after a payment the table reads its rows anew.
+     */
     private static function owed(PayoutRequest $record): Money
     {
-        return app(PayoutRequests::class)->available($record->organization, $record->currency);
+        self::$owed ??= new WeakMap;
+
+        return self::$owed[$record] ??= app(PayoutRequests::class)->available($record->organization, $record->currency);
     }
 
     private static function destination(PayoutRequest $record): ?OrganizationPayoutDetail
     {
-        return OrganizationPayoutDetail::query()
-            ->where('organization_id', $record->organization_id)
-            ->where('currency', $record->currency)
-            ->first();
+        self::$destinations ??= new WeakMap;
+
+        if (! isset(self::$destinations[$record])) {
+            self::$destinations[$record] = ['detail' => OrganizationPayoutDetail::query()
+                ->where('organization_id', $record->organization_id)
+                ->where('currency', $record->currency)
+                ->orderByRaw('verified_at is null')
+                ->first()];
+        }
+
+        return self::$destinations[$record]['detail'];
+    }
+
+    /** A verified destination for this request's organization and currency. */
+    private static function verifiedDestination(): Closure
+    {
+        return fn ($details) => $details
+            ->select(DB::raw(1))
+            ->from('organization_payout_details')
+            ->whereColumn('organization_payout_details.organization_id', 'payout_requests.organization_id')
+            ->whereColumn('organization_payout_details.currency', 'payout_requests.currency')
+            ->whereNotNull('organization_payout_details.verified_at');
     }
 }

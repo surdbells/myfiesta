@@ -47,9 +47,12 @@ class TicketIssuer
          * The ticket then belongs to nobody, is reachable by no link, and can
          * be transferred by nobody — which is exactly what a walk-up scanned
          * in on the spot is.
+         *
+         * withTrashed: an account staff deactivated keeps its address, and a
+         * second row for it would break the unique index on email.
          */
         $owner = $order->user ?? (filled($order->buyer_email)
-            ? User::firstOrCreate(
+            ? User::withTrashed()->firstOrCreate(
                 ['email' => $order->buyer_email],
                 ['name' => $order->buyer_name, 'password' => null],
             )
@@ -131,7 +134,8 @@ class TicketIssuer
         string $email,
         string $name,
     ): Ticket {
-        $owner = User::firstOrCreate(
+        // Deactivated accounts included, as in issueFor().
+        $owner = User::withTrashed()->firstOrCreate(
             ['email' => strtolower(trim($email))],
             ['name' => $name, 'password' => null],
         );

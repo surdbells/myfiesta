@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PayoutDetails\Tables;
 
+use App\Filament\Support\Listing;
 use App\Models\OrganizationPayoutDetail;
 use App\Services\Payouts\PayoutVerificationRefused;
 use App\Services\Payouts\PayoutVerifier;
@@ -12,6 +13,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,21 +27,36 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class PayoutDetailsTable
 {
+    public const RAILS = ['interac' => 'Interac e-Transfer', 'bank_transfer' => 'Bank transfer'];
+
     public static function configure(Table $table): Table
     {
-        return $table
+        return Listing::defaults($table, 'payout destinations')
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['organization:id,name', 'verifier:id,name']))
+            // Encrypted columns are not searchable, and would not be offered if
+            // they were: the organization is how anybody asks about these.
+            ->searchPlaceholder('Organization')
             ->columns([
                 TextColumn::make('organization.name')
                     ->label('Organization')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->weight('medium'),
 
                 TextColumn::make('destination')
                     ->label('Pays to')
                     ->state(fn (OrganizationPayoutDetail $record) => $record->maskedDestination()),
 
-                TextColumn::make('currency')->badge()->color('gray'),
+                TextColumn::make('rail')
+                    ->label('Rail')
+                    ->formatStateUsing(fn (string $state) => self::RAILS[$state] ?? $state)
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('currency')
+                    ->badge()
+                    ->color('gray')
+                    ->sortable(),
 
                 TextColumn::make('verified_at')
                     ->label('Status')
@@ -48,13 +65,22 @@ class PayoutDetailsTable
                     ->color(fn (string $state) => $state === 'Verified' ? 'success' : 'warning')
                     ->description(fn (OrganizationPayoutDetail $record) => $record->isVerified()
                         ? 'by '.($record->verifier?->name ?? 'a former staff member').', '.$record->verified_at->diffForHumans()
-                        : null),
+                        : null)
+                    ->sortable(),
+
+                TextColumn::make('verification_method')
+                    ->label('Confirmed by')
+                    ->formatStateUsing(fn (?string $state) => $state ? (OrganizationPayoutDetail::VERIFICATION_METHODS[$state] ?? $state) : null)
+                    ->placeholder('—')
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 // When the organizer last changed them. A destination edited
                 // yesterday, just before a large balance, is the one to look at.
                 TextColumn::make('updated_at')
                     ->label('Last changed')
                     ->since()
+                    ->dateTimeTooltip('j M Y, H:i')
                     ->sortable(),
             ])
             ->defaultSort('updated_at', 'desc')
@@ -70,6 +96,14 @@ class PayoutDetailsTable
                         blank: fn (Builder $query) => $query,
                     )
                     ->default(false),
+
+                Listing::currency(),
+
+                SelectFilter::make('rail')
+                    ->label('Rail')
+                    ->options(self::RAILS),
+
+                Listing::dateRange('changed', 'updated_at', 'Last changed'),
             ])
             ->recordActions([
                 self::verify(),

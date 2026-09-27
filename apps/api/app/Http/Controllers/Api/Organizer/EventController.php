@@ -302,6 +302,15 @@ class EventController extends Controller
         $this->authorize('view', $event);
         $this->authorize('create', [Event::class, $event->organization_id]);
 
+        // A copy would carry no takedown, and publish() only refuses the
+        // event that does: copying is the takedown undone in two calls.
+        if ($event->taken_down_at !== null) {
+            return response()->json([
+                'message' => 'myFiesta has taken this event off sale, so it cannot be copied until that is lifted. '
+                    .'Reply to the email we sent to have it looked at again.',
+            ], 422);
+        }
+
         $data = $request->validate([
             'starts_at' => ['nullable', 'date', 'after:now'],
             'title' => ['nullable', 'string', 'max:160'],
@@ -467,6 +476,15 @@ class EventController extends Controller
                 'message' => $from === EventStatus::Cancelled
                     ? 'A cancelled event cannot go back on sale. Copy it to a new date instead.'
                     : "An event that is {$from->label()} cannot become {$to->label()}.",
+            ], 422);
+        }
+
+        // Taken off sale by the platform (EventModeration). Only staff lift
+        // that; otherwise a takedown is undone by the next click.
+        if ($to === EventStatus::Published && $event->taken_down_at !== null) {
+            return response()->json([
+                'message' => 'myFiesta has taken this event off sale: '.$event->taken_down_reason
+                    .' Reply to the email we sent to have it looked at again.',
             ], 422);
         }
 

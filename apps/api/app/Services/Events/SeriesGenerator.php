@@ -81,6 +81,14 @@ class SeriesGenerator
      */
     public function generate(EventSeries $series, ?CarbonInterface $horizon = null): array
     {
+        // Nothing new is copied from an event the platform has taken off sale:
+        // a fresh occurrence carries no takedown and could simply be
+        // published. The window is left where it was, so the run after the
+        // takedown is lifted catches up.
+        if ($series->source?->taken_down_at !== null) {
+            return [];
+        }
+
         $horizon ??= CarbonImmutable::now()->addDays(self::HORIZON_DAYS);
 
         $slots = $this->slotsFor($series, $horizon);

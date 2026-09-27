@@ -8,6 +8,7 @@ use App\Models\ResaleListing;
 use App\Models\Ticket;
 use App\Services\Resale\Resale;
 use App\Services\Resale\ResaleRefused;
+use App\Services\Tickets\BuyersTickets;
 use App\Services\Tickets\TicketAccessPayload;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -95,7 +96,10 @@ class ResaleController extends Controller
             ->where('order_id', $order->id)
             ->first();
 
-        if ($ticket === null) {
+        // One handed to somebody else is theirs, not the link's: giving it
+        // back from here would void the new holder's ticket and repay the
+        // address it was moved away from (BuyersTickets).
+        if ($ticket === null || BuyersTickets::of($order, collect([$ticket]))->isEmpty()) {
             throw new NotFoundHttpException('That ticket is not on this order.');
         }
 
