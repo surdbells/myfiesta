@@ -474,17 +474,30 @@ class RefundService
      * balance stops counting money that went back. Not for an order that was
      * never a sale — a late payment with no room left — whose ledger never
      * held anything.
+     *
+     * The organizer is told, unless the caller says not to. Only the cutover
+     * does (legacy:reconcile --apply, through StripeRefundRecorder): the
+     * refunds it writes down went back before the switch, some of them months
+     * ago, and one email per refund on the morning of it would be hundreds of
+     * messages about nothing that just happened. Quiet means no email
+     * and no order.refunded to the organizer's integrations, which never heard
+     * of these orders as paid either. Everything else is the same, the audit
+     * entry included, and it says the organizer was not told.
      */
-    public function recordMadeElsewhere(Order $order, int $amount, ?string $processorReference = null): ?Refund
-    {
-        return DB::transaction(function () use ($order, $amount, $processorReference) {
+    public function recordMadeElsewhere(
+        Order $order,
+        int $amount,
+        ?string $processorReference = null,
+        bool $tellTheOrganizer = true,
+    ): ?Refund {
+        return DB::transaction(function () use ($order, $amount, $processorReference, $tellTheOrganizer) {
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
             $counted = Refund::query()
                 ->where('order_id', $locked->id)
                 ->whereIn('status', ['pending', 'succeeded'])
-                ->get(['amount', 'tax_amount', 'service_charge_amount']);
+                ->get(['amount', 'tax_amount', 'service_charge_amount', 'service_charge_tax_amount']);
 
             $left = $locked->total_amount - (int) $counted->sum('amount');
 
@@ -516,18 +529,22 @@ class RefundService
             // so an order refunded in pieces still nets to exactly zero. One
             // that leaves money on the order takes its proportion, rounded
             // down, and leaves the rounding to whichever refund comes last.
-            [$tax, $serviceCharge] = $whole
+            // The same for the part of the service charge that is tax.
+            [$tax, $serviceCharge, $chargeTax] = $whole
                 ? [
                     max(0, $locked->tax_amount - (int) $counted->sum('tax_amount')),
                     max(0, $locked->service_charge_amount - (int) $counted->sum('service_charge_amount')),
+                    max(0, $locked->service_charge_tax_amount - (int) $counted->sum('service_charge_tax_amount')),
                 ]
                 : [
                     intdiv($locked->tax_amount * $amount, $locked->total_amount),
                     intdiv($locked->service_charge_amount * $amount, $locked->total_amount),
+                    intdiv($locked->service_charge_tax_amount * $amount, $locked->total_amount),
                 ];
 
             $tax = min($tax, $amount);
             $serviceCharge = min($serviceCharge, $amount - $tax);
+            $chargeTax = min($chargeTax, $serviceCharge);
 
             $refund = Refund::create([
                 'order_id' => $locked->id,
@@ -539,6 +556,7 @@ class RefundService
                 'amount' => $amount,
                 'tax_amount' => $tax,
                 'service_charge_amount' => $serviceCharge,
+                'service_charge_tax_amount' => $chargeTax,
                 'gateway' => $locked->gateway,
                 'gateway_reference' => $processorReference,
                 'status' => 'pending',
@@ -555,7 +573,7 @@ class RefundService
             $outcome = AttemptOutcome::succeeded((string) $processorReference);
 
             $settled = $wasASale
-                ? $this->settle($locked, $refund, $outcome)
+                ? $this->settle($locked, $refund, $outcome, announce: $tellTheOrganizer)
                 : $this->settleUnfulfilled($locked, $refund, $outcome);
 
             $this->auditor->record('refund.made_elsewhere', $locked, metadata: [
@@ -566,13 +584,14 @@ class RefundService
                 'processor_reference' => $processorReference,
                 'whole_order' => $whole,
                 'tickets' => $tickets->count(),
+                'organizer_told' => $wasASale && $tellTheOrganizer,
             ]);
 
-            if ($wasASale) {
+            if ($wasASale && $tellTheOrganizer) {
                 // After commit, so an organizer is never told about a refund
                 // that then rolled back.
                 DB::afterCommit(fn () => $this->tellTheOrganizer($locked, $settled, $whole));
-            } else {
+            } elseif (! $wasASale) {
                 Log::warning('A payment that never became a sale was refunded at the processor, and is recorded.', [
                     'order' => $locked->reference,
                     'refund_id' => $settled->id,
@@ -711,6 +730,7 @@ class RefundService
                 'amount' => $share['amount'],
                 'tax_amount' => $share['tax'],
                 'service_charge_amount' => $share['service_charge'],
+                'service_charge_tax_amount' => $share['service_charge_tax'],
                 'gateway' => $locked->gateway,
                 'status' => 'pending',
                 'reason' => $reason,
@@ -765,6 +785,7 @@ class RefundService
                 'amount' => $locked->total_amount,
                 'tax_amount' => $locked->tax_amount,
                 'service_charge_amount' => $locked->service_charge_amount,
+                'service_charge_tax_amount' => $locked->service_charge_tax_amount,
                 'gateway' => $locked->gateway,
                 'status' => 'pending',
                 'reason' => $reason,
@@ -902,10 +923,14 @@ class RefundService
      * follow-up can all arrive for the same refund, and whichever is second
      * finds it no longer pending and leaves it alone — so tickets are voided
      * and the ledger written exactly once.
+     *
+     * $announce is false only for a refund recorded quietly at the cutover
+     * (recordMadeElsewhere): history, not news, for integrations as for the
+     * organizer's inbox.
      */
-    private function settle(Order $order, Refund $refund, AttemptOutcome $outcome): Refund
+    private function settle(Order $order, Refund $refund, AttemptOutcome $outcome, bool $announce = true): Refund
     {
-        return DB::transaction(function () use ($order, $refund, $outcome) {
+        return DB::transaction(function () use ($order, $refund, $outcome, $announce) {
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -969,16 +994,18 @@ class RefundService
 
             // Inside the transaction, so a refund that rolls back never
             // announces itself; the delivery itself goes after commit.
-            app(Webhooks::class)->emit($locked->organization_id, 'order.refunded', [
-                ...app(Payloads::class)->order($locked->fresh()),
-                'refund' => [
-                    'amount' => ['amount' => (int) $refund->amount, 'currency' => $locked->currency],
-                    'reason' => $refund->reason,
-                    // How many tickets this refund stopped working, which
-                    // is what an attendee list elsewhere has to take off.
-                    'tickets' => $refund->tickets()->count(),
-                ],
-            ]);
+            if ($announce) {
+                app(Webhooks::class)->emit($locked->organization_id, 'order.refunded', [
+                    ...app(Payloads::class)->order($locked->fresh()),
+                    'refund' => [
+                        'amount' => ['amount' => (int) $refund->amount, 'currency' => $locked->currency],
+                        'reason' => $refund->reason,
+                        // How many tickets this refund stopped working, which
+                        // is what an attendee list elsewhere has to take off.
+                        'tickets' => $refund->tickets()->count(),
+                    ],
+                ]);
+            }
 
             return $refund->refresh();
         });
@@ -1118,7 +1145,7 @@ class RefundService
      * parts belonging to its own. Splitting only the refunded tickets would
      * lose the rounding to whoever is refunded last.
      *
-     * @return array{amount: int, tax: int, service_charge: int}
+     * @return array{amount: int, tax: int, service_charge: int, service_charge_tax: int}
      */
     private function shareFor(Order $order, Collection $tickets): array
     {
@@ -1168,10 +1195,19 @@ class RefundService
             return array_sum(array_map(fn (int $i) => $parts[$i], $positions));
         };
 
+        // The service charge in its two parts, the tax inside it and the rest,
+        // each split on its own. Splitting the whole and the tax separately
+        // could hand one ticket more of the tax than of the charge it sits in
+        // — largest remainder is not monotone — and this way each part still
+        // comes back to exactly the order's over a full refund. With no tax
+        // on the charge it is the same split as the whole.
+        $chargeTax = $take((int) $order->service_charge_tax_amount);
+
         return [
             'amount' => $take($order->total_amount),
             'tax' => $take($order->tax_amount),
-            'service_charge' => $take($order->service_charge_amount),
+            'service_charge' => $take($order->service_charge_amount - (int) $order->service_charge_tax_amount) + $chargeTax,
+            'service_charge_tax' => $chargeTax,
         ];
     }
 

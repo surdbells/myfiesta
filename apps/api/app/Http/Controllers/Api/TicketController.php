@@ -23,12 +23,17 @@ class TicketController extends Controller
             // tickets.status and Postgres will not guess which was meant.
             ->where('tickets.owner_user_id', $request->user()->id)
             ->whereIn('tickets.status', ['valid', 'checked_in'])
-            ->with(['event', 'ticketType'])
+            // The order too, for the receipt on tickets this account bought.
+            ->with(['event', 'ticketType', 'order'])
             // Soonest first: the one you need next is the one you want on
             // screen when you open the app at a door.
             ->join('events', 'events.id', '=', 'tickets.event_id')
             ->orderBy('events.starts_at')
             ->select('tickets.*')
+            // After the select, which would otherwise drop it: whether each
+            // ticket was ever handed on, which the receipt asks of a ticket
+            // from an order placed without an account.
+            ->withExists('transfers')
             ->paginate(50);
 
         return TicketResource::collection($tickets);

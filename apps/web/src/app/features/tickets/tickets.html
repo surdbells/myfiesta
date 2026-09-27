@@ -165,6 +165,10 @@
       </section>
     }
 
+    @if (o.receipt) {
+      <app-receipt [receipt]="o.receipt" [timezone]="o.event.timezone" />
+    }
+
     <dl class="summary m-0 mt-8 flex justify-center gap-3 text-sm text-text-muted">
       <dt class="m-0">Order</dt>
       <dd class="m-0"><code class="select-all tracking-[0.06em]">{{ o.reference }}</code></dd>

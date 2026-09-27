@@ -1,7 +1,8 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import type { DoorList, OfflineScan, ScanResult, SyncResult } from '@myfiesta/door';
+import type { Account, AccountErasurePreview, AccountErasureResult, Receipt, SignUp } from '@myfiesta/api-types';
 import type { Money } from './money';
 
 /** A refusal with a sentence worth showing, and the status it came with. */
@@ -11,6 +12,8 @@ export class ApiError extends Error {
     readonly status: number,
     /** A 422's complaints, by field, so a form can put each under its own box. */
     readonly fields?: Record<string, string[]>,
+    /** What kind of refusal, when the server names one — `email_unverified`, say. */
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -23,6 +26,12 @@ export interface Ticket {
   type: string | null;
   holder_name: string | null;
   event: { slug: string; title: string; starts_at: string; timezone: string; city: string };
+  /**
+   * What was paid for the order it came from, only on a ticket this account
+   * bought. Null on one somebody passed on, and absent from a list saved
+   * before receipts were sent.
+   */
+  receipt?: Receipt | null;
 }
 
 /*
@@ -123,6 +132,13 @@ export class Api {
 
   readonly base = this.resolveBase();
 
+  /**
+   * The last "confirm your email address first" the server answered, as it
+   * worded it. A new object each time, so the same sentence twice is still
+   * two refusals to answer.
+   */
+  readonly unverified = signal<{ message: string } | null>(null);
+
   private resolveBase(): string {
     const meta = this.document.querySelector<HTMLMetaElement>('meta[name="api-base"]');
 
@@ -173,7 +189,14 @@ export class Api {
     const body = text === '' ? {} : (JSON.parse(text) as Record<string, unknown>);
 
     if (!response.ok) {
-      throw new ApiError(this.messageFor(response.status, body), response.status, body['errors'] as Record<string, string[]> | undefined);
+      const code = typeof body['code'] === 'string' ? body['code'] : undefined;
+      const error = new ApiError(this.messageFor(response.status, body), response.status, body['errors'] as Record<string, string[]> | undefined, code);
+
+      // Said once, here, for whichever screen met it: the prompt that offers
+      // to send the link again is the shell's (EmailVerification).
+      if (response.status === 403 && code === 'email_unverified') this.unverified.set({ message: error.message });
+
+      throw error;
     }
 
     return body as T;
@@ -336,19 +359,24 @@ export class Api {
    * console, where there is a screen wide enough to build one; this is for
    * somebody who bought as a guest and wants their tickets to follow them.
    */
-  /** With an organization name, an organizer account and its events page; without one, an attendee. */
-  register(name: string, email: string, password: string, organization: string | null = null): Promise<Record<string, unknown>> {
-    return this.send('POST', '/api/auth/register', {
-      body: {
-        name,
-        email,
-        password,
-        password_confirmation: password,
-        ...(organization ? { organization } : { attendee: true }),
-        device: 'mobile',
-      },
-      anonymous: true,
-    });
+  /**
+   * With an organization name, an organizer account and its events page; without one, an attendee.
+   *
+   * `acceptTerms` is the box on the screen, as it was left: the server refuses
+   * a sign-up without it, and is the one that decides.
+   */
+  register(name: string, email: string, password: string, organization: string | null, acceptTerms: boolean): Promise<Record<string, unknown>> {
+    const body: SignUp = {
+      name,
+      email,
+      password,
+      password_confirmation: password,
+      ...(organization ? { organization } : { attendee: true }),
+      device: 'mobile',
+      accept_terms: acceptTerms,
+    };
+
+    return this.send('POST', '/api/auth/register', { body, anonymous: true });
   }
 
   /**
@@ -379,16 +407,34 @@ export class Api {
   /**
    * Who is signed in, and the organizations they belong to — with what they
    * may do in each, as the server resolves it rather than as the phone guesses.
-   * Also the phone number, so the details form opens showing the one on file.
+   * Also the phone number, so the details form opens showing the one on file,
+   * and whether the address is proved, which Manage says before a publish is
+   * refused for it.
    */
-  me(): Promise<{
-    name: string;
-    email: string;
-    phone: string | null;
-    timezone: string | null;
-    organizations: { id: string; name: string; role: string; permissions: string[] }[];
-  }> {
+  me(): Promise<Account> {
     return this.send('GET', '/api/auth/me');
+  }
+
+  /**
+   * A fresh link to prove the address the account already has: 202 when one
+   * went, 200 with `verified` when there was nothing to prove, and a 429 whose
+   * sentence says how long to wait.
+   */
+  resendVerification(): Promise<{ message: string; verified: boolean }> {
+    return this.send('POST', '/api/auth/email/verification', { body: {} });
+  }
+
+  /** What deleting this account would do, and what would stop it. Changes nothing. */
+  erasurePreview(): Promise<AccountErasurePreview> {
+    return this.send('GET', '/api/auth/erasure');
+  }
+
+  /**
+   * Delete this account: the privacy page's erasure, on the password. A 409
+   * is the only owner of an organization being told nothing happened.
+   */
+  eraseAccount(current: string): Promise<AccountErasureResult> {
+    return this.send('POST', '/api/auth/erasure', { body: { current_password: current } });
   }
 
   /**

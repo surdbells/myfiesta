@@ -76,7 +76,7 @@ class EventInfolist
                     TextEntry::make('fig_service')
                         ->label('Service charges')
                         ->state(fn (Event $record) => EventFigures::for($record)['service'])
-                        ->helperText('The platform\'s, paid by buyers'),
+                        ->helperText('The platform\'s, paid by buyers, less any tax in them'),
                     TextEntry::make('fig_comps')
                         ->label('Comps and guest list')
                         ->state(fn (Event $record) => number_format(EventFigures::for($record)['comps'])),

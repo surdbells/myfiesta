@@ -6,6 +6,7 @@ import { Api } from '../../core/api';
 import { Seo } from '../../core/seo';
 import { TicketAccess } from '../../core/api.types';
 import { AddToCalendar } from '../../shared/add-to-calendar';
+import { ReceiptSection } from './receipt';
 
 /**
  * The tickets somebody bought, and the QR a door reads.
@@ -20,7 +21,7 @@ import { AddToCalendar } from '../../shared/add-to-calendar';
  */
 @Component({
   selector: 'app-tickets',
-  imports: [RouterLink, AddToCalendar],
+  imports: [RouterLink, AddToCalendar, ReceiptSection],
   templateUrl: './tickets.html',
 })
 export class Tickets {

@@ -306,6 +306,63 @@ export interface TicketAccess {
    * evidence its buyer holds of it.
    */
   extras: { name: string; quantity: number }[];
+  /** What was paid, to whom, and each tax on it — the same receipt the email carries. */
+  receipt: Receipt;
+}
+
+/**
+ * One tax on an order, with its own rate.
+ *
+ * Quebec with QST collected has GST and QST side by side; a taxed service
+ * charge has its own lines, marked `on: 'service_charge'`.
+ */
+export interface ReceiptTax {
+  /** GST, HST, QST, VAT. */
+  name: string;
+  /** A percentage as written: "5", "9.975", "13", "7.5". */
+  rate: string;
+  on: 'tickets' | 'service_charge';
+  /** Inside the price it was charged on (Nigeria), rather than added to it. */
+  included: boolean;
+  amount: Money;
+}
+
+/** Somebody named on a receipt, with the numbers their taxes are filed under. */
+export interface ReceiptParty {
+  name: string | null;
+  address: string | null;
+  registrations: { label: string; number: string }[];
+}
+
+/**
+ * What an order says about itself as a receipt.
+ *
+ * Read from the order's own copy of how it was priced, so it says what was
+ * charged at the time, whatever the settings say now. Never carries a ticket
+ * code. Adds up: subtotal, less discount, plus every tax not `included`, plus
+ * the service charge, is the total.
+ */
+export interface Receipt {
+  reference: string;
+  issued_at: string;
+  currency: Money['currency'];
+  seller_of_record: 'organizer' | 'platform';
+  /** Who sold the tickets. */
+  seller: ReceiptParty;
+  /** Who sold the booking service — the service charge — where that is not the seller. */
+  service: ReceiptParty | null;
+  /** The organizer, named where the platform was the seller. */
+  organizer: string | null;
+  lines: { name: string; quantity: number; unit_price: Money; discount: Money; amount: Money }[];
+  subtotal: Money;
+  discount: Money;
+  taxes: ReceiptTax[];
+  /** Before any tax added to it; with its tax inside where prices include tax. */
+  service_charge: Money;
+  total: Money;
+  tax_included: boolean;
+  /** Money given back since, if any. */
+  refunded: Money;
 }
 
 /** Everything the front page needs, in one response. */

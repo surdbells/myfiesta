@@ -50,6 +50,24 @@ abstract class Metrics
 
     protected const SOLD_AT = 'coalesce(orders.paid_at, orders.created_at)';
 
+    /*
+     * The platform's part of a service charge, and all the tax on a sale.
+     *
+     * A service charge can carry tax inside it (service_charge_tax_amount):
+     * HST added to it in Ontario, VAT inside it in Lagos, and always where the
+     * platform is the seller of record. That part is owed to a tax authority
+     * and was never the platform's to keep, so it is counted as tax, beside
+     * the tax on the tickets, and not as platform revenue. Each refund records
+     * its own share of it, so what was handed back is split the same way.
+     */
+    protected const ORDER_SERVICE = '(orders.service_charge_amount - orders.service_charge_tax_amount)';
+
+    protected const ORDER_TAX = '(orders.tax_amount + orders.service_charge_tax_amount)';
+
+    protected const REFUND_SERVICE = '(refunds.service_charge_amount - refunds.service_charge_tax_amount)';
+
+    protected const REFUND_TAX = '(refunds.tax_amount + refunds.service_charge_tax_amount)';
+
     /**
      * @param  list<scalar|null>  $parts
      */
@@ -102,7 +120,9 @@ abstract class Metrics
      * Net platform take is what the platform keeps of its service charge:
      * less what the processors took, less the service charge handed back
      * with refunds. Gateway fees are only known once a payment settles, so
-     * orders still waiting on theirs are counted rather than guessed.
+     * orders still waiting on theirs are counted rather than guessed. The
+     * service charge here is the platform's part, without any tax in it,
+     * and that tax is in the tax figure instead (ORDER_SERVICE, ORDER_TAX).
      *
      * @param  array{organization_id?: string, event_id?: string}  $scope
      * @return array<string, int|float|null>
@@ -113,9 +133,9 @@ abstract class Metrics
             ->selectRaw('count(*) as orders')
             ->selectRaw('coalesce(sum(orders.total_amount), 0) as gross')
             ->selectRaw('coalesce(sum(orders.net_revenue_amount), 0) as net')
-            ->selectRaw('coalesce(sum(orders.tax_amount), 0) as tax')
+            ->selectRaw('coalesce(sum('.self::ORDER_TAX.'), 0) as tax')
             ->selectRaw('coalesce(sum(orders.discount_amount), 0) as discount')
-            ->selectRaw('coalesce(sum(orders.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::ORDER_SERVICE.'), 0) as service')
             ->selectRaw('coalesce(sum(orders.gateway_fee_amount), 0) as fees')
             ->selectRaw('count(*) filter (where orders.gateway is not null and orders.gateway_fee_amount is null) as fees_pending')
             ->selectRaw("count(*) filter (where orders.channel = 'door') as door_orders")
@@ -132,7 +152,7 @@ abstract class Metrics
         $refunds = $this->refunds($currency, $period, $scope)
             ->selectRaw('count(*) as refunds')
             ->selectRaw('coalesce(sum(refunds.amount), 0) as amount')
-            ->selectRaw('coalesce(sum(refunds.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::REFUND_SERVICE.'), 0) as service')
             ->first();
 
         $gross = (int) $orders->gross;
@@ -182,7 +202,7 @@ abstract class Metrics
             ->selectRaw('count(*) as orders')
             ->selectRaw('coalesce(sum(orders.total_amount), 0) as gross')
             ->selectRaw('coalesce(sum(orders.net_revenue_amount), 0) as net')
-            ->selectRaw('coalesce(sum(orders.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::ORDER_SERVICE.'), 0) as service')
             ->selectRaw('coalesce(sum(orders.gateway_fee_amount), 0) as fees')
             ->groupByRaw('1')
             ->get()
@@ -201,7 +221,7 @@ abstract class Metrics
         $refunds = $this->refunds($currency, $period, $scope)
             ->selectRaw("to_char({$refundBucket}, 'YYYY-MM-DD') as bucket", [$period->timezone])
             ->selectRaw('coalesce(sum(refunds.amount), 0) as amount')
-            ->selectRaw('coalesce(sum(refunds.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::REFUND_SERVICE.'), 0) as service')
             ->groupByRaw('1')
             ->get()
             ->keyBy('bucket');
@@ -250,16 +270,16 @@ abstract class Metrics
         $orders = (clone $sold)
             ->selectRaw('coalesce(sum(orders.total_amount), 0) as gross')
             ->selectRaw('coalesce(sum(orders.net_revenue_amount), 0) as net')
-            ->selectRaw('coalesce(sum(orders.tax_amount), 0) as tax')
-            ->selectRaw('coalesce(sum(orders.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::ORDER_TAX.'), 0) as tax')
+            ->selectRaw('coalesce(sum('.self::ORDER_SERVICE.'), 0) as service')
             ->first();
 
         $returned = DB::table('refunds')
             ->where('refunds.status', 'succeeded')
             ->whereIn('refunds.order_id', (clone $sold)->select('orders.id'))
             ->selectRaw('coalesce(sum(refunds.amount), 0) as amount')
-            ->selectRaw('coalesce(sum(refunds.tax_amount), 0) as tax')
-            ->selectRaw('coalesce(sum(refunds.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::REFUND_TAX.'), 0) as tax')
+            ->selectRaw('coalesce(sum('.self::REFUND_SERVICE.'), 0) as service')
             ->first();
 
         $refundedNet = (int) $returned->amount - (int) $returned->tax - (int) $returned->service;
@@ -291,8 +311,8 @@ abstract class Metrics
         $orders = $this->sold($currency, $period, $scope)
             ->selectRaw("{$bucket} as bucket", [$period->timezone])
             ->selectRaw('coalesce(sum(orders.net_revenue_amount), 0) as net')
-            ->selectRaw('coalesce(sum(orders.tax_amount), 0) as tax')
-            ->selectRaw('coalesce(sum(orders.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::ORDER_TAX.'), 0) as tax')
+            ->selectRaw('coalesce(sum('.self::ORDER_SERVICE.'), 0) as service')
             ->groupByRaw('1')
             ->get()
             ->keyBy('bucket');
@@ -302,8 +322,8 @@ abstract class Metrics
             ->where('refunds.status', 'succeeded')
             ->selectRaw("{$bucket} as bucket", [$period->timezone])
             ->selectRaw('coalesce(sum(refunds.amount), 0) as amount')
-            ->selectRaw('coalesce(sum(refunds.tax_amount), 0) as tax')
-            ->selectRaw('coalesce(sum(refunds.service_charge_amount), 0) as service')
+            ->selectRaw('coalesce(sum('.self::REFUND_TAX.'), 0) as tax')
+            ->selectRaw('coalesce(sum('.self::REFUND_SERVICE.'), 0) as service')
             ->groupByRaw('1')
             ->get()
             ->keyBy('bucket');

@@ -8,6 +8,8 @@ use App\Models\Code;
 use App\Models\Event;
 use App\Models\TaxRate;
 use App\Models\TicketType;
+use App\Services\Settings\PlatformSettings;
+use App\Services\Settings\SellerOfRecord;
 use App\Support\Allocation;
 use App\Support\Money;
 
@@ -22,17 +24,20 @@ use App\Support\Money;
  */
 class Pricer
 {
+    public function __construct(private readonly PlatformSettings $settings) {}
+
     /**
-     * The service charge, in basis points.
+     * The service charge, in basis points, for a sale in this currency.
      *
-     * Read from configuration rather than fixed as a constant here. The
-     * constant this replaces said 10% while `payments.commission_bps` also
-     * said 10% and was read by nothing — two declarations of one rate, one of
-     * them dead, which is how a rate drifts from the one the business charges.
+     * Staff set it per currency in the admin; until they do, it is
+     * `payments.service_charge_bps`. Never a constant here. The constant this
+     * replaced said 10% while `payments.commission_bps` also said 10% and was
+     * read by nothing — two declarations of one rate, one of them dead, which
+     * is how a rate drifts from the one the business charges.
      */
-    private function serviceChargeBps(): int
+    private function serviceChargeBps(string $currency): int
     {
-        return (int) config('payments.service_charge_bps', 800);
+        return $this->settings->serviceChargeBps($currency);
     }
 
     /**
@@ -88,7 +93,10 @@ class Pricer
         $afterDiscount = $subtotal->minus($discount);
 
         $taxRate = TaxRate::resolve($event->country, $event->subdivision);
-        $tax = $this->taxFor($taxRate, $afterDiscount);
+        $qstPpm = $this->qstFor($event, $taxRate);
+
+        $ticketTaxes = $this->ticketTaxes($taxRate, $qstPpm, $afterDiscount);
+        $tax = TaxLine::sum($ticketTaxes, $currency);
 
         // Where the tax sits relative to the price changes what the organizer
         // actually earned, and getting it backwards double-charges.
@@ -122,11 +130,30 @@ class Pricer
          * would mean invoicing an organizer for cash we cannot see, which is
          * a worse business than not charging.
          */
-        $serviceCharge = $channel === 'door'
-            ? Money::zero($currency)
-            : $netRevenue->percentage($this->serviceChargeBps());
+        $serviceChargeBps = $channel === 'door' ? 0 : $this->serviceChargeBps($currency);
+        $charge = $netRevenue->percentage($serviceChargeBps);
+
+        /*
+         * Tax on the service charge, when it is taxed, at the event's own
+         * rate: HST in Ontario, GST — and QST, when collected — in Quebec,
+         * VAT in Nigeria.
+         *
+         * Where prices include tax, the service charge does too: the buyer in
+         * Lagos is charged the same figure either way, and the VAT is the part
+         * of it that is not the platform's. Where tax is added, it is added.
+         * Either way it stays inside the service charge and out of `tax` — see
+         * Quote for why that matters to the organizer's ledger.
+         */
+        $chargeTaxes = $charge->amount > 0 && $this->settings->serviceChargeTaxed()
+            ? $this->serviceChargeTaxes($taxRate, $qstPpm, $charge)
+            : [];
+        $chargeTax = TaxLine::sum($chargeTaxes, $currency);
+
+        $serviceCharge = $taxRate?->inclusive ? $charge : $charge->plus($chargeTax);
 
         $total = $ticketSide->plus($serviceCharge);
+
+        $seller = $this->settings->sellerOfRecord();
 
         return new Quote(
             event: $event,
@@ -145,7 +172,102 @@ class Pricer
             accessCode: $accessCode !== null && array_filter($lines, fn (QuoteLine $l) => $l->isTicket() && $l->ticketType->isLocked()) !== []
                 ? $accessCode
                 : null,
+            serviceChargeTax: $chargeTax,
+            taxLines: [...$ticketTaxes, ...$chargeTaxes],
+            sellerOfRecord: $seller,
+            snapshot: $this->snapshot($event, $seller, $serviceChargeBps, $qstPpm, $chargeTaxes !== []),
         );
+    }
+
+    /**
+     * Quebec Sales Tax, in millionths, when this sale owes it.
+     *
+     * An event in Quebec, while the platform collects QST. Charged beside
+     * GST, on the same price before either — QST has not been charged on top
+     * of GST since 2013. Not where a rate is already inside the price: QST is
+     * added at checkout, and a total that both contains one tax and adds
+     * another would not reconcile with the order it becomes.
+     */
+    private function qstFor(Event $event, ?TaxRate $rate): ?int
+    {
+        if ($event->country !== 'CA' || strtoupper((string) $event->subdivision) !== 'QC' || $rate?->inclusive) {
+            return null;
+        }
+
+        return $this->settings->qstPpm();
+    }
+
+    /**
+     * Each tax on the tickets and extras: the jurisdiction's rate, then QST.
+     *
+     * @return list<TaxLine>
+     */
+    private function ticketTaxes(?TaxRate $rate, ?int $qstPpm, Money $taxable): array
+    {
+        return $this->taxesOn(TaxLine::ON_TICKETS, $rate, $qstPpm, $taxable);
+    }
+
+    /** @return list<TaxLine> */
+    private function serviceChargeTaxes(?TaxRate $rate, ?int $qstPpm, Money $charge): array
+    {
+        return $this->taxesOn(TaxLine::ON_SERVICE_CHARGE, $rate, $qstPpm, $charge);
+    }
+
+    /**
+     * The taxes on one amount.
+     *
+     * No rate for the jurisdiction means none is charged. Inventing one would
+     * be worse than charging nothing.
+     *
+     * @return list<TaxLine>
+     */
+    private function taxesOn(string $on, ?TaxRate $rate, ?int $qstPpm, Money $base): array
+    {
+        $lines = [];
+
+        if ($rate !== null) {
+            $lines[] = TaxLine::charge($rate->name, $rate->rate_bps * 100, $on, $base, (bool) $rate->inclusive, $rate->id);
+        }
+
+        if ($qstPpm !== null && $qstPpm > 0) {
+            $lines[] = TaxLine::charge('QST', $qstPpm, $on, $base, false);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * What a receipt for this sale needs to say, as things stand now.
+     *
+     * Kept on the order so it never has to be worked out again from settings
+     * that may have moved on: who sold it, under which numbers, and what the
+     * rates and switches were.
+     *
+     * The platform's registration numbers are printed where the platform
+     * charged a tax: on everything where it is the seller, and on the tax on
+     * its service charge where the organizer is. The organizer's own numbers
+     * are not held anywhere, so none are printed against the ticket's tax.
+     *
+     * @return array<string, mixed>
+     */
+    private function snapshot(Event $event, SellerOfRecord $seller, int $serviceChargeBps, ?int $qstPpm, bool $chargeTaxed): array
+    {
+        $platformCharged = $seller === SellerOfRecord::Platform || $chargeTaxed;
+
+        return [
+            'seller_of_record' => $seller->value,
+            'service_charge_bps' => $serviceChargeBps,
+            'service_charge_taxed' => $chargeTaxed,
+            'qst_ppm' => $qstPpm,
+            'organizer' => ['name' => $event->organization?->name],
+            'platform' => [
+                'name' => $this->settings->legalName() ?? config('app.name'),
+                'address' => $this->settings->address($event->country),
+                'registrations' => $platformCharged
+                    ? $this->settings->registrations($event->country, $event->subdivision)
+                    : [],
+            ],
+        ];
     }
 
     /**
@@ -444,27 +566,5 @@ class Pricer
         }
 
         return implode(', ', array_slice($names, 0, -1)).' or '.end($names);
-    }
-
-    private function taxFor(?TaxRate $rate, Money $taxable): Money
-    {
-        if ($rate === null) {
-            // No rate for the jurisdiction means none is charged. Inventing one
-            // would be worse than charging nothing.
-            return Money::zero($taxable->currency);
-        }
-
-        if ($rate->inclusive) {
-            // The displayed price already contains the tax, so it is extracted
-            // rather than added: at 7.5%, the tax inside 1075 is 75, not 80.
-            $divisor = 10000 + $rate->rate_bps;
-
-            return new Money(
-                (int) round($taxable->amount * $rate->rate_bps / $divisor),
-                $taxable->currency,
-            );
-        }
-
-        return $taxable->percentage($rate->rate_bps);
     }
 }

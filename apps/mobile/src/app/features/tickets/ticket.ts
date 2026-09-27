@@ -18,6 +18,7 @@ import {
   ToastStore,
 } from '../../ui';
 import { Navigation } from '../../core/navigation';
+import { MfReceipt } from './receipt';
 
 /**
  * One ticket, full screen.
@@ -31,7 +32,7 @@ import { Navigation } from '../../core/navigation';
  */
 @Component({
   selector: 'mf-ticket',
-  imports: [FormsModule, MfScreen, MfCard, MfBadge, MfButton, MfQr, MfSheet, MfField, MfEmpty, MfSkeleton],
+  imports: [FormsModule, MfScreen, MfCard, MfBadge, MfButton, MfQr, MfSheet, MfField, MfEmpty, MfSkeleton, MfReceipt],
   template: `
     <mf-screen [title]="ticket()?.event?.title ?? 'Ticket'" back backTo="/tickets">
       @if (loading()) {
@@ -88,6 +89,10 @@ import { Navigation } from '../../core/navigation';
             <button mfButton variant="ghost" block (click)="transferring.set(true)">Send to somebody else</button>
           }
         </div>
+
+        @if (held.receipt; as receipt) {
+          <mf-receipt [receipt]="receipt" [timezone]="held.event.timezone" />
+        }
       }
     </mf-screen>
 

@@ -3,10 +3,11 @@
 namespace App\Mail;
 
 use App\Models\Order;
+use App\Services\Events\CalendarFile;
+use App\Services\Receipts\Receipt;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use App\Services\Events\CalendarFile;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -58,6 +59,18 @@ class TicketsIssued extends Mailable implements ShouldQueue
                  */
                 'url' => rtrim(config('app.public_url'), '/')
                     .'/tickets/'.$this->order->access_token,
+                /*
+                 * What was paid, to whom, and the tax on it, line by line.
+                 *
+                 * This email is the one a buyer keeps, forwards to an
+                 * accountant, or prints for an expense claim, so it carries
+                 * the receipt rather than a link to one. Read from the order's
+                 * own copy of its pricing, so a resend next month says what
+                 * was charged, not what would be charged now. Only for an
+                 * order that exists: there is nothing to account for in one
+                 * that was never saved.
+                 */
+                'receipt' => $this->order->exists ? Receipt::for($this->order) : null,
             ],
         );
     }

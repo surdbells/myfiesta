@@ -5,6 +5,7 @@ namespace App\Services\Tickets;
 use App\Models\Order;
 use App\Models\Ticket;
 use App\Services\Events\CalendarFile;
+use App\Services\Receipts\Receipt;
 use App\Services\Resale\Resale;
 
 /**
@@ -60,6 +61,11 @@ class TicketAccessPayload
                     'quantity' => $line->quantity,
                 ])
                 ->values(),
+
+            // What was paid, to whom, and each tax on it — the same receipt
+            // the confirmation email carries, from the order's own copy of
+            // how it was priced. No ticket codes in it.
+            'receipt' => Receipt::for($order)->toArray(),
 
             // Only the tickets the buyer still holds. One handed to somebody
             // else is theirs now, and after a reissue its new code must not

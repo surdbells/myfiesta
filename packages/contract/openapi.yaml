@@ -1185,6 +1185,101 @@ components:
         tickets:
           type: array
           items: { $ref: '#/components/schemas/HeldTicket' }
+        receipt: { $ref: '#/components/schemas/Receipt' }
+
+    Receipt:
+      type: object
+      description: |
+        What was paid, to whom, and each tax on it — the same receipt the
+        confirmation email carries. Read from the order's own copy of how it
+        was priced, so it says what was charged at the time, whatever the
+        rates and settings are now. Never carries a ticket code.
+
+        Adds up: subtotal, less discount, plus every tax not marked included,
+        plus the service charge, is the total.
+      required: [reference, issued_at, currency, seller_of_record, seller, lines, subtotal, discount, taxes, service_charge, total, tax_included, refunded]
+      properties:
+        reference: { type: string }
+        issued_at: { type: string, format: date-time }
+        currency: { type: string }
+        seller_of_record:
+          type: string
+          enum: [organizer, platform]
+          description: Who sold the tickets, in law, when the order was placed.
+        seller: { $ref: '#/components/schemas/ReceiptParty' }
+        service:
+          description: |
+            Who sold the booking service — the service charge — where that is
+            not the seller of the tickets. Null where the platform sold
+            everything, or there was no service charge.
+          oneOf:
+            - $ref: '#/components/schemas/ReceiptParty'
+            - type: 'null'
+        organizer:
+          type: [string, 'null']
+          description: The organizer, named where the platform was the seller.
+        lines:
+          type: array
+          items:
+            type: object
+            required: [name, quantity, unit_price, discount, amount]
+            properties:
+              name: { type: string }
+              quantity: { type: integer }
+              unit_price: { $ref: '#/components/schemas/Money' }
+              discount: { $ref: '#/components/schemas/Money' }
+              amount: { $ref: '#/components/schemas/Money' }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        taxes:
+          type: array
+          items: { $ref: '#/components/schemas/TaxLine' }
+        service_charge:
+          $ref: '#/components/schemas/Money'
+          description: |
+            Before any tax added to it. Where prices include tax, as in
+            Nigeria, the tax is inside this figure and its line is marked
+            included.
+        total: { $ref: '#/components/schemas/Money' }
+        tax_included:
+          type: boolean
+          description: Whether the prices on it already contain their tax.
+        refunded:
+          $ref: '#/components/schemas/Money'
+          description: Money given back since, if any.
+
+    ReceiptParty:
+      type: object
+      required: [name, address, registrations]
+      properties:
+        name: { type: [string, 'null'] }
+        address: { type: [string, 'null'] }
+        registrations:
+          type: array
+          description: The registration numbers the taxes it charged are filed under. Only those that exist.
+          items:
+            type: object
+            required: [label, number]
+            properties:
+              label: { type: string, description: 'GST/HST, QST, VAT (TIN)' }
+              number: { type: string }
+
+    TaxLine:
+      type: object
+      description: One tax, with its own rate. Quebec with QST collected has GST and QST side by side.
+      required: [name, rate, on, included, amount]
+      properties:
+        name: { type: string, description: 'GST, HST, QST, VAT' }
+        rate:
+          type: string
+          description: A percentage as written — "5", "9.975", "13", "7.5".
+        on:
+          type: string
+          enum: [tickets, service_charge]
+        included:
+          type: boolean
+          description: Inside the price it was charged on, rather than added to it.
+        amount: { $ref: '#/components/schemas/Money' }
 
     GalleryImage:
       type: object
@@ -1347,7 +1442,14 @@ components:
         total: { $ref: '#/components/schemas/Money' }
         tax_label:
           type: [string, 'null']
-          description: What the buyer is shown — HST, GST, VAT.
+          description: What the buyer is shown — HST, GST, VAT, or "GST + QST" in Quebec while QST is collected.
+        tax_lines:
+          type: array
+          description: Each tax on its own — on the tickets, and on the service charge where it is taxed.
+          items: { $ref: '#/components/schemas/TaxLine' }
+        service_charge_tax:
+          $ref: '#/components/schemas/Money'
+          description: How much of the service charge is tax on it. Zero unless the service charge is taxed.
         tax_inclusive:
           type: boolean
           description: Whether tax was already inside the displayed price.
@@ -1386,8 +1488,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/QuoteRequest'
         - type: object
-          required: [buyer]
+          required: [buyer, accept_terms]
           properties:
+            accept_terms:
+              type: boolean
+              const: true
+              description: |
+                The buyer ticked the box agreeing to the terms, the privacy
+                policy and the refund policy. Refused with a 422 without it.
+                The order keeps which version was agreed to, and when. This
+                endpoint reads no sign-in, so every caller sends it, whatever
+                token it carries.
             buyer:
               type: object
               description: |
@@ -1499,6 +1610,14 @@ components:
         apple_wallet_url: { type: [string, 'null'], format: uri }
         google_wallet_url: { type: [string, 'null'], format: uri }
         event: { $ref: '#/components/schemas/EventSummary' }
+        receipt:
+          description: |
+            The receipt for the order this ticket came from, only to the
+            account that bought it. Null on a ticket somebody passed on, and
+            on a comp.
+          oneOf:
+            - $ref: '#/components/schemas/Receipt'
+            - type: 'null'
 
     ScanResult:
       type: object

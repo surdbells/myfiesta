@@ -112,6 +112,11 @@ class Order extends Model
         return [
             'paid_at' => 'datetime',
             'refunded_at' => 'datetime',
+            // What the buyer agreed to, and when. Null for a door sale. See Terms.
+            'terms_accepted_at' => 'datetime',
+            // How it was taxed and who sold it, as it was. See Pricer.
+            'tax_lines' => 'array',
+            'pricing_snapshot' => 'array',
         ];
     }
 

@@ -47,7 +47,9 @@ final class EventFigures
             ->selectRaw("count(*) filter (where channel = 'door') as door_orders")
             ->selectRaw('coalesce(sum(total_amount), 0) as gross')
             ->selectRaw('coalesce(sum(net_revenue_amount), 0) as organizer')
-            ->selectRaw('coalesce(sum(service_charge_amount), 0) as service')
+            // The platform's part: any tax inside a service charge is owed
+            // to a tax authority, as the admin's reports count it.
+            ->selectRaw('coalesce(sum(service_charge_amount - service_charge_tax_amount), 0) as service')
             ->first();
 
         $refunded = (int) DB::table('refunds')
