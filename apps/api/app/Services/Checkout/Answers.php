@@ -36,7 +36,7 @@ class Answers
      *
      * Runs before any stock is held: a refusal here costs the buyer a message
      * and nothing else, and a hold taken for an order that was never going to
-     * be created is stock nobody can buy for twenty minutes.
+     * be created is stock nobody can buy until the hold runs out.
      *
      * @param  array<string, mixed>  $answers  question id => value, for the order
      * @param  list<array{ticket_type_id: string, answers?: array<string, mixed>}>  $attendees

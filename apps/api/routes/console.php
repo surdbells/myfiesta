@@ -63,6 +63,17 @@ Schedule::command('webhooks:prune')
     ->runInBackground();
 
 /*
+ * Refunds the payment processor never answered. Left waiting rather than
+ * called failed, because the money may already have gone back — and without
+ * this they would wait for ever, holding their tickets. Every five minutes;
+ * each refund is only asked about once it has waited ten (RefundService).
+ */
+Schedule::command('refunds:follow-up')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+/*
  * Campaigns an organizer scheduled. Every five minutes: "Friday at 6pm" going
  * out at 6:04 is on time as far as anybody reading it can tell, and the list
  * is worked out when it sends, not when it was written.
@@ -79,5 +90,15 @@ Schedule::command('campaigns:send')
  */
 Schedule::command('privacy:prune')
     ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+/*
+ * Staff sessions that ran out on their own. The token has already stopped
+ * working by then — this only writes the end into the audit trail, so a
+ * session never reads as still open to somebody going through it.
+ */
+Schedule::command('impersonation:close-lapsed')
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();

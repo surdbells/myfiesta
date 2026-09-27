@@ -363,17 +363,33 @@ class RefundTest extends TestCase
         $this->assertSame($order->total_amount, $refund->amount);
     }
 
-    public function test_a_gateway_that_throws_is_recorded_as_a_failure(): void
+    public function test_a_gateway_that_throws_leaves_the_refund_waiting_not_failed(): void
     {
         $order = $this->paidOrder(quantity: 1);
         $this->gateway->throwOnRefund();
 
         $refund = app(RefundService::class)->refund($order);
 
-        // If the exception escaped, the refund would stay pending forever and
-        // hold part of the order's balance against every retry.
-        $this->assertSame('failed', $refund->status);
+        // The request may have reached the processor before whatever broke
+        // broke. Failed would tell the organizer to send it again, and a
+        // second refund is the buyer paid twice. So it waits, with the reason
+        // on it, and the tickets keep working until somebody knows.
+        $this->assertSame('pending', $refund->status);
+        $this->assertNotNull($refund->unanswered_at);
         $this->assertNotNull($refund->failure_reason);
+        $this->assertSame(0, $order->tickets()->where('status', 'refunded')->count());
+        $this->assertSame('paid', $order->refresh()->status);
+        $this->assertSame([$refund->id], $this->gateway->keys, 'Sent with its own id as the key.');
+
+        // And it cannot be sent again under a new row while it waits.
+        try {
+            app(RefundService::class)->refund($order);
+            $this->fail('A second refund was accepted while the first had no answer.');
+        } catch (RefundRefused $e) {
+            $this->assertStringContainsString('already being refunded', $e->getMessage());
+        }
+
+        $this->assertSame(1, Refund::count());
     }
 
     public function test_an_unpaid_order_cannot_be_refunded(): void
@@ -408,6 +424,27 @@ class RefundTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('status', 'succeeded')
             ->assertJsonPath('amount.amount', $order->total_amount);
+    }
+
+    public function test_a_refund_nobody_answered_tells_the_organizer_not_to_send_it_again(): void
+    {
+        $order = $this->paidOrder(quantity: 2);
+        $this->gateway->throwOnRefund();
+        $this->asOrganizer($this->member(Role::Manager));
+
+        // "Try again" is the one thing not to say: the money may be on its way.
+        $response = $this->refundRequest($order)
+            ->assertStatus(504)
+            ->assertJsonPath('display', true)
+            ->assertJsonPath('refund.status', 'pending');
+
+        $this->assertStringContainsString('do not send it again', $response->json('message'));
+
+        // And pressing the button again anyway changes nothing.
+        $this->gateway->succeed();
+        $this->refundRequest($order)->assertStatus(422);
+        $this->assertSame(1, Refund::count());
+        $this->assertCount(1, $this->gateway->keys);
     }
 
     public function test_marketing_cannot_move_money(): void
@@ -520,6 +557,9 @@ class FakeRefundGateway implements PaymentGateway
 {
     public ?int $lastAmount = null;
 
+    /** @var list<string|null> the idempotency key each refund was sent with */
+    public array $keys = [];
+
     private bool $succeeds = true;
 
     private bool $throws = false;
@@ -571,9 +611,10 @@ class FakeRefundGateway implements PaymentGateway
         return null;
     }
 
-    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null): RefundResult
+    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null, ?string $idempotencyKey = null): RefundResult
     {
         $this->lastAmount = $amountMinorUnits;
+        $this->keys[] = $idempotencyKey;
 
         if ($this->throws) {
             throw new \RuntimeException('connection reset');

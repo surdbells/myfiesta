@@ -75,6 +75,38 @@ class Order extends Model
         return $reference;
     }
 
+    /**
+     * Where an order may go from where it is, when a processor says so.
+     *
+     * Notices arrive late, twice, and out of order, and each one used to write
+     * its status over whatever the order said: a "payment failed" retried
+     * after the buyer had paid on a second card made a paid order failed, and
+     * a partial refund made in Stripe's dashboard marked the whole order
+     * refunded while every ticket still worked. So a notice can only move an
+     * order forward, and only along these lines.
+     *
+     * Paid and refunded are decided elsewhere too (Fulfiller, RefundService),
+     * under the order's lock, and follow the same lines. Nothing leaves
+     * refunded or failed: a failed order that is then paid is for a person to
+     * look at (Fulfiller says so out loud).
+     */
+    private const MOVES = [
+        'pending' => ['paid', 'failed', 'cancelled', 'refunded'],
+        // A payment page closed, or a basket given up on, whose money arrived
+        // anyway; and the refund of it when there was no room left.
+        'cancelled' => ['paid', 'refunded'],
+        'paid' => ['partially_refunded', 'refunded'],
+        'partially_refunded' => ['partially_refunded', 'refunded'],
+        'failed' => [],
+        'refunded' => [],
+    ];
+
+    /** Whether a processor's notice may move this order to $status. */
+    public function mayBecome(string $status): bool
+    {
+        return in_array($status, self::MOVES[$this->status] ?? [], true);
+    }
+
     protected function casts(): array
     {
         return [
@@ -127,6 +159,12 @@ class Order extends Model
     public function refunds(): HasMany
     {
         return $this->hasMany(Refund::class);
+    }
+
+    /** The stock set aside for this order while its buyer was paying. */
+    public function holds(): HasMany
+    {
+        return $this->hasMany(InventoryHold::class);
     }
 
     protected function subtotal(): Attribute

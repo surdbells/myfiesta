@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Taken in the same transaction that increments a code redemption count, so
  * neither tickets nor a capped code can oversell. Expired rows are swept and
  * the stock returns.
+ *
+ * Each belongs to the order it was taken for, and paying for that order gives
+ * up its own holds and nobody else's. A hold with no order was taken before
+ * holds said whose they were.
  */
 class InventoryHold extends Model
 {
@@ -23,6 +27,11 @@ class InventoryHold extends Model
     protected function casts(): array
     {
         return ['expires_at' => 'datetime'];
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
     }
 
     public function ticketType(): BelongsTo

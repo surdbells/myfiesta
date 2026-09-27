@@ -106,7 +106,7 @@ class DiscountCodeTest extends TestCase
 
         // The first buyer walks away. Once the hold has lapsed the use is free
         // again — it used to be spent for good.
-        $this->travel(21)->minutes();
+        $this->travel(CheckoutService::HOLD_MINUTES + 1)->minutes();
 
         $this->checkout([$this->general->id => 1], 'second@example.com');
 
@@ -149,7 +149,7 @@ class DiscountCodeTest extends TestCase
         $code = $this->code(['max_redemptions' => 1]);
 
         $late = $this->checkout([$this->general->id => 1], 'late@example.com');
-        $this->travel(21)->minutes();
+        $this->travel(CheckoutService::HOLD_MINUTES + 1)->minutes();
         $this->pay($this->checkout([$this->general->id => 1], 'prompt@example.com'));
 
         // The first buyer's payment lands late. They paid; they get tickets.
@@ -356,7 +356,7 @@ class DiscountTestGateway implements PaymentGateway
         return null;
     }
 
-    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null): RefundResult
+    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null, ?string $idempotencyKey = null): RefundResult
     {
         return new RefundResult(true, 're_test', $amountMinorUnits, $order->currency);
     }

@@ -59,6 +59,16 @@ final readonly class PaymentEvent
          * has ever heard of.
          */
         public ?string $paymentReference = null,
+
+        /**
+         * For a refund notice, what the processor said about the refund.
+         *
+         * Refunds are the one event whose details the domain acts on beyond
+         * the amount: which refund it was, whose it was, and whether it is a
+         * running total. Each processor says those in its own shape, so the
+         * gateway that parsed the payload fills this in.
+         */
+        public ?RefundNotice $refund = null,
     ) {}
 
     public function isDispute(): bool

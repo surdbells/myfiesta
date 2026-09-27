@@ -73,6 +73,22 @@ interface PaymentGateway
      *
      * The resulting ledger entries are the caller's responsibility; this moves
      * the money and reports what happened.
+     *
+     * The key names one refund on our side. Implementations send it wherever
+     * the processor accepts one, so however many times the same refund is
+     * sent — a retry after a timeout, a follow-up an hour later — the
+     * processor pays it back once. A processor that takes no key is asked
+     * whether it already has the refund before it is ever sent twice
+     * (FindsRefunds).
+     *
+     * An answer nobody can trust — a timeout, the processor's own error — is
+     * RefundResult::unknown(), never failed(): failed tells the organizer it
+     * is safe to try again.
      */
-    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null): RefundResult;
+    public function refund(
+        Order $order,
+        int $amountMinorUnits,
+        ?string $reason = null,
+        ?string $idempotencyKey = null,
+    ): RefundResult;
 }

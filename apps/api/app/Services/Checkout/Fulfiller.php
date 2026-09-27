@@ -3,24 +3,31 @@
 namespace App\Services\Checkout;
 
 use App\Mail\TicketsIssued;
+use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
+use App\Models\TicketType;
+use App\Services\Audit\Auditor;
 use App\Services\Integrations\Payloads;
 use App\Services\Integrations\Webhooks;
 use App\Services\Payments\GatewayFee;
+use App\Services\Refunds\RefundRefused;
+use App\Services\Refunds\RefundService;
 use App\Services\Resale\Resale;
 use App\Services\Sms\Texts;
 use App\Services\Waitlist\Waitlist;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
  * Marks an order paid and issues its tickets.
  *
- * Reached from exactly two places: a verified webhook, and a zero-total order
- * that never needed a gateway. Nothing a browser sends can call it. The
+ * Reached from exactly three places: a verified webhook, a zero-total order
+ * that never needed a gateway, and a sale at the door, where the money is
+ * already in the tin. Nothing a browser sends can call it. The
  * previous platform inverted this — the client posted a session id along with
  * its own base64 cart, and the server minted whatever the cart said, so a
  * genuine one-dollar payment could be redeemed for any tickets at all.
@@ -30,13 +37,28 @@ use Illuminate\Support\Facades\Mail;
  */
 class Fulfiller
 {
-    public function __construct(private readonly TicketIssuer $issuer) {}
+    /**
+     * The states a payment can still turn into tickets.
+     *
+     * Pending is the ordinary case. Cancelled is a checkout closed as
+     * abandoned, or a payment page that expired, whose money arrived anyway —
+     * a Paystack transfer confirming hours later. Everything else has been
+     * decided already: a paid or part-refunded order has its tickets, and a
+     * refunded one has had its money back, so a payment notice for either is
+     * a repeat. A failed one is left alone as well, and said out loud (below).
+     */
+    private const FULFILLABLE = ['pending', 'cancelled'];
+
+    public function __construct(
+        private readonly TicketIssuer $issuer,
+        private readonly Stock $stock,
+    ) {}
 
     /**
      * Idempotent by design.
      *
      * Gateways retry webhooks, sometimes for days, and a duplicate delivery
-     * must not mint a second set of tickets. The paid check inside the
+     * must not mint a second set of tickets. The status check inside the
      * transaction is the guard; calling this twice is safe.
      */
     public function fulfil(Order $order): Order
@@ -45,8 +67,30 @@ class Fulfiller
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
-            if ($locked->status === 'paid') {
+            if (! in_array($locked->status, self::FULFILLABLE, true)) {
+                // Only reached with money in hand, and a processor that said
+                // "failed" and then "paid" about one order is something to
+                // look at rather than guess about. Nothing is issued and
+                // nothing is kept quiet.
+                if ($locked->status === 'failed') {
+                    Log::alert('A payment arrived for an order already marked failed. Nothing was issued.', [
+                        'order' => $locked->reference,
+                        'gateway' => $locked->gateway,
+                    ]);
+                }
+
                 return $locked;
+            }
+
+            // Turned away already, and its money is on the way back. A second
+            // delivery of the same payment must not be the one that decides
+            // differently.
+            if ($locked->refunds()->whereIn('status', ['pending', 'succeeded'])->exists()) {
+                return $locked;
+            }
+
+            if (! $this->hasRoom($locked)) {
+                return $this->turnAway($locked);
             }
 
             $locked->update([
@@ -222,21 +266,174 @@ class Fulfiller
      *
      * Leaving it would double-count against availability, since issued tickets
      * are now themselves part of the count.
+     *
+     * This order's own holds, and only those. It used to be the oldest live
+     * holds on the same ticket types, as many rows as the order had places —
+     * whoever they belonged to, and counted in rows although each row carries
+     * a quantity. Paying for one order released other shoppers' reservations
+     * while they were still on the payment page, and the places it freed
+     * could then be sold twice.
+     *
+     * Both kinds: a held table is stock somebody else could not buy, and it
+     * has been bought now.
      */
     private function releaseHolds(Order $order): void
     {
-        $lines = $order->lines()->get();
+        InventoryHold::query()->where('order_id', $order->id)->delete();
+    }
 
-        // Both kinds: a table held for twenty minutes is stock somebody else
-        // could not buy, and it has been bought now.
-        InventoryHold::query()
-            ->where(fn ($query) => $query
-                ->whereIn('ticket_type_id', $lines->pluck('ticket_type_id')->filter())
-                ->orWhereIn('add_on_id', $lines->pluck('add_on_id')->filter()))
-            ->where('expires_at', '>', now())
-            ->orderBy('created_at')
-            ->limit((int) $lines->sum('quantity'))
-            ->delete();
+    /**
+     * Whether there is room for everything on the order.
+     *
+     * Ordinarily there is nothing to check. The order still holds, live,
+     * every place it is for: the stock was counted when the hold was taken,
+     * and nobody else could have it since.
+     *
+     * But a payment can outlive its hold. Paystack's page never closes, a
+     * bank transfer can confirm an hour later, and a webhook can be retried
+     * for days; by then the places may have been sold to somebody who paid on
+     * time. Honouring it anyway is how an event oversells — a thousand
+     * tickets for a room of nine hundred, and the door finds out.
+     *
+     * So each place no longer held is counted again, the way checkout counts
+     * it and under the same row locks (Stock): issued tickets and other
+     * orders' live holds. If it all fits, the late payment is honoured as if
+     * it were on time. If any of it does not, none of it is issued — half an
+     * order is not what anybody paid for.
+     *
+     * A tier or add-on the organizer has removed since has no room at all.
+     * It is off sale, and a place taken off sale has gone as surely as one
+     * sold. It was looked up in a way that threw instead: the notice failed,
+     * every retry failed the same way, and the buyer's money sat there with
+     * nothing issued and nothing sent back. One still held is another
+     * matter — the hold was a promise made while it was on sale, and is kept.
+     */
+    private function hasRoom(Order $order): bool
+    {
+        $held = $order->holds()->live()->get(['ticket_type_id', 'add_on_id', 'quantity']);
+
+        foreach ($this->wanted($order) as [$column, $id, $quantity]) {
+            if ((int) $held->where($column, $id)->sum('quantity') >= $quantity) {
+                continue;
+            }
+
+            $item = $column === 'ticket_type_id'
+                ? TicketType::query()->find($id)
+                : AddOn::query()->find($id);
+
+            if ($item === null) {
+                return false;
+            }
+
+            $left = $item instanceof TicketType
+                ? $this->stock->ticketsLeft($item, besides: $order)
+                : $this->stock->addOnsLeft($item, besides: $order);
+
+            if ($left !== null && $left < $quantity) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * What the order is for, one entry per thing sold.
+     *
+     * Tickets before add-ons, as checkout takes them, and each kind in a fixed
+     * order after that — so two late payments for the same night lock the
+     * same rows the same way round, rather than each waiting on the other.
+     *
+     * @return list<array{0: 'ticket_type_id'|'add_on_id', 1: string, 2: int}>
+     */
+    private function wanted(Order $order): array
+    {
+        $wanted = [];
+
+        foreach ($order->lines()->get() as $line) {
+            $column = $line->ticket_type_id !== null ? 'ticket_type_id' : 'add_on_id';
+            $key = ($column === 'ticket_type_id' ? '0:' : '1:').$line->{$column};
+
+            $wanted[$key] ??= [$column, (string) $line->{$column}, 0];
+            $wanted[$key][2] += (int) $line->quantity;
+        }
+
+        ksort($wanted, SORT_STRING);
+
+        return array_values($wanted);
+    }
+
+    /**
+     * A payment for places that have gone.
+     *
+     * Nothing is issued, so nothing is oversold. The money arrived all the
+     * same, and it goes back — all of it, automatically, because the buyer
+     * did nothing wrong and there is no organizer to ask: nothing was sold.
+     *
+     * The order keeps a record that the money came: when it came, and what
+     * the processor kept for taking it, which no processor gives back on a
+     * refund and is the platform's cost, not the organizer's. No ledger
+     * entry is written, now or when the refund settles; the organizer never
+     * made this sale, and their balance never sees it.
+     *
+     * The refund itself goes after the commit. It calls the processor over
+     * the internet, and doing that inside this transaction would hold the
+     * order — and the ticket types just counted — locked for as long as the
+     * processor takes to answer. The buyer is told once the processor has
+     * accepted it, so the email is true when it is read.
+     */
+    private function turnAway(Order $order): Order
+    {
+        // Whatever of it was still held goes back on sale now.
+        $this->releaseHolds($order);
+
+        app(Auditor::class)->record('order.sold_out_while_paying', $order, metadata: [
+            'reference' => $order->reference,
+            'total' => $order->total_amount,
+            'currency' => $order->currency,
+        ]);
+
+        // A free order has nothing to give back. It is closed, and that is
+        // all.
+        if (! $order->requiresPayment()) {
+            $order->update(['status' => 'cancelled']);
+
+            return $order->refresh();
+        }
+
+        $order->update([
+            'paid_at' => now(),
+            'gateway_fee_amount' => $order->gateway === null
+                ? 0
+                : GatewayFee::on($order->total, $order->gateway)->amount,
+        ]);
+
+        DB::afterCommit(fn () => $this->giveItBack($order));
+
+        return $order->refresh();
+    }
+
+    /**
+     * Send the money back. The buyer is told once it has gone.
+     *
+     * The telling is RefundService's, because "once it has gone" is not always
+     * now: a refund that got no answer is confirmed later, by the processor's
+     * notice or a follow-up, and the email goes then. A refund the processor
+     * refuses stays on the order as a failed refund, with an alert, for a
+     * person to finish (RefundService::refundUnfulfilled). One refused here as
+     * already under way is a second delivery arriving behind the first, and
+     * the first is dealing with it.
+     */
+    private function giveItBack(Order $order): void
+    {
+        try {
+            app(RefundService::class)->refundUnfulfilled($order, 'Sold out while the buyer was paying.');
+        } catch (RefundRefused $e) {
+            Log::warning('A payment for places that had gone was not refunded here.', [
+                'order' => $order->reference,
+                'reason' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

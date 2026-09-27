@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Payments\StripeGateway;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -32,15 +33,28 @@ class CheckoutService
     /**
      * How long stock is held while the buyer completes payment.
      *
-     * Must outlive the gateway's own session expiry by a margin. Releasing a
-     * hold while someone is still on the payment page sells their tickets to
-     * somebody else mid-transaction, and they are then charged for nothing.
+     * Longer than the payment page stays open, and by a margin. Releasing a
+     * hold while somebody is still on the page sells their places to somebody
+     * else mid-payment, and they are then charged for nothing. Stripe's page
+     * closes at thirty minutes; a payment made in its last second still has to
+     * reach us as a webhook, which takes seconds and now and then minutes, so
+     * the hold runs ten minutes past it. It was twenty for a long time —
+     * shorter than the page it was meant to outlast.
+     *
+     * Written as the page's lifetime plus the margin, so the two cannot drift
+     * apart by somebody changing one of them.
+     *
+     * Paystack's page never closes, so there is nothing there to outlive. A
+     * payment that lands after its hold has gone is Fulfiller's to deal with:
+     * it issues the tickets while there is still room, and gives the money
+     * back when there is not.
      */
-    private const HOLD_MINUTES = 20;
+    public const HOLD_MINUTES = StripeGateway::SESSION_MINUTES + 10;
 
     public function __construct(
         private readonly Pricer $pricer,
         private readonly Answers $answers,
+        private readonly Stock $stock,
     ) {}
 
     /**
@@ -99,7 +113,7 @@ class CheckoutService
 
         // Before the holds, deliberately. A refusal here costs the buyer a
         // message and nothing else; a hold taken for an order that was never
-        // going to be created is stock nobody else can buy for twenty minutes.
+        // going to be created is stock nobody else can buy until it runs out.
         $checkedAnswers = $this->answers->check($event, $answers, $attendees, $quantities);
 
         return DB::transaction(function () use (
@@ -110,8 +124,10 @@ class CheckoutService
             // against stock or a code that changes before the hold is taken.
             $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns, $channel);
 
+            $holds = [];
+
             foreach ($quote->lines as $line) {
-                $line->isTicket()
+                $holds[] = $line->isTicket()
                     ? $this->takeHold($line->ticketType, $line->quantity)
                     : $this->takeAddOnHold($line->addOn, $line->quantity);
             }
@@ -156,6 +172,21 @@ class CheckoutService
                 'door_pass_id' => $doorPassId,
             ]);
 
+            /*
+             * The holds are this order's, and say so.
+             *
+             * Taken before the order existed, because the stock has to be
+             * counted before anything is written for it, and claimed here in
+             * the same transaction — there is no moment at which a hold
+             * belongs to nobody. Payment then gives up exactly these, rather
+             * than whichever holds on the same tier happened to be oldest,
+             * which is how paying for one order used to release somebody
+             * else's while they were still on the payment page.
+             */
+            InventoryHold::query()
+                ->whereKey(array_map(fn (InventoryHold $hold) => $hold->id, $holds))
+                ->update(['order_id' => $order->id]);
+
             foreach ($quote->lines as $line) {
                 OrderLine::create([
                     'order_id' => $order->id,
@@ -189,45 +220,21 @@ class CheckoutService
      * expired. A hold that is still live is stock somebody else is in the
      * middle of buying, and treating it as available is how two people end up
      * paying for the same seat.
+     *
+     * The count locks the ticket type's row, and everything after it is
+     * serialised per ticket type — the narrowest lock that makes the count
+     * trustworthy. An unlimited tier is not locked and still gets its hold,
+     * so reporting on demand during an on-sale does not have a hole in it.
      */
-    private function takeHold(TicketType $type, int $quantity): void
+    private function takeHold(TicketType $type, int $quantity): InventoryHold
     {
-        if ($type->quantity_available === null) {
-            // Unlimited. Still recorded, so reporting on demand during an
-            // on-sale does not have a hole in it.
-            InventoryHold::create([
-                'ticket_type_id' => $type->id,
-                'quantity' => $quantity,
-                'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
-            ]);
+        $remaining = $this->stock->ticketsLeft($type);
 
-            return;
+        if ($remaining !== null && $remaining < $quantity) {
+            throw CheckoutException::soldOut($type->name, max(0, $remaining));
         }
 
-        // Lock the row first. Everything after this is serialised per ticket
-        // type, which is the narrowest lock that makes the count trustworthy.
-        $locked = TicketType::query()
-            ->whereKey($type->id)
-            ->lockForUpdate()
-            ->first();
-
-        $issued = DB::table('tickets')
-            ->where('ticket_type_id', $type->id)
-            ->whereIn('status', ['valid', 'checked_in'])
-            ->count();
-
-        $held = (int) DB::table('inventory_holds')
-            ->where('ticket_type_id', $type->id)
-            ->where('expires_at', '>', now())
-            ->sum('quantity');
-
-        $remaining = $locked->quantity_available - $issued - $held;
-
-        if ($remaining < $quantity) {
-            throw CheckoutException::soldOut($locked->name, max(0, $remaining));
-        }
-
-        InventoryHold::create([
+        return InventoryHold::create([
             'ticket_type_id' => $type->id,
             'quantity' => $quantity,
             'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
@@ -237,46 +244,21 @@ class CheckoutService
     /**
      * The same reservation, for the thing that is not a ticket.
      *
-     * Counted differently because an add-on mints nothing: a ticket type can
-     * count the tickets it has issued, and twenty tables have no rows to
-     * count, so what has been paid for is the count. Locked and held the same
-     * way — the last table goes to one of two people reaching it together,
-     * not to both.
+     * Counted differently because an add-on mints nothing (Stock says how),
+     * but locked and held the same way — the last table goes to one of two
+     * people reaching it together, not to both.
      */
-    private function takeAddOnHold(AddOn $addOn, int $quantity): void
+    private function takeAddOnHold(AddOn $addOn, int $quantity): InventoryHold
     {
-        if ($addOn->quantity_available === null) {
-            InventoryHold::create([
-                'add_on_id' => $addOn->id,
-                'quantity' => $quantity,
-                'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
-            ]);
+        $remaining = $this->stock->addOnsLeft($addOn);
 
-            return;
-        }
-
-        $locked = AddOn::query()->whereKey($addOn->id)->lockForUpdate()->first();
-
-        $sold = (int) DB::table('order_lines')
-            ->join('orders', 'orders.id', '=', 'order_lines.order_id')
-            ->where('order_lines.add_on_id', $addOn->id)
-            ->whereIn('orders.status', Code::PAID_STATUSES)
-            ->sum('order_lines.quantity');
-
-        $held = (int) DB::table('inventory_holds')
-            ->where('add_on_id', $addOn->id)
-            ->where('expires_at', '>', now())
-            ->sum('quantity');
-
-        $remaining = $locked->quantity_available - $sold - $held;
-
-        if ($remaining < $quantity) {
+        if ($remaining !== null && $remaining < $quantity) {
             throw new CheckoutException($remaining <= 0
-                ? "{$locked->name} has gone."
-                : "Only {$remaining} of {$locked->name} left.");
+                ? "{$addOn->name} has gone."
+                : "Only {$remaining} of {$addOn->name} left.");
         }
 
-        InventoryHold::create([
+        return InventoryHold::create([
             'add_on_id' => $addOn->id,
             'quantity' => $quantity,
             'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
@@ -315,5 +297,4 @@ class CheckoutService
             );
         }
     }
-
 }

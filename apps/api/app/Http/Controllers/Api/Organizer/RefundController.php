@@ -115,6 +115,22 @@ class RefundController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        if ($refund->status === 'pending') {
+            // Sent, and no answer. The one thing not to say is "try again":
+            // the money may already be on its way, and a second refund would
+            // pay it twice. The tickets are held against a second refund until
+            // the processor says, which the platform asks it by itself
+            // (refunds:follow-up). 504 because that is what happened, and
+            // `display` so the console shows this rather than a generic error.
+            return response()->json([
+                'message' => 'We asked the payment processor for this refund and did not hear back, so it may already '
+                    .'have gone through. Please do not send it again. The tickets keep working until the processor '
+                    .'confirms, and this order will update by itself once it does.',
+                'display' => true,
+                'refund' => $this->present($refund->fresh()->load('tickets')),
+            ], 504);
+        }
+
         if (! $refund->succeeded()) {
             // The processor declining. 502 rather than 422: nothing about the
             // request was wrong, and a retry may well work.

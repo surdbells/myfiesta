@@ -577,7 +577,7 @@ class QuestionsTestGateway implements PaymentGateway
         return null;
     }
 
-    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null): RefundResult
+    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null, ?string $idempotencyKey = null): RefundResult
     {
         throw new \LogicException('Not needed here.');
     }

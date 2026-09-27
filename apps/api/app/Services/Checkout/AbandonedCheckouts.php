@@ -16,15 +16,18 @@ use Illuminate\Support\Facades\DB;
  *
  * Closed as cancelled, which the buyer's order page already explains as
  * "nothing has been charged". A payment that does land later is still
- * honoured: fulfilment does not look at the old status, because refusing
- * tickets somebody has paid for is worse than a tidy list.
+ * honoured while there is room for it, because refusing tickets somebody has
+ * paid for is worse than a tidy list. Its hold is long gone by then, so
+ * fulfilment counts the stock again first; if the places have been sold to
+ * somebody else meanwhile, the money goes back instead (Fulfiller).
  */
 class AbandonedCheckouts
 {
     /**
-     * Long enough past any payment page's own expiry — Stripe's is set to
-     * thirty minutes — for a slow bank redirect or a delayed webhook to land
-     * before the order is called abandoned.
+     * Long enough past any payment page's own expiry — Stripe's is thirty
+     * minutes (StripeGateway::SESSION_MINUTES), and the stock hold a little
+     * longer — for a slow bank redirect or a delayed webhook to land before
+     * the order is called abandoned.
      */
     public const AFTER_MINUTES = 120;
 

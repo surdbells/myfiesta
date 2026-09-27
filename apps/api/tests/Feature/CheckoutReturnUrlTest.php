@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Contracts\Payments\CheckoutOptions;
 use App\Contracts\Payments\CheckoutSession;
-use App\Contracts\Payments\PaymentGateway;
 use App\Contracts\Payments\PaymentEvent;
+use App\Contracts\Payments\PaymentGateway;
 use App\Contracts\Payments\PaymentGatewayRegistry;
 use App\Contracts\Payments\RefundResult;
 use App\Models\Event;
@@ -158,7 +158,7 @@ class CapturingGateway implements PaymentGateway
         return null;
     }
 
-    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null): RefundResult
+    public function refund(Order $order, int $amountMinorUnits, ?string $reason = null, ?string $idempotencyKey = null): RefundResult
     {
         throw new \LogicException('Not needed here.');
     }

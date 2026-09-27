@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Exceptions\CheckoutException;
 use App\Models\Code;
 use App\Models\Event;
+use App\Models\InventoryHold;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\Organization;
@@ -12,6 +13,7 @@ use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Services\Checkout\CheckoutService;
 use App\Services\Checkout\Fulfiller;
+use App\Services\Payments\StripeGateway;
 use Database\Seeders\TaxRateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -106,11 +108,86 @@ class CheckoutFlowTest extends TestCase
 
         $this->reserve($event, $type, 2);
 
-        $this->travel(25)->minutes();
+        $this->travel(CheckoutService::HOLD_MINUTES + 1)->minutes();
 
         // Abandoned baskets must not sell out an event forever.
         $order = $this->reserve($event, $type, 2);
         $this->assertSame('pending', $order->status);
+    }
+
+    public function test_every_hold_belongs_to_the_order_that_took_it(): void
+    {
+        $event = $this->event();
+        $type = $this->ticket($event, 10000, ['quantity_available' => 10]);
+
+        $order = $this->reserve($event, $type, 3);
+
+        $holds = InventoryHold::where('ticket_type_id', $type->id)->get();
+
+        $this->assertCount(1, $holds);
+        $this->assertSame($order->id, $holds->first()->order_id);
+        $this->assertSame(3, $holds->first()->quantity);
+    }
+
+    public function test_the_hold_outlives_the_payment_page(): void
+    {
+        $event = $this->event();
+        $type = $this->ticket($event);
+
+        $order = $this->reserve($event, $type, 1);
+
+        // Somebody paying in the page's last second still has their places
+        // when the payment reaches us. A hold that ran out first sold them to
+        // somebody else while the card was being charged.
+        $pageCloses = now()->addMinutes(StripeGateway::SESSION_MINUTES);
+
+        $this->assertTrue(
+            $order->holds()->first()->expires_at->gt($pageCloses->copy()->addMinutes(5)),
+            'The hold runs well past the moment the payment page closes.',
+        );
+    }
+
+    public function test_paying_one_order_leaves_somebody_elses_hold_alone(): void
+    {
+        $event = $this->event();
+        $type = $this->ticket($event, 10000, ['quantity_available' => 10]);
+
+        // B started first, so B's hold is the older one — which is the one
+        // payment used to give up, whoever it belonged to.
+        $b = $this->checkout->reserve($event, [$type->id => 1], 'b@example.com', 'B');
+        $this->travel(1)->minutes();
+        $a = $this->checkout->reserve($event, [$type->id => 1], 'a@example.com', 'A');
+
+        $this->fulfiller->fulfil($a);
+
+        $this->assertSame(0, $a->holds()->count(), 'The paid order gives up its own hold.');
+        $this->assertSame(1, $b->holds()->live()->count(), 'Nobody else loses theirs.');
+        $this->assertSame(1, (int) $b->holds()->live()->sum('quantity'));
+    }
+
+    public function test_payment_gives_up_the_places_it_held_not_that_many_holds(): void
+    {
+        $event = $this->event();
+        $type = $this->ticket($event, 10000, ['quantity_available' => 10]);
+
+        $b = $this->checkout->reserve($event, [$type->id => 1], 'b@example.com', 'B');
+        $c = $this->checkout->reserve($event, [$type->id => 1], 'c@example.com', 'C');
+        $a = $this->checkout->reserve($event, [$type->id => 3], 'a@example.com', 'A');
+
+        // Three places is one hold. It used to release three holds' worth of
+        // rows — its own and both of the others.
+        $this->fulfiller->fulfil($a);
+
+        $this->assertSame(1, $b->holds()->live()->count());
+        $this->assertSame(1, $c->holds()->live()->count());
+
+        // Ten, less three issued, less two still held.
+        $this->assertSame(5, $type->fresh()->remainingNow());
+
+        // And the two still being paid for cannot be sold under them.
+        $this->reserve($event, $type, 5);
+        $this->expectException(CheckoutException::class);
+        $this->reserve($event, $type, 1);
     }
 
     public function test_a_capped_code_stops_being_redeemable(): void
