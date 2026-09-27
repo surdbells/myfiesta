@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -115,6 +114,11 @@ class AuthController extends Controller
         return response()->json([
             'name' => $user->name,
             'email' => $user->email,
+            // Whether the address is proved. Publishing, asking to be paid and
+            // changing where payouts go wait for it (verified.email); without
+            // this the console and the phone learnt it only from that refusal,
+            // after somebody had already pressed the button.
+            'email_verified' => $user->email_verified_at !== null,
             // The rest of what the profile form edits. Without them a form
             // opened on a phone showed the number box empty, so saving it as
             // it looked either kept a number nobody could see or, once empty

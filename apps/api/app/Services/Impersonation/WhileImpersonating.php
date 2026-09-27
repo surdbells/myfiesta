@@ -7,6 +7,7 @@ use App\Enums\PlatformRole;
 use App\Enums\Role;
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DataRequestController;
 use App\Http\Controllers\Api\DoorController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\InvitationController;
@@ -192,6 +193,10 @@ final class WhileImpersonating
         // Invokable: the router names it by the class alone.
         EmailVerificationController::class => self::OWN_ACCOUNT,
         InvitationController::class.'@accept' => self::OWN_ACCOUNT,
+        // Deleting the account behind the session is further out of reach
+        // than renaming it.
+        DataRequestController::class.'@preview' => self::OWN_ACCOUNT,
+        DataRequestController::class.'@erase' => self::OWN_ACCOUNT,
     ];
 
     /**

@@ -35,6 +35,7 @@ import {
   MfStat,
 } from '../../ui';
 import { MfEventRow } from './event-row';
+import { MfVerifyEmail } from './verify-email';
 
 /**
  * The organizer's tab: everything they run, from the phone in their pocket.
@@ -49,7 +50,7 @@ import { MfEventRow } from './event-row';
  */
 @Component({
   selector: 'mf-manage-hub',
-  imports: [MfScreen, MfIconButton, MfButton, MfCard, MfEmpty, MfSkeleton, MfStat, MfSpark, MfList, MfRow, MfIcon, MfEventRow],
+  imports: [MfScreen, MfIconButton, MfButton, MfCard, MfEmpty, MfSkeleton, MfStat, MfSpark, MfList, MfRow, MfIcon, MfEventRow, MfVerifyEmail],
   template: `
     <mf-screen title="Manage" [subtitle]="session.organization()?.name ?? null" large refreshable [busy]="loading()" (refresh)="load()">
       @if (session.organizations().length > 1) {
@@ -58,6 +59,9 @@ import { MfEventRow } from './event-row';
       @if (session.can('events.create')) {
         <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" label="New event" (click)="router.navigate(['/manage/events/new'])"></button>
       }
+
+      <!-- Until the address is proved: what waits for it, and another link. -->
+      <mf-verify-email />
 
       @if (overview(); as o) {
         @if (o.attention.length > 0) {

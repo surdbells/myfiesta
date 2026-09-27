@@ -3,7 +3,7 @@ import { Banknote, Landmark, ShieldCheck } from 'lucide-angular';
 import type { PayoutRequestRow, PayoutStatement } from '@myfiesta/api-types';
 import { Organizer } from '../../core/organizer';
 import { formatMoney } from '../../core/money';
-import { messageOf } from '../../core/errors';
+import { isEmailUnverified, messageOf } from '../../core/errors';
 import {
   Dialogs,
   MfBadge,
@@ -424,7 +424,8 @@ export class OrgPayouts implements OnInit {
       this.toasts.show(message, 'success');
       await this.load();
     } catch (error) {
-      this.askError.set(messageOf(error, 'That request could not be sent.'));
+      // An unproved address gets the shell's prompt instead, on top of this sheet.
+      if (!isEmailUnverified(error)) this.askError.set(messageOf(error, 'That request could not be sent.'));
     } finally {
       this.busy.set(false);
     }
@@ -511,7 +512,9 @@ export class OrgPayouts implements OnInit {
       this.toasts.show('Saved. It is checked before the next payout.', 'success');
       await this.load();
     } catch (error) {
-      this.formError.set(messageOf(error, 'Those details could not be saved. Check them and try again.'));
+      // An unproved address gets the shell's prompt on top of this sheet,
+      // which stays open with what was typed.
+      if (!isEmailUnverified(error)) this.formError.set(messageOf(error, 'Those details could not be saved. Check them and try again.'));
     } finally {
       this.busy.set(false);
     }

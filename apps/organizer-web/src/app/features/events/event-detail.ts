@@ -13,7 +13,7 @@ import {
   SeriesOccurrence,
   TicketType,
 } from '../../core/api.types';
-import { messageFor } from '../../core/errors';
+import { isEmailUnverified, messageFor } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
 import { zonedWallClockToIso } from '../../core/zoned-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
@@ -311,6 +311,9 @@ export class EventDetail {
       },
       error: (response) => {
         this.publishing.set(false);
+        // An unproved address gets the shell's prompt instead, with the
+        // button that sends the link again.
+        if (isEmailUnverified(response)) return;
         this.error.set(messageFor(response, 'That could not be changed.'));
       },
     });

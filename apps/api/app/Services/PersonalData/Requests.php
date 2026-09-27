@@ -5,7 +5,9 @@ namespace App\Services\PersonalData;
 use App\Mail\DataRequestDone;
 use App\Mail\DataRequestVerify;
 use App\Models\DataRequest;
+use App\Models\User;
 use App\Services\Audit\Auditor;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
@@ -58,6 +60,49 @@ class Requests
     }
 
     /**
+     * An erasure asked for by somebody signed in: "Delete my account" in the
+     * phone app or the console.
+     *
+     * The same request the privacy page opens, recorded the same way and
+     * carried out by fulfil() below. What differs is the proof. The emailed
+     * link shows that whoever typed an address can read its inbox; somebody
+     * signed in who has just typed the account's password has shown the
+     * account is theirs — and when the account's address is one it proved,
+     * that covers the address too, so the link would only be a detour.
+     *
+     * An address the account never proved is not enough. Guest orders and
+     * tickets are found by address, and an account opened under somebody
+     * else's before sign-ups waited for their link would otherwise erase that
+     * person's tickets along with itself. Then the link goes out exactly as it
+     * does from the form, and nothing happens until it comes back.
+     *
+     * The caller has checked the password, and Eraser::refusal — staff
+     * access, or being the only owner of an organization: each is a step
+     * they can take now, and a request opened only to be refused would tell
+     * them so by email instead.
+     */
+    public function openForAccount(User $user, ?string $ip): DataRequest
+    {
+        $subject = new Subject($user->email, $user);
+
+        $request = DataRequest::create([
+            'kind' => 'erasure',
+            'email' => $subject->email,
+            'user_id' => $user->id,
+            'status' => 'pending',
+            'ip_address' => $ip,
+        ]);
+
+        if ($user->email_verified_at === null) {
+            Mail::to($subject->email)->queue(new DataRequestVerify($request));
+
+            return $request;
+        }
+
+        return $this->fulfil($request);
+    }
+
+    /**
      * The link came back. Do the thing.
      *
      * Immediately rather than in thirty days: the law allows a month because
@@ -71,15 +116,23 @@ class Requests
 
         $subject = Subject::forEmail($request->email);
 
-        $request->update([
-            'status' => 'verified',
-            'verified_at' => now(),
-            'due_at' => now()->addDays(DataRequest::DUE_DAYS),
-        ]);
+        // All or nothing. An erasure that stopped partway would leave an
+        // account with its name gone and its password and tokens still
+        // working, and a request stuck at "verified" that nothing retries.
+        // Rolled back, the request is still pending and its link still works
+        // once whatever stopped it is fixed. The audit entry and the email
+        // come after, so they describe something that happened.
+        DB::transaction(function () use ($request, $subject): void {
+            $request->update([
+                'status' => 'verified',
+                'verified_at' => now(),
+                'due_at' => now()->addDays(DataRequest::DUE_DAYS),
+            ]);
 
-        $request->kind === 'export'
-            ? $this->export($request, $subject)
-            : $this->erase($request, $subject);
+            $request->kind === 'export'
+                ? $this->export($request, $subject)
+                : $this->erase($request, $subject);
+        });
 
         $this->auditor->record("privacy.{$request->kind}", $request, null, metadata: [
             'status' => $request->status,

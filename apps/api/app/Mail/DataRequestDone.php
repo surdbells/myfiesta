@@ -44,6 +44,10 @@ class DataRequestDone extends Mailable implements ShouldQueue
                 'kept' => collect($this->request->outcome['erased'] ?? [])
                     ->filter(fn ($row) => in_array($row['action'] ?? '', ['anonymised', 'kept'], true))
                     ->isNotEmpty(),
+                // The one kept record that still carries their name: what they
+                // did on a team, which nobody can edit. Said, not glossed over
+                // by "they no longer say who you are".
+                'history' => isset($this->request->outcome['erased']['audit_logs']),
             ],
         );
     }

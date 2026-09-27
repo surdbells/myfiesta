@@ -3,6 +3,7 @@
 namespace App\Services\PersonalData;
 
 use App\Models\Organization;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -18,12 +19,13 @@ use Illuminate\Support\Str;
  *
  *   deleted    the row goes: a waitlist entry, a guest on somebody's list, an
  *              invitation. Nothing is owed to anybody on the strength of it.
- *   anonymised the row stays and the person leaves it: an order, a ticket, an
- *              audit entry. These are financial and admission records, which
+ *   anonymised the row stays and the person leaves it: an order, a ticket, a
+ *              door scan. These are financial and admission records, which
  *              both PIPEDA and the NDPR permit keeping, and which the ledger's
  *              append-only trigger would refuse to give up in any case.
  *   kept       the suppression list, which only works if it outlives the
- *              account, and the security log, which exists to catch misuse.
+ *              account; the security log, which exists to catch misuse; and
+ *              the audit trail, which the database will not let anybody edit.
  *
  * The person is told which of the three happened to what. "You have been
  * erased" when an anonymised order still sits in a ledger is a claim that does
@@ -72,23 +74,32 @@ class Eraser
     /**
      * Why this cannot be done, if it cannot.
      *
-     * One case: somebody who is the only owner of an organization. Erasing
-     * them would leave events, money and other people's tickets behind a door
-     * nobody can open — and their payout details are the organization's, not
+     * Two cases, each with a step somebody can actually take.
+     *
+     * A myFiesta staff account. Its admin sign-in codes go to its address,
+     * so it cannot be erased on the strength of a password alone — the thing
+     * most likely to have leaked — any more than the address can be moved
+     * that way (AccountController::requestEmailChange). And the role would
+     * outlive the erasure: this writes past the model, so User::booted()
+     * never takes it away, and StaffAccess's rule that the last administrator
+     * stays one would be skipped. Another administrator removes the access
+     * first, through StaffAccess, and then it is an account like any other.
+     *
+     * Somebody who is the only owner of an organization. Erasing them would
+     * leave events, money and other people's tickets behind a door nobody
+     * can open — and their payout details are the organization's, not
      * theirs to take with them. They are told to hand it over or close it
-     * first, which is a step they can actually take.
+     * first.
      */
     public function refusal(Subject $subject): ?string
     {
-        if ($subject->user === null) {
-            return null;
+        if ($subject->user?->isPlatformStaff()) {
+            return 'This account has myFiesta staff access, and its admin sign-in codes go to this address, so it '
+                .'cannot be erased from here. Ask another administrator to remove your staff access first, and then '
+                .'ask again.';
         }
 
-        $stranded = Organization::query()
-            ->whereHas('members', fn ($q) => $q->where('users.id', $subject->user->id)->where('organization_user.role', 'owner'))
-            ->withCount(['members as owners_count' => fn ($q) => $q->where('organization_user.role', 'owner')])
-            ->get()
-            ->filter(fn (Organization $organization) => $organization->owners_count === 1);
+        $stranded = $this->stranded($subject);
 
         if ($stranded->isEmpty()) {
             return null;
@@ -99,6 +110,30 @@ class Eraser
         return "You are the only owner of {$names}. Erasing your account would leave its events, its money and "
             .'its ticket holders with nobody who can reach them. Make somebody else an owner, or close the '
             .'organization, and then ask again.';
+    }
+
+    /**
+     * The organizations this person is the only owner of: the ones refusal()
+     * names.
+     *
+     * Separate so that somebody deleting their account from the app can be
+     * shown which organizations stand in the way, with a way to hand each one
+     * over, before they type a password rather than after.
+     *
+     * @return Collection<int, Organization>
+     */
+    public function stranded(Subject $subject): Collection
+    {
+        if ($subject->user === null) {
+            return new Collection;
+        }
+
+        return Organization::query()
+            ->whereHas('members', fn ($q) => $q->where('users.id', $subject->user->id)->where('organization_user.role', 'owner'))
+            ->withCount(['members as owners_count' => fn ($q) => $q->where('organization_user.role', 'owner')])
+            ->get()
+            ->filter(fn (Organization $organization) => $organization->owners_count === 1)
+            ->values();
     }
 
     /**

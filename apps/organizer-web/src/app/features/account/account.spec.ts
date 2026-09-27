@@ -1,27 +1,51 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL } from '../../core/api';
+import { EmailVerification } from '../../core/email-verification';
 import { SessionStore } from '../../core/session';
 import { Account } from './account';
 
+/** Somewhere for the page to send people: signed out, or to a team. */
+@Component({ template: '' })
+class Elsewhere {}
+
 /**
- * The account page's email section.
+ * The account page's email section, and deleting the account.
  *
  * Asking for a new address needs the current password, and the answer is the
  * server's sentence as it comes — it is the same whether or not the address
  * already has an account, and the page must not improve on it.
+ *
+ * Deleting says what goes and what stays before the password is typed, sends
+ * the only owner of an organization to hand it over instead, and forgets the
+ * session once the account behind it is gone.
  */
 describe('Account', () => {
   let backend: HttpTestingController;
   let session: SessionStore;
 
+  beforeAll(() => {
+    // jsdom's <dialog> has no showModal(); the dialog only needs it not to throw.
+    const dialog = HTMLDialogElement.prototype as unknown as Record<string, unknown>;
+    dialog['showModal'] ??= function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    };
+    dialog['close'] ??= function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+    };
+  });
+
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
+        provideRouter([
+          { path: 'sign-in', component: Elsewhere },
+          { path: 'team', component: Elsewhere },
+        ]),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: API_BASE_URL, useValue: 'http://api.test' },
@@ -54,6 +78,7 @@ describe('Account', () => {
     backend.expectOne('http://api.test/api/auth/me').flush({
       name: 'Ada Okafor',
       email: 'ada@example.test',
+      email_verified: true,
       phone: null,
       timezone: null,
       organizations: [],
@@ -132,5 +157,174 @@ describe('Account', () => {
 
     page.requestEmail();
     backend.expectNone('http://api.test/api/auth/email');
+  });
+
+  it('tells the banner the address is proved once it is', () => {
+    render();
+    me({ email_verified: true });
+
+    expect(TestBed.inject(EmailVerification).verified()).toBe(true);
+  });
+
+  // --- deleting the account ---------------------------------------------------------
+
+  function preview(overrides: Record<string, unknown> = {}) {
+    backend.expectOne((r) => r.method === 'GET' && r.url === 'http://api.test/api/auth/erasure').flush({
+      email: 'ada@example.test',
+      email_verified: true,
+      refused: null,
+      organizations: [],
+      kept_for_years: 7,
+      history_kept: false,
+      ...overrides,
+    });
+  }
+
+  it('says what goes and what stays before asking for the password', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview({ organizations: [{ id: 'org-2', name: 'Toronto Afters', slug: 'toronto-afters', role: 'manager', only_owner: false }] });
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent ?? '';
+    expect(text).toContain('What goes');
+    expect(text).toContain('What stays');
+    expect(text).toContain('for 7 years');
+    // A member who is not the only owner leaves, and the organization keeps its things.
+    expect(text).toContain('Your place on the team at Toronto Afters');
+    // Nothing in the audit trail names them, so nothing is said to.
+    expect(text).not.toContain('under your name');
+    expect(page.canDelete()).toBe(false);
+
+    page.deletePassword.set('the right one 12');
+    expect(page.canDelete()).toBe(true);
+  });
+
+  it('says that what they did on a team stays under their name', () => {
+    const fixture = render();
+    me();
+
+    fixture.componentInstance.openDelete();
+    preview({
+      organizations: [{ id: 'org-2', name: 'Toronto Afters', slug: 'toronto-afters', role: 'manager', only_owner: false }],
+      history_kept: true,
+    });
+    fixture.detectChanges();
+
+    // The audit trail cannot be edited, so it is not promised a clean slate.
+    const text = fixture.nativeElement.textContent ?? '';
+    expect(text).toContain('What you did on an organizer’s team');
+    expect(text).toContain('under your name');
+  });
+
+  it('refuses a staff account without offering to hand an organization over', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview({
+      refused: 'This account has myFiesta staff access. Ask another administrator to remove your staff access first.',
+      organizations: [],
+    });
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent ?? '';
+    expect(text).toContain('Ask another administrator');
+    // Neither the hand-over nor closing an organization has anything to do with it.
+    expect(text).not.toContain('Make somebody else an owner');
+    expect(text).not.toContain('write to us');
+
+    page.deletePassword.set('the right one 12');
+    expect(page.canDelete()).toBe(false);
+    page.deleteAccount();
+    backend.expectNone((r) => r.method === 'POST' && r.url === 'http://api.test/api/auth/erasure');
+  });
+
+  it('sends the only owner to hand the organization over, and offers no delete', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview({
+      refused: 'You are the only owner of Lagos Nights. Make somebody else an owner, or close the organization, and then ask again.',
+      organizations: [{ id: 'org-1', name: 'Lagos Nights', slug: 'lagos-nights', role: 'owner', only_owner: true }],
+    });
+    fixture.detectChanges();
+
+    expect(page.stranded().map((o) => o.name)).toEqual(['Lagos Nights']);
+    expect(fixture.nativeElement.textContent).toContain('Make somebody else an owner');
+    expect(fixture.nativeElement.textContent).toContain('write to us');
+
+    page.deletePassword.set('the right one 12');
+    expect(page.canDelete()).toBe(false);
+    page.deleteAccount();
+    backend.expectNone((r) => r.method === 'POST' && r.url === 'http://api.test/api/auth/erasure');
+  });
+
+  it('deletes with the password, then forgets the session that no longer exists', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview();
+    page.deletePassword.set('the right one 12');
+    page.deleteAccount();
+
+    const request = backend.expectOne((r) => r.method === 'POST' && r.url === 'http://api.test/api/auth/erasure');
+    expect(request.request.body).toEqual({ current_password: 'the right one 12' });
+    request.flush({ status: 'completed', message: 'Your account is deleted, and you are signed out everywhere.' });
+
+    // No sign-out request: every token the account had went with it.
+    backend.expectNone('http://api.test/api/auth/logout');
+    expect(session.signedIn()).toBe(false);
+    expect(page.deleteOpen()).toBe(false);
+  });
+
+  it('puts a wrong password under the password box and keeps the account', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview();
+    page.deletePassword.set('a guess');
+    page.deleteAccount();
+
+    backend.expectOne((r) => r.method === 'POST' && r.url === 'http://api.test/api/auth/erasure').flush(
+      { message: 'That is not your current password.', errors: { current_password: ['That is not your current password.'] } },
+      { status: 422, statusText: 'Unprocessable Content' },
+    );
+
+    expect(page.deletePasswordError()).toBe('That is not your current password.');
+    expect(session.signedIn()).toBe(true);
+  });
+
+  it('waits for the link when the address was never proved', () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.openDelete();
+    preview({ email_verified: false });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('first we email a link to ada@example.test');
+
+    page.deletePassword.set('the right one 12');
+    page.deleteAccount();
+    backend.expectOne((r) => r.method === 'POST' && r.url === 'http://api.test/api/auth/erasure').flush(
+      { status: 'pending', message: 'We sent a link to ada@example.test. Your account is deleted when you open it and confirm.' },
+      { status: 202, statusText: 'Accepted' },
+    );
+
+    // Nothing has gone yet, so nothing is forgotten here.
+    expect(page.deletePending()).toContain('We sent a link');
+    expect(page.deletePassword()).toBe('');
+    expect(session.signedIn()).toBe(true);
   });
 });

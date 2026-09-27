@@ -1,10 +1,14 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ToastStore, UiAlert, UiButton, UiField, UiPageHeader } from '@myfiesta/ui';
+import { Router } from '@angular/router';
+import { ToastStore, UiAlert, UiButton, UiField, UiModal, UiPageHeader } from '@myfiesta/ui';
 import { Api } from '../../core/api';
+import type { AccountErasurePreview } from '../../core/api.types';
+import { EmailVerification } from '../../core/email-verification';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { SITE_URL } from '../../core/site-url';
 
 /**
  * The signed-in person's own account: their name, their address and their
@@ -17,16 +21,22 @@ import { SessionStore } from '../../core/session';
  * The address is not edited in place. A new one is asked for, with the current
  * password, and the account moves only when the link sent to it is opened —
  * otherwise a borrowed laptop is enough to take an account over.
+ *
+ * And deleting it: the privacy page's erasure, asked for signed in, the same
+ * as the phone app's "Delete my account".
  */
 @Component({
   selector: 'app-account',
-  imports: [FormsModule, UiPageHeader, UiField, UiButton, UiAlert],
+  imports: [FormsModule, UiPageHeader, UiField, UiButton, UiAlert, UiModal],
   templateUrl: './account.html',
 })
 export class Account {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly router = inject(Router);
+  private readonly verification = inject(EmailVerification);
   readonly session = inject(SessionStore);
+  readonly site = inject(SITE_URL).replace(/\/+$/, '');
 
   constructor() {
     /*
@@ -41,6 +51,9 @@ export class Account {
     this.api.me().subscribe({
       next: (me) => {
         this.session.updateUser({ name: me.name, email: me.email });
+        // Opened after following the link: the banner goes now, not at the
+        // next reload.
+        if (typeof me.email_verified === 'boolean') this.verification.learn(me.email_verified);
         // Unless somebody has already started typing over it.
         if (this.name() === signedInAs) this.name.set(me.name);
       },
@@ -212,5 +225,108 @@ export class Account {
           this.passwordError.set(messageFor(response, 'Your password could not be changed.'));
         },
       });
+  }
+
+  // --- deleting the account ---------------------------------------------------
+
+  readonly deleteOpen = signal(false);
+  readonly erasure = signal<AccountErasurePreview | null>(null);
+  readonly erasureError = signal<string | null>(null);
+  readonly deletePassword = signal('');
+  readonly deletePasswordError = signal<string | null>(null);
+  readonly deleteError = signal<string | null>(null);
+  readonly deleting = signal(false);
+
+  /** "We sent a link": an address never proved has to be, before anything goes. */
+  readonly deletePending = signal<string | null>(null);
+
+  /** The organizations this person would leave, and those they would leave with nobody in charge. */
+  readonly leaving = computed(() => this.erasure()?.organizations ?? []);
+  readonly stranded = computed(() => this.leaving().filter((organization) => organization.only_owner));
+  readonly leavingNames = computed(() => this.leaving().map((organization) => organization.name).join(', '));
+
+  readonly canDelete = computed(
+    () => !!this.erasure() && !this.erasure()?.refused && this.deletePassword() !== '' && !this.deleting() && !this.deletePending(),
+  );
+
+  /**
+   * Opens with what would happen, asked of the server first — including
+   * whether it would be refused, which is better known before a password is
+   * typed than after.
+   */
+  openDelete(): void {
+    this.erasure.set(null);
+    this.erasureError.set(null);
+    this.deletePassword.set('');
+    this.deletePasswordError.set(null);
+    this.deleteError.set(null);
+    this.deletePending.set(null);
+    this.deleteOpen.set(true);
+
+    this.api.erasurePreview().subscribe({
+      next: (preview) => this.erasure.set(preview),
+      error: (response) => this.erasureError.set(messageFor(response, 'Could not work out what deleting would involve.')),
+    });
+  }
+
+  /** The password typed here does not outlive the dialog. */
+  closeDelete(): void {
+    this.deleteOpen.set(false);
+    this.deletePassword.set('');
+  }
+
+  /** To the team screen of an organization somebody else has to be made an owner of. */
+  handOver(organizationId: string): void {
+    this.closeDelete();
+    this.session.select(organizationId);
+    void this.router.navigate(['/team']);
+  }
+
+  deleteAccount(): void {
+    if (!this.canDelete()) return;
+
+    this.deleting.set(true);
+    this.deletePasswordError.set(null);
+    this.deleteError.set(null);
+
+    this.api.eraseAccount(this.deletePassword()).subscribe({
+      next: (result) => {
+        this.deleting.set(false);
+        this.deletePassword.set('');
+
+        if (result.status === 'pending') {
+          this.deletePending.set(result.message);
+          return;
+        }
+
+        // Every token the account had is gone, this one included: there is
+        // nothing to sign out of, only a session to forget.
+        this.deleteOpen.set(false);
+        this.verification.forget();
+        this.session.clear();
+        this.toasts.show(result.message, 'success');
+        void this.router.navigate(['/sign-in'], { replaceUrl: true });
+      },
+      error: (response: unknown) => {
+        this.deleting.set(false);
+
+        const body = response instanceof HttpErrorResponse ? response.error : null;
+
+        if (body?.errors?.current_password?.[0]) {
+          this.deletePasswordError.set(body.errors.current_password[0]);
+          return;
+        }
+
+        // Somebody became the only owner of something since the dialog
+        // opened. Nothing happened; the reason is the server's.
+        if (response instanceof HttpErrorResponse && response.status === 409 && typeof body?.message === 'string') {
+          const preview = this.erasure();
+          if (preview) this.erasure.set({ ...preview, refused: body.message });
+          return;
+        }
+
+        this.deleteError.set(messageFor(response, 'Your account could not be deleted. Nothing has changed.'));
+      },
+    });
   }
 }

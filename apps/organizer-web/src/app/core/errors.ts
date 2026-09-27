@@ -71,3 +71,14 @@ export function messageFor(error: unknown, fallback = 'Something went wrong.'): 
 
   return fallback;
 }
+
+/**
+ * The refusal that means "prove your address first".
+ *
+ * Publishing, asking to be paid and changing where payouts go wait for it.
+ * The interceptor hands it to the shell's prompt, which has the button that
+ * sends the link again, so a screen that meets it says nothing of its own.
+ */
+export function isEmailUnverified(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && error.status === 403 && error.error?.code === 'email_unverified';
+}

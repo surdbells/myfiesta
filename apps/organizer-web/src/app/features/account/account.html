@@ -115,4 +115,128 @@
       <button uiButton type="submit" [loading]="changing()" [disabled]="changing() || !canChange()">Change password</button>
     </div>
   </form>
+
+  <!-- A staff session is not anybody's own account, and the API refuses it this. -->
+  @if (!session.impersonation()) {
+    <section class="delete-account grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+      <header class="grid gap-1">
+        <h2 class="text-base font-semibold">Delete your account</h2>
+        <p class="text-pretty text-sm text-text-muted">
+          Closes your account and takes your name, email address and phone number off everything we hold. Orders,
+          tickets and payments stay, with nobody’s name on them, because the law says we keep them. The organizations
+          you belong to keep their events and their money.
+        </p>
+      </header>
+
+      <div>
+        <button uiButton type="button" variant="secondary" (click)="openDelete()">Delete my account…</button>
+      </div>
+    </section>
+  }
 </div>
+
+<ui-modal [open]="deleteOpen()" heading="Delete your account?" (dismissed)="closeDelete()">
+  @if (deletePending(); as message) {
+    <ui-alert tone="success">{{ message }}</ui-alert>
+  } @else if (erasureError(); as message) {
+    <ui-alert tone="danger">{{ message }}</ui-alert>
+  } @else if (erasure(); as preview) {
+    @if (preview.refused) {
+      <!-- Not yet: the only owner of an organization cannot leave it with nobody in charge, and a staff account
+           waits for another administrator. The message says which. -->
+      <div class="delete-account__refused grid gap-4 text-sm">
+        <ui-alert tone="warning" title="Not yet">{{ preview.refused }}</ui-alert>
+
+        @if (stranded().length > 0) {
+          <ul class="grid gap-2">
+            @for (organization of stranded(); track organization.id) {
+              <li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-4 py-3">
+                <span class="font-medium">{{ organization.name }}</span>
+                <button uiButton type="button" size="sm" variant="secondary" (click)="handOver(organization.id)">
+                  Make somebody else an owner
+                </button>
+              </li>
+            }
+          </ul>
+
+          <p class="text-pretty text-text-muted">
+            Invite them from the team screen, or change the role of somebody already on it. If there is nobody to hand
+            it to, <a class="underline" [href]="site + '/contact'" target="_blank" rel="noopener">write to us</a> and we
+            will close the organization with you. Then come back here.
+          </p>
+        }
+      </div>
+    } @else {
+      <form class="delete-account__form grid gap-4 text-sm" (ngSubmit)="deleteAccount()">
+        <div class="grid gap-2">
+          <h3 class="font-semibold">What goes</h3>
+          <ul class="grid list-disc gap-1 pl-5 text-pretty text-text-muted">
+            <li>Your sign-in, on every device.</li>
+            <li>Your name, email address and phone number.</li>
+            <li>Nights you saved, organizers you follow, and waitlist and guest-list places under your address.</li>
+            @if (leaving().length > 0) {
+              <li>Your place on the team at {{ leavingNames() }}. Their events, orders and money stay with them.</li>
+            }
+          </ul>
+        </div>
+
+        <div class="grid gap-2">
+          <h3 class="font-semibold">What stays</h3>
+          <ul class="grid list-disc gap-1 pl-5 text-pretty text-text-muted">
+            <li>
+              Orders, tickets and payments, with nobody’s name on them, for {{ preview.kept_for_years }} years, because
+              tax and accounting law requires it. Tickets for nights still to come keep working from the link in their
+              confirmation email.
+            </li>
+            @if (preview.history_kept) {
+              <li>
+                What you did on an organizer’s team — a refund, a price change, a cancelled event — in that history,
+                under your name. Nobody can edit it afterwards, us included.
+              </li>
+            }
+            <li>That you asked us not to email or text you, if you did, so that it stays that way.</li>
+            <li>A record that you asked for this, and what we did.</li>
+          </ul>
+        </div>
+
+        @if (!preview.email_verified) {
+          <ui-alert tone="info">
+            Your address has not been confirmed, so first we email a link to {{ preview.email }}. Your account is deleted
+            when you open it.
+          </ui-alert>
+        }
+        @if (deleteError(); as message) {
+          <ui-alert tone="danger">{{ message }}</ui-alert>
+        }
+
+        <!-- For password managers: which account the password below belongs to. -->
+        <input type="hidden" name="username" autocomplete="username" [value]="session.user()?.email ?? ''" />
+
+        <ui-field label="Your password" hint="So that a laptop left signed in isn’t enough to delete you." [error]="deletePasswordError()" required>
+          <input
+            id="delete-password"
+            name="deletePassword"
+            type="password"
+            autocomplete="current-password"
+            required
+            [ngModel]="deletePassword()"
+            (ngModelChange)="deletePassword.set($event); deletePasswordError.set(null)"
+          />
+        </ui-field>
+
+        <p class="text-pretty text-text-muted">This cannot be undone.</p>
+      </form>
+    }
+  } @else {
+    <p class="text-sm text-text-muted" role="status">Working out what that would involve…</p>
+  }
+
+  <ng-container modalActions>
+    <button uiButton type="button" variant="secondary" (click)="closeDelete()">{{ deletePending() ? 'Close' : 'Keep my account' }}</button>
+    @if (erasure() && !erasure()?.refused && !deletePending()) {
+      <button uiButton type="button" variant="danger" [loading]="deleting()" [disabled]="!canDelete()" (click)="deleteAccount()">
+        Delete my account
+      </button>
+    }
+  </ng-container>
+</ui-modal>

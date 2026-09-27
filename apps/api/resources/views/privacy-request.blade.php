@@ -88,7 +88,8 @@
           <p>
             Your account is closed, and your name and address are removed from everything we can remove them
             from. Orders, tickets and the entries that record money moving stay for seven years because the
-            law requires it — with nobody's name on them.
+            law requires it — with nobody's name on them. If you were on an organizer's team, what you did
+            there stays in its history under your name: nobody can edit that history, us included.
           </p>
           <p>This cannot be undone, and nobody will ask you why.</p>
         @else
@@ -112,7 +113,7 @@
           <p>Nothing has been erased. Ask again once that is sorted.</p>
         @elseif ($request->kind === 'erasure')
           <h1>Done</h1>
-          <p>You have been erased. What is left is below, with nobody's name attached to it.</p>
+          <p>You have been erased. What is left is below, and why it stays.</p>
           <ul>
             @foreach ($request->outcome['erased'] ?? [] as $table => $row)
               @if (($row['action'] ?? '') !== 'deleted' && $table !== 'account')

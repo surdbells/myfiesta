@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts run in Linux containers and CI, where a carriage return ends up
+# in the interpreter line ("bash\r: not found"). LF on every checkout, whatever
+# core.autocrlf says on the machine doing it.
+*.sh text eol=lf

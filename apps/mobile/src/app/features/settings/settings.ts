@@ -1,9 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Browser } from '@capacitor/browser';
+import type { AccountErasurePreview } from '@myfiesta/api-types';
 import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
 import { Reminders } from '../../core/reminders';
-import { Api, Ticket } from '../../core/api';
+import { Api, ApiError, Ticket } from '../../core/api';
+import { Discover } from '../../core/discovery';
 import { messageOf, fieldErrors } from '../../core/errors';
 import {
   MfButton,
@@ -26,6 +29,10 @@ import {
  * is one nobody reads. What an organization configures lives under Manage;
  * this is the person — their name, their address, their password, how the app
  * looks.
+ *
+ * And the way out for good: "Delete my account", which the App Store requires
+ * of an app that makes accounts. It is the privacy page's erasure, asked for
+ * signed in, and says what goes and what stays before the password is typed.
  */
 @Component({
   selector: 'mf-settings',
@@ -112,8 +119,98 @@ import {
         Sign out
       </button>
 
+      @if (!session.locked()) {
+        <mf-card class="block">
+          <p class="label">Delete your account</p>
+          <p class="hint muted">
+            Closes your account and takes your name, email address and phone number off everything we hold. Orders and
+            tickets stay, with nobody’s name on them, because the law says we keep them.
+          </p>
+          <button mfButton class="mt delete-account" variant="ghost" block [loading]="loadingErasure()" (click)="startDelete()">
+            Delete my account
+          </button>
+        </mf-card>
+      }
+
       <p class="version subtle">myFiesta {{ version }}</p>
     </mf-screen>
+
+    <mf-sheet
+      [open]="deleteOpen()"
+      [heading]="erasure()?.refused ? 'Not yet' : 'Delete your account?'"
+      [subheading]="erasure()?.refused ? null : 'This cannot be undone.'"
+      closable
+      (closed)="closeDelete()"
+    >
+      @if (deletePending(); as message) {
+        <p class="sent">{{ message }}</p>
+      } @else if (erasure(); as preview) {
+        @if (preview.refused) {
+          <!-- The only owner of an organization cannot leave it with nobody in charge; a staff account waits for
+               another administrator. The message says which. -->
+          <p class="sent">{{ preview.refused }}</p>
+          @if (stranded().length > 0) {
+            @for (organization of stranded(); track organization.id) {
+              <button mfButton class="mt" variant="secondary" block (click)="handOver(organization.id)">
+                Open the team at {{ organization.name }}
+              </button>
+            }
+            <p class="hint muted">
+              Make somebody on it an owner, or invite one. If there is nobody to hand it to, write to us and we will
+              close the organization with you. Then come back here.
+            </p>
+            <button mfButton class="mt" variant="ghost" block (click)="writeToUs()">Write to us</button>
+          }
+        } @else {
+          <div class="erasure">
+            <p class="label">What goes</p>
+            <ul>
+              <li>Your sign-in, on this phone and everywhere else.</li>
+              <li>Your name, email address and phone number.</li>
+              <li>Nights you saved, organizers you follow, and waitlist and guest-list places under your address.</li>
+              @if (leaving()) {
+                <li>Your place on the team at {{ leaving() }}. Their events, orders and money stay with them.</li>
+              }
+            </ul>
+            <p class="label">What stays</p>
+            <ul>
+              <li>
+                Orders, tickets and payments, with nobody’s name on them, for {{ preview.kept_for_years }} years, because
+                tax and accounting law requires it. Tickets for nights still to come keep working from the link in their
+                confirmation email.
+              </li>
+              @if (preview.history_kept) {
+                <li>
+                  What you did on an organizer’s team — a refund, a price change, a cancelled event — in that history,
+                  under your name. Nobody can edit it afterwards, us included.
+                </li>
+              }
+              <li>That you asked us not to email or text you, if you did, so that it stays that way.</li>
+              <li>A record that you asked for this, and what we did.</li>
+            </ul>
+            @if (!preview.email_verified) {
+              <p class="hint">
+                Your address has not been confirmed, so first we email a link to {{ preview.email }}. Your account is
+                deleted when you open it.
+              </p>
+            }
+            <mf-field label="Your password" hint="So a phone left unlocked is not enough to delete you." [error]="err('current_password')">
+              <input type="password" autocomplete="current-password" [value]="deletePassword()" (input)="deletePassword.set($any($event.target).value)" />
+            </mf-field>
+          </div>
+        }
+      }
+      <ng-container sheetFooter>
+        @if (deletePending() || erasure()?.refused) {
+          <button mfButton (click)="closeDelete()">Done</button>
+        } @else {
+          <button mfButton variant="secondary" (click)="closeDelete()">Keep it</button>
+          <button mfButton variant="danger" label="Deleting…" [loading]="deleting()" [disabled]="!deleteReady()" (click)="deleteAccount()">
+            Delete
+          </button>
+        }
+      </ng-container>
+    </mf-sheet>
 
     <mf-sheet [open]="detailsOpen()" heading="Your details" subheading="To sign in with a different email address, use Change email." closable (closed)="detailsOpen.set(false)">
       <div class="form">
@@ -255,6 +352,24 @@ import {
       margin-top: var(--space-6);
       text-align: center;
       font-size: var(--font-size-xs);
+    }
+
+    .delete-account {
+      color: var(--danger);
+    }
+
+    .erasure {
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .erasure ul {
+      display: grid;
+      gap: var(--space-2);
+      padding-left: var(--space-5);
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
     }
   `,
 })
@@ -510,5 +625,112 @@ export class Settings {
 
   go(path: string): void {
     void this.router.navigate([path]);
+  }
+
+  // --- deleting the account ---------------------------------------------------
+
+  private readonly discover = inject(Discover);
+
+  readonly deleteOpen = signal(false);
+  readonly loadingErasure = signal(false);
+  readonly erasure = signal<AccountErasurePreview | null>(null);
+  readonly deletePassword = signal('');
+  readonly deleting = signal(false);
+
+  /** "We sent a link": an address never proved has to be, before anything goes. */
+  readonly deletePending = signal<string | null>(null);
+
+  readonly stranded = computed(() => (this.erasure()?.organizations ?? []).filter((organization) => organization.only_owner));
+
+  /** The teams this person would leave, by name, or null for none. */
+  readonly leaving = computed(() => {
+    const names = (this.erasure()?.organizations ?? []).map((organization) => organization.name);
+
+    return names.length ? names.join(', ') : null;
+  });
+
+  readonly deleteReady = computed(
+    () => !!this.erasure() && !this.erasure()?.refused && this.deletePassword() !== '' && !this.deleting() && !this.deletePending(),
+  );
+
+  /**
+   * Opens with what would happen, asked of the server first — including
+   * whether it would be refused, which is better known before a password is
+   * typed than after.
+   */
+  async startDelete(): Promise<void> {
+    if (this.loadingErasure()) return;
+
+    this.loadingErasure.set(true);
+    this.errors.set({});
+    this.deletePassword.set('');
+    this.deletePending.set(null);
+
+    try {
+      this.erasure.set(await this.api.erasurePreview());
+      this.deleteOpen.set(true);
+    } catch (error) {
+      this.toasts.show(messageOf(error, 'Could not work out what deleting would involve. Try again.'), 'danger');
+    } finally {
+      this.loadingErasure.set(false);
+    }
+  }
+
+  /** The password typed here does not outlive the sheet. */
+  closeDelete(): void {
+    this.deleteOpen.set(false);
+    this.deletePassword.set('');
+  }
+
+  /** To the team of an organization somebody else has to be made an owner of. */
+  async handOver(organizationId: string): Promise<void> {
+    this.closeDelete();
+    await this.session.chooseOrganization(organizationId);
+    await this.router.navigate(['/manage/team']);
+  }
+
+  /** The site's contact page, in the browser: closing an organization is done with us. */
+  writeToUs(): void {
+    void Browser.open({ url: this.discover.siteBase() + '/contact' }).catch(() => undefined);
+  }
+
+  async deleteAccount(): Promise<void> {
+    if (!this.deleteReady()) return;
+
+    this.deleting.set(true);
+    this.errors.set({});
+
+    try {
+      const result = await this.api.eraseAccount(this.deletePassword());
+      this.deletePassword.set('');
+
+      if (result.status === 'pending') {
+        // Nothing has gone yet, so the phone stays signed in until it has.
+        this.deletePending.set(result.message);
+        return;
+      }
+
+      // Every token the account had is gone, this phone's included: there is
+      // nothing to sign out of, only a session to forget.
+      this.deleteOpen.set(false);
+      await this.session.clear();
+      this.toasts.show(result.message, 'success', 6000);
+      await this.router.navigate(['/'], { replaceUrl: true });
+    } catch (error) {
+      // Somebody became the only owner of something since the sheet opened.
+      // Nothing happened; the reason is the server's.
+      if (error instanceof ApiError && error.status === 409) {
+        const preview = this.erasure();
+        if (preview) this.erasure.set({ ...preview, refused: error.message });
+        return;
+      }
+
+      this.errors.set(fieldErrors(error));
+      // A 429 is the server saying how long to wait, and belongs in the same place.
+      if (error instanceof ApiError && error.status === 429) this.errors.set({ current_password: error.message });
+      if (!Object.keys(this.errors()).length) this.toasts.show(messageOf(error, 'Your account could not be deleted. Nothing has changed.'), 'danger');
+    } finally {
+      this.deleting.set(false);
+    }
   }
 }

@@ -7,6 +7,7 @@ import { SessionStore } from './core/session';
 import { Navigation } from './core/navigation';
 import { Chrome } from './core/chrome';
 import { DeepLinks } from './core/deep-links';
+import { EmailVerification } from './core/email-verification';
 
 /**
  * The shell: the stage screens slide across, the bottom bar, the app's toasts,
@@ -80,6 +81,9 @@ export class App {
   private readonly router = inject(Router);
   private readonly nav = inject(Navigation);
   protected readonly chrome = inject(Chrome);
+
+  /** Made with the shell, so a refusal for an unproved address is answered on every screen. */
+  private readonly verification = inject(EmailVerification);
 
   /**
    * The bar is for moving between places, so it is absent everywhere moving is

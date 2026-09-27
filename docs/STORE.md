@@ -9,8 +9,8 @@ The short version, in order:
 
 1. **Decide the iPhone bundle id.** The live iPhone app is not under the id
    this project uses. Nothing else on iOS can be finished before this.
-2. **Give the app a way to delete an account** (below). Apple rejects an app
-   that makes accounts and cannot start deleting one.
+2. **Set up the reviewers' account** (see [Deleting an account](#deleting-an-account)).
+   The app can delete accounts now, and App Review will try it.
 3. Fill in the two placeholders the site serves (Apple Team ID, Android
    signing fingerprint) and deploy the site.
 4. Confirm the live version numbers are below ours.
@@ -19,17 +19,49 @@ The short version, in order:
    Android differ, because only Android links Google ML Kit — and add the
    listing assets.
 
-## Not in the app yet
+## Deleting an account
 
-**Deleting an account.** The app makes accounts (`/join`) and has no way to
-start deleting one. App Store guideline 5.1.1(v) requires one inside the app,
-and Play's Data safety form asks for a deletion link. The erasure request
-exists — on the site's privacy page, `/privacy`, email-confirmed and open to
-people without an account — so the least that satisfies both is a "Delete my
-account" row in the app's Settings that opens that page, at the form, in the
-browser. Play's deletion URL is the same page. On Android 12 and up, with the
-app installed, that link opens the app first, which hands it straight to the
-browser (see [Links that open the app](#links-that-open-the-app)).
+App Store guideline 5.1.1(v) requires an app that makes accounts to start
+deleting one inside the app; Play's Data safety form asks for the same, and
+for a web link to it.
+
+- **In the app:** You → **Delete my account**, at the bottom of Settings. In
+  the console: the account page, **Delete your account**. Both first show
+  what goes (the sign-in on every device; name, email address and phone
+  number; saved nights, follows, waitlist and guest-list places) and what
+  stays (orders, tickets and payments for seven years, with nobody's name on
+  them, for tax and accounting; the do-not-email and do-not-text lists; the
+  record of the request itself; and, for anybody who has worked on a team,
+  what they did there, in its audit trail under their name, because that
+  trail is append-only and nobody can edit it), then ask for the password.
+- **It is the privacy page's erasure**, not a second one: the same request,
+  recorded in the admin panel's privacy requests, with the same email
+  afterwards saying what was kept (`GET`/`POST /api/auth/erasure`,
+  `Requests::openForAccount`). A proved address is erased at once and every
+  token revoked, so the phone forgets its session. An address never proved is
+  sent the page's link first, and nothing happens until it is opened: guest
+  orders are found by address, and an account opened under somebody else's
+  must not be able to erase theirs.
+- **The only owner of an organization is refused** before anything starts,
+  and shown a button to that organization's team to make somebody else an
+  owner. There is no way for an owner to close an organization themselves
+  yet, so the screen says to write to us (the site's `/contact`) when there
+  is nobody to hand it to.
+- **A myFiesta staff account is refused** too, from the app and from the
+  privacy page's link alike: its admin sign-in codes go to its address, so a
+  password alone must not shut it. Another administrator removes the staff
+  access first, and then it is deleted like any other account.
+- **Play's deletion URL** is `https://myfiesta.ca/privacy` — the erasure form
+  there works for anybody, with or without the app or an account. On Android
+  12 and up, with the app installed, that link opens the app first, which
+  hands it straight to the browser (see
+  [Links that open the app](#links-that-open-the-app)).
+- **App Review signs in and may delete.** Give each store a demo account that
+  is not the only owner of any organization (or it will be refused, which a
+  reviewer may read as broken), with a proved address, and expect to make a
+  new one after each review. Only the operator can make and keep those.
+
+## Not in the app yet
 
 **A promoter's ref through the app's checkout.** A promoter's link
 (`/{slug}?ref=…`) opens the site in the browser on both platforms, not the
@@ -335,9 +367,10 @@ library.
     Only door staff scanning codes cause it, but nobody can turn it off, so
     it is not optional. Re-read Google's page before each submission; it
     lists only the SDK's latest version.
-  - Deletion: yes, on request — the erasure request on the site's
-    `/privacy` page. That erases what the API keeps; what ML Kit sent is
-    Google's.
+  - Deletion: yes, on request — in the app (You → Delete my account), and
+    for anybody without it, the erasure request on the site's `/privacy`
+    page, which is the URL to give. That erases what the API keeps, less what
+    the law keeps without a name on it; what ML Kit sent is Google's.
 
 ## Building a release
 

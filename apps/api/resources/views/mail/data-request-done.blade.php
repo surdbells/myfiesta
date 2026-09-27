@@ -16,6 +16,12 @@ The law requires us to keep those for seven years, and they no longer say who yo
 your address on purpose — the list that stops us emailing you — because forgetting that would start the
 emails again.
 @endif
+
+@if ($history)
+What you did on an organizer's team — a refund, a price change, a cancelled event — stays in that history
+under the name you had then. Nobody can edit that history afterwards, us included, which is what makes it
+worth keeping.
+@endif
 @else
 # Your data is ready
 

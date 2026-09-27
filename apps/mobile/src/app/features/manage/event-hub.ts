@@ -34,7 +34,7 @@ import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
 import { Discover } from '../../core/discovery';
 import { formatMoney } from '../../core/money';
-import { messageOf } from '../../core/errors';
+import { isEmailUnverified, messageOf } from '../../core/errors';
 import { longEventTime, shortEventTime } from '../../core/event-time';
 import { until } from '../../core/when';
 import { EventContext } from './event-context';
@@ -837,7 +837,9 @@ export class EventHub implements OnInit {
       await task();
       if (reload) await this.load();
     } catch (error) {
-      this.toasts.show(messageOf(error), 'danger');
+      // An unproved address is answered by the shell's prompt, which can
+      // send the link again; a toast of the same words would only cover it.
+      if (!isEmailUnverified(error)) this.toasts.show(messageOf(error), 'danger');
     } finally {
       this.working.set(false);
     }

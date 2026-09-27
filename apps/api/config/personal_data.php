@@ -50,6 +50,22 @@ return [
             'key' => 'user_id',
         ],
 
+        // Two lists a person keeps for themselves: nights saved for later,
+        // and organizers followed. A browsing habit, owed to nobody. The
+        // account row is kept rather than deleted, so its cascade never
+        // fires and these would otherwise outlive the person.
+        'saved_events' => [
+            'strategy' => 'delete',
+            'key' => 'user_id',
+            'reason' => 'A private list. No transaction and no retention duty.',
+        ],
+
+        'organization_follows' => [
+            'strategy' => 'delete',
+            'key' => 'user_id',
+            'reason' => 'A private list; an organizer is only ever told how many follow them. No retention duty.',
+        ],
+
         'organization_user' => [
             'strategy' => 'delete',
             'key' => 'user_id',
@@ -69,19 +85,22 @@ return [
          * Added deliberately rather than caught by the heuristic — `actor_label`
          * does not look like a personal column and holds somebody's name.
          *
-         * Anonymised, not deleted. The rows are the record that a refund was
-         * sent, a price was dropped, an event was cancelled; deleting them
-         * because the person who did it left would destroy the history of money
-         * that moved, which both PIPEDA and the NDPR permit retaining. What goes
-         * is the name: the action survives, the identity does not, and the
-         * foreign key is already nullOnDelete so the join disappears with the
-         * account.
+         * Kept as it is. The rows are the record that a refund was sent, a
+         * price was dropped, an event was cancelled, and who did it: the
+         * question an organization asks of its own history is "who dropped the
+         * price at 11pm?", and an answer that vanishes when that person leaves
+         * is no answer. The table is append-only, enforced by a trigger, so an
+         * erasure that tried to blank the name would be refused by the
+         * database halfway through — which is what this entry used to do.
+         * Both PIPEDA and the NDPR permit keeping a record needed to account
+         * for money and to detect misuse. The account the rows point at is
+         * anonymised like any other, so nothing new can be learned through
+         * the join.
          */
         'audit_logs' => [
-            'strategy' => 'anonymise',
+            'strategy' => 'retain',
             'key' => 'actor_id',
-            'columns' => ['actor_label', 'ip_address'],
-            'reason' => 'The record that something happened is a financial record. Who did it is not, once they have asked to be forgotten.',
+            'reason' => 'What you did on an organizer\'s team or as myFiesta staff — a refund, a price change, a cancelled event — stays in that history under the name you had then, with the internet address it came from. Nobody can edit it afterwards, us included, which is what makes it worth keeping.',
         ],
 
         'sensitive_data_accesses' => [

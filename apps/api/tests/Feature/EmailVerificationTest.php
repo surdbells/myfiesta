@@ -271,6 +271,21 @@ class EmailVerificationTest extends TestCase
         Mail::assertSent(VerifyEmailAddress::class, EmailVerification::PER_HOUR);
     }
 
+    public function test_the_account_says_whether_its_address_is_proved(): void
+    {
+        $user = $this->owner(verified: false);
+
+        // So the console and the phone can say so before somebody presses
+        // Publish, rather than learning it from the refusal.
+        $this->getJson('/api/auth/me')->assertOk()->assertJsonPath('email_verified', false);
+
+        $this->postJson('/api/auth/email/verification')->assertStatus(202);
+        $this->post($this->verificationLink('ada@example.com'), ['password' => 'correct horse 7'])->assertOk();
+
+        $this->actAs($user);
+        $this->getJson('/api/auth/me')->assertOk()->assertJsonPath('email_verified', true);
+    }
+
     public function test_a_proved_address_is_told_so_and_sent_nothing(): void
     {
         $this->owner(verified: true);
