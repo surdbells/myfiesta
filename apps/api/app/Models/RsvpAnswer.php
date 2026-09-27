@@ -19,11 +19,13 @@ class RsvpAnswer extends Model
         return ['value' => 'array'];
     }
 
+    /** @return BelongsTo<Rsvp, $this> */
     public function rsvp(): BelongsTo
     {
         return $this->belongsTo(Rsvp::class);
     }
 
+    /** @return BelongsTo<EventQuestion, $this> */
     public function question(): BelongsTo
     {
         return $this->belongsTo(EventQuestion::class, 'event_question_id')->withTrashed();

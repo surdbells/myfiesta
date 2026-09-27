@@ -27,21 +27,25 @@ class Settlement extends Model
         return ['settled_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function settledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'settled_by');
     }
 
+    /** @return Attribute<Money, never> */
     protected function money(): Attribute
     {
         return Attribute::get(fn () => new Money($this->amount, $this->currency));

@@ -26,21 +26,25 @@ class Ticket extends Model
         return ['checked_in_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<TicketType, $this> */
     public function ticketType(): BelongsTo
     {
         return $this->belongsTo(TicketType::class);
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
@@ -51,17 +55,21 @@ class Ticket extends Model
      *
      * Only the per-person answers reach a ticket. What the buyer answered for
      * the order as a whole belongs to the order.
+     *
+     * @return HasMany<OrderAnswer, $this>
      */
     public function answers(): HasMany
     {
         return $this->hasMany(OrderAnswer::class);
     }
 
+    /** @return HasMany<TicketScan, $this> */
     public function scans(): HasMany
     {
         return $this->hasMany(TicketScan::class);
     }
 
+    /** @return HasMany<TicketTransfer, $this> */
     public function transfers(): HasMany
     {
         return $this->hasMany(TicketTransfer::class);

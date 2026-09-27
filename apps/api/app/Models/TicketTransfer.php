@@ -17,11 +17,13 @@ class TicketTransfer extends Model
         return ['transferred_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<Ticket, $this> */
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(Ticket::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function initiator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'initiated_by');

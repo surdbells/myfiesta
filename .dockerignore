@@ -16,6 +16,11 @@
 # Build output. The images build their own; a stale local copy shipping
 # instead is a deploy of whatever was last built on somebody's laptop.
 **/dist
+# Except the design tokens, which are not build output in that sense: they are
+# committed, CI fails if they drift from tokens.json, and both web apps import
+# them straight from this folder. No image regenerates them, so without them
+# the console and the public site have no stylesheet to build.
+!packages/tokens/dist
 **/.angular
 apps/api/bootstrap/cache/*.php
 apps/api/public/build

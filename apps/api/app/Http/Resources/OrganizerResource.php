@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Organization;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Storage;
  * no join date and no contact address, because none of those help somebody
  * decide whether to go to a party and two of them belong to the organizer
  * rather than to the public.
+ *
+ * @mixin Organization
  */
 class OrganizerResource extends JsonResource
 {

@@ -105,11 +105,15 @@ return [
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'strict' => false,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                // The poster column is a longblob. Buffering keeps one row in
-                // memory at a time rather than the whole result set.
+            'options' => extension_loaded('pdo_mysql') ? [
+                // Buffered, PDO's default, said out loud. A buffered query holds
+                // its whole result in memory, which is why the poster import
+                // (the longblob column) asks for one row per query; in return
+                // the connection can be asked something else before a result
+                // is read to the end. Not wrapped in array_filter(), which
+                // would quietly drop this if it were ever set to false.
                 PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
-            ]) : [],
+            ] : [],
         ],
 
         'pgsql' => [

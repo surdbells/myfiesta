@@ -50,17 +50,23 @@ class Guest extends Model
         return 'invite_token';
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return HasMany<Rsvp, $this> */
     public function rsvps(): HasMany
     {
         return $this->hasMany(Rsvp::class);
     }
 
-    /** The current answer. Superseded ones are kept but never the live one. */
+    /**
+     * The current answer. Superseded ones are kept but never the live one.
+     *
+     * @return HasOne<Rsvp, $this>
+     */
     public function rsvp(): HasOne
     {
         return $this->hasOne(Rsvp::class)->whereNull('superseded_at');

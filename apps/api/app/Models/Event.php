@@ -69,47 +69,59 @@ class Event extends Model
         return 'slug';
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<Venue, $this> */
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
     }
 
+    /** @return HasMany<TicketType, $this> */
     public function ticketTypes(): HasMany
     {
         return $this->hasMany(TicketType::class);
     }
 
+    /** @return BelongsTo<EventSeries, $this> */
     public function series(): BelongsTo
     {
         return $this->belongsTo(EventSeries::class, 'series_id');
     }
 
+    /** @return HasMany<EventMessage, $this> */
     public function messages(): HasMany
     {
         return $this->hasMany(EventMessage::class)->latest('created_at');
     }
 
+    /** @return HasMany<EventReminder, $this> */
     public function reminders(): HasMany
     {
         return $this->hasMany(EventReminder::class)->orderByDesc('offset_minutes');
     }
 
+    /** @return HasMany<EventImage, $this> */
     public function images(): HasMany
     {
         return $this->hasMany(EventImage::class);
     }
 
-    /** The one picture that sells the link. */
+    /**
+     * The one picture that sells the link.
+     *
+     * @return HasOne<EventImage, $this>
+     */
     public function banner(): HasOne
     {
         return $this->hasOne(EventImage::class)->where('kind', 'banner');
     }
 
+    /** @return HasMany<EventImage, $this> */
     public function gallery(): HasMany
     {
         return $this->hasMany(EventImage::class)
@@ -118,23 +130,33 @@ class Event extends Model
             ->orderBy('created_at');
     }
 
-    /** Sold with a ticket and admitting nobody: a table, a bottle, a shirt. */
+    /**
+     * Sold with a ticket and admitting nobody: a table, a bottle, a shirt.
+     *
+     * @return HasMany<AddOn, $this>
+     */
     public function addOns(): HasMany
     {
         return $this->hasMany(AddOn::class)->orderBy('sort_order')->orderBy('created_at');
     }
 
-    /** What this event asks the people coming to it, in the order it asks. */
+    /**
+     * What this event asks the people coming to it, in the order it asks.
+     *
+     * @return HasMany<EventQuestion, $this>
+     */
     public function questions(): HasMany
     {
         return $this->hasMany(EventQuestion::class)->orderBy('sort_order')->orderBy('created_at');
     }
 
+    /** @return HasMany<Order, $this> */
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }
 
+    /** @return HasMany<Ticket, $this> */
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);

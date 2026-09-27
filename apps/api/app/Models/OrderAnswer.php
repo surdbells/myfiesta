@@ -31,21 +31,25 @@ class OrderAnswer extends Model
         return ['value' => 'array'];
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<OrderLine, $this> */
     public function line(): BelongsTo
     {
         return $this->belongsTo(OrderLine::class, 'order_line_id');
     }
 
+    /** @return BelongsTo<Ticket, $this> */
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(Ticket::class);
     }
 
+    /** @return BelongsTo<EventQuestion, $this> */
     public function question(): BelongsTo
     {
         // Including deleted ones: a question an organizer has since removed is

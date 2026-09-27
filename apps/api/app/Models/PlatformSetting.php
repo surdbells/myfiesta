@@ -37,6 +37,7 @@ class PlatformSetting extends Model
         static::deleted(fn () => PlatformSettings::forget());
     }
 
+    /** @return BelongsTo<User, $this> */
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');

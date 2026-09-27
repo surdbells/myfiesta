@@ -44,7 +44,11 @@ class Organization extends Model
         return $this->suspended_at !== null;
     }
 
-    /** The member of staff who suspended it, while it is suspended. */
+    /**
+     * The member of staff who suspended it, while it is suspended.
+     *
+     * @return BelongsTo<User, $this>
+     */
     public function suspender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'suspended_by');
@@ -69,6 +73,7 @@ class Organization extends Model
         return $this->verified_at !== null && $this->verified_name !== $this->name;
     }
 
+    /** @return BelongsToMany<User, $this, OrganizationUser> */
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class)
@@ -77,41 +82,49 @@ class Organization extends Model
             ->withTimestamps();
     }
 
+    /** @return HasMany<Event, $this> */
     public function events(): HasMany
     {
         return $this->hasMany(Event::class);
     }
 
+    /** @return HasMany<Venue, $this> */
     public function venues(): HasMany
     {
         return $this->hasMany(Venue::class);
     }
 
+    /** @return HasMany<Code, $this> */
     public function codes(): HasMany
     {
         return $this->hasMany(Code::class);
     }
 
+    /** @return HasMany<Settlement, $this> */
     public function settlements(): HasMany
     {
         return $this->hasMany(Settlement::class);
     }
 
+    /** @return HasMany<LedgerEntry, $this> */
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(LedgerEntry::class);
     }
 
+    /** @return HasMany<OrganizationPayoutDetail, $this> */
     public function payoutDetails(): HasMany
     {
         return $this->hasMany(OrganizationPayoutDetail::class);
     }
 
+    /** @return HasMany<OrganizationIdentityDocument, $this> */
     public function identityDocuments(): HasMany
     {
         return $this->hasMany(OrganizationIdentityDocument::class);
     }
 
+    /** @return HasMany<PayoutRequest, $this> */
     public function payoutRequests(): HasMany
     {
         return $this->hasMany(PayoutRequest::class);

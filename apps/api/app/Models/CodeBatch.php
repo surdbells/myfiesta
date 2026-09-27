@@ -14,16 +14,19 @@ class CodeBatch extends Model
 
     protected $guarded = ['id'];
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return HasMany<Code, $this> */
     public function codes(): HasMany
     {
         return $this->hasMany(Code::class, 'batch_id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

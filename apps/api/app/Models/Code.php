@@ -36,12 +36,17 @@ class Code extends Model
         ];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
-    /** Null scopes the code to every event the organization runs. */
+    /**
+     * Null scopes the code to every event the organization runs.
+     *
+     * @return BelongsTo<Event, $this>
+     */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
@@ -52,13 +57,19 @@ class Code extends Model
      *
      * Only an event's own code can name them: an organization-wide code runs
      * across events whose ticket types it cannot know about.
+     *
+     * @return BelongsToMany<TicketType, $this>
      */
     public function ticketTypes(): BelongsToMany
     {
         return $this->belongsToMany(TicketType::class);
     }
 
-    /** The tiers this code opens to whoever holds it. */
+    /**
+     * The tiers this code opens to whoever holds it.
+     *
+     * @return BelongsToMany<TicketType, $this>
+     */
     public function unlocks(): BelongsToMany
     {
         return $this->belongsToMany(TicketType::class, 'code_unlocks');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Event;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -11,6 +12,8 @@ use Illuminate\Support\Collection;
  *
  * Carries the cheapest way in rather than a price range, because that is what a
  * browsing decision turns on and what the price filter matches.
+ *
+ * @mixin Event
  */
 class EventSummaryResource extends JsonResource
 {

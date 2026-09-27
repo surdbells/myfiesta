@@ -46,6 +46,7 @@ class DataRequest extends Model
         static::creating(fn (DataRequest $request) => $request->token ??= Str::random(48));
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

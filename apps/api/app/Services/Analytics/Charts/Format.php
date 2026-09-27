@@ -57,7 +57,9 @@ final class Format
         $abs = abs($n);
         $sign = $n < 0 ? '-' : '';
 
-        foreach ([1e9 => 'B', 1e6 => 'M', 1e3 => 'K'] as $size => $suffix) {
+        // Integers: PHP truncates a float key to an int, which is harmless for
+        // these three and would not be for 1.5e3.
+        foreach ([1_000_000_000 => 'B', 1_000_000 => 'M', 1_000 => 'K'] as $size => $suffix) {
             if ($abs >= $size) {
                 $scaled = $abs / $size;
 

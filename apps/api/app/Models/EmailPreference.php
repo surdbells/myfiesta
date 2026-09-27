@@ -61,7 +61,7 @@ class EmailPreference extends Model
     /** @return array<int, string> the addresses that still want announcements */
     public static function marketable(array $emails): array
     {
-        return static::wanting($emails, 'marketing_opted_out_at');
+        return self::wanting($emails, 'marketing_opted_out_at');
     }
 
     public function wantsReminders(): bool
@@ -72,7 +72,7 @@ class EmailPreference extends Model
     /** @return array<int, string> the addresses that still want reminders */
     public static function remindable(array $emails): array
     {
-        return static::wanting($emails, 'reminders_opted_out_at');
+        return self::wanting($emails, 'reminders_opted_out_at');
     }
 
     /**

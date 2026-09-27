@@ -18,6 +18,7 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
       contract: ${{ steps.filter.outputs.contract }}
       tokens: ${{ steps.filter.outputs.tokens }}
+      docker: ${{ steps.filter.outputs.docker }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -37,6 +38,11 @@ jobs:
             mobile:     ['apps/mobile/**', 'packages/tokens/**', 'packages/door/**', 'packages/shared/**', 'packages/api-types/**', 'package.json', 'package-lock.json']
             contract:   ['packages/contract/**']
             tokens:     ['packages/tokens/**']
+            # Everything the images copy. All four build from the root, so
+            # .dockerignore decides what of it reaches each one. And the
+            # example that stands in for .env.production when the compose
+            # file is checked.
+            docker:     ['ops/docker/**', '.dockerignore', '.env.production.example', 'apps/api/**', 'apps/web/**', 'apps/organizer-web/**', 'packages/**', 'package.json', 'package-lock.json']
 
   tokens:
     needs: changes
@@ -118,7 +124,19 @@ jobs:
           extensions: pdo_pgsql, redis, gd, intl
           coverage: none
       - run: composer install --prefer-dist --no-progress
+      # Formatting, first because it fails in seconds: ./vendor/bin/pint in apps/api puts it right.
+      - run: ./vendor/bin/pint --test
       - run: cp .env.example .env && php artisan key:generate
+      # Static analysis: phpstan.neon says what it looks for and why, and
+      # `composer analyse` is the same run on a laptop. PHPStan's own result
+      # cache is carried from one run to the next, so it reads again only
+      # what changed; it notices a changed config or lockfile by itself.
+      - uses: actions/cache@v6
+        with:
+          path: apps/api/storage/framework/cache/phpstan
+          key: phpstan-${{ github.sha }}
+          restore-keys: phpstan-
+      - run: composer analyse -- --no-progress --error-format=github
       # Every value the services here differ on, named rather than inherited.
       # .env.example describes the developer stack in compose.yaml, where
       # Postgres is on 15432 and Redis on 56379 to stay clear of Windows'
@@ -186,3 +204,66 @@ jobs:
       # Android only here: the iOS copy wants CocoaPods and a Mac.
       - run: npx cap copy android
         working-directory: apps/mobile
+
+  # The four production images, built the way a release builds them, and the
+  # compose file that runs them read the way a deploy reads it. Nothing is
+  # pushed and nothing is kept: this finds a Dockerfile that has stopped
+  # building on the day it stops, not on the night of a release.
+  docker:
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Every variable compose.prod.yml refuses to start without, given a
+      # dummy, with the example standing in for .env.production so a line in
+      # it that compose cannot read fails here as well. Nothing in either file
+      # is a secret, and nothing here needs one.
+      - name: compose.prod.yml
+        run: |
+          cp .env.production.example .env.production
+          printf '%s\n' TAG=ci TRUSTED_PROXIES=10.0.0.1 SITE_HOSTS=example.test \
+            API_BASE_URL=https://api.example.test CONSOLE_URL=https://console.example.test \
+            PUBLIC_URL=https://example.test > "$RUNNER_TEMP/ci.env"
+          docker compose --env-file .env.production --env-file "$RUNNER_TEMP/ci.env" \
+            -f ops/docker/compose.prod.yml config --quiet
+      # Each image's layers are kept in the Actions cache under its own name,
+      # so the three a change did not touch come back from the cache rather
+      # than being built again.
+      - uses: docker/setup-buildx-action@v4
+      - name: api
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/api.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: api-web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/api-web.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=api-web
+          cache-to: type=gha,scope=api-web,mode=max
+      - name: console
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/console.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=console
+          cache-to: type=gha,scope=console,mode=max
+      - name: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/web.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max

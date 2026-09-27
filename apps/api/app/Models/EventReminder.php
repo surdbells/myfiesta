@@ -26,6 +26,7 @@ class EventReminder extends Model
         return ['sent_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);

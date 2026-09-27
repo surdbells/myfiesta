@@ -64,6 +64,8 @@ class TaxRate extends Model
      * resolve() matches the event's province exactly, so an Ontario rate
      * typed as "on" would never apply to an Ontario event, which would
      * quietly fall back to the federal rate.
+     *
+     * @return Attribute<string|null, string|null>
      */
     protected function subdivision(): Attribute
     {

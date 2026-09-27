@@ -2,12 +2,14 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Receipts\Receipt;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
 
+/** @mixin Ticket */
 class TicketResource extends JsonResource
 {
     public function toArray(Request $request): array

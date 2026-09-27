@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -36,6 +37,12 @@ use Laravel\Sanctum\PersonalAccessToken;
  * `password` is nullable. Historical buyers migrate as unclaimed records keyed
  * on the email their tickets were issued to, so when they later register their
  * orders are already waiting.
+ *
+ * The terms columns are named here because the migration that adds them
+ * loops over three tables, and Larastan reads a migration without running it.
+ *
+ * @property string|null $terms_version
+ * @property Carbon|null $terms_accepted_at
  */
 #[Fillable(['name', 'email', 'password', 'phone', 'locale', 'timezone'])]
 #[Hidden(['password', 'remember_token'])]
@@ -56,6 +63,7 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
         ];
     }
 
+    /** @return BelongsToMany<Organization, $this, OrganizationUser> */
     public function organizations(): BelongsToMany
     {
         /*
@@ -75,11 +83,13 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
             ->withTimestamps();
     }
 
+    /** @return HasMany<Ticket, $this> */
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class, 'owner_user_id');
     }
 
+    /** @return HasMany<Order, $this> */
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

@@ -49,32 +49,38 @@ class Refund extends Model
         ];
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
     }
 
+    /** @return BelongsToMany<Ticket, $this> */
     public function tickets(): BelongsToMany
     {
         return $this->belongsToMany(Ticket::class, 'refund_tickets')
             ->withTimestamps();
     }
 
+    /** @return Attribute<Money, never> */
     protected function money(): Attribute
     {
         return Attribute::get(fn () => new Money($this->amount, $this->currency));

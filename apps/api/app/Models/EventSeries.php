@@ -31,22 +31,29 @@ class EventSeries extends Model
         ];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
-    /** The event occurrences are copied from. */
+    /**
+     * The event occurrences are copied from.
+     *
+     * @return BelongsTo<Event, $this>
+     */
     public function source(): BelongsTo
     {
         return $this->belongsTo(Event::class, 'source_event_id');
     }
 
+    /** @return HasMany<Event, $this> */
     public function occurrences(): HasMany
     {
         return $this->hasMany(Event::class, 'series_id')->orderBy('series_occurs_at');
     }
 
+    /** @return HasMany<EventSeriesException, $this> */
     public function exceptions(): HasMany
     {
         return $this->hasMany(EventSeriesException::class, 'series_id');

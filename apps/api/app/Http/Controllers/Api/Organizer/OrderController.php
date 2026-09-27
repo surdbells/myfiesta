@@ -179,6 +179,8 @@ class OrderController extends Controller
      *
      * One definition for the screen and the export, so a spreadsheet can never
      * hold a different set of orders from the list it was exported from.
+     *
+     * @return Builder<Order>
      */
     private function filtered(Organization $organization, array $filters): Builder
     {

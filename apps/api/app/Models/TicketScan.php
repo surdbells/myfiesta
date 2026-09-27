@@ -26,16 +26,19 @@ class TicketScan extends Model
         return ['scanned_at' => 'datetime'];
     }
 
+    /** @return BelongsTo<Ticket, $this> */
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(Ticket::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function scanner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'scanned_by');

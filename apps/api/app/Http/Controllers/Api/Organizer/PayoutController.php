@@ -347,7 +347,7 @@ class PayoutController extends Controller
             'currency' => $this->currency($organization),
             // The only part kept in the clear, and the only part ever shown.
             'account_last_four' => $rail === 'bank_transfer' && $request->filled('account_number')
-                ? substr(preg_replace('/\D/', '', $request->string('account_number')), -4)
+                ? substr(preg_replace('/\D/', '', $request->string('account_number')->toString()), -4)
                 : null,
         ]);
 

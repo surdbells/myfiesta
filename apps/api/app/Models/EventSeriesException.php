@@ -24,6 +24,7 @@ class EventSeriesException extends Model
         return ['occurs_at' => UtcDateTime::class];
     }
 
+    /** @return BelongsTo<EventSeries, $this> */
     public function series(): BelongsTo
     {
         return $this->belongsTo(EventSeries::class, 'series_id');

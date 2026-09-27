@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * Somebody who has asked for an account and not yet shown the address is
@@ -11,6 +12,12 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Nothing exists for them until the link sent to that address is opened —
  * see SignUps::complete(), which turns one of these into an account.
+ *
+ * The terms columns are named here because the migration that adds them
+ * loops over three tables, and Larastan reads a migration without running it.
+ *
+ * @property string|null $terms_version
+ * @property Carbon|null $terms_accepted_at
  */
 class PendingRegistration extends Model
 {

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -20,6 +21,12 @@ use Illuminate\Support\Str;
  *
  * user_id is null for guest checkout, which is the primary path — buying
  * requires no account.
+ *
+ * The terms columns are named here because the migration that adds them
+ * loops over three tables, and Larastan reads a migration without running it.
+ *
+ * @property string|null $terms_version
+ * @property Carbon|null $terms_accepted_at
  */
 class Order extends Model
 {
@@ -120,85 +127,113 @@ class Order extends Model
         ];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Code, $this> */
     public function code(): BelongsTo
     {
         return $this->belongsTo(Code::class);
     }
 
+    /** @return BelongsTo<TaxRate, $this> */
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
     }
 
+    /** @return HasMany<OrderLine, $this> */
     public function lines(): HasMany
     {
         return $this->hasMany(OrderLine::class);
     }
 
+    /** @return HasMany<Ticket, $this> */
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
     }
 
-    /** What the buyer answered: for the order, and about each person on it. */
+    /**
+     * What the buyer answered: for the order, and about each person on it.
+     *
+     * @return HasMany<OrderAnswer, $this>
+     */
     public function answers(): HasMany
     {
         return $this->hasMany(OrderAnswer::class);
     }
 
+    /** @return HasMany<Refund, $this> */
     public function refunds(): HasMany
     {
         return $this->hasMany(Refund::class);
     }
 
-    /** The stock set aside for this order while its buyer was paying. */
+    /**
+     * The stock set aside for this order while its buyer was paying.
+     *
+     * @return HasMany<InventoryHold, $this>
+     */
     public function holds(): HasMany
     {
         return $this->hasMany(InventoryHold::class);
     }
 
+    /** @return Attribute<Money, never> */
     protected function subtotal(): Attribute
     {
         return Attribute::get(fn () => new Money($this->subtotal_amount, $this->currency));
     }
 
+    /** @return Attribute<Money, never> */
     protected function discount(): Attribute
     {
         return Attribute::get(fn () => new Money($this->discount_amount, $this->currency));
     }
 
+    /** @return Attribute<Money, never> */
     protected function tax(): Attribute
     {
         return Attribute::get(fn () => new Money($this->tax_amount, $this->currency));
     }
 
+    /** @return Attribute<Money, never> */
     protected function total(): Attribute
     {
         return Attribute::get(fn () => new Money($this->total_amount, $this->currency));
     }
 
-    /** What the organizer earned. Not reduced by the service charge. */
+    /**
+     * What the organizer earned. Not reduced by the service charge.
+     *
+     * @return Attribute<Money, never>
+     */
     protected function netRevenue(): Attribute
     {
         return Attribute::get(fn () => new Money($this->net_revenue_amount, $this->currency));
     }
 
-    /** What the buyer paid the platform, on top of the ticket price. */
+    /**
+     * What the buyer paid the platform, on top of the ticket price.
+     *
+     * @return Attribute<Money, never>
+     */
     protected function serviceCharge(): Attribute
     {
         return Attribute::get(fn () => new Money($this->service_charge_amount, $this->currency));
@@ -209,6 +244,8 @@ class Order extends Model
      *
      * Null until then, and null is not zero: an unsettled order has an unknown
      * cost, not a free one.
+     *
+     * @return Attribute<Money|null, never>
      */
     protected function gatewayFee(): Attribute
     {
@@ -230,11 +267,13 @@ class Order extends Model
         return $this->channel === 'door';
     }
 
+    /** @return BelongsTo<User, $this> */
     public function soldBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sold_by_user_id');
     }
 
+    /** @return BelongsTo<DoorPass, $this> */
     public function doorPass(): BelongsTo
     {
         return $this->belongsTo(DoorPass::class);

@@ -1,0 +1,35 @@
+# Larastan: PHPStan with the framework's magic explained to it — models and
+# their relations, the container, facades. `composer analyse` runs it, and so
+# does CI, on every change to the API.
+includes:
+    - vendor/larastan/larastan/extension.neon
+    # What was already here when the analysis arrived, and none of it a bug:
+    # the admin panel handing records over as any model, columns a query names
+    # with "as", the pivot, and checks the code makes that PHPStan can prove it
+    # does not need. It only shrinks. An entry whose error has gone fails the
+    # run until it is taken out, and a real bug never goes in it.
+    - phpstan-baseline.neon
+
+parameters:
+    # Arguments, returns, properties and dead branches. Level 6 also wants
+    # every array and generic to say what it holds, which about 180 places
+    # here do not yet; that is the next step, not something to baseline.
+    level: 5
+    paths:
+        - app/
+        - config/
+        - database/
+        - routes/
+    # Ignored by git and by the image builds, like the rest of the cache.
+    tmpDir: storage/framework/cache/phpstan
+    # The casts are in each model's casts() method, which Larastan reads only
+    # when told to. Without it every date and every enum is a string.
+    parseModelCastsMethod: true
+    # Filament's halt() and cancel() stop an action by throwing, so nothing
+    # after one runs.
+    earlyTerminatingMethodCalls:
+        Filament\Pages\BasePage:
+            - halt
+        Filament\Actions\Action:
+            - halt
+            - cancel

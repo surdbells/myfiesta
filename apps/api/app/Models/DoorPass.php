@@ -26,21 +26,25 @@ class DoorPass extends Model
         ];
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
     }
 
+    /** @return BelongsTo<PersonalAccessToken, $this> */
     public function token(): BelongsTo
     {
         return $this->belongsTo(PersonalAccessToken::class, 'token_id');
     }
 
+    /** @return HasMany<TicketScan, $this> */
     public function scans(): HasMany
     {
         return $this->hasMany(TicketScan::class);

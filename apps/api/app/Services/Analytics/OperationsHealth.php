@@ -74,9 +74,10 @@ class OperationsHealth
      *
      * The payload is never shown — it is a serialized job and may carry a
      * buyer's details. The job's class name is read out of it, and the
-     * exception is cut to its first line.
+     * exception is cut to its first line. Keyed by uuid, which the table reads
+     * as each row's key, like the two below.
      *
-     * @return LengthAwarePaginator<int, array<string, mixed>>
+     * @return LengthAwarePaginator<string, array<string, mixed>>
      */
     public function failedJobPage(?string $search, ?string $queue, int $page, int $perPage, string $direction = 'desc'): LengthAwarePaginator
     {

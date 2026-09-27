@@ -15,17 +15,23 @@ class OrderLine extends Model
 
     protected $guarded = ['id'];
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
-    /** Set on a ticket line, null on an add-on. Exactly one of the two is. */
+    /**
+     * Set on a ticket line, null on an add-on. Exactly one of the two is.
+     *
+     * @return BelongsTo<TicketType, $this>
+     */
     public function ticketType(): BelongsTo
     {
         return $this->belongsTo(TicketType::class);
     }
 
+    /** @return BelongsTo<AddOn, $this> */
     public function addOn(): BelongsTo
     {
         // Including removed ones: an order line points at what was sold, and
@@ -39,12 +45,17 @@ class OrderLine extends Model
         return $this->ticket_type_id !== null;
     }
 
-    /** Snapshotted: the ticket type may be renamed or repriced afterwards. */
+    /**
+     * Snapshotted: the ticket type may be renamed or repriced afterwards.
+     *
+     * @return Attribute<Money, never>
+     */
     protected function unitPrice(): Attribute
     {
         return Attribute::get(fn () => new Money($this->unit_price_amount, $this->order->currency));
     }
 
+    /** @return Attribute<Money, never> */
     protected function lineTotal(): Attribute
     {
         return Attribute::get(fn () => new Money($this->line_total_amount, $this->order->currency));

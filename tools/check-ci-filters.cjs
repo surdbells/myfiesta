@@ -1,4 +1,4 @@
-const { readFileSync, readdirSync, existsSync } = require('node:fs');
+const { readFileSync, readdirSync, existsSync, statSync } = require('node:fs');
 const { join, relative } = require('node:path');
 
 /**
@@ -20,10 +20,17 @@ const { join, relative } = require('node:path');
  * the tests reach them — a relative path into packages/, or an import of
  * @myfiesta/something — and fails with the filter to fix. A mention in a
  * comment is not a dependency, and is not counted.
+ *
+ * The production images are held to the same rule, read from their
+ * Dockerfiles instead. Every Dockerfile in ops/docker has to be built by a
+ * job, and everything it copies out of the repository has to be in that
+ * job's filter: a lockfile left out is a change that breaks the release
+ * build and still comes back green.
  */
 
 const ROOT = join(__dirname, '..');
 const WORKFLOW = '.github/workflows/ci.yml';
+const IMAGES = 'ops/docker';
 
 /** Folders that are output, caches, other people's code, or native shells. */
 const SKIP = new Set([
@@ -48,9 +55,10 @@ const RELATIVE = /['"]\/?(?:\.\.\/)+packages\/([a-z0-9-]+)(?=[/'"])/g;
 /** An import of a workspace package by its name. */
 const NAMED = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"]@myfiesta\/([a-z0-9-]+)/g;
 
+const lines = readFileSync(join(ROOT, WORKFLOW), 'utf8').split(/\r?\n/);
+
 /** The filters block, read as the lines paths-filter itself will parse. */
 function filters() {
-  const lines = readFileSync(join(ROOT, WORKFLOW), 'utf8').split(/\r?\n/);
   const start = lines.findIndex((line) => /^\s*filters:\s*\|\s*$/.test(line));
 
   if (start < 0) throw new Error(`${WORKFLOW}: no "filters: |" block to read`);
@@ -68,6 +76,45 @@ function filters() {
   }
 
   return found;
+}
+
+/** A filter pattern as a regular expression, the way paths-filter matches it. */
+function pattern(glob) {
+  const source = glob
+    .split(/(\*\*\/|\*\*|\*|\?)/)
+    .map((part) => {
+      if (part === '**/') return '(?:.*/)?';
+      if (part === '**') return '.*';
+      if (part === '*') return '[^/]*';
+      if (part === '?') return '[^/]';
+
+      return part.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    })
+    .join('');
+
+  return new RegExp(`^${source}$`);
+}
+
+/**
+ * Whether a filter takes in the whole of a folder or a file.
+ *
+ * A folder is taken in by its own `folder/**` or by one above it, so
+ * `packages/**` takes in every package. A file can also be named by a pattern
+ * of its own. A pattern that takes in part of a folder does not count: a
+ * change to the rest of it would run nothing.
+ */
+function covers(paths, target, folder) {
+  return paths.some((path) => {
+    if (path === '**') return true;
+
+    if (path.endsWith('/**')) {
+      const base = path.slice(0, -3);
+
+      if (target === base || target.startsWith(`${base}/`)) return true;
+    }
+
+    return !folder && pattern(path).test(target);
+  });
 }
 
 /** Every source file under a folder, left to right, skipping what is not source. */
@@ -138,11 +185,97 @@ function closure(dir) {
   return found;
 }
 
+/**
+ * What a Dockerfile takes out of the repository: the source of every COPY
+ * and ADD that is not --from another stage or image. Every image here builds
+ * from the root, as its own header says, so these are paths from the root.
+ */
+function copies(dockerfile) {
+  const found = [];
+  const instructions = readFileSync(join(ROOT, dockerfile), 'utf8')
+    .replace(/\\\r?\n/g, ' ')
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+
+  for (const instruction of instructions) {
+    const copy = instruction.match(/^(?:COPY|ADD)\s+(.*)$/i);
+
+    if (!copy) continue;
+
+    const words = copy[1].split(/\s+/);
+
+    while (words.length > 0 && words[0].startsWith('--')) {
+      if (words.shift().startsWith('--from=')) words.length = 0;
+    }
+
+    const rest = words.join(' ');
+    const args = rest.startsWith('[') ? JSON.parse(rest) : words;
+
+    for (const source of args.slice(0, -1)) {
+      if (source.startsWith('<<') || /^[a-z]+:\/\//i.test(source)) continue;
+
+      // Up to the first wildcard, so a pattern is answered for the folder it
+      // reaches into.
+      const path = source.split(/[*?[]/)[0].replace(/^\.\//, '').replace(/\/+$/, '');
+
+      found.push(path === '' ? '.' : path);
+    }
+  }
+
+  return found;
+}
+
+/**
+ * The job that builds each Dockerfile, and the filter it runs on: null when
+ * it runs on every change, which no filter can leave anything out of.
+ */
+function builders() {
+  const found = new Map();
+  const job = (line) => /^ {2}[\w-]+:\s*$/.test(line);
+
+  lines.forEach((line, i) => {
+    const file = line.match(/^\s*file:\s*['"]?([^'"\s]+\.Dockerfile)['"]?\s*$/);
+
+    if (!file) return;
+
+    let start = i;
+    let end = i + 1;
+
+    while (start > 0 && !job(lines[start])) start--;
+    while (end < lines.length && !job(lines[end])) end++;
+
+    const gate = lines
+      .slice(start, end)
+      .map((l) => l.match(/^ {4}if:.*\bneeds\.changes\.outputs\.([\w-]+)/))
+      .find(Boolean);
+
+    found.set(file[1].replace(/^\.\//, ''), { job: lines[start].trim().replace(/:$/, ''), filter: gate ? gate[1] : null });
+  });
+
+  return found;
+}
+
+const all = filters();
+
+/** The changes job's outputs, each to the filter it hands on. */
+const handed = new Map(
+  lines
+    .map((line) => line.match(/^\s+([\w-]+):\s*\$\{\{\s*steps\.filter\.outputs\.([\w-]+)\s*\}\}\s*$/))
+    .filter(Boolean)
+    .map((m) => [m[1], m[2]])
+);
+
+const built = builders();
+const imageFilters = new Set([...built.values()].map(({ filter }) => handed.get(filter)).filter(Boolean));
 const workspaces = new Set(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).workspaces ?? []);
 const problems = [];
 let checked = 0;
 
-for (const [name, paths] of filters()) {
+for (const [name, paths] of all) {
+  // The images' filter names several apps and is none of theirs. It is held
+  // to what the Dockerfiles copy, below.
+  if (imageFilters.has(name)) continue;
+
   const own = paths.map((path) => path.match(/^(apps\/[^/]+)\/\*\*$/)).find(Boolean);
 
   if (!own) continue;
@@ -152,7 +285,7 @@ for (const [name, paths] of filters()) {
   for (const [folder, file] of closure(join(ROOT, own[1]))) {
     if (!existsSync(join(ROOT, 'packages', folder))) {
       problems.push(`${name}: ${file} reads packages/${folder}, which does not exist`);
-    } else if (!paths.includes(`packages/${folder}/**`)) {
+    } else if (!covers(paths, `packages/${folder}`, true)) {
       problems.push(`${name}: ${file} reads packages/${folder}, and the filter leaves out 'packages/${folder}/**'`);
     }
   }
@@ -160,7 +293,7 @@ for (const [name, paths] of filters()) {
   // An app installed from the root lockfile changes whenever the lockfile does.
   if (workspaces.has(own[1])) {
     for (const path of ['package.json', 'package-lock.json']) {
-      if (!paths.includes(path)) {
+      if (!covers(paths, path, false)) {
         problems.push(`${name}: installs from the root, and the filter leaves out '${path}'`);
       }
     }
@@ -169,8 +302,63 @@ for (const [name, paths] of filters()) {
 
 if (checked === 0) problems.push(`${WORKFLOW}: no filter names an app, so nothing here was checked`);
 
+let images = 0;
+
+for (const name of readdirSync(join(ROOT, IMAGES)).filter((n) => n.endsWith('.Dockerfile')).sort()) {
+  const dockerfile = `${IMAGES}/${name}`;
+  const builder = built.get(dockerfile);
+
+  if (!builder) {
+    problems.push(`${dockerfile}: no job in ${WORKFLOW} builds it, so nothing finds out when it stops building`);
+    continue;
+  }
+
+  images++;
+
+  // Runs on every change, so no filter can leave anything out of it.
+  if (builder.filter === null) continue;
+
+  const filter = handed.get(builder.filter);
+  const paths = all.get(filter);
+
+  // Said once, for every job, below.
+  if (!paths) continue;
+
+  // The Dockerfile itself, and .dockerignore, which decides what of each
+  // folder copied reaches the build.
+  const inputs = new Set([
+    dockerfile,
+    ...(existsSync(join(ROOT, '.dockerignore')) ? ['.dockerignore'] : []),
+    ...copies(dockerfile),
+  ]);
+
+  for (const input of inputs) {
+    const path = join(ROOT, input);
+
+    if (!existsSync(path)) {
+      problems.push(`${filter}: ${dockerfile} copies ${input}, which is not in the repository`);
+    } else if (covers(paths, input, statSync(path).isDirectory())) {
+      continue;
+    } else if (input === dockerfile) {
+      problems.push(`${filter}: the filter leaves out ${dockerfile} itself`);
+    } else {
+      problems.push(`${filter}: ${dockerfile} reads ${input}, and the filter leaves it out`);
+    }
+  }
+}
+
+// A job waiting on an output the changes job does not hand on never runs,
+// and never says so: the output is empty, not false.
+for (const gate of new Set(lines.flatMap((line) => [...line.matchAll(/needs\.changes\.outputs\.([\w-]+)/g)].map((m) => m[1])))) {
+  if (!handed.has(gate)) {
+    problems.push(`${WORKFLOW}: a job runs on '${gate}', and the changes job's outputs leave it out`);
+  } else if (!all.has(handed.get(gate))) {
+    problems.push(`${WORKFLOW}: a job runs on '${gate}', and there is no '${handed.get(gate)}' filter`);
+  }
+}
+
 if (problems.length > 0) {
-  console.error('\nci filters: an app reads a path its filter does not name\n');
+  console.error('\nci filters: a job builds from a path its filter does not name\n');
 
   for (const problem of problems) console.error(`  ${problem}`);
 
@@ -182,4 +370,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`ci filters: ${checked} apps, each filter naming every package the app reads`);
+console.log(`ci filters: ${checked} apps and ${images} images, each filter naming everything its job builds from`);

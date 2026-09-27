@@ -40,26 +40,31 @@ class LedgerEntry extends Model
         });
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<LedgerEntry, $this> */
     public function reverses(): BelongsTo
     {
         return $this->belongsTo(self::class, 'reverses_entry_id');
     }
 
+    /** @return Attribute<Money, never> */
     protected function money(): Attribute
     {
         return Attribute::get(fn () => new Money($this->amount, $this->currency));

@@ -31,6 +31,7 @@ class WebhookDelivery extends Model
         ];
     }
 
+    /** @return BelongsTo<WebhookEndpoint, $this> */
     public function endpoint(): BelongsTo
     {
         return $this->belongsTo(WebhookEndpoint::class, 'webhook_endpoint_id');

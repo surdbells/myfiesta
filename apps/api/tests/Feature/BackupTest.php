@@ -204,6 +204,35 @@ class BackupTest extends TestCase
         $this->assertFileExists($this->target.'/notes.txt');
     }
 
+    public function test_a_file_named_for_a_moment_that_never_was_is_not_taken_for_a_backup(): void
+    {
+        // Each of these rolls over into some other date if it is parsed and
+        // not read back: month 13, the 30th of February, hour 25, and the
+        // year 10007.
+        foreach ([
+            'myfiesta-20261340T063000Z.dump',
+            'myfiesta-20260230T063000Z.dump.enc',
+            'myfiesta-20260927T253000Z.dump',
+            'myfiesta-99999999T999999Z.dump.enc',
+        ] as $name) {
+            $this->assertNull(StoredBackup::fromName($name), "{$name} was taken for a backup.");
+        }
+
+        $real = StoredBackup::fromName('myfiesta-20260927T063000Z.dump.enc');
+
+        $this->assertNotNull($real);
+        $this->assertSame('2026-09-27 06:30:00', $real->takenAt->format('Y-m-d H:i:s'));
+        $this->assertTrue($real->encrypted);
+
+        // Beside a real backup from tonight, the stray is not the newest one:
+        // the health check measures tonight's, and passes.
+        File::put($this->target.'/myfiesta-99999999T999999Z.dump.enc', 'stray');
+        $this->artisan('backup:run')->assertSuccessful();
+
+        $this->artisan('app:health', ['--only' => ['backup']])->assertSuccessful();
+        $this->assertFileExists($this->target.'/myfiesta-99999999T999999Z.dump.enc');
+    }
+
     public function test_retention_skips_empty_periods_rather_than_counting_them(): void
     {
         // A backup every ten days: seven "daily" backups still means seven.

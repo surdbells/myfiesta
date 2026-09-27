@@ -44,11 +44,13 @@ class WebhookEndpoint extends Model
         ];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return HasMany<WebhookDelivery, $this> */
     public function deliveries(): HasMany
     {
         return $this->hasMany(WebhookDelivery::class);

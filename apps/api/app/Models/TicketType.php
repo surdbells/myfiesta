@@ -33,17 +33,23 @@ class TicketType extends Model
         ];
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return HasMany<Ticket, $this> */
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
     }
 
-    /** The tier this one waits for: it opens when that one sells out. */
+    /**
+     * The tier this one waits for: it opens when that one sells out.
+     *
+     * @return BelongsTo<TicketType, $this>
+     */
     public function opensAfter(): BelongsTo
     {
         return $this->belongsTo(TicketType::class, 'opens_after_id');
@@ -87,7 +93,11 @@ class TicketType extends Model
             && ! $this->opensAfter->isExhausted();
     }
 
-    /** Currency comes from the event; a ticket type never carries its own. */
+    /**
+     * Currency comes from the event; a ticket type never carries its own.
+     *
+     * @return Attribute<Money, never>
+     */
     protected function price(): Attribute
     {
         return Attribute::get(

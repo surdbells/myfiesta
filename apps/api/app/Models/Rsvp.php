@@ -30,16 +30,19 @@ class Rsvp extends Model
         ];
     }
 
+    /** @return BelongsTo<Guest, $this> */
     public function guest(): BelongsTo
     {
         return $this->belongsTo(Guest::class);
     }
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
+    /** @return HasMany<RsvpAnswer, $this> */
     public function answers(): HasMany
     {
         return $this->hasMany(RsvpAnswer::class);

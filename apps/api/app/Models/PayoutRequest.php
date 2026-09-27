@@ -24,21 +24,25 @@ class PayoutRequest extends Model
         ];
     }
 
+    /** @return BelongsTo<Organization, $this> */
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function decider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
     }
 
+    /** @return BelongsTo<Settlement, $this> */
     public function settlement(): BelongsTo
     {
         return $this->belongsTo(Settlement::class);
