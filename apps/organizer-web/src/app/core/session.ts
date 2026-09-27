@@ -4,6 +4,37 @@ import { Membership, Permission, Session } from './api.types';
 
 const STORAGE_KEY = 'myfiesta.organizer.session';
 
+/** A staff session, in this tab's sessionStorage only. See startImpersonation. */
+const STAFF_KEY = 'myfiesta.organizer.staff-session';
+
+/**
+ * myFiesta staff viewing this organization as it does, as the API describes it.
+ *
+ * The console reads it for the banner and the countdown; what staff may do is
+ * still the permission list on the one membership, decided by the server.
+ */
+export interface Impersonation {
+  id: string;
+  organization: { id: string; name: string };
+  staff: { name: string };
+  reason: string;
+  started_at: string;
+  expires_at: string;
+  /** Permissions an owner has that this session does not. */
+  withheld: Permission[];
+  /**
+   * Whether the payouts screen is open to this staff member. It follows their
+   * own staff role, as it does in the admin panel, so support sees the
+   * organization's orders and sales but not where its money goes.
+   */
+  payouts?: boolean;
+}
+
+/** What POST /api/impersonation/exchange answers: a sign-in, plus the staff session. */
+export interface StaffSession extends Session {
+  impersonation: Impersonation;
+}
+
 /**
  * Who is signed in, and which organization they are working in.
  *
@@ -21,7 +52,19 @@ const STORAGE_KEY = 'myfiesta.organizer.session';
 export class SessionStore {
   private readonly document = inject(DOCUMENT);
 
-  private readonly state = signal<Session | null>(this.restore());
+  /*
+   * A staff session in this tab wins over anybody's own sign-in on this
+   * browser, and is never written where that sign-in lives. The staff member
+   * may well be signed in to the console as themselves in another tab — or an
+   * organizer may be, on a shared machine — and opening, using or ending a
+   * staff session must leave that exactly as it was.
+   */
+  private readonly staffState = signal<StaffSession | null>(this.restoreStaff());
+
+  private readonly state = signal<Session | null>(this.staffState() ?? this.restore());
+
+  /** Set while myFiesta staff are viewing an organization as it does, in this tab. */
+  readonly impersonation = computed<Impersonation | null>(() => this.staffState()?.impersonation ?? null);
 
   readonly session = this.state.asReadonly();
   readonly signedIn = computed(() => this.state() !== null);
@@ -70,6 +113,8 @@ export class SessionStore {
    */
   readonly canEditEvents = computed(() => this.can('events.edit'));
   readonly canSeeMoney = computed(() => this.can('money.view'));
+  /** The server says so for a staff session (Impersonation.payouts); otherwise it is seeing the money. */
+  readonly canSeePayouts = computed(() => this.canSeeMoney() && this.impersonation()?.payouts !== false);
   readonly canMessage = computed(() => this.can('messages.send'));
   readonly canManageCodes = computed(() => this.can('codes.manage'));
   readonly canManageTickets = computed(() => this.can('tickets.manage'));
@@ -87,20 +132,45 @@ export class SessionStore {
   }
 
   start(session: Session): void {
+    // Somebody signing in as themselves: whatever staff session this tab
+    // held is over.
+    this.dropStaff();
     this.state.set(session);
     this.persist(session);
+  }
+
+  /**
+   * Take on a staff session handed over from the admin panel.
+   *
+   * Kept in this tab's sessionStorage and nowhere else: closing the tab
+   * forgets it, another tab never sees it, and localStorage — where somebody's
+   * own sign-in is — is not read or written while it lasts.
+   */
+  startImpersonation(session: StaffSession): void {
+    this.staffState.set(session);
+    this.state.set(session);
+    this.selectedId.set(session.impersonation.organization.id);
+
+    try {
+      this.sessionStorage?.setItem(STAFF_KEY, JSON.stringify(session));
+    } catch {
+      // Blocked storage: the session works until this page reloads.
+    }
   }
 
   /** The person's own details changed; the token and memberships did not. */
   updateUser(user: Session['user']): void {
     const session = this.state();
-    if (!session) return;
+    if (!session || this.impersonation()) return;
 
     this.start({ ...session, user });
   }
 
   select(organizationId: string): void {
     this.selectedId.set(organizationId);
+
+    if (this.impersonation()) return;
+
     this.storage?.setItem(`${STORAGE_KEY}.org`, organizationId);
   }
 
@@ -112,16 +182,74 @@ export class SessionStore {
    * that looks signed in and fails on every action.
    */
   clear(): void {
+    // A staff session ending forgets only itself. Somebody's own sign-in on
+    // this browser is theirs, and the next tab they open still has it.
+    if (this.impersonation()) {
+      this.dropStaff();
+      this.state.set(null);
+      this.selectedId.set(null);
+      return;
+    }
+
     this.state.set(null);
     this.selectedId.set(null);
     this.storage?.removeItem(STORAGE_KEY);
     this.storage?.removeItem(`${STORAGE_KEY}.org`);
   }
 
+  private dropStaff(): void {
+    this.staffState.set(null);
+
+    try {
+      this.sessionStorage?.removeItem(STAFF_KEY);
+    } catch {
+      // Nothing stored, or nothing reachable: either way nothing to remove.
+    }
+  }
+
   private get storage(): Storage | null {
     // Private browsing can throw on access rather than return null.
     try {
       return this.document.defaultView?.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private get sessionStorage(): Storage | null {
+    try {
+      return this.document.defaultView?.sessionStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The staff session this tab was holding, if it still has time left.
+   *
+   * An expired one is dropped here rather than restored: the server refuses
+   * its token anyway, and a console that draws for a moment as the
+   * organization before failing is exactly the confusion the banner exists
+   * to prevent.
+   */
+  private restoreStaff(): StaffSession | null {
+    try {
+      const raw = this.sessionStorage?.getItem(STAFF_KEY);
+      if (!raw) return null;
+
+      const session = JSON.parse(raw) as StaffSession;
+      const live =
+        typeof session?.token === 'string' &&
+        Array.isArray(session.organizations) &&
+        session.organizations.every((o) => Array.isArray(o.permissions)) &&
+        new Date(session.impersonation?.expires_at).getTime() > Date.now();
+
+      if (!live) {
+        this.sessionStorage?.removeItem(STAFF_KEY);
+        return null;
+      }
+
+      return session;
     } catch {
       return null;
     }

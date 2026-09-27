@@ -4,6 +4,7 @@ import { CalendarDays, LayoutDashboard, LogOut, Mail, Menu, Plug, PanelLeftClose
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
 import { SessionStore } from './core/session';
+import { StaffBanner } from './features/impersonation/staff-banner';
 
 /** One entry in the sidebar. */
 interface NavItem {
@@ -18,7 +19,7 @@ const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -78,7 +79,9 @@ export class App {
   readonly bare = signal(App.isBare(typeof location === 'undefined' ? '/' : location.pathname));
 
   private static isBare(url: string): boolean {
-    return /^\/(scan|door-pass)\//.test(url);
+    // A staff link lands bare too: this browser's own sign-in, if it has
+    // one, must not draw for a moment before the staff session replaces it.
+    return /^\/(scan|door-pass)\//.test(url) || /^\/impersonate(\/|$|[?#])/.test(url);
   }
 
   constructor() {
@@ -116,7 +119,13 @@ export class App {
     }
 
     if (this.session.canSeeMoney()) {
-      items.push({ label: 'Orders', link: '/orders', glyph: ReceiptText }, { label: 'Payouts', link: '/payouts', glyph: Wallet });
+      items.push({ label: 'Orders', link: '/orders', glyph: ReceiptText });
+    }
+
+    // Separately from orders: a support member of staff acting as the
+    // organization sees its sales, not where its money goes.
+    if (this.session.canSeePayouts()) {
+      items.push({ label: 'Payouts', link: '/payouts', glyph: Wallet });
     }
 
     // Owners only: a link that could only 403 is not shown.
@@ -160,17 +169,25 @@ export class App {
     return letters.toUpperCase() || '?';
   }
 
+  readonly signOutLabel = computed(() => (this.session.impersonation() ? 'End staff session' : 'Sign out'));
+
   signOut(): void {
+    // A staff session is ended, not signed out of: the server revokes it and
+    // records who ended it, and this tab goes to the page that says so
+    // rather than to a sign-in form nobody here should use.
+    const staff = this.session.impersonation() !== null;
+    const request = staff ? this.api.endImpersonation() : this.api.signOut();
+
     // The local session is cleared either way. A network failure must not
     // leave somebody stuck signed in on a shared machine.
-    this.api.signOut().subscribe({
-      next: () => this.finishSignOut(),
-      error: () => this.finishSignOut(),
+    request.subscribe({
+      next: () => this.finishSignOut(staff),
+      error: () => this.finishSignOut(staff),
     });
   }
 
-  private finishSignOut(): void {
+  private finishSignOut(staff = false): void {
     this.session.clear();
-    void this.router.navigate(['/sign-in']);
+    void this.router.navigate(staff ? ['/impersonate/ended'] : ['/sign-in']);
   }
 }

@@ -106,6 +106,44 @@ describe('App shell', () => {
       expect(known).toContain(href);
     }
   });
+
+  it('offers a support member of staff the orders but not the payouts, as the admin panel does', () => {
+    const staffSession = (payouts: boolean) => ({
+      ...sessionWith('owner'),
+      abilities: ['organizer', 'impersonation'],
+      impersonation: {
+        id: 'session-1',
+        organization: { id: 'org-1', name: 'Lagos Nights' },
+        staff: { name: 'Sade Support' },
+        reason: 'Ticket #4411',
+        started_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+        withheld: [],
+        payouts,
+      },
+    });
+
+    const links = () => {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+
+      return Array.from<HTMLAnchorElement>(fixture.nativeElement.querySelectorAll('.nav__link')).map((a) =>
+        a.getAttribute('href'),
+      );
+    };
+
+    const session = TestBed.inject(SessionStore);
+
+    session.startImpersonation(staffSession(false));
+    expect(links()).toContain('/orders');
+    expect(links()).not.toContain('/payouts');
+
+    session.startImpersonation(staffSession(true));
+    expect(links()).toContain('/payouts');
+
+    session.clear();
+    sessionStorage.clear();
+  });
 });
 
 describe('SessionStore permissions', () => {

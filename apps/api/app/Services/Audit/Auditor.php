@@ -3,6 +3,7 @@
 namespace App\Services\Audit;
 
 use App\Models\AuditLog;
+use App\Models\ImpersonationSession;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
@@ -41,7 +42,7 @@ class Auditor
                 'action' => $action,
                 'subject_type' => $subject ? $subject::class : null,
                 'subject_id' => $subject?->getKey(),
-                'metadata' => $metadata ?: null,
+                'metadata' => $this->withImpersonation($actor, $metadata) ?: null,
                 'ip_address' => $this->ip(),
                 'created_at' => now(),
             ]);
@@ -54,6 +55,31 @@ class Auditor
 
             return null;
         }
+    }
+
+    /**
+     * Staff acting as an organization, named on everything they do there.
+     *
+     * The actor is already the member of staff — the token is theirs — but
+     * "Jane changed the price" in an organization's history reads like somebody
+     * on the team did it. This records that she did it as myFiesta staff, and
+     * in which session, so nobody has to work that out from a name.
+     */
+    private function withImpersonation(?User $actor, array $metadata): array
+    {
+        $tokenId = $actor?->impersonationTokenId();
+
+        if ($tokenId === null) {
+            return $metadata;
+        }
+
+        $session = ImpersonationSession::query()->where('token_id', $tokenId)->first(['id', 'organization_id']);
+
+        return $metadata + ['impersonating' => [
+            'session' => $session?->id,
+            'organization' => $session?->organization_id,
+            'staff_role' => $actor->platform_role?->value,
+        ]];
     }
 
     /**

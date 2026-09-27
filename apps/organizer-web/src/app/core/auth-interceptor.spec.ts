@@ -39,6 +39,7 @@ describe('authInterceptor', () => {
             },
             current: () => current,
             signedIn: () => token !== null,
+            impersonation: () => null,
             clear: () => undefined,
           },
         },

@@ -79,8 +79,19 @@ class Announcements
      */
     private function worthAnnouncing(Event $event): bool
     {
+        return $event->status === 'published' && $this->wouldAnnounce($event);
+    }
+
+    /**
+     * Whether publishing this event now would tell its organizer's followers.
+     *
+     * Asked before the publish as well as during it: staff acting as an
+     * organization do not send mail in its name (WhileImpersonating), and
+     * this is the one publish that does.
+     */
+    public function wouldAnnounce(Event $event): bool
+    {
         return $event->announced_at === null
-            && $event->status === 'published'
             && $event->kind === 'ticketed'
             && $event->starts_at->isFuture();
     }

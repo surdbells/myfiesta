@@ -22,3 +22,28 @@
 .nav__link.is-current .nav__glyph {
   color: inherit;
 }
+
+/*
+ * Room for the staff banner (features/impersonation/staff-banner.ts), which
+ * sits above the shell while myFiesta staff are viewing an organization. The
+ * sidebar and the small-screen top bar are sticky to the top of the window,
+ * so they move down by exactly its height rather than slide underneath it.
+ *
+ * A Sass value rather than a custom property: the token check only knows the
+ * shared sheets, and this is one component's height, not a role in the
+ * system. It is the banner's `h-12`.
+ */
+$staff-banner-h: 3rem;
+
+.shell.has-staff-banner {
+  min-height: calc(100dvh - #{$staff-banner-h});
+}
+
+.shell.has-staff-banner .side {
+  top: $staff-banner-h;
+  height: calc(100dvh - #{$staff-banner-h});
+}
+
+.shell.has-staff-banner .topbar {
+  top: $staff-banner-h;
+}

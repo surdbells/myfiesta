@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Organizations\Tables;
 
 use App\Enums\PlatformRole;
+use App\Filament\Actions\ImpersonateOrganizationAction;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
@@ -114,6 +115,9 @@ class OrganizationsTable
             ])
             ->recordActions([
                 ViewAction::make(),
+
+                // Staff opening the organization's console as it; see the class.
+                ImpersonateOrganizationAction::make(),
 
                 /*
                  * Agreeing that a renamed organization is still the one whose

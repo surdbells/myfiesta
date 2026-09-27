@@ -33,6 +33,22 @@ export const routes: Routes = [
     loadComponent: () => import('./features/door/door-pass-open').then((m) => m.DoorPassOpen),
   },
   {
+    /*
+     * myFiesta staff arriving from the admin panel's "Open as organization",
+     * with a one-minute code in the fragment. Open to anyone holding the link:
+     * the code is the credential, and it works once. No sidebar — whatever
+     * this browser's own sign-in is must not flash up first.
+     */
+    path: 'impersonate',
+    loadComponent: () => import('./features/impersonation/impersonate').then((m) => m.Impersonate),
+  },
+  {
+    // Where a staff session goes when it is ended, or runs out.
+    path: 'impersonate/ended',
+    data: { ended: true },
+    loadComponent: () => import('./features/impersonation/impersonate').then((m) => m.Impersonate),
+  },
+  {
     // The door on a phone holding a pass: no session, no sidebar, one screen.
     path: 'scan/:id',
     loadComponent: () => import('./features/door/door-pass-scanner').then((m) => m.DoorPassScanner),

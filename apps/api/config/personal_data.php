@@ -89,6 +89,16 @@ return [
             'key' => 'user_id',
             'reason' => 'Security audit trail. Erasing it would defeat the log that exists to detect misuse.',
         ],
+
+        // Staff opening an organization's console as it. Kept, like the
+        // audit trail it sits beside, as the record that it happened and
+        // why; the name and addresses of the member of staff go.
+        'impersonation_sessions' => [
+            'strategy' => 'anonymise',
+            'key' => 'staff_user_id',
+            'columns' => ['staff_label', 'started_ip', 'opened_ip'],
+            'reason' => 'The record that staff acted inside an organization is kept for that organization; who did it is not, once they have asked to be forgotten.',
+        ],
     ],
 
     /*
@@ -135,6 +145,14 @@ return [
         ],
 
         'password_reset_tokens' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+        ],
+
+        // A sign-up nobody has confirmed yet: a name, and a password hash
+        // for an account that does not exist. Worth nothing once erased, and
+        // gone within a day in any case.
+        'pending_registrations' => [
             'strategy' => 'delete',
             'key' => 'email',
         ],

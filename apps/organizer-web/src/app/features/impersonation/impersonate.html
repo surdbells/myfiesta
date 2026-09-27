@@ -1,0 +1,33 @@
+<main
+  class="impersonate grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0"
+>
+  <div
+    class="card grid w-full max-w-[28rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none"
+  >
+    <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">myFiesta staff</p>
+
+    @if (ended) {
+      <h1 class="text-balance text-2xl font-semibold tracking-[-0.02em]">Staff session ended</h1>
+      <p class="text-pretty text-sm text-text-muted">
+        @if (why === 'expired') {
+          The hour is up, so the organization's console is closed to this tab. Start a new session
+          from the admin panel if you still need it.
+        } @else if (why === 'unconfirmed') {
+          This tab has forgotten the session, but the server could not be reached to revoke it. It
+          stops working by itself when its hour is up.
+        } @else {
+          The organization's console is closed to this tab, and its access has been revoked. Nothing
+          about your own sign-in changed.
+        }
+      </p>
+      <button uiButton type="button" variant="secondary" (click)="close()">Close this tab</button>
+    } @else if (error(); as message) {
+      <h1 class="text-balance text-2xl font-semibold tracking-[-0.02em]">
+        This staff link did not open
+      </h1>
+      <ui-alert tone="warning">{{ message }}</ui-alert>
+    } @else {
+      <p class="text-sm text-text-muted" role="status">Opening the organization's console…</p>
+    }
+  </div>
+</main>
