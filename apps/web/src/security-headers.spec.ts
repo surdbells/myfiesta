@@ -43,6 +43,18 @@ describe('securityHeaders', () => {
     }
   });
 
+  it('lets error reports out only to the ingest origin a DSN names, and only when there is one', () => {
+    expect(directive(securityHeaders('/', context)['Content-Security-Policy'], 'connect-src')).not.toContain('sentry');
+
+    const policy = securityHeaders('/', { ...context, errorReportingOrigin: 'https://o123.ingest.us.sentry.io' })[
+      'Content-Security-Policy'
+    ];
+
+    expect(directive(policy, 'connect-src')).toBe("connect-src 'self' https://api.myfiesta.ca https://o123.ingest.us.sentry.io");
+    // Reports are sent, never loaded: nothing else widens.
+    expect(directive(policy, 'script-src')).toBe("script-src 'self' 'nonce-abc123=='");
+  });
+
   it('allows the dev server its reload socket only under ng serve', () => {
     expect(securityHeaders('/', context)['Content-Security-Policy']).not.toContain('ws://');
     expect(

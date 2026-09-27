@@ -18,6 +18,11 @@
          the one the console is served from. Injected at deploy time, like the
          API base — a built bundle should carry no hostname. -->
     <meta name="public-base" content="" />
+    <!-- Where errors are reported (Sentry), stamped at start-up like the two
+         above. Empty sends nothing, and the reporter is never downloaded. -->
+    <meta name="sentry-dsn" content="" />
+    <meta name="sentry-environment" content="" />
+    <meta name="sentry-release" content="" />
   </head>
   <body>
     <app-root></app-root>

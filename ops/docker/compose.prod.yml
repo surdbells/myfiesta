@@ -1,6 +1,12 @@
 # Everything that has to be running for this platform to work.
 #
-#   docker compose -f ops/docker/compose.prod.yml up -d --build
+#   docker compose --env-file .env.production --env-file .env.release \
+#     -f ops/docker/compose.prod.yml up -d
+#
+# .env.release is one line, TAG=<the release to run>, rewritten by every
+# release and rollback (docs/OPERATIONS.md). Every image is that tag and no
+# other: there is no "latest" to fall back on, so a command that was not told
+# which release is running stops here rather than starting an older build.
 #
 # Host-agnostic on purpose: it runs on one box, and it is a readable statement
 # of what any other arrangement — Kubernetes, ECS, a platform-as-a-service —
@@ -19,9 +25,22 @@ x-api: &api
   build:
     context: ../..
     dockerfile: ops/docker/api.Dockerfile
-  image: myfiesta/api:${TAG:-latest}
+    # The release is the tag: baked into the image for Sentry and the backup
+    # manifests, so rolling back to an older tag rolls back what errors say too.
+    args:
+      RELEASE: ${TAG:?set TAG in .env.release to the release to run}
+  image: myfiesta/api:${TAG:?set TAG in .env.release to the release to run}
   env_file: [../../.env.production]
   restart: unless-stopped
+  # The parts the API answers for: the database, the cache and both disks
+  # (docs/OPERATIONS.md). The worker and the scheduler replace this with their
+  # own part, so each container is unhealthy for its own reason.
+  healthcheck:
+    test: ["CMD", "php", "artisan", "app:health", "--only=database,cache,storage"]
+    interval: 30s
+    timeout: 20s
+    retries: 3
+    start_period: 30s
   volumes:
     # Private files: identity documents, data exports. On a volume so a
     # redeploy does not take somebody's export with it, and never in the image.
@@ -46,7 +65,9 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/api.Dockerfile
-    image: myfiesta/api:${TAG:-latest}
+      args:
+        RELEASE: ${TAG:?set TAG in .env.release to the release to run}
+    image: myfiesta/api:${TAG:?set TAG in .env.release to the release to run}
     env_file: [../../.env.production]
     command: >
       sh -c "php artisan app:preflight
@@ -66,6 +87,15 @@ services:
     # A worker is not a web server: it must finish the job in its hands before
     # it goes, or somebody's tickets are minted and never sent.
     stop_grace_period: 90s
+    # Healthy while jobs are being taken off the queue: the heartbeat the
+    # scheduler sends every minute has been run, and jobs are not failing in
+    # bulk. So it also goes unhealthy when the scheduler stops sending.
+    healthcheck:
+      test: ["CMD", "php", "artisan", "app:health", "--only=queue"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 180s
 
   # Six commands matter and all of them are in here — see apps/api/README.md.
   # schedule:work runs in the foreground, which is what a container wants;
@@ -73,6 +103,20 @@ services:
   scheduler:
     <<: *api
     command: php artisan schedule:work
+    healthcheck:
+      test: ["CMD", "php", "artisan", "app:health", "--only=scheduler"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
+    # The nightly backup runs here (backup:run). With BACKUP_TARGET=volume it
+    # is written to api-backups — on this host, which is better than nothing
+    # and not off-site; BACKUP_TARGET=s3 is. Listed in full because a service's
+    # volumes replace the anchor's rather than adding to them.
+    volumes:
+      - api-storage:/var/www/api/storage/app
+      - api-media:/var/www/api/storage/app/public
+      - api-backups:/var/backups/myfiesta
 
   api-web:
     # Its own image: the API's public files (the admin panel's scripts and
@@ -80,7 +124,7 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/api-web.Dockerfile
-    image: myfiesta/api-web:${TAG:-latest}
+    image: myfiesta/api-web:${TAG:?set TAG in .env.release to the release to run}
     restart: unless-stopped
     environment:
       # Not optional. The addresses the load balancer connects from: only they
@@ -93,6 +137,15 @@ services:
     volumes:
       - api-media:/var/www/api/storage/app/public:ro
     depends_on: [api]
+    # Liveness through the whole web path: nginx, php-fpm and the framework,
+    # without the database. Whether the platform can take an order is
+    # /api/health/ready, for the uptime monitor (docs/OPERATIONS.md).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/up || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     # On this host's loopback unless API_BIND says otherwise. A load balancer
     # on this host reaches it through Docker's proxy and arrives from the
     # network's gateway, which is why TRUSTED_PROXIES names the gateway then.
@@ -109,7 +162,9 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/web.Dockerfile
-    image: myfiesta/web:${TAG:-latest}
+      args:
+        RELEASE: ${TAG:?set TAG in .env.release to the release to run}
+    image: myfiesta/web:${TAG:?set TAG in .env.release to the release to run}
     restart: unless-stopped
     environment:
       # Not optional. Angular refuses to render for an unrecognised Host and
@@ -119,14 +174,25 @@ services:
       API_BASE_URL: ${API_BASE_URL:?set the public API address}
       CONSOLE_URL: ${CONSOLE_URL:?set the console address}
       PUBLIC_URL: ${PUBLIC_URL:?set this site's own address}
+      # Where browser errors are reported. Empty reports nothing.
+      SENTRY_DSN: ${SITE_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     ports:
       - "${SITE_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/robots.txt || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   console:
     build:
       context: ../..
       dockerfile: ops/docker/console.Dockerfile
-    image: myfiesta/console:${TAG:-latest}
+      args:
+        RELEASE: ${TAG:?set TAG in .env.release to the release to run}
+    image: myfiesta/console:${TAG:?set TAG in .env.release to the release to run}
     restart: unless-stopped
     environment:
       # Stamped into index.html at start-up by the image's entrypoint, which
@@ -134,11 +200,24 @@ services:
       # localhost.
       API_BASE_URL: ${API_BASE_URL:?set the public API address}
       PUBLIC_URL: ${PUBLIC_URL:?set the public site address}
+      # Where console errors are reported; stamped like the two above, and
+      # written into the policy. Empty reports nothing.
+      SENTRY_DSN: ${CONSOLE_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     ports:
       - "${CONSOLE_PORT:-4310}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   api-storage:
   # Posters, logos and gallery pictures when MEDIA_DISK=local. Unused, and
   # harmless, when the pictures live in a bucket.
   api-media:
+  # Nightly database backups when BACKUP_TARGET=volume. On this host, so not
+  # off-site: see docs/OPERATIONS.md.
+  api-backups:

@@ -29,4 +29,9 @@ COPY ops/docker/console-entrypoint.sh /docker-entrypoint.d/40-stamp-addresses.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.d/40-stamp-addresses.sh \
     && chmod +x /docker-entrypoint.d/40-stamp-addresses.sh
 
+# Which build this is, stamped into the page with the DSN so every error
+# report names it: the tag the images are built with (compose.prod.yml).
+ARG RELEASE=
+ENV SENTRY_RELEASE=${RELEASE}
+
 EXPOSE 80

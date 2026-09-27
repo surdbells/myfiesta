@@ -31,8 +31,15 @@ const ROOT = join(__dirname, '..');
 const server = readFileSync(join(ROOT, 'apps/web/src/server.ts'), 'utf8');
 const template = readFileSync(join(ROOT, 'apps/web/src/index.html'), 'utf8');
 
-/** Every meta tag the template expects somebody to fill in at run time. */
-const STAMPED = ['api-base', 'console-url'];
+/**
+ * Every meta tag the template expects somebody to fill in at run time.
+ *
+ * The three sentry ones say where browser errors are reported and which build
+ * this is. Left unstamped, the DSN in the template is empty and reporting is
+ * quietly off in production — the same silent failure, in a place nobody
+ * looks until the day they need the report.
+ */
+const STAMPED = ['api-base', 'console-url', 'sentry-dsn', 'sentry-environment', 'sentry-release'];
 
 const problems = [];
 
@@ -79,7 +86,7 @@ for (const name of STAMPED) {
   }
 }
 
-for (const variable of ['API_BASE_URL', 'CONSOLE_URL']) {
+for (const variable of ['API_BASE_URL', 'CONSOLE_URL', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE']) {
   if (!server.includes(`process.env['${variable}']`)) {
     problems.push(`${variable}: the server never reads it, so a deploy cannot set it`);
   }
@@ -97,12 +104,22 @@ for (const variable of ['API_BASE_URL', 'CONSOLE_URL']) {
 const consoleTemplate = readFileSync(join(ROOT, 'apps/organizer-web/src/index.html'), 'utf8');
 const consoleEntrypoint = readFileSync(join(ROOT, 'ops/docker/console-entrypoint.sh'), 'utf8');
 
-for (const name of ['api-base', 'public-base']) {
+const CONSOLE_STAMPED = ['api-base', 'public-base', 'sentry-dsn', 'sentry-environment', 'sentry-release'];
+
+for (const name of CONSOLE_STAMPED) {
   if (!new RegExp(`<meta name="${name}"`).test(consoleTemplate)) {
     problems.push(`console ${name}: the template has no such meta tag to fill in`);
   } else if (!new RegExp(`stamp ${name}`).test(consoleEntrypoint)) {
     problems.push(`console ${name}: nothing stamps it at start-up, so the console would call localhost in production`);
   }
+}
+
+// The policy names wherever errors are reported, and only because the
+// entrypoint wrote it: a variable nginx is never given stops nginx starting.
+const consolePolicy = readFileSync(join(ROOT, 'ops/docker/console.nginx.conf'), 'utf8');
+
+if (consolePolicy.includes('$console_sentry_origin') && !consoleEntrypoint.includes('$console_sentry_origin')) {
+  problems.push('console sentry origin: the policy reads $console_sentry_origin and the entrypoint never writes it, so nginx would not start');
 }
 
 // And refuses to start rather than serving a console pointed at nobody.
@@ -129,6 +146,19 @@ if (!/<meta name="api-base"/.test(mobileTemplate)) {
   problems.push('mobile api-base: nothing stamps it before cap sync, so a packaged app would ship pointing at localhost');
 }
 
+// Where its errors go, and which store build it is: written in the same way.
+const MOBILE_SENTRY = ['sentry-dsn', 'sentry-environment', 'sentry-release'];
+
+for (const name of MOBILE_SENTRY) {
+  if (!new RegExp(`<meta name="${name}"`).test(mobileTemplate)) {
+    problems.push(`mobile ${name}: the phone app has no such meta tag, so it cannot be told where errors go`);
+  }
+}
+
+if (!/stamp-mobile-sentry/.test(mobileScripts.sync ?? '')) {
+  problems.push('mobile sentry: nothing stamps it before cap sync, so a packaged app would report no errors anywhere');
+}
+
 if (problems.length > 0) {
   console.error('\nruntime config: the page and the server disagree\n');
 
@@ -142,4 +172,6 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`runtime config: ${STAMPED.length + 3} addresses stamped into a page and read back out, across the site, the console and the phone app`);
+console.log(
+  `runtime config: ${STAMPED.length + CONSOLE_STAMPED.length + 1 + MOBILE_SENTRY.length} values stamped into a page and read back out, across the site, the console and the phone app`,
+);

@@ -10,7 +10,11 @@ use App\Support\Observability\SentryScrubber;
 return [
 
     // @see https://docs.sentry.io/concepts/key-terms/dsn-explainer/
-    'dsn' => env('SENTRY_LARAVEL_DSN', env('SENTRY_DSN')),
+    //
+    // Empty in development and in tests, and then nothing is sent anywhere:
+    // the SDK starts with no destination and every event stops with it.
+    // `?: null` because an empty line in .env reads as "", which is not unset.
+    'dsn' => env('SENTRY_LARAVEL_DSN') ?: (env('SENTRY_DSN') ?: null),
 
     // @see https://spotlightjs.com/
     // 'spotlight' => env('SENTRY_SPOTLIGHT', false),
@@ -18,9 +22,11 @@ return [
     // @see: https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/#logger
     // 'logger' => Sentry\Logger\DebugFileLogger::class, // By default this will log to `storage_path('logs/sentry.log')`
 
-    // The release version of your application
-    // Example with dynamic git hash: trim(exec('git --git-dir ' . base_path('.git') . ' log --pretty="%h" -n1 HEAD'))
-    'release' => env('SENTRY_RELEASE'),
+    // Which build this is. Baked into the image when it is built — the RELEASE
+    // build argument, the same tag the images carry (ops/docker/api.Dockerfile)
+    // — so an error always names the code that raised it, and a rollback shows
+    // up in Sentry as the older release coming back.
+    'release' => env('SENTRY_RELEASE') ?: null,
 
     // When left empty or `null` the Laravel environment will be used (usually discovered from `APP_ENV` in your `.env`)
     'environment' => env('SENTRY_ENVIRONMENT'),
@@ -52,14 +58,36 @@ return [
     // The minimum log level that will be sent to Sentry as logs using the `sentry_logs` logging channel
     'logs_channel_level' => env('SENTRY_LOG_LEVEL', env('SENTRY_LOGS_LEVEL', env('LOG_LEVEL', 'debug'))),
 
+    // @see: https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/#max_request_body_size
+    //
+    // A request's body is where a password, an account number and its
+    // holder's name, a ticket holder's name and the answers to an organizer's
+    // questions all arrive, under whatever names each form gives them. None of
+    // it says why something broke that the address and the stack trace do not,
+    // so no body is attached to anything: not an error, not a trace. Not a
+    // setting, for the same reason as send_default_pii below.
+    'max_request_body_size' => 'never',
+
     // @see: https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/#send_default_pii
-    'send_default_pii' => env('SENTRY_SEND_DEFAULT_PII', false),
+    //
+    // Off, and not a setting: no addresses, no cookies, no signed-in user's
+    // details. An environment variable that could turn it on is one line in
+    // .env away from sending every buyer's IP to a third party.
+    'send_default_pii' => false,
 
     // Last check before an error leaves the process. send_default_pii being off
     // stops Sentry attaching user details deliberately; it does nothing about an
     // exception carrying decrypted bank details or a government ID in a stack
     // frame. See the SentryScrubber class imported above.
     'before_send' => [SentryScrubber::class, 'handle'],
+
+    // And before a performance trace leaves, which is not an error and so
+    // never passes before_send. A trace carries as much as an error does: the
+    // address the request was made to, every breadcrumb, and a span for each
+    // query, cache key and outgoing request, described by its statement, key
+    // or address. At the example's SENTRY_TRACES_SAMPLE_RATE of 0.1 that is
+    // one request in ten, so it goes through the same scrubber.
+    'before_send_transaction' => [SentryScrubber::class, 'handle'],
 
     // @see: https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/#ignore_exceptions
     // 'ignore_exceptions' => [],
@@ -68,6 +96,10 @@ return [
     'ignore_transactions' => [
         // Ignore Laravel's default health URL
         '/up',
+        // And the two a monitor asks every minute, which would otherwise be
+        // most of the traces this sends.
+        '/api/health',
+        '/api/health/ready',
     ],
 
     // Breadcrumb specific configuration
@@ -84,8 +116,9 @@ return [
         // Capture SQL queries as breadcrumbs
         'sql_queries' => env('SENTRY_BREADCRUMBS_SQL_QUERIES_ENABLED', true),
 
-        // Capture SQL query bindings (parameters) in SQL query breadcrumbs
-        'sql_bindings' => env('SENTRY_BREADCRUMBS_SQL_BINDINGS_ENABLED', false),
+        // Capture SQL query bindings (parameters) in SQL query breadcrumbs.
+        // Never: the bindings are the values — an email, a payout account.
+        'sql_bindings' => false,
 
         // Capture queue job information as breadcrumbs
         'queue_info' => env('SENTRY_BREADCRUMBS_QUEUE_INFO_ENABLED', true),
@@ -111,8 +144,9 @@ return [
         // Capture SQL queries as spans
         'sql_queries' => env('SENTRY_TRACE_SQL_QUERIES_ENABLED', true),
 
-        // Capture SQL query bindings (parameters) in SQL query spans
-        'sql_bindings' => env('SENTRY_TRACE_SQL_BINDINGS_ENABLED', false),
+        // Capture SQL query bindings (parameters) in SQL query spans. Never,
+        // for the same reason as the breadcrumbs above.
+        'sql_bindings' => false,
 
         // Capture where the SQL query originated from on the SQL query spans
         'sql_origin' => env('SENTRY_TRACE_SQL_ORIGIN_ENABLED', true),

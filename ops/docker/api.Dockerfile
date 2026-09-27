@@ -24,6 +24,12 @@ RUN apk add --no-cache \
 
 COPY ops/docker/php.ini /usr/local/etc/php/conf.d/myfiesta.ini
 
+# pg_dump and pg_restore, for the nightly backup (backup:run) and the restore
+# drill (backup:restore) — docs/OPERATIONS.md. The major version matches the
+# server's: pg_dump refuses a server newer than itself, so this moves with the
+# database, never behind it.
+RUN apk add --no-cache postgresql17-client
+
 WORKDIR /var/www/api
 
 # --- dependencies, cached apart from the source --------------------------------
@@ -57,6 +63,19 @@ COPY --from=vendor /var/www/api .
 # identity documents, data exports — and is a mounted volume in production so
 # a redeploy does not take somebody's export with it.
 RUN chown -R www-data:www-data storage bootstrap/cache
+
+# Where backups go with BACKUP_TARGET=volume. Made here, owned by the runtime
+# user, so the volume mounted over it starts out writable by that user and
+# nobody else.
+RUN mkdir -p /var/backups/myfiesta \
+    && chown www-data:www-data /var/backups/myfiesta \
+    && chmod 0700 /var/backups/myfiesta
+
+# Which build this is, for Sentry and for every backup's manifest: the tag the
+# images are built with (compose.prod.yml passes TAG). An error then names the
+# release that raised it, and a rollback shows as the older release returning.
+ARG RELEASE=
+ENV SENTRY_RELEASE=${RELEASE}
 
 # php-fpm checks production is fit to run before it starts (app:preflight), and
 # the container stops with the list if it is not. Other commands pass straight

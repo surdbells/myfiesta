@@ -63,3 +63,38 @@ fi
 printf 'map $host $console_api_origin {\n    default "%s";\n}\n' "$API_ORIGIN" > /etc/nginx/conf.d/00-console-origin.conf
 
 echo "console: the policy allows the API at $API_ORIGIN"
+
+# Where errors are reported (Sentry), if anywhere: optional, and stamped
+# either way so a DSN from an earlier container never lingers in the page.
+# Empty reports nothing and the console never downloads the reporter
+# (src/app/core/error-reporting.ts). A DSN that is not one refuses to start,
+# rather than turning reporting off without saying so.
+SENTRY_DSN=${SENTRY_DSN:-}
+SENTRY_ORIGIN=""
+
+if [ -n "$SENTRY_DSN" ]; then
+    if ! printf '%s' "$SENTRY_DSN" | grep -Eq '^https://[A-Za-z0-9]+@[A-Za-z0-9.-]+(:[0-9]+)?/[0-9]+$'; then
+        echo "console: SENTRY_DSN is not a Sentry DSN (https://key@host/project) — refusing to start. Leave it empty to report nothing." >&2
+        exit 1
+    fi
+
+    # Scheme, host and port: never the key in front of the host.
+    SENTRY_ORIGIN=$(printf '%s' "$SENTRY_DSN" | sed -E 's#^https://[^@]+@([^/]+)/.*$#https://\1#')
+fi
+
+# Labels only; anything but a plain word is dropped rather than written into
+# the page.
+SENTRY_ENVIRONMENT=$(printf '%s' "${SENTRY_ENVIRONMENT:-production}" | tr -cd 'A-Za-z0-9._-')
+SENTRY_RELEASE=$(printf '%s' "${SENTRY_RELEASE:-}" | tr -cd 'A-Za-z0-9._@+-')
+
+stamp sentry-dsn "$SENTRY_DSN"
+stamp sentry-environment "$SENTRY_ENVIRONMENT"
+stamp sentry-release "$SENTRY_RELEASE"
+
+printf 'map $host $console_sentry_origin {\n    default "%s";\n}\n' "$SENTRY_ORIGIN" > /etc/nginx/conf.d/01-console-sentry.conf
+
+if [ -n "$SENTRY_ORIGIN" ]; then
+    echo "console: errors are reported to $SENTRY_ORIGIN (release ${SENTRY_RELEASE:-unset}, $SENTRY_ENVIRONMENT)"
+else
+    echo "console: SENTRY_DSN is empty, so errors are not reported anywhere"
+fi

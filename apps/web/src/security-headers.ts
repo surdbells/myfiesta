@@ -21,6 +21,12 @@ export interface PolicyContext {
   /** Where the browser half calls, from API_BASE_URL. Pictures on the API's own disk come from here too. */
   apiOrigin: string;
 
+  /**
+   * Where browser errors are reported, from SENTRY_DSN: the ingest origin
+   * only. Absent when no DSN is set, and then nothing is allowed for it.
+   */
+  errorReportingOrigin?: string;
+
   /** Under `ng serve`, whose reloads arrive over a websocket to this same host. */
   devServerHost?: string;
 
@@ -50,6 +56,8 @@ export function securityHeaders(path: string, context: PolicyContext): Record<st
     [
       "connect-src 'self'",
       context.apiOrigin,
+      // Error reports, when there is somewhere to send them.
+      ...(context.errorReportingOrigin ? [context.errorReportingOrigin] : []),
       ...(context.devServerHost ? [`ws://${context.devServerHost}`] : []),
     ].join(' '),
     // Nothing here puts another page inside itself. Paying happens on the

@@ -12,6 +12,11 @@
     <!-- Rewritten at deploy time, like api-base. Empty would make every
          organizer link point at this site itself. -->
     <meta name="console-url" content="http://localhost:4310" />
+    <!-- Where browser errors are reported (Sentry), stamped like api-base.
+         Empty sends nothing, and the reporter is never even downloaded. -->
+    <meta name="sentry-dsn" content="" />
+    <meta name="sentry-environment" content="" />
+    <meta name="sentry-release" content="" />
   </head>
   <body>
     <app-root></app-root>

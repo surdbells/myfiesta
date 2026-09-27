@@ -35,6 +35,9 @@ not. So the API itself has to reach the mail server, not only the worker.
 | `campaigns:send` | a scheduled campaign never goes out |
 | `series:extend` | a repeating event stops appearing on new dates |
 | `privacy:prune` | data exports sit on disk past the week they are allowed |
+| `app:heartbeat` | the readiness check reports the scheduler and the worker as stopped, whether they are or not |
+| `backup:run` | no nightly database backup — see [OPERATIONS.md](OPERATIONS.md#backups) |
+| `queue:prune-failed`, `sanctum:prune-expired`, `auth:clear-resets`, `app:prune-expired` | failed jobs, expired tokens and dead links pile up, each holding somebody's details |
 
 Both are in the compose file. `ops/systemd/` has the same two for a host
 without containers.
@@ -104,8 +107,10 @@ check having run is answered with an error rather than served.
 Every other command runs. Build-time commands — `package:discover`,
 `config:cache` and the rest — work with no secrets at all, and so does anything
 an operator needs to put a box right:
-`docker compose run --rm --no-deps api php artisan key:generate --show` for the
-missing `APP_KEY` the list names, `tinker`, or `app:preflight` to check again.
+`fiesta run --rm --no-deps api php artisan key:generate --show` for the
+missing `APP_KEY` the list names, `tinker`, or `app:preflight` to check again
+(`fiesta` is the compose command in [OPERATIONS.md](OPERATIONS.md), which
+reads `.env.production` and the release to run from `.env.release`).
 
 To send no texts until a provider account exists, empty `SMS_COUNTRIES`: then
 nothing is sent and nothing is claimed. Outside production the same list is
@@ -159,6 +164,11 @@ would be refused.
 | API files on disk (the panel's scripts, styles and fonts) | `ops/docker/api.nginx.conf` | the same, for what nginx serves without PHP |
 | Site | `apps/web/src/security-headers.ts`, from `server.ts` | its own scripts plus the inline ones Angular writes, each carrying a per-response nonce; calls only `API_BASE_URL` |
 | Console | `ops/docker/console.nginx.conf`, the API origin written in at start-up | its own scripts plus WebAssembly for the door's QR decoder; calls only `API_BASE_URL` |
+
+When `SITE_SENTRY_DSN` or `CONSOLE_SENTRY_DSN` is set, that app's policy also
+lets it send to the ingest host the DSN names (its origin only, never the key),
+and to nothing else of Sentry's: the reporter itself is served from the app's
+own origin.
 
 All of them send `X-Content-Type-Options: nosniff`, a `Referrer-Policy` that
 tells other sites no more than the origin, and a `Permissions-Policy` that
@@ -250,6 +260,30 @@ carry a notice saying the details are still to be filled in — both markets
 require a reachable operator, and Stripe and Paystack read these pages before an
 account goes live.
 
+## Tax, the service charge and receipts
+
+The tax rates the platform launches with (every Canadian province, and Nigerian
+VAT) are installed by a migration, so `migrate` on an empty production database
+is enough — nothing has to be seeded. It adds a rate only for a place that has
+none and never changes one that exists, so it is safe on a database that was
+seeded already. After that, rates change by being superseded in the admin
+(Configuration → Tax rates), never edited.
+
+The rest is a setting an administrator changes in the admin (Configuration →
+Platform settings): the service charge in each currency, whether the organizer
+or the platform is the seller of record, whether the service charge is taxed,
+whether Quebec's QST is collected beside GST, the registration numbers printed
+on receipts, and the legal name and addresses receipts show. `TAX_*` in `.env`
+(`config/tax.php`), `PLATFORM_SERVICE_CHARGE_BPS` and `CONTACT_*` are the
+defaults until somebody saves something different there. Every change is in the
+audit log with what it replaced, and every order keeps its own copy of what
+applied to it, so a receipt never changes after it is sent.
+
+Before launch, the business has to decide and fill in: the seller of record,
+whether the service charge is taxed, whether it is registered to collect QST,
+and the GST/HST, QST and Nigerian VAT (TIN) numbers. None of them have values
+here, because none of them are ours to know.
+
 ## A release
 
 1. Build the images from the repository root: the API, its nginx
@@ -266,12 +300,40 @@ Migrations are additive and are written to be safe to run while the previous
 release is still serving. The one thing to know: `config:cache` means a change
 to `.env` does nothing until the cache is rebuilt.
 
+Every release has a tag (the short git hash will do): the images are tagged
+with it and it is baked into each as the release Sentry reports. The one that
+is running is written in `.env.release`, beside `.env.production`, as
+`TAG=<tag>` — before the containers are replaced, and again on a rollback — and
+every compose command reads it from there (`--env-file .env.release`, after
+`.env.production`). So the previous release is always one edit of that file
+and an `up -d` away, and nothing started later quietly runs a different build.
+The compose file refuses to run without it; on the first deploy, write it
+before anything else. The checklist to run before a deploy, the commands, and
+how to roll one back are in
+[OPERATIONS.md](OPERATIONS.md#deploys-and-rolling-back).
+
+## Keeping it running
+
+[OPERATIONS.md](OPERATIONS.md) has the rest: what the uptime monitor watches
+(`/up` for the load balancer, `/api/health/ready` for paging somebody), the
+nightly backup and the restore drill, what is deleted on a schedule, and where
+errors are reported. Each container has a healthcheck for its own part, so
+`docker ps` says which one is unwell.
+
 ## What has to exist around it
 
 - **Postgres 17.** Not negotiable: the schema uses generated columns, partial
-  unique indexes, check constraints and an append-only trigger on the ledger.
+  unique indexes, check constraints, an append-only trigger on the ledger, and
+  an exclusion constraint that keeps tax-rate dates from overlapping. That one
+  needs the `btree_gist` extension, which the migration creates; it ships with
+  Postgres and is trusted, so the database's owner can, but check a managed
+  provider allows it before the first deploy.
   A managed instance with backups somebody else tests is worth more than a
-  container beside the application.
+  container beside the application — with point-in-time recovery switched on,
+  and this platform's own nightly backup beside it (OPERATIONS.md). The backup
+  connects directly, not through a transaction-pooling proxy, and its
+  `pg_dump` is 17: move the image's client (`ops/docker/api.Dockerfile`) up with
+  the server, never behind it.
 - **Redis**, for queues and cache.
 - **Object storage** for private files — identity documents, data exports —
   or a volume that survives a redeploy. `storage/app` in the image is not it.
@@ -343,3 +405,9 @@ of the report are in [CUTOVER.md](CUTOVER.md).
 - **Webhooks to organizers stop.** `webhooks:retry` is not running, or the
   endpoint has been switched off after 25 consecutive failures — which the
   console says on the Integrations screen.
+- **`/api/health/ready` answers 503.** Its answer names the part that failed;
+  what each means and what to do first is in
+  [OPERATIONS.md](OPERATIONS.md#what-to-watch). The reason is in the API's log.
+- **The console will not start, saying SENTRY_DSN is not a Sentry DSN.**
+  `CONSOLE_SENTRY_DSN` is set to something that is not one. Correct it, or
+  empty it to report nothing.

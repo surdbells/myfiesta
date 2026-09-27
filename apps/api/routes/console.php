@@ -102,3 +102,74 @@ Schedule::command('impersonation:close-lapsed')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Heartbeats, for the readiness check (GET /api/health/ready). The scheduler
+ * writes its own time every minute and sends the queue a job that writes the
+ * worker's; either going stale is the first sign that emails have stopped.
+ * In the foreground: it takes a millisecond, and a heartbeat that ran in a
+ * process of its own would say the scheduler was fine when it was only the
+ * fork that was. No overlap lock: two at once do no harm, and a lock left by
+ * a killed run would silence the heartbeat for a day. Through maintenance
+ * mode as well: the scheduler is still alive while the platform is down, and
+ * a switch-over is checked before `up`. (Workers take no jobs while it is
+ * down, so the queue's heartbeat does go stale then; they catch up after.)
+ */
+Schedule::command('app:heartbeat')
+    ->everyMinute()
+    ->evenInMaintenanceMode();
+
+/*
+ * The nightly backup (docs/OPERATIONS.md). 06:30 UTC is 02:30 in Toronto in
+ * summer (01:30 in winter) and 07:30 in Lagos: after most doors have closed
+ * in one market and before the day's sales start in the other. pg_dump reads a snapshot and blocks
+ * nobody, so this is about load, not locks. Sentry is told when it starts and
+ * how it ended, and says so when a night goes by without one.
+ */
+Schedule::command('backup:run')
+    ->dailyAt('06:30')
+    ->withoutOverlapping(6 * 60)
+    ->runInBackground()
+    ->sentryMonitor('database-backup');
+
+/*
+ * Things that were only ever waiting, deleted once they cannot be used —
+ * each carries somebody's details, and none of it is a record of anything.
+ *
+ *   failed jobs    a job's payload is the job, buyer's name and address
+ *                  included; kept long enough to retry after a weekend
+ *   sign-in tokens past their expiry (a week of grace, for "last active")
+ *   password resets past their hour
+ *   address changes and sign-ups whose links ran out (app:prune-expired)
+ *   anything a model marks Prunable (model:prune; none do yet)
+ *
+ * Stock holds are swept by checkouts:expire, webhook deliveries by
+ * webhooks:prune and lapsed staff sessions by impersonation:close-lapsed,
+ * above. Nothing here touches the ledger, the audit trail, orders, tickets
+ * or scans: those are records, the first two are append-only in the
+ * database itself, and PruneScheduleTest holds all of it in place.
+ */
+Schedule::command('queue:prune-failed', ['--hours' => 24 * config('operations.prune.failed_jobs_days')])
+    ->dailyAt('05:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('sanctum:prune-expired', ['--hours' => config('operations.prune.tokens_expired_hours')])
+    ->dailyAt('05:05')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('auth:clear-resets')
+    ->dailyAt('05:10')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('app:prune-expired')
+    ->dailyAt('05:15')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('model:prune')
+    ->dailyAt('05:20')
+    ->withoutOverlapping()
+    ->runInBackground();

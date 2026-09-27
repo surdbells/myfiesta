@@ -1,5 +1,6 @@
 import {
   ApplicationConfig,
+  ErrorHandler,
   isDevMode,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
@@ -9,10 +10,13 @@ import { provideRouter, withInMemoryScrolling } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/api';
+import { ReportingErrorHandler } from './core/error-reporting';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    // Angular's handler, then a report to Sentry when the page names one.
+    { provide: ErrorHandler, useClass: ReportingErrorHandler },
     provideZonelessChangeDetection(),
     provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' })),
     // The interceptor attaches the token and clears the session on a 401, so

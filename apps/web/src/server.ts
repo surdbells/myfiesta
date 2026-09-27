@@ -9,6 +9,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { securityHeaders } from './security-headers';
+import { errorReportingOrigin as errorReportingOriginOf } from '@myfiesta/shared/error-reporting';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -32,6 +33,7 @@ app.use((req, res, next) => {
   const headers = securityHeaders(req.path, {
     nonce,
     apiOrigin,
+    errorReportingOrigin,
     devServerHost: isDevMode() ? req.get('host') : undefined,
     // Believed only to decide whether to insist on https, which a browser
     // ignores over plain http anyway: a client that lies here fools itself.
@@ -144,6 +146,24 @@ const apiOrigin = new URL(apiBaseUrl).origin;
 const consoleUrl = process.env['CONSOLE_URL'] ?? 'http://localhost:4310';
 
 /**
+ * Where the browser reports errors, and what it labels them with — stamped
+ * for the same reason again (core/error-reporting.ts). Empty means the page
+ * reports nothing and never loads the reporter. The release is the one the
+ * image was built with (ops/docker/web.Dockerfile).
+ */
+const sentryDsn = (process.env['SENTRY_DSN'] ?? '').trim();
+const sentryEnvironment = (process.env['SENTRY_ENVIRONMENT'] ?? '').trim();
+const sentryRelease = (process.env['SENTRY_RELEASE'] ?? '').trim();
+
+/** The same, as an origin the policy lets the browser send reports to. */
+const errorReportingOrigin = errorReportingOriginOf(sentryDsn) ?? undefined;
+
+/** A value going into an attribute: nothing that could close it. */
+function attribute(value: string): string {
+  return value.replace(/[&"<>]/g, '');
+}
+
+/**
  * What crawlers may read.
  *
  * Event pages and the listing, yes — they are the storefront. A buyer's
@@ -248,7 +268,10 @@ app.use((req, res, next) => {
       // there — which is precisely the bug this replaced.
       const html = (await response.text())
         .replace(/<meta name="api-base"[^>]*>/, `<meta name="api-base" content="${apiBaseUrl}">`)
-        .replace(/<meta name="console-url"[^>]*>/, `<meta name="console-url" content="${consoleUrl}">`);
+        .replace(/<meta name="console-url"[^>]*>/, `<meta name="console-url" content="${consoleUrl}">`)
+        .replace(/<meta name="sentry-dsn"[^>]*>/, `<meta name="sentry-dsn" content="${attribute(sentryDsn)}">`)
+        .replace(/<meta name="sentry-environment"[^>]*>/, `<meta name="sentry-environment" content="${attribute(sentryEnvironment)}">`)
+        .replace(/<meta name="sentry-release"[^>]*>/, `<meta name="sentry-release" content="${attribute(sentryRelease)}">`);
 
       res.status(response.status);
       response.headers.forEach((value, key) => {

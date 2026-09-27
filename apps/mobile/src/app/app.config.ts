@@ -1,4 +1,10 @@
-import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
+import {
+  ApplicationConfig,
+  ErrorHandler,
+  inject,
+  provideAppInitializer,
+  provideBrowserGlobalErrorListeners,
+} from '@angular/core';
 import { RouteReuseStrategy, provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
 import { routes } from './app.routes';
 import { SessionStore } from './core/session';
@@ -6,6 +12,7 @@ import { Reminders } from './core/reminders';
 import { Theme } from './core/theme';
 import { Navigation } from './core/navigation';
 import { LinkedScreenReuse } from './core/deep-links';
+import { ReportingErrorHandler } from './core/error-reporting';
 
 /**
  * Whether the phone has been asked for less movement.
@@ -44,6 +51,8 @@ const transitions = withViewTransitions({
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    // Angular's handler, then a report to Sentry when the build names one.
+    { provide: ErrorHandler, useClass: ReportingErrorHandler },
     prefersLessMotion()
       ? provideRouter(routes, withComponentInputBinding())
       : provideRouter(routes, withComponentInputBinding(), transitions),

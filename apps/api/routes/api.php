@@ -36,10 +36,12 @@ use App\Http\Controllers\Api\Organizer\QuestionController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
+use App\Http\Controllers\Api\Organizer\StandingController;
 use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\Organizer\TicketTypeController;
 use App\Http\Controllers\Api\Organizer\WaitlistController as OrganizerWaitlistController;
 use App\Http\Controllers\Api\OrganizerController;
+use App\Http\Controllers\Api\ReadinessController;
 use App\Http\Controllers\Api\ResaleController;
 use App\Http\Controllers\Api\SavedEventController;
 use App\Http\Controllers\Api\SitemapController;
@@ -47,9 +49,16 @@ use App\Http\Controllers\Api\TicketAccessController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\V1\ReadController;
 use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Middleware\ThrottleHealthChecks;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => ['status' => 'ok']);
+
+// Whether the database, cache, queue, disks and scheduler all work: for an
+// uptime monitor, never a load balancer (docs/OPERATIONS.md). Limited, because
+// every call writes a file and reads the database — by a limiter that gives
+// way when Redis, which it counts in, is what is down.
+Route::get('/health/ready', ReadinessController::class)->middleware(ThrottleHealthChecks::class.':30,1');
 
 /*
  * Public. No token, because browsing and buying require no account — guest
@@ -215,6 +224,12 @@ Route::middleware(['auth:sanctum', 'token.scope:account'])->group(function () {
     // A fresh link to prove the address the account already has. Limited per
     // account inside as well; this only keeps a stuck button from hammering.
     Route::post('/auth/email/verification', EmailVerificationController::class)->middleware('throttle:6,1');
+
+    // Deleting the account from inside the app that made it, which the App
+    // Store requires. The privacy page's erasure, asked for signed in: what it
+    // would do first, then doing it with the account's password.
+    Route::get('/auth/erasure', [DataRequestController::class, 'preview']);
+    Route::post('/auth/erasure', [DataRequestController::class, 'erase'])->middleware('throttle:10,1');
 });
 
 /*
@@ -243,6 +258,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
     ->group(function () {
         // What somebody signs in to find out, in one request.
         Route::get('/overview', [OverviewController::class, 'index']);
+
+        // Whether the platform is selling for this organization: the
+        // console's suspension banner, open to every member.
+        Route::get('/standing', [StandingController::class, 'show']);
 
         // What is owed, what has been sent, and where it goes. Read-only
         // for settlements: paying somebody out is a manual act against a

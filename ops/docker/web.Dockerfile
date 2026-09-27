@@ -26,6 +26,11 @@ FROM node:22-alpine AS runtime
 
 ENV NODE_ENV=production
 
+# Which build this is, stamped into every page for the error reporter: the tag
+# the images are built with (compose.prod.yml passes TAG).
+ARG RELEASE=
+ENV SENTRY_RELEASE=${RELEASE}
+
 WORKDIR /app
 
 COPY --from=build /repo/apps/web/dist/web ./
@@ -36,7 +41,7 @@ USER node
 EXPOSE 4000
 
 # ALLOWED_HOSTS, API_BASE_URL, CONSOLE_URL and PUBLIC_URL come from the
-# environment. The first is not optional: Angular refuses to render for an
+# environment, and SENTRY_DSN and SENTRY_ENVIRONMENT when errors are reported. The first is not optional: Angular refuses to render for an
 # unrecognised Host and falls back to client rendering silently, which is
 # exactly the failure this whole process exists to avoid.
 CMD ["node", "server/server.mjs"]

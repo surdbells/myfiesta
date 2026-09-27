@@ -19,6 +19,11 @@
     <!-- Read by the app at runtime, so one build serves staging and production. -->
     <meta name="api-base" content="" />
     <meta name="site-base" content="" />
+    <!-- Where errors are reported (Sentry), written in before packaging by
+         tools/stamp-mobile-sentry.cjs. Empty sends nothing. -->
+    <meta name="sentry-dsn" content="" />
+    <meta name="sentry-environment" content="" />
+    <meta name="sentry-release" content="" />
 
     <link rel="icon" href="favicon.ico" />
   </head>

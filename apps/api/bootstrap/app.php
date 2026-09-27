@@ -4,11 +4,15 @@ use App\Http\Middleware\AuthenticateApiKey;
 use App\Http\Middleware\EnforceTokenScope;
 use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Middleware\ImpersonationBoundary;
+use App\Http\Middleware\PreventRequestsDuringMaintenance;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SuspensionBoundary;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance as BasePreventRequestsDuringMaintenance;
 use Illuminate\Http\Request;
+use Sentry\Laravel\Integration;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -34,6 +38,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // listing it. Inert for every token that is not a staff session's.
         $middleware->appendToGroup('api', ImpersonationBoundary::class);
 
+        // A suspended organization: publishing, selling and asking to be
+        // paid are refused with a sentence that says why. Inert for every
+        // endpoint WhileSuspended does not name.
+        $middleware->appendToGroup('api', SuspensionBoundary::class);
+
         /*
          * Who a request came from, believed only from the proxies named in
          * TRUSTED_PROXIES (config/trustedproxy.php).
@@ -51,6 +60,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Outermost, so every response carries them — including the ones the
         // framework's own middleware answers before a route is reached.
         $middleware->prepend(SecurityHeaders::class);
+
+        // The framework's, except that the readiness check still answers when
+        // Redis, where maintenance mode is kept, is down. See the class.
+        $middleware->replace(BasePreventRequestsDuringMaintenance::class, PreventRequestsDuringMaintenance::class);
 
         // Webhooks carry no browser session, so there is no CSRF token to
         // present and nothing for one to protect. Their authentication is the
@@ -79,4 +92,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // Every reported exception to Sentry, through SentryScrubber on the
+        // way (config/sentry.php). With SENTRY_LARAVEL_DSN empty — tests,
+        // development — the SDK has nowhere to send it and nothing leaves.
+        Integration::handles($exceptions);
     })->create();
