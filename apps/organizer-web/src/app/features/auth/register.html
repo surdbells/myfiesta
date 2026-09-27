@@ -103,13 +103,36 @@
         />
       </ui-field>
 
+      <!--
+        Unticked until they tick it. The pages live on the public site, so
+        they open in a tab of their own and the form stays as it was typed.
+        A link inside the label follows the link rather than ticking the box.
+      -->
+      <label class="terms flex cursor-pointer items-start gap-3 text-sm">
+        <input
+          class="mt-0.5 h-4 w-4 shrink-0"
+          type="checkbox"
+          id="agreed"
+          name="agreed"
+          required
+          [ngModel]="form().agreed"
+          (ngModelChange)="form.set({ ...form(), agreed: $event })"
+        />
+        <span>
+          I accept the
+          <a class="text-primary-text" [href]="site + '/terms'" target="_blank" rel="noopener">terms</a>,
+          the <a class="text-primary-text" [href]="site + '/privacy'" target="_blank" rel="noopener">privacy policy</a>
+          and the <a class="text-primary-text" [href]="site + '/refunds'" target="_blank" rel="noopener">refund policy</a>.
+        </span>
+      </label>
+
       <button
         uiButton
         type="submit"
         size="lg"
         [block]="true"
         [loading]="busy()"
-        [disabled]="busy() || mismatch() || !!passwordHint()"
+        [disabled]="busy() || mismatch() || !!passwordHint() || !form().agreed"
       >
         @if (busy()) { Creating your account… } @else { Create account }
       </button>

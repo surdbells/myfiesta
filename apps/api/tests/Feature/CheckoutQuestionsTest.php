@@ -535,6 +535,7 @@ class CheckoutQuestionsTest extends TestCase
         $body = [
             'items' => [['ticket_type_id' => $this->general->id, 'quantity' => 1]],
             'buyer' => ['name' => 'Ada Buyer', 'email' => 'ada@example.test'],
+            'accept_terms' => true,
         ];
 
         $this->postJson('/api/events/afro-fest/orders', $body)

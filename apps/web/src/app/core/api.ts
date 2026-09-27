@@ -43,6 +43,12 @@ export interface NewOrder extends Basket {
   attendees?: Attendee[];
   /** Bought inside an organizer's own site, for their reports. */
   embedded?: boolean;
+  /**
+   * The box by the pay button, as the buyer left it: the terms, the privacy
+   * policy and the refund policy, agreed to. The server refuses the order
+   * without it and keeps which version was agreed to, and when.
+   */
+  accept_terms: boolean;
 }
 
 export interface EventQuery {

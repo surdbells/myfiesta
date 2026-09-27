@@ -36,6 +36,7 @@ class AttendeeRegistrationTest extends TestCase
             'password_confirmation' => 'correct horse battery staple 7',
             'attendee' => true,
             'device' => 'mobile',
+            'accept_terms' => true,
         ], $body);
     }
 
@@ -71,6 +72,7 @@ class AttendeeRegistrationTest extends TestCase
             'email' => 'ada@example.com',
             'password' => 'correct horse battery staple 7',
             'password_confirmation' => 'correct horse battery staple 7',
+            'accept_terms' => true,
         ])
             ->assertStatus(422)
             ->assertJsonPath('errors.organization.0', 'What should we call your events page?');
@@ -84,6 +86,7 @@ class AttendeeRegistrationTest extends TestCase
             'password' => 'correct horse battery staple 7',
             'password_confirmation' => 'correct horse battery staple 7',
             'organization' => 'Lagos Nights',
+            'accept_terms' => true,
         ]);
 
         $body = $this->signIn('ada@example.com', 'correct horse battery staple 7');

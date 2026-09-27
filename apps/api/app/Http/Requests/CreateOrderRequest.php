@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Order;
+use App\Services\Accounts\Terms;
+
 class CreateOrderRequest extends QuoteRequest
 {
     public function rules(): array
@@ -33,7 +36,48 @@ class CreateOrderRequest extends QuoteRequest
             'embedded' => ['sometimes', 'boolean'],
             'attendees.*.ticket_type_id' => ['required', 'uuid'],
             'attendees.*.answers' => ['nullable', 'array', 'max:50'],
+
+            /*
+             * The box by the pay button: the terms, the privacy policy and the
+             * refund policy, agreed to.
+             *
+             * Asked of every buyer today. This route reads no sign-in — no app
+             * checks out signed in, and a token sent here is not looked at —
+             * so $this->user() is nobody, as it is for the order itself. The
+             * account half is for a checkout that knows its buyer: one whose
+             * account agreed to the words in force is not asked again, and
+             * one whose account has not is asked once. It arrives with the
+             * order being placed for that account, resolved the same way, or
+             * the agreement would land on an account the order is not on.
+             *
+             * Door sales never come through here, and are not asked. The
+             * person paying at the door hands over cash or a card to the
+             * organizer's own staff, is let in on the spot, and has no screen
+             * of ours in front of them to read three pages on — and the sale
+             * is made by an organizer who agreed to the terms when they signed
+             * up. An order with no agreement on it is how a door sale reads.
+             */
+            'accept_terms' => app(Terms::class)->acceptedBy($this->user()) ? ['nullable', 'boolean'] : ['accepted'],
         ]);
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'accept_terms.accepted' => Terms::REFUSAL,
+        ];
+    }
+
+    /**
+     * Keep with the order what its buyer agreed to.
+     *
+     * The same user the order itself is placed for, resolved the same way, so
+     * the agreement lands on the account the order does and no other.
+     */
+    public function recordAcceptance(Order $order): void
+    {
+        app(Terms::class)->recordOn($order, $this->user(), $this->boolean('accept_terms'));
     }
 
     /**

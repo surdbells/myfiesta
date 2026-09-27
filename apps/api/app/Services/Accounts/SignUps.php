@@ -53,9 +53,15 @@ class SignUps
      * stranger who used up the hour's emails stop the owner signing up at
      * all, for as long as the stranger kept at it.
      *
+     * The terms version is the one whoever filled in the form agreed to, and
+     * it waits here with the rest of what they typed. It is theirs, not the
+     * inbox's: complete() gives it to the account only when the password they
+     * chose opens it.
+     *
      * @param  string  $password  already hashed; the caller hashed it whatever happens next
+     * @param  string|null  $termsVersion  the version of the terms the box was ticked for, just now
      */
-    public function begin(string $email, string $name, string $password, ?string $organization, bool $sendEmail = true): void
+    public function begin(string $email, string $name, string $password, ?string $organization, bool $sendEmail = true, ?string $termsVersion = null): void
     {
         if ($this->addressIsTaken($email)) {
             if ($sendEmail) {
@@ -75,6 +81,8 @@ class SignUps
             'password' => $password,
             'organization' => filled($organization) ? $organization : null,
             'expires_at' => now()->addHours(PendingRegistration::EXPIRES_HOURS),
+            'terms_version' => $termsVersion,
+            'terms_accepted_at' => $termsVersion !== null ? now() : null,
         ]);
 
         if ($sendEmail) {
@@ -170,7 +178,30 @@ class SignUps
                     'name' => $pending->name,
                     'password' => $pending->password,
                     'email_verified_at' => now(),
-                ])->save();
+                ]);
+
+                /*
+                 * What was agreed to on the form, by whoever filled it in.
+                 *
+                 * This sign-up is the one the password opened, so its
+                 * agreement belongs to the person the account now belongs to
+                 * — never a stranger's sign-up for the same address. The
+                 * moment is when the box was ticked, not now, and the version
+                 * is the one it was ticked for: if the words changed while
+                 * the link waited, the account is asked about the new ones at
+                 * its next checkout.
+                 *
+                 * A sign-up from before the box existed has nothing to give,
+                 * and the account is left to be asked.
+                 */
+                if ($pending->terms_version !== null) {
+                    $user->forceFill([
+                        'terms_version' => $pending->terms_version,
+                        'terms_accepted_at' => $pending->terms_accepted_at,
+                    ]);
+                }
+
+                $user->save();
 
                 if (! $pending->isAttendee()) {
                     $this->openOrganization($user, $pending->organization);

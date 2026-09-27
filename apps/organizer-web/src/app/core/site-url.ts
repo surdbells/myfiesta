@@ -20,8 +20,12 @@ import { DOCUMENT } from '@angular/common';
 export const SITE_URL = new InjectionToken<string>('SITE_URL', {
   providedIn: 'root',
   factory: () => {
-    const meta = inject(DOCUMENT).querySelector<HTMLMetaElement>('meta[name="site-url"]');
+    // public-base is the tag index.html carries and the container stamps
+    // (ops/docker/console-entrypoint.sh). This read site-url, which nothing
+    // stamps, so every link built from it pointed at localhost in
+    // production. Empty in development, hence || rather than ??.
+    const meta = inject(DOCUMENT).querySelector<HTMLMetaElement>('meta[name="public-base"]');
 
-    return meta?.content ?? 'http://localhost:4320';
+    return meta?.content?.replace(/\/+$/, '') || 'http://localhost:4320';
   },
 });

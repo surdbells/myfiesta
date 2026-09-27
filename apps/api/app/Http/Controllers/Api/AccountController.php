@@ -13,6 +13,7 @@ use App\Models\OrganizationInvitation;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Accounts\SignUps;
+use App\Services\Accounts\Terms;
 use App\Services\Door\DoorPasses;
 use App\Services\Impersonation\Impersonation;
 use App\Services\Team\TeamService;
@@ -108,9 +109,18 @@ class AccountController extends Controller
              */
             'attendee' => ['nullable', 'boolean'],
             'device' => ['nullable', 'string', 'max:64'],
+            /*
+             * The box on the form: the terms, the privacy policy and the
+             * refund policy, agreed to. Refused without it, for every address
+             * alike and before anything is looked up, so the refusal says
+             * nothing about who is here already. Kept with the sign-up until
+             * its link is opened, then on the account (see Terms).
+             */
+            'accept_terms' => ['accepted'],
         ], [
             'password.confirmed' => 'The two passwords do not match.',
             'organization.required_without_all' => 'What should we call your events page?',
+            'accept_terms.accepted' => Terms::REFUSAL,
         ]);
 
         $email = Str::lower(trim($data['email']));
@@ -179,6 +189,7 @@ class AccountController extends Controller
                 ? null
                 : trim($data['organization']),
             $sendEmail,
+            app(Terms::class)->current(),
         );
 
         return response()->json([
@@ -219,6 +230,10 @@ class AccountController extends Controller
                     // sign-in.
                     'password' => $data['password'],
                     'email_verified_at' => now(),
+                    // Ticked on this form, by the person the account is made
+                    // for here and now: there is no link in between to wait on.
+                    'terms_version' => app(Terms::class)->current(),
+                    'terms_accepted_at' => now(),
                 ])->save();
 
                 app(TeamService::class)->accept($invitation, $user->load('organizations'));

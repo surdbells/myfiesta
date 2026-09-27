@@ -149,6 +149,7 @@ class ApiSurfaceTest extends TestCase
 
         $this->postJson('/api/events/afro-fest/orders', $this->items() + [
             'buyer' => ['name' => 'Ada', 'email' => 'ada@example.com'],
+            'accept_terms' => true,
         ])
             ->assertCreated()
             ->assertJsonPath('status', 'paid')

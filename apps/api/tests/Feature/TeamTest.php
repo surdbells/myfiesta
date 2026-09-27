@@ -123,6 +123,7 @@ class TeamTest extends TestCase
             'password' => 'correct horse 42',
             'password_confirmation' => 'correct horse 42',
             'invitation' => $token,
+            'accept_terms' => true,
         ])->assertCreated()
             ->assertJsonCount(1, 'organizations')
             ->assertJsonPath('organizations.0.name', 'Lagos Nights')
@@ -140,6 +141,7 @@ class TeamTest extends TestCase
             'name' => 'Imposter', 'email' => 'imposter@example.com',
             'password' => 'correct horse 42', 'password_confirmation' => 'correct horse 42',
             'invitation' => $token,
+            'accept_terms' => true,
         ])->assertStatus(422)->assertJsonValidationErrors('email');
 
         $this->assertSame(0, User::where('email', 'imposter@example.com')->count());

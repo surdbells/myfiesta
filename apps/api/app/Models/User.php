@@ -51,6 +51,8 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
             'last_login_at' => 'datetime',
             'platform_role' => PlatformRole::class,
             'password' => 'hashed',
+            // Which terms this account agreed to, and when. See Terms.
+            'terms_accepted_at' => 'datetime',
         ];
     }
 

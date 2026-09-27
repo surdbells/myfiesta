@@ -273,6 +273,7 @@ class EventCancellationTest extends TestCase
         $this->postJson("/api/events/{$this->event->slug}/orders", [
             'items' => [['ticket_type_id' => $this->type->id, 'quantity' => 1]],
             'buyer' => ['name' => 'Late Buyer', 'email' => 'late@example.com'],
+            'accept_terms' => true,
         ])->assertNotFound();
 
         // And the same for pricing a basket, which is the step before it.

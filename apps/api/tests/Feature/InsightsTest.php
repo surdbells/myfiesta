@@ -207,6 +207,7 @@ class InsightsTest extends TestCase
             'items' => [['ticket_type_id' => $this->event->ticketTypes()->value('id'), 'quantity' => 1]],
             'buyer' => ['name' => 'Ada', 'email' => 'ada@example.com'],
             'embedded' => true,
+            'accept_terms' => true,
         ]);
 
         // The gateway may not be configured here; the order is made either way.

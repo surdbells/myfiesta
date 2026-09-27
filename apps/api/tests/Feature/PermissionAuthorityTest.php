@@ -260,6 +260,7 @@ class PermissionAuthorityTest extends TestCase
             'password' => 'correct horse 7',
             'password_confirmation' => 'correct horse 7',
             'organization' => 'Danforth Sessions',
+            'accept_terms' => true,
         ]);
 
         $session = $this->signIn('ada@example.com', 'correct horse 7');
@@ -278,6 +279,7 @@ class PermissionAuthorityTest extends TestCase
             'password' => 'correct horse 7',
             'password_confirmation' => 'correct horse 7',
             'attendee' => true,
+            'accept_terms' => true,
         ]);
 
         $session = $this->signIn('tunde@example.com', 'correct horse 7');

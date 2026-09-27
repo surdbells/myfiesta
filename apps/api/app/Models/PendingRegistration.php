@@ -35,6 +35,9 @@ class PendingRegistration extends Model
     {
         return [
             'expires_at' => 'datetime',
+            // When the box on the form was ticked, which is when the account
+            // this becomes agreed to the terms — not when the link is opened.
+            'terms_accepted_at' => 'datetime',
         ];
     }
 

@@ -1,4 +1,14 @@
-@if (event(); as ev) {
+@if (notFound()) {
+  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+    <h1>Event not found</h1>
+    <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
+  </section>
+} @else if (unavailable()) {
+  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+    <h1>This event could not be loaded</h1>
+    <p class="muted">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
+  </section>
+} @else if (event(); as ev) {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
     <!-- Inside somebody else's page there is no "Home" to go back to: the
          page around the frame is theirs. The event is named instead. -->
@@ -88,17 +98,30 @@
           </div>
         </div>
 
+        <!--
+          Unticked until the buyer ticks it, and sent as it stands: the server
+          refuses the order without it and keeps which version of the three
+          pages was agreed to.
+
+          Each page opens in a tab of its own, on the site and inside a frame
+          alike — reading the refund policy should not cost the buyer the
+          form. A static target is RouterLink's own input, so it lets the
+          browser have the click. A link inside the label follows the link
+          rather than ticking the box.
+        -->
         <label class="mt-6 flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
           <input
             class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
             type="checkbox"
             name="agreed"
+            required
             [ngModel]="agreed()"
             (ngModelChange)="agreed.set($event)"
           />
           <span>
-            Send the tickets to this email address. I accept the
-            <a routerLink="/terms" target="_blank">terms of service</a>.
+            I accept the <a routerLink="/terms" target="_blank">terms</a>,
+            the <a routerLink="/privacy" target="_blank">privacy policy</a>
+            and the <a routerLink="/refunds" target="_blank">refund policy</a>.
           </span>
         </label>
 

@@ -81,6 +81,7 @@ class CheckoutReturnUrlTest extends TestCase
         $this->postJson("/api/events/{$this->event->slug}/orders", [
             'items' => [['ticket_type_id' => $this->type->id, 'quantity' => 1]],
             'buyer' => ['name' => 'Ada Okafor', 'email' => 'ada@example.com'],
+            'accept_terms' => true,
         ])->assertCreated();
     }
 

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -7,6 +8,7 @@ import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, rememberPayment } from '../../core/embed';
 import { formatMoney } from '../../core/money';
+import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
 import { QuestionField } from './question-field';
 
@@ -29,10 +31,15 @@ export class Checkout {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly seo = inject(Seo);
   readonly store = inject(CheckoutStore);
   readonly embed = inject(EmbedMode);
 
   readonly event = signal<EventDetail | null>(null);
+  /** The API says there is no such event on sale. Answered 404 on the server. */
+  readonly notFound = signal(false);
+  /** The API did not answer, which is not the same as there being no event. */
+  readonly unavailable = signal(false);
   readonly quote = signal<Quote | null>(null);
   readonly quoteError = signal<string | null>(null);
 
@@ -45,6 +52,15 @@ export class Checkout {
   readonly last = signal('');
   readonly email = signal('');
   readonly confirm = signal('');
+
+  /**
+   * The terms, the privacy policy and the refund policy, agreed to.
+   *
+   * Unticked every time. Nobody is signed in on this site, so there is no
+   * earlier agreement to remember — and a box ticked for somebody is not
+   * somebody agreeing. Sent as it stands; the server refuses the order
+   * without it and keeps which version was agreed to, with the order.
+   */
   readonly agreed = signal(false);
 
   readonly promo = signal('');
@@ -127,20 +143,43 @@ export class Checkout {
   constructor() {
     this.store.loadFor(this.slug);
 
-    // Arriving with nothing chosen — a bookmark, an expired session — goes
-    // back to the choosing, not to an empty bill.
-    if (this.store.lines().length === 0) {
-      void this.router.navigate(this.embed.tickets(this.slug));
-      return;
-    }
-
-    this.promo.set(this.store.code());
+    /*
+     * Arriving with nothing chosen — a bookmark, an expired session, and
+     * always on the server, which has no basket — goes back to the choosing,
+     * not to an empty bill.
+     *
+     * Once the event is known to be there. For a slug that is no event on
+     * sale there is no choosing to go back to, and this address answers 404
+     * itself — the way the event page does — rather than a 200 that says
+     * "not found", or a redirect to a page that does. An API that did not
+     * answer is a 503 instead: a page to come back to, not a page that is gone.
+     */
+    const empty = this.store.lines().length === 0;
 
     this.api.event(this.slug).subscribe({
-      next: ({ data }) => this.event.set(data),
-      error: () => undefined,
+      next: ({ data }) => {
+        if (empty) {
+          void this.router.navigate(this.embed.tickets(this.slug));
+
+          return;
+        }
+
+        this.event.set(data);
+      },
+      error: (error: HttpErrorResponse) => {
+        if (error.status === 404) {
+          this.notFound.set(true);
+          this.seo.notFound('Event not found');
+        } else {
+          this.unavailable.set(true);
+          this.seo.unavailable('Event unavailable');
+        }
+      },
     });
 
+    if (empty) return;
+
+    this.promo.set(this.store.code());
     this.refreshQuote();
   }
 
@@ -182,6 +221,7 @@ export class Checkout {
         // reason is a way to fail an order over a question nobody asked.
         attendees: this.attendeeQuestions().length > 0 ? attendeesFor(this.slots(), this.attendeeAnswers()) : undefined,
         embedded: this.embed.active() || undefined,
+        accept_terms: this.agreed(),
       })
       .subscribe({
         next: (order) => {

@@ -59,6 +59,7 @@ class CheckoutFailureTest extends TestCase
         return $this->postJson('/api/events/gateway-down/orders', [
             'items' => [['ticket_type_id' => $this->type->id, 'quantity' => 1]],
             'buyer' => ['name' => 'Ada', 'email' => 'ada@example.com'],
+            'accept_terms' => true,
         ]);
     }
 

@@ -1,7 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Browser } from '@capacitor/browser';
 import { Api, ApiError } from '../../core/api';
+import { Discover } from '../../core/discovery';
 import { SessionStore } from '../../core/session';
 import { MfButton, MfField, MfScreen, MfSegmented, type MfSegment } from '../../ui';
 import { Navigation } from '../../core/navigation';
@@ -91,6 +93,24 @@ import { Navigation } from '../../core/navigation';
             />
           </mf-field>
 
+          <!-- Unticked until they tick it. A link inside the label opens its
+               page rather than ticking the box; the pages are the site's, so
+               they open in the browser and this form stays as it was typed. -->
+          <label class="agree">
+            <input
+              type="checkbox"
+              name="agreed"
+              [ngModel]="agreed()"
+              (ngModelChange)="agreed.set($event)"
+            />
+            <span>
+              I accept the
+              <a [href]="page('/terms')" (click)="open($event, '/terms')">terms</a>,
+              the <a [href]="page('/privacy')" (click)="open($event, '/privacy')">privacy policy</a>
+              and the <a [href]="page('/refunds')" (click)="open($event, '/refunds')">refund policy</a>.
+            </span>
+          </label>
+
           <button
             mfButton
             type="submit"
@@ -147,6 +167,29 @@ import { Navigation } from '../../core/navigation';
     .mt {
       margin-top: var(--space-4);
     }
+
+    .agree {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      min-height: var(--mf-tap);
+      color: var(--text);
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+      cursor: pointer;
+    }
+
+    .agree input {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      accent-color: var(--primary);
+    }
+
+    .agree a {
+      color: var(--primary-text);
+    }
   `,
 })
 export class Join {
@@ -154,6 +197,7 @@ export class Join {
   private readonly api = inject(Api);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly discover = inject(Discover);
 
   readonly kind = signal<'going' | 'hosting'>('going');
   readonly kinds: MfSegment[] = [
@@ -168,7 +212,18 @@ export class Join {
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
 
-  /** Set when the address was already in use: the server emailed them instead. */
+  /**
+   * The terms, privacy and refund policies, agreed to. Starts unticked: a box
+   * ticked for somebody is not somebody agreeing. The server refuses the
+   * sign-up without it and keeps which version was agreed to.
+   */
+  readonly agreed = signal(false);
+
+  /**
+   * What the server said once the sign-up was taken, which for every sign-up
+   * from here is "check your email": the account is made when the emailed
+   * link is opened, whether or not the address was already in use.
+   */
   readonly sent = signal<string | null>(null);
 
   /**
@@ -195,8 +250,20 @@ export class Join {
       this.name().trim().length > 1 &&
       this.email().includes('@') &&
       this.strong() &&
+      this.agreed() &&
       (this.kind() === 'going' || this.organization().trim().length > 1),
   );
+
+  /** One of the site's own pages, whole: the app serves none of them. */
+  page(path: string): string {
+    return this.discover.siteBase() + path;
+  }
+
+  /** In the browser, like the checkout, so the form here is kept. */
+  open(event: Event, path: string): void {
+    event.preventDefault();
+    void Browser.open({ url: this.page(path) }).catch(() => undefined);
+  }
 
   private strong(): boolean {
     const password = this.password();
@@ -216,11 +283,14 @@ export class Join {
         this.email().trim(),
         this.password(),
         this.kind() === 'hosting' ? this.organization().trim() : null,
+        this.agreed(),
       );
 
-      // An address already in use gets a 202 and an email, not an account and
-      // not a token. The screen says what happened without saying whether the
-      // address was known.
+      // Every sign-up gets a 202 and an email, not an account and not a
+      // token: the account is made when the link in that email is opened,
+      // and an address already in use is told so by the same email instead.
+      // The screen says what happened without saying whether the address was
+      // known.
       if (typeof body['token'] !== 'string') {
         this.sent.set(
           (body['message'] as string) ?? 'Check your email to finish setting up your account.',

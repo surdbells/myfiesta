@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { UiSelect, type SelectOption } from '@myfiesta/ui';
@@ -34,6 +35,8 @@ export class TicketSelect {
 
   readonly event = signal<EventDetail | null>(null);
   readonly notFound = signal(false);
+  /** The API did not answer, which is not the same as there being no event. */
+  readonly unavailable = signal(false);
   readonly quote = signal<Quote | null>(null);
 
   readonly formatMoney = formatMoney;
@@ -203,7 +206,19 @@ export class TicketSelect {
         this.seo.forEvent(data, `https://myfiesta.ca/${data.slug}`);
         this.refreshQuote();
       },
-      error: () => this.notFound.set(true),
+      // As the event page does. It used to show "Event not found" and answer
+      // 200 — a soft 404, kept by a search engine under whatever the link
+      // said — and to say the same when the API had only failed to answer,
+      // which is a page to come back to (503), not a page that is gone.
+      error: (error: HttpErrorResponse) => {
+        if (error.status === 404) {
+          this.notFound.set(true);
+          this.seo.notFound('Event not found');
+        } else {
+          this.unavailable.set(true);
+          this.seo.unavailable('Event unavailable');
+        }
+      },
     });
   }
 

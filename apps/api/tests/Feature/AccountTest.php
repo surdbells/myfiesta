@@ -47,6 +47,7 @@ class AccountTest extends TestCase
             'password' => 'correct horse 7',
             'password_confirmation' => 'correct horse 7',
             'organization' => 'Lagos Nights',
+            'accept_terms' => true,
         ], $overrides);
     }
 

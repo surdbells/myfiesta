@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { SITE_URL } from '../../core/site-url';
 
 /**
  * Signing up as an organizer.
@@ -25,6 +26,12 @@ export class Register {
   private readonly route = inject(ActivatedRoute);
 
   /**
+   * The public site, where the terms, privacy and refund pages live. The
+   * console serves none of them, so the links name the site's host.
+   */
+  readonly site = inject(SITE_URL);
+
+  /**
    * An invitation being accepted by signing up.
    *
    * The organization question disappears — they are joining one, not making
@@ -39,6 +46,12 @@ export class Register {
     organization: '',
     password: '',
     confirm: '',
+    /**
+     * The terms, privacy and refund policies, agreed to. Starts unticked: a
+     * box ticked for somebody is not somebody agreeing. The server refuses
+     * the sign-up without it and keeps which version was agreed to.
+     */
+    agreed: false,
   });
 
   readonly busy = signal(false);
@@ -68,7 +81,7 @@ export class Register {
   });
 
   submit(): void {
-    if (this.busy() || this.mismatch() || this.passwordHint()) return;
+    if (this.busy() || this.mismatch() || this.passwordHint() || !this.form().agreed) return;
 
     const form = this.form();
 
@@ -82,16 +95,22 @@ export class Register {
         ...(this.invitation ? { invitation: this.invitation } : { organization: form.organization.trim() }),
         password: form.password,
         password_confirmation: form.confirm,
+        accept_terms: form.agreed,
       })
       .subscribe({
         next: (session) => {
           this.busy.set(false);
 
           /*
-           * A 202 with no token means the address already has an account. The
-           * server will not say so, and neither does this — the same wording
-           * covers both, because "that email is taken" is how somebody tests
-           * whether a named venue is on the platform.
+           * A 202 with no token is every sign-up without an invitation: the
+           * account is made when the link emailed to the address is opened,
+           * and the same email says so if the address already has one. The
+           * answer is the same for a new address and a known one, and so is
+           * this screen — "that email is taken" is how somebody tests whether
+           * a named venue is on the platform.
+           *
+           * Only joining by invitation comes back with a token: that link was
+           * opened from the inbox already, so the account is made at once.
            */
           if (!session.token) {
             this.sent.set(true);
