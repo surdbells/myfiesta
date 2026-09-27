@@ -88,6 +88,41 @@ describe('MfSheet', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
+  it('comes straight back up when it is opened again while still sliding away', async () => {
+    const ui = await mount();
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const raised = () => ui.panel()?.classList.contains('showing') ?? false;
+
+    ui.host.open.set(true);
+    await ui.settle();
+    await frame();
+    expect(raised()).toBe(true);
+
+    // Closed, and asked for again a moment later: the door's next question,
+    // about the next table's ticket, straight after the last was answered.
+    // Not settled in between, which would wait out the closing slide.
+    ui.host.open.set(false);
+    ui.fixture.detectChanges();
+    await wait(100);
+    ui.host.open.set(true);
+    ui.fixture.detectChanges();
+    await frame();
+    ui.fixture.detectChanges();
+
+    // Up again, not left down with only the page behind it on screen until
+    // the unmount it was waiting on had run.
+    expect(raised()).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // And the unmount stays called off.
+    await wait(400);
+    ui.fixture.detectChanges();
+
+    expect(ui.panel()).not.toBeNull();
+    expect(raised()).toBe(true);
+  });
+
   it('is what back closes first, newest first', async () => {
     const stack = TestBed.inject(SheetStack);
     const closed: string[] = [];

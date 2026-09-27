@@ -107,6 +107,31 @@ belongs to an identity, claimed or unclaimed, which is what makes authenticated
 transfer possible and is the precondition for controlled resale. Historical
 buyers migrate as unclaimed records keyed on their email.
 
+**Staff can open an organization's console as the organization, for an hour,
+with less than an owner.** Administrators and support start it from the admin
+panel with a written reason; finance cannot, because its work is done in the
+admin panel and it already holds the one role that reads bank details. The
+console receives a one-minute, single-use code in the link's fragment and
+trades it for a token held only in that tab's sessionStorage, so no token is
+ever in a URL and nobody's own sign-in, the staff member's included, is
+touched. The token belongs to the staff member, so every audit entry names
+them, marked `impersonating`. It acts as an owner without the owner's
+irreversible or identity-changing powers — where payouts go and asking for
+them, the team, integrations, the brand, cancelling or deleting events,
+refunds (made from the admin panel instead), the door — which are removed from
+the permission list every policy asks, and refused by route as well with a
+message that says why, along with exports and anything that emails people in
+the organization's name (messages, campaigns, the waitlist, emailed tickets,
+and an event's first publish, which tells its followers). The payouts
+statement follows the staff member's own role: support does not see it here
+because the admin panel does not show it to support. Every request that could
+change something, and every refusal, is written to the audit trail as
+`impersonation.request` — route, record ids and status, never the body — so a
+change is attributable even where the endpoint keeps no entry of its own.
+Nothing extends a session; ending it, losing the staff role, or anything that
+revokes the staff member's sign-ins (signed out everywhere, deactivated, a new
+password) ends it at once, including a link not yet opened.
+
 ## Clients
 
 **The web is the sales channel, not a brochure.** Organizers sell through
@@ -180,6 +205,39 @@ not reported as somebody owed entry — that is a copied ticket working as it
 should. Where the door turned away a guest the server had let in, the server
 keeps its admission and says so rather than undoing a check-in that has
 already been announced to webhooks.
+
+**A ticket for more than one is never let in whole on a scan that did not say
+how many.** A scan with no number used to admit everyone the ticket had left,
+so the first of a table holding up its ticket counted the whole table in, and
+the rest could walk in later, unscanned, past a count that already had them.
+Now, with more than one place left, the server answers `choose_party` — the
+ticket's type and holder, how many it admits, how many are in and how many are
+still to come — and admits nobody. Nothing is recorded for it: a question is
+neither an admission nor a refusal, and would read as a refusal in every count
+of them. For the same reason it carries none of the guest's checkout answers:
+with no row behind it, a door could read them for any table as often as it
+liked, off the organizer's record. Both doors pause the camera and ask, "All N
+here" or a smaller number (a stepper past six), and scan again with the answer.
+That second scan is sent at once rather than left to the camera, which would
+take the ticket it read seconds ago as a repeat, and under the id of the scan
+that asked. The question left that id free; and when the door asked from its
+own list because the server took too long, the server may have let that very
+scan in on the last place, so the answer has to be recognised as the same scan
+rather than refused as a second person on a spent ticket. A number put in "How
+many" first is used without asking, and the last place on a ticket — every
+single ticket — needs no question. The same rule decides with no signal, from
+the saved list, which already carried how many each ticket admits and how many
+are in.
+
+**A sync does not ask.** A queued scan with no number keeps the meaning it had
+when the door acted on it: everyone that phone's list had left. Phones from
+before the question stay in use until their owners update, and on those the
+people are already inside; asking the server to judge them afresh would leave
+their places open for somebody else. Doors that ask never queue the question,
+and queue the number that went in on anything for more than one, so a null
+from them only ever meets a single place. An older door scanning online gets
+the question as a refusal it cannot show as buttons, so its words say what to
+do: put the number in "How many" and scan again.
 
 **An add-on is a line on the order, not a table of its own.** A bottle, a table,
 a shirt: sold with a ticket, settled through the same ledger, and admitting
@@ -294,7 +352,10 @@ The same code is read many times a second, so the door ignores a repeat until
 it has been out of view for four seconds — counted from the last sighting and
 held while a scan is still waiting for its answer: one guest, one admission,
 rather than a wall of "already used", and never a second send of a group
-ticket with its party size cleared.
+ticket with its party size cleared. The answer to "how many are here" is the
+door's own scan, not the camera's, and holds the ticket in view the same way,
+so the rest of a table is not asked about while the first of them still has
+the ticket up.
 
 **On iPhone the door scans inside the WebView, not with ML Kit.** The ML Kit
 plugin ships a CocoaPods podspec and no `Package.swift`, and the iOS project

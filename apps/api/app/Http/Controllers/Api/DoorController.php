@@ -42,13 +42,17 @@ class DoorController extends Controller
 
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:32'],
-            // How many of the party are going in now. Absent admits everyone
-            // still outstanding, which is the right default for an ordinary
-            // single-admission ticket.
+            // How many of the party are going in now. Absent lets in the one
+            // place left, which is every ordinary single ticket; with more
+            // than one left it lets in nobody and answers `choose_party`, for
+            // the door to ask how many are here and scan again with that.
             'party' => ['nullable', 'integer', 'min:1', 'max:50'],
             // The scan's own id. A phone that times out waiting for an answer
             // falls back to its offline list and sends the scan again later;
             // this is what stops the retry refusing a guest already let in.
+            // The scan answering `choose_party` goes under the id of the one
+            // that asked, for the same reason: the asking scan may have been
+            // let in here after all, with its answer lost on the way back.
             'client_id' => ['nullable', 'uuid'],
         ]);
 
@@ -98,6 +102,11 @@ class DoorController extends Controller
      * disagreement is in `conflicts` like every other — a guest let in on a
      * ticket the server had just refused is exactly what the organizer needs
      * to hear about. Nobody is counted twice for it.
+     *
+     * A scan here with no party is not asked about, as one at the scan
+     * endpoint is: the door already acted on it. It means what it meant to
+     * the phone that queued it, everyone its list had left on the ticket —
+     * see CheckInService::recordOffline.
      */
     public function sync(Request $request, Event $event): JsonResponse
     {
@@ -341,7 +350,9 @@ class DoorController extends Controller
             'accepted' => $outcome->admittedAnyone(),
             // How many this scan let in, and how many of the party are still
             // outside. The second is what tells the door whether to keep the
-            // ticket open for the rest of a table.
+            // ticket open for the rest of a table — and, on `choose_party`,
+            // how many it can offer to let in, with the ticket below saying
+            // what it is, how many it admits and how many are already in.
             'admitted' => $outcome->admitted,
             'remaining' => $outcome->remaining,
             'message' => $outcome->message,
@@ -360,7 +371,13 @@ class DoorController extends Controller
                     // Only what was asked of them. What the buyer answered for
                     // the order — how they heard about the night — is not
                     // somebody on a door's business.
-                    'answers' => $this->answers($outcome->ticket),
+                    //
+                    // And not on the question of how many are here. Nothing
+                    // is recorded for that, so a door could read a table's
+                    // answers as often as it liked with no scan on the
+                    // organizer's record to say so; neither door shows them
+                    // while it asks. The scan that answers it carries them.
+                    'answers' => $outcome->asksHowMany() ? [] : $this->answers($outcome->ticket),
                 ]
                 // Nothing about a ticket belonging to another event. A door
                 // token is scoped to one event, and leaking a guest's name from

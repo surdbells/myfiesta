@@ -22,6 +22,14 @@ class ScanOutcome
     /** Asked for more people than the ticket has left. */
     public const OVER_CAPACITY = 'over_capacity';
 
+    /**
+     * A ticket with more than one person still to come, scanned without
+     * saying how many are here. Not a verdict but a question: nobody went in,
+     * nobody was turned away, and the door is to ask and scan it again with
+     * the number. See CheckInService::decide.
+     */
+    public const CHOOSE_PARTY = 'choose_party';
+
     /** The door let somebody in offline on a ticket the server refused. */
     public const CONFLICT_ADMITTED_INVALID = 'admitted_invalid';
 
@@ -65,6 +73,12 @@ class ScanOutcome
     public function admittedAnyone(): bool
     {
         return $this->result === self::ACCEPTED && $this->applied;
+    }
+
+    /** Whether the door has to say how many of the party are here before anybody goes in. */
+    public function asksHowMany(): bool
+    {
+        return $this->result === self::CHOOSE_PARTY;
     }
 
     /**

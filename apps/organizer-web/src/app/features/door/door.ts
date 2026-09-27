@@ -1,16 +1,22 @@
-import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
 import {
   CameraRefusal,
   NotATicketNote,
   PageCamera,
+  PartySize,
   RepeatReads,
+  askingAbout,
+  asksHowMany,
   canScanInPage,
   conflictsIn,
   fetchDecoderAhead,
+  partOfParty,
+  partyChoices,
   partyKey,
   partySize,
+  queuedParty,
   ticketCode,
   unrecordedAdmission,
 } from '@myfiesta/door';
@@ -181,6 +187,11 @@ export class Door implements OnDestroy {
     // ticket list: the service worker keeps it only once it has been asked
     // for, and a camera first started in the basement has nobody to ask.
     if (this.cameraSupported) void fetchDecoderAhead();
+
+    // The question is put where the verdict goes, at the top. On a laptop the
+    // camera is further down the page, and a door looking at the preview
+    // would otherwise not see that it has been asked anything.
+    effect(() => this.chooser()?.nativeElement.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }));
   }
 
   /**
@@ -457,8 +468,106 @@ export class Door implements OnDestroy {
     return outcome.remaining > 0 ? 'partial' : 'in';
   });
 
+  /** "2 of 4 in — 2 still to come", for a table let in part-way. */
+  readonly partOfParty = partOfParty;
+
+  // --- how many are here -----------------------------------------------------
+
+  /**
+   * A ticket for more than one, scanned with nothing in "How many": the code,
+   * what the server (or this phone's list) said about it, and the id the scan
+   * went with.
+   *
+   * Nobody has gone in. It used to let in everyone the ticket had left, so a
+   * table's ticket shown by the first of its guests counted the whole table in,
+   * and the rest walked in later past a door that had already counted them.
+   * Now the door says how many are standing there, with the camera paused so
+   * the next ticket in the queue is not read over the question, and the scan
+   * goes again with that number — under the same id: see `choose`.
+   */
+  readonly asking = signal<{ code: string; result: ScanResult; clientId: string } | null>(null);
+
+  /** "All 4 here", and each smaller number or a stepper — see `partyChoices`. */
+  readonly choices = computed(() => partyChoices(this.asking()?.result.remaining ?? 0));
+
+  /** Whose ticket, what it is and how many are in, beside the question. */
+  readonly askingAbout = computed(() => {
+    const asked = this.asking();
+
+    return asked ? askingAbout(asked.result) : '';
+  });
+
+  /** The stepper's number, for a table too big for a button each. */
+  readonly stepped = signal(1);
+
+  private readonly chooser = viewChild<ElementRef<HTMLElement>>('chooser');
+
+  /**
+   * Let this many of the party in.
+   *
+   * Sent straight away, never back through the camera: the ticket was read a
+   * moment ago and is very likely still held up, and the camera would take a
+   * read of it now for the same scan again and hold it back. See
+   * `RepeatReads.again`.
+   *
+   * Under the id of the scan that asked. Nothing is recorded for a question,
+   * so the id is free when the server asked it. When this phone asked, from
+   * its list after the server took too long, the server may have let that
+   * scan in on the one place left and the answer never came back: sent under
+   * a new id, the answer was refused as a second person on a spent ticket,
+   * or synced as a conflict, for the guest the server had just counted in.
+   */
+  choose(party: number): void {
+    const asked = this.asking();
+
+    if (!asked || this.busy()) return;
+
+    this.asking.set(null);
+    this.reads.again(asked.code);
+
+    void this.send(asked.code, party, asked.clientId).finally(() => {
+      this.reads.answered(asked.code);
+      this.camera.resume();
+    });
+  }
+
+  step(by: 1 | -1): void {
+    const most = this.choices().upTo ?? 1;
+
+    this.stepped.update((n) => Math.min(most, Math.max(1, n + by)));
+  }
+
+  /**
+   * Nobody after all — the guest went back for the others, or it was the wrong
+   * ticket. Nothing was recorded, so there is nothing to undo; the camera reads
+   * again, and the same ticket once it has been out of sight for a moment.
+   */
+  notNow(): void {
+    const asked = this.asking();
+
+    if (!asked) return;
+
+    this.asking.set(null);
+    this.reads.answered(asked.code);
+    this.camera.resume();
+  }
+
+  private ask(code: string, result: ScanResult, clientId: string): void {
+    // The last guest's verdict comes down: left up, its green "Let them in"
+    // reads as the answer for the table in front of the door now.
+    this.outcome.set(null);
+    this.stepped.set(1);
+    this.asking.set({ code, result, clientId });
+    this.camera.pause();
+    this.notATicketNote.clear();
+  }
+
   submit(): void {
     if (!this.code().trim() || this.busy()) return;
+
+    // Typed while the door was asking: this is the next scan, and the
+    // question is dropped rather than left on screen answering nothing.
+    this.notNow();
 
     // Checked before it goes anywhere, typed or not: a code no ticket could
     // have, saved while offline, would hold every scan queued behind it.
@@ -485,9 +594,14 @@ export class Door implements OnDestroy {
    * the purposes of a door, no connection. The scan carries an id either way,
    * so if the slow request did reach the server after all, the queued copy
    * is recognised as the same scan rather than a second person.
+   *
+   * @param chosen how many the door said are here, when it was asked; what
+   *               is in "How many" otherwise.
+   * @param clientId the id of the scan that asked, for the scan answering it —
+   *                 see `choose`. A new one otherwise.
    */
-  private async send(code: string): Promise<void> {
-    const size = this.partyTyped();
+  private async send(code: string, chosen?: number, clientId: string = scanId()): Promise<void> {
+    const size: PartySize = chosen === undefined ? this.partyTyped() : { ok: true, party: chosen };
 
     // Said before anything is sent or decided, camera or typed: offline, a
     // party of 1.5 would be decided, and then hold the queue it sits in.
@@ -502,7 +616,6 @@ export class Door implements OnDestroy {
     this.error.set(null);
 
     const party = size.party;
-    const clientId = scanId();
 
     let outcome: ScanResult;
 
@@ -544,20 +657,33 @@ export class Door implements OnDestroy {
       outcome = await this.offline.decide(code, party);
 
       // Every offline scan is queued, refusals included: the server needs to
-      // know who was turned away as much as who went in.
-      await this.offline.enqueue({
-        client_id: clientId,
-        event_id: this.eventId,
-        code,
-        party,
-        offline_result: outcome.result,
-        scanned_at: new Date().toISOString(),
-      });
+      // know who was turned away as much as who went in. Not the question of
+      // how many are here, which let nobody in and turned nobody away — the
+      // scan that answers it is queued instead, with the number that went in.
+      if (!asksHowMany(outcome)) {
+        await this.offline.enqueue({
+          client_id: clientId,
+          event_id: this.eventId,
+          code,
+          party: queuedParty(party, outcome),
+          offline_result: outcome.result,
+          scanned_at: new Date().toISOString(),
+        });
 
-      await this.updatePending();
+        await this.updatePending();
+      }
     }
 
     this.busy.set(false);
+
+    // Not a verdict, so not counted as a scan: the one that answers it is.
+    if (asksHowMany(outcome)) {
+      this.ask(code, outcome, clientId);
+      this.code.set('');
+
+      return;
+    }
+
     this.outcome.set(outcome);
     this.scannedHere.update((n) => n + 1);
     this.admittedHere.update((n) => n + outcome.admitted);
@@ -574,8 +700,8 @@ export class Door implements OnDestroy {
 
   /**
    * "How many", as a scan sends it — see `partySize`. A box the browser could
-   * not read reports itself empty, which would let the whole table in, so it
-   * is refused as what it is instead.
+   * not read reports itself empty, which would send what somebody typed as no
+   * number at all, so it is refused as what it is instead.
    */
   private partyTyped() {
     return partySize(this.partyBox()?.nativeElement.validity?.badInput ? NaN : this.party());
@@ -634,6 +760,10 @@ export class Door implements OnDestroy {
    * see `NotATicketNote`.
    */
   private read(raw: string): void {
+    // Paused while the door is asked how many are here; a read already on its
+    // way when it paused goes nowhere either.
+    if (this.asking()) return;
+
     const code = ticketCode(raw);
     const now = Date.now();
 

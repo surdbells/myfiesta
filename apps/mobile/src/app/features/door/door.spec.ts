@@ -6,11 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@capacitor/haptics', () => ({
   Haptics: { impact: vi.fn(async () => undefined), notification: vi.fn(async () => undefined) },
   ImpactStyle: { Light: 'LIGHT' },
-  NotificationType: { Error: 'ERROR' },
+  NotificationType: { Error: 'ERROR', Warning: 'WARNING' },
 }));
 
 import { Haptics } from '@capacitor/haptics';
-import { Api, ScanResult } from '../../core/api';
+import { Api, ApiError, ScanResult } from '../../core/api';
 import { DoorOffline } from '../../core/door-offline';
 import { Scanner } from '../../core/scanner';
 import { SessionStore } from '../../core/session';
@@ -192,7 +192,14 @@ describe('The door, on a phone', () => {
       answer = () =>
         new Promise((resolve) =>
           setTimeout(
-            () => resolve({ ...admitted, admitted: 2, remaining: 2, message: 'Admitted 2. 2 still to come.' }),
+            () =>
+              resolve({
+                ...admitted,
+                admitted: 2,
+                remaining: 2,
+                message: 'Admitted 2. 2 still to come.',
+                ticket: { holder_name: 'Chidi Nwosu', type: 'Table of 4', admits: 4, admitted_count: 2 },
+              }),
             4500,
           ),
         );
@@ -208,11 +215,13 @@ describe('The door, on a phone', () => {
       await holdUp('wfy7-f77k4ejw', 10_000);
       fixture.detectChanges();
 
-      // A second scan would have gone with the number cleared, which lets in
-      // everyone still outside.
+      // A second scan would have gone with the number cleared, which asks all
+      // over again about a table the door has just answered for.
       expect(sent).toHaveLength(1);
       expect(sent[0]).toMatchObject({ code: 'WFY7-F77K4EJW', party: 2 });
-      expect(fixture.nativeElement.textContent).toContain('2 of the party still outside');
+      expect(fixture.nativeElement.textContent).toContain('2 of 4 in — 2 still to come');
+      // The number typed first is the answer: nothing is asked.
+      expect(fixture.componentInstance.asking()).toBeNull();
       // Cleared once decided: it belonged to that ticket.
       expect(fixture.componentInstance.party()).toBe('');
     });
@@ -331,6 +340,259 @@ describe('The door, on a phone', () => {
       expect(press('e')).toBe(true);
       expect(press('4')).toBe(false);
       expect(press('Backspace')).toBe(false);
+    });
+  });
+
+  /**
+   * A ticket for more than one, read with nothing in "How many".
+   *
+   * It used to let in everyone the ticket had left, so the first of a table
+   * holding its ticket up counted the whole table in, and the rest walked in
+   * later unscanned. The server asks now, and so does this door: nothing the
+   * camera reads is acted on, the door says how many are here, and the scan
+   * goes again with that number.
+   */
+  describe('a ticket for more than one', () => {
+    const TABLE = 'TBLE-ACDEFHJK';
+    const table = (inside: number) => ({ holder_name: 'Chidi Nwosu', type: 'Table of 4', admits: 4, admitted_count: inside });
+
+    const asked = (inside: number): ScanResult => ({
+      result: 'choose_party',
+      accepted: false,
+      admitted: 0,
+      remaining: 4 - inside,
+      message: 'This ticket admits 4. Put how many are going in now in How many, and scan it again.',
+      ticket: table(inside),
+    });
+
+    const letIn = (now: number, inside: number): ScanResult => ({
+      result: 'accepted',
+      accepted: true,
+      admitted: now,
+      remaining: 4 - inside,
+      message: inside === 4 ? `Admitted ${now}. That is everyone.` : `Admitted ${now}. ${4 - inside} still to come.`,
+      ticket: table(inside),
+    });
+
+    /** The server's answers, one per scan, in order. */
+    function answers(...replies: ScanResult[]): void {
+      answer = async () => replies.shift()!;
+    }
+
+    function button(fixture: Awaited<ReturnType<typeof open>>, name: string): HTMLButtonElement | undefined {
+      return [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+        (candidate) => candidate.textContent?.trim() === name,
+      );
+    }
+
+    async function settle(fixture: Awaited<ReturnType<typeof open>>): Promise<void> {
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      fixture.detectChanges();
+    }
+
+    it('asks how many are here, reads nothing meanwhile, and sends the answer at once', async () => {
+      vi.useFakeTimers();
+      answers(asked(0), letIn(1, 1));
+
+      const fixture = await open();
+      const door = fixture.componentInstance;
+      const page: HTMLElement = fixture.nativeElement;
+
+      await door.startCamera();
+      await holdUp(TABLE, 200);
+      await settle(fixture);
+
+      // Nothing typed, so no number sent: the server decides whether to ask.
+      expect(sent).toMatchObject([{ code: TABLE, party: null }]);
+      expect(page.textContent).toContain('How many are here?');
+      expect(page.textContent).toContain('Chidi Nwosu · Table of 4 · none of 4 in yet');
+      expect(button(fixture, 'All 4 here')).toBeDefined();
+      expect(['1', '2', '3'].map((n) => button(fixture, n))).not.toContain(undefined);
+      // A question: felt as one, and not a refusal or a scan in the tally.
+      expect(Haptics.notification).toHaveBeenCalledWith({ type: 'WARNING' });
+      expect(page.textContent).not.toContain('Do not admit');
+      expect(door.scanned()).toBe(0);
+
+      // Paused: the ticket still held up, and the next guest's behind it, go
+      // nowhere however long the question takes.
+      expect(page.textContent).toContain('Paused until you say how many are here');
+
+      await holdUp(TABLE, 5000);
+      await holdUp('MFST-9K2L4XQ7', 1000);
+
+      expect(sent).toHaveLength(1);
+
+      // One of the four is here. The ticket read seconds ago, still held up,
+      // is sent again straight away rather than held back as a repeat.
+      button(fixture, '1')!.click();
+      await settle(fixture);
+
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toMatchObject({ code: TABLE, party: 1 });
+      // Under the id of the scan that asked, which the question left free.
+      expect(sent[1].clientId).toBe(sent[0].clientId);
+
+      expect(page.textContent).toContain('Let them in');
+      expect(page.textContent).toContain('1 of 4 in — 3 still to come');
+      expect(door.asking()).toBeNull();
+      expect(door.admitted()).toBe(1);
+
+      // Reading again, and the ticket still held up is the scan just answered,
+      // not the rest of the table.
+      await holdUp(TABLE, 3000);
+
+      expect(sent).toHaveLength(2);
+    });
+
+    it('asks again for the rest of the table later, and lets them in together', async () => {
+      vi.useFakeTimers();
+      answers(asked(0), letIn(1, 1), asked(1), letIn(3, 4));
+
+      const fixture = await open();
+
+      await fixture.componentInstance.startCamera();
+      await holdUp(TABLE, 200);
+      await settle(fixture);
+      button(fixture, '1')!.click();
+      await settle(fixture);
+
+      // Away with the first guest, and back an hour later with the others.
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      await holdUp(TABLE, 200);
+      await settle(fixture);
+
+      expect(fixture.nativeElement.textContent).toContain('Chidi Nwosu · Table of 4 · 1 of 4 already in');
+      expect(button(fixture, '3')).toBeUndefined();
+
+      button(fixture, 'All 3 here')!.click();
+      await settle(fixture);
+
+      expect(sent.map((scan) => scan.party)).toEqual([null, 1, null, 3]);
+      // Each answer goes with its own question's id; the second question is
+      // a scan of its own.
+      expect(sent[1].clientId).toBe(sent[0].clientId);
+      expect(sent[2].clientId).not.toBe(sent[0].clientId);
+      expect(sent[3].clientId).toBe(sent[2].clientId);
+      expect(fixture.nativeElement.textContent).toContain('Let them in');
+      expect(fixture.componentInstance.admitted()).toBe(4);
+    });
+
+    it('puts the next ticket’s question up straight after the last one was answered', async () => {
+      vi.useFakeTimers();
+
+      const couple: ScanResult = {
+        ...asked(0),
+        remaining: 2,
+        ticket: { holder_name: 'Bisi Adeyemi', type: 'Couple', admits: 2, admitted_count: 0 },
+      };
+
+      answers(asked(0), letIn(4, 4), couple);
+
+      const fixture = await open();
+      const page: HTMLElement = fixture.nativeElement;
+      const raised = () => page.querySelector('mf-sheet .panel.showing');
+
+      await fixture.componentInstance.startCamera();
+      await holdUp(TABLE, 200);
+      await settle(fixture);
+      await vi.advanceTimersByTimeAsync(50);
+      fixture.detectChanges();
+
+      expect(raised()).not.toBeNull();
+
+      button(fixture, 'All 4 here')!.click();
+      await settle(fixture);
+
+      // The couple beside them hold up theirs while the table's question is
+      // still sliding away.
+      seen!('CPLE-ACDEFHJK');
+      await settle(fixture);
+      await vi.advanceTimersByTimeAsync(50);
+      fixture.detectChanges();
+
+      // Up, with the couple's ticket in it: not slid away over a camera that
+      // says it is waiting for an answer nobody can see how to give.
+      expect(fixture.componentInstance.asking()?.code).toBe('CPLE-ACDEFHJK');
+      expect(raised()).not.toBeNull();
+      expect(raised()!.textContent).toContain('Bisi Adeyemi · Couple · none of 2 in yet');
+      expect(button(fixture, 'All 2 here')).toBeDefined();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      fixture.detectChanges();
+
+      expect(raised()).not.toBeNull();
+    });
+
+    it('sends the answer under the asking scan’s id when it was asked with no signal', async () => {
+      vi.useFakeTimers();
+
+      const offline = TestBed.inject(DoorOffline);
+      const queued: { party: number | null; clientId: string | undefined }[] = [];
+
+      Object.defineProperty(offline, 'supported', { value: true });
+      vi.spyOn(offline, 'prepare').mockResolvedValue(undefined);
+      vi.spyOn(offline, 'sync').mockResolvedValue(true);
+      vi.spyOn(offline, 'refreshList').mockResolvedValue(undefined);
+      vi.spyOn(offline, 'decideAndQueue').mockImplementation(async (_event, _code, party, clientId) => {
+        queued.push({ party, clientId });
+
+        return party === null ? asked(0) : letIn(party, party);
+      });
+
+      // No answer from the server, either time.
+      answer = async () => {
+        throw new ApiError('No connection.', 0);
+      };
+
+      const fixture = await open();
+
+      fixture.componentInstance.code.set(TABLE);
+      await fixture.componentInstance.submit();
+      await settle(fixture);
+
+      button(fixture, '2')!.click();
+      await settle(fixture);
+
+      // The request that went unanswered may have arrived, and been let in on
+      // the one place the server had left. Under the same id the answer is
+      // that scan, online or queued, not a second person on the ticket.
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toMatchObject({ code: TABLE, party: 2, clientId: sent[0].clientId });
+      expect(queued).toEqual([
+        { party: null, clientId: sent[0].clientId },
+        { party: 2, clientId: sent[0].clientId },
+      ]);
+    });
+
+    it('lets the question go without sending anything', async () => {
+      vi.useFakeTimers();
+      answers(asked(0));
+
+      const fixture = await open();
+
+      fixture.componentInstance.code.set(TABLE);
+      await fixture.componentInstance.submit();
+      await settle(fixture);
+
+      button(fixture, 'Not now')!.click();
+      await settle(fixture);
+
+      expect(fixture.componentInstance.asking()).toBeNull();
+      expect(sent).toHaveLength(1);
+    });
+
+    it('uses a number typed before the scan without asking', async () => {
+      answers(letIn(2, 2));
+
+      const fixture = await open();
+
+      fixture.componentInstance.code.set(TABLE);
+      typeParty(fixture, '2');
+      await fixture.componentInstance.submit();
+
+      expect(sent).toMatchObject([{ code: TABLE, party: 2 }]);
+      expect(fixture.componentInstance.asking()).toBeNull();
     });
   });
 

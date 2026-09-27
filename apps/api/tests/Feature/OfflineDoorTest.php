@@ -317,7 +317,7 @@ class OfflineDoorTest extends TestCase
 
         // Three in at another door. Here, the whole of what was left: two.
         $this->postJson("/api/events/{$this->event->id}/scan", ['code' => $table->code, 'party' => 3]);
-        $this->online($table->code, $id)->assertJsonPath('admitted', 2);
+        $this->online($table->code, $id, party: 2)->assertJsonPath('admitted', 2);
 
         // The door, with no answer, says four went in on that scan.
         $result = $this->sync([$this->offline($table->code, 'accepted', ['client_id' => $id, 'party' => 4])])

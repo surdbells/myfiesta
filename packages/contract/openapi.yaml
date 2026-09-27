@@ -571,7 +571,8 @@ paths:
 
         Every attempt is recorded, including refusals. Check-in is decided and
         written in one transaction, so two scanners cannot both be told the same
-        ticket is valid.
+        ticket is valid. A `choose_party` answer is a question rather than an
+        attempt, and is not recorded: the scan that answers it is.
       tags: [Door]
       security:
         - bearerAuth: [door]
@@ -595,7 +596,11 @@ paths:
                   type: integer
                   minimum: 1
                   maximum: 50
-                  description: How many of the ticket's party go in now. Absent admits everyone outstanding.
+                  description: |
+                    How many of the ticket's party go in now. Absent admits the
+                    one place left; with more than one left it admits nobody and
+                    the result is `choose_party`, for the door to ask how many
+                    are here and scan again with the number.
                 client_id:
                   type: string
                   format: uuid
@@ -604,7 +609,9 @@ paths:
                     times out after the server admitted the guest is retried
                     through the sync endpoint with the same id, and is
                     recognised as the same scan rather than refused as a
-                    second person on the ticket.
+                    second person on the ticket. The scan answering
+                    `choose_party` is sent under the id of the scan that
+                    asked, for the same reason.
       responses:
         '200':
           description: A decision. Refusals are 200 with a result, not errors.
@@ -1503,10 +1510,16 @@ components:
           description: Present on sync results, to match each back to its queued scan.
         result:
           type: string
-          enum: [accepted, duplicate, not_found, wrong_event, void, over_capacity]
+          enum: [accepted, duplicate, not_found, wrong_event, void, over_capacity, choose_party]
           description: |
             The server's verdict. A refusal is a normal outcome, not an error,
             so the scanner can show it without treating it as a failure.
+            `choose_party` is not a verdict: a ticket with more than one place
+            left, scanned without `party`. Nobody was admitted and nothing was
+            recorded; `remaining` and `ticket` say what to ask. The ticket's
+            checkout answers are left out of it, and come with the scan that
+            answers it. Never returned by the sync endpoint, where no `party`
+            keeps meaning everyone outstanding.
         accepted:
           type: boolean
           description: Whether anybody went in on this scan.

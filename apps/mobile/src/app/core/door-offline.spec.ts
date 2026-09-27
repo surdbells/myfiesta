@@ -536,4 +536,60 @@ describe('DoorOffline, sending what was scanned without signal', () => {
       expect(offline.unrecorded()).toEqual([halfAPerson]);
     });
   });
+
+  /**
+   * A table's ticket, with no signal. The list carries how many it admits and
+   * how many are in, so the phone asks how many are here as the server does —
+   * and the server reads a queued scan with no number as the whole table,
+   * which is what phones from before the question meant by it.
+   */
+  describe('a ticket for more than one', () => {
+    const TABLE = 'TBLE-ACDEFHJK';
+
+    beforeEach(async () => {
+      const salt = 'salt-for-evt_1';
+
+      await offline.save({
+        event_id: 'evt_1',
+        salt,
+        iterations: 1,
+        generated_at: '2026-09-26T21:05:00Z',
+        tickets: [
+          {
+            hash: await hashCode(TABLE, salt, 1),
+            status: 'valid',
+            admits: 4,
+            admitted_count: 0,
+            holder_name: 'Chidi Nwosu',
+            type: 'Table of 4',
+          },
+        ],
+      });
+    });
+
+    it('queues nothing for the question, and the answer with how many went in', async () => {
+      const asked = await offline.decideAndQueue('evt_1', TABLE, null, good.client_id);
+
+      expect(asked).toMatchObject({ result: 'choose_party', accepted: false, remaining: 4 });
+      // Nobody went in and nobody was turned away: nothing for the server.
+      expect(await queued()).toEqual([]);
+      expect(offline.pendingCount()).toBe(0);
+
+      const two = await offline.decideAndQueue('evt_1', TABLE, 2, later.client_id);
+
+      expect(two).toMatchObject({ accepted: true, admitted: 2, remaining: 2 });
+      expect(await queued()).toMatchObject([{ client_id: later.client_id, code: TABLE, party: 2, offline_result: 'accepted' }]);
+    });
+
+    it('queues the last of the table with its number, not with none', async () => {
+      await offline.decideAndQueue('evt_1', TABLE, 3, good.client_id);
+
+      const last = await offline.decideAndQueue('evt_1', TABLE, null, later.client_id);
+
+      // No question for one place; but no number would read, on the server,
+      // as however many it has left.
+      expect(last).toMatchObject({ result: 'accepted', admitted: 1, remaining: 0 });
+      expect((await queued()).map((scan) => scan.party)).toEqual([3, 1]);
+    });
+  });
 });

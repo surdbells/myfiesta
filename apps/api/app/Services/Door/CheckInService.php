@@ -23,6 +23,14 @@ use Illuminate\Support\Str;
  * So each scan admits some number of people and the ticket closes when the last
  * of them is inside.
  *
+ * And the number is said, never assumed. A scan that did not say how many used
+ * to let in everyone still outstanding, so a table's ticket held up by the
+ * first of its guests admitted the whole table, and the rest of it walked in
+ * later past a door that had already counted them. Now a scan with no number,
+ * on a ticket with more than one person still to come, lets nobody in and
+ * asks (`choose_party`); the door answers with how many are standing there,
+ * all of them or some. The last place on a ticket needs no question.
+ *
  * The row is locked for the whole decision. Two scanners on the same table at
  * the same moment is exactly the situation this exists for, and the database
  * carries a matching constraint so a race cannot put six through a table of
@@ -31,15 +39,26 @@ use Illuminate\Support\Str;
 class CheckInService
 {
     /**
-     * @param  int|null  $party  How many are going in now. Null admits everyone
-     *                           still outstanding, which is the common case and
-     *                           the right default for a single-admission ticket.
+     * @param  int|null  $party  How many are going in now. Null is the door not
+     *                           saying: the one place left if that is all there
+     *                           is, which covers every single-admission ticket,
+     *                           and otherwise nobody yet — the answer is
+     *                           `choose_party`, and the door asks how many are
+     *                           here. Nothing is recorded for that answer: it is
+     *                           a question, and the scan is the one that
+     *                           follows it with a number.
      * @param  string|null  $clientId  The scan's own id, minted on the phone.
      *                                 Sending the same scan twice — a request
      *                                 that timed out after the server had
      *                                 already admitted the guest — returns the
      *                                 first result instead of refusing the
-     *                                 guest it let in.
+     *                                 guest it let in. The scan answering
+     *                                 `choose_party` is sent under the id of
+     *                                 the one that asked: nothing is recorded
+     *                                 for a question, so the id is free, and a
+     *                                 question the phone put from its own list
+     *                                 after a timeout may be about a scan this
+     *                                 server had already let in.
      */
     public function scan(
         string $code,
@@ -73,6 +92,14 @@ class CheckInService
      * that answer never reached the door and the scan came back in the queue:
      * it is still one scan and one row, but what the door did with it is kept
      * and compared all the same. See `reconcile`.
+     *
+     * A party of null keeps the meaning it had when the door acted on it:
+     * everyone still outstanding. This is not a question to ask, because the
+     * door has already answered it — a phone from before doors asked how many
+     * are here, working with no signal, let the whole of what its list had
+     * left through on one scan, and those people are inside. Doors that ask
+     * send the number they let in on any ticket for more than one, so a null
+     * from them only ever meets a single place.
      */
     public function recordOffline(
         string $code,
@@ -121,11 +148,20 @@ class CheckInService
                 if ($earlier) {
                     return $offlineResult !== null && $this->awaitsDoorsAnswer($earlier, $eventId, $code)
                         ? $this->reconcile($earlier, $ticket, $eventId, $scanner, $party, $offlineResult)
-                        : $this->replay($earlier, $ticket);
+                        : $this->replay($earlier, $ticket, $offlineResult === null ? $party : null);
                 }
             }
 
-            $outcome = $this->decide($ticket, $eventId, $party);
+            // Asked only of a door that is standing in front of the guest. One
+            // syncing what it did with no signal has already done it.
+            $outcome = $this->decide($ticket, $eventId, $party, askHowMany: $offlineResult === null);
+
+            // Nobody went in and nobody was turned away, so there is no scan
+            // to record yet: the one that says how many is. Recorded, it would
+            // read as a refusal in every count of the night's refusals.
+            if ($outcome->asksHowMany()) {
+                return $outcome->withTicket($ticket);
+            }
 
             $admitCount = $this->admitCount($outcome, $offlineResult);
 
@@ -401,10 +437,24 @@ class CheckInService
         return $verdict->result === ScanOutcome::ACCEPTED ? null : $verdict;
     }
 
-    /** The answer this scan got the first time it arrived. */
-    private function replay(TicketScan $earlier, ?Ticket $ticket): ScanOutcome
+    /**
+     * The answer this scan got the first time it arrived.
+     *
+     * @param  int|null  $asked  How many the door says are here now, when the
+     *                           scan comes back online with a number. More than
+     *                           the scan let in only when it answers a question
+     *                           the phone put from its own list after a
+     *                           timeout, about a scan this server had already
+     *                           let in on the one place left. The one is in;
+     *                           the rest of those standing there are said to
+     *                           have no place, rather than all of them being
+     *                           told they are in.
+     */
+    private function replay(TicketScan $earlier, ?Ticket $ticket, ?int $asked = null): ScanOutcome
     {
         $remaining = $ticket ? max(0, $ticket->admits - $ticket->admitted_count) : 0;
+        $counted = (int) $earlier->admitted;
+        $uncounted = $asked !== null && $counted > 0 ? max(0, $asked - $counted) : 0;
 
         // Counted in online while the door, with no answer, turned them away.
         // "They are in" would be the one thing not true.
@@ -413,8 +463,12 @@ class CheckInService
         return (new ScanOutcome(
             $earlier->result,
             match (true) {
-                $earlier->admitted > 0 && $turnedAway => 'Turned away with no signal, but the server had already let them in, so the ticket reads as used. They can come in.',
-                $earlier->admitted > 0 => 'Already recorded — they are in.',
+                $counted > 0 && $turnedAway => 'Turned away with no signal, but the server had already let them in, so the ticket reads as used. They can come in.',
+                $uncounted > 0 => "Already recorded for {$counted} of them, who can come in. "
+                    .($remaining === 0
+                        ? "The ticket has no places left for the other {$uncounted}."
+                        : "The other {$uncounted} need a scan of their own."),
+                $counted > 0 => 'Already recorded — they are in.',
                 default => 'Already recorded.',
             },
             admitted: $earlier->admitted,
@@ -443,9 +497,18 @@ class CheckInService
      *                               ticket, online, before the door's own
      *                               answer arrived. Not held against it — see
      *                               `reconcile`.
+     * @param  bool  $askHowMany  Whether a scan with no party, on a ticket
+     *                            with more than one place left, is answered
+     *                            with a question rather than with everyone.
+     *                            Online only — see `recordOffline`.
      */
-    private function decide(?Ticket $ticket, string $eventId, ?int $party, int $alreadyCounted = 0): ScanOutcome
-    {
+    private function decide(
+        ?Ticket $ticket,
+        string $eventId,
+        ?int $party,
+        int $alreadyCounted = 0,
+        bool $askHowMany = false,
+    ): ScanOutcome {
         if ($ticket === null) {
             return new ScanOutcome(ScanOutcome::NOT_FOUND, 'Not recognised.');
         }
@@ -481,8 +544,22 @@ class CheckInService
             );
         }
 
-        // Default to the whole remaining party. For an ordinary single ticket
-        // that is one person and the door never has to think about it.
+        // A table's ticket is shown by whoever of the table is at the front,
+        // and letting in everyone it has left would wave the rest through
+        // whenever they turn up, unscanned and already counted. So the door
+        // is asked. The checks above come first, so a spent, cancelled or
+        // wrong-night ticket is refused at once rather than asked about.
+        if ($party === null && $remaining > 1 && $askHowMany) {
+            return new ScanOutcome(
+                ScanOutcome::CHOOSE_PARTY,
+                $this->howManyMessage($ticket->admits, $remaining),
+                remaining: $remaining,
+            );
+        }
+
+        // No number and one place left, which is every ordinary single ticket
+        // and the last of a table: that one person, and the door never has to
+        // think about it. Or a sync from a door that let everyone through.
         $wanted = $party ?? $remaining;
 
         if ($wanted < 1) {
@@ -531,5 +608,18 @@ class CheckInService
         }
 
         return "Admitted {$admitted}. {$left} still to come.";
+    }
+
+    /**
+     * The question, in words that work on a door that cannot show buttons for
+     * it: a phone app from before doors asked puts this under "Do not admit",
+     * and its "How many" box is how that door answers.
+     */
+    private function howManyMessage(int $admits, int $remaining): string
+    {
+        $in = $admits - $remaining;
+
+        return "This ticket admits {$admits}, ".($in === 0 ? 'nobody in yet' : "{$in} already in")
+            .'. Put how many are going in now in How many, and scan it again.';
     }
 }

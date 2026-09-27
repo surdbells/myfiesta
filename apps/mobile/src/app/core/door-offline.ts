@@ -1,5 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { DoorOfflineStore, OfflineScan, ScanResult, conflictsIn, scanId } from '@myfiesta/door';
+import {
+  DoorOfflineStore,
+  OfflineScan,
+  ScanResult,
+  asksHowMany,
+  conflictsIn,
+  queuedParty,
+  scanId,
+} from '@myfiesta/door';
 import { Api, ApiError } from './api';
 
 /** Where the phone's answer and the server's later disagreed, about one scan. */
@@ -150,7 +158,10 @@ export class DoorOffline extends DoorOfflineStore {
    *
    * The scan is queued whatever the answer was, including a refusal: the
    * server needs the whole night, not only the admissions, or its record of
-   * who was turned away and why is this phone's alone.
+   * who was turned away and why is this phone's alone. Except the question
+   * of how many of a table are here, which let nobody in and turned nobody
+   * away: the scan that answers it is queued instead, with the number that
+   * went in (`queuedParty`).
    *
    * @param clientId the id the scan was first sent to the server with, if it
    *                 was: a request that timed out may still have arrived, and
@@ -166,11 +177,13 @@ export class DoorOffline extends DoorOfflineStore {
   ): Promise<ScanResult> {
     const outcome = await this.decide(code, party);
 
+    if (asksHowMany(outcome)) return outcome;
+
     const scan: OfflineScan = {
       client_id: clientId,
       event_id: eventId,
       code,
-      party,
+      party: queuedParty(party, outcome),
       offline_result: outcome.result,
       scanned_at: new Date().toISOString(),
     };

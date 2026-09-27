@@ -112,13 +112,19 @@ class PartialAdmissionTest extends TestCase
         $this->assertSame(5, $ticket->admitted_count);
     }
 
-    public function test_the_whole_party_arriving_together_is_one_scan(): void
+    public function test_the_whole_party_arriving_together_is_one_scan_once_the_door_says_so(): void
     {
         $ticket = $this->ticketAdmitting(2, 'Couple');
 
-        // No party given: everyone outstanding goes in. A couple arriving
-        // together should not need the door to type a number.
-        $outcome = $this->door->scan($ticket->code, $this->event->id);
+        // No party given: the door is asked rather than both being let in on
+        // the word of whoever is holding the ticket.
+        $asked = $this->door->scan($ticket->code, $this->event->id);
+
+        $this->assertSame(ScanOutcome::CHOOSE_PARTY, $asked->result);
+        $this->assertSame(0, $ticket->refresh()->admitted_count);
+
+        // "Both here" is one scan.
+        $outcome = $this->door->scan($ticket->code, $this->event->id, party: 2);
 
         $this->assertSame(2, $outcome->admitted);
         $this->assertSame('Admitted all 2.', $outcome->message);

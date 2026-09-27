@@ -120,3 +120,68 @@ describe('the saved list a door decides from', () => {
     expect((await store.decide(TONIGHT, null)).result).toBe('not_found');
   });
 });
+
+/**
+ * A table's ticket, decided from the saved list with no signal.
+ *
+ * Scanned with no number it used to count the whole table in, so the first of
+ * four holding it up let the other three in later unscanned. The list carries
+ * how many a ticket admits and how many are in, and the door asks.
+ */
+describe('a table on the saved list', () => {
+  const TABLE = 'TBLE-ACDEFHJK';
+
+  beforeEach(() => {
+    const db = memoryIndexedDB();
+
+    vi.stubGlobal('indexedDB', db.indexedDB);
+    vi.stubGlobal('IDBKeyRange', db.IDBKeyRange);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function withTable(): Promise<DoorOfflineStore> {
+    const store = openStore();
+    const list = await listFor('evt_1', TABLE, '2026-09-26T21:05:00Z');
+
+    list.tickets[0] = { ...list.tickets[0], admits: 4, type: 'Table of 4' };
+    await store.save(list);
+
+    return store;
+  }
+
+  it('counts nobody in on the question, and exactly the number the door gives after it', async () => {
+    const store = await withTable();
+
+    const asked = await store.decide(TABLE, null);
+
+    expect(asked).toMatchObject({ result: 'choose_party', accepted: false, admitted: 0, remaining: 4 });
+    // Asked again, it is still four: the question counted nobody.
+    expect((await store.decide(TABLE, null)).remaining).toBe(4);
+
+    // One of them now.
+    expect(await store.decide(TABLE, 1)).toMatchObject({ accepted: true, admitted: 1, remaining: 3 });
+
+    // The other three later: asked about again, and let in together.
+    expect(await store.decide(TABLE, null)).toMatchObject({ result: 'choose_party', remaining: 3 });
+    expect(await store.decide(TABLE, 3)).toMatchObject({ accepted: true, admitted: 3, remaining: 0 });
+    expect((await store.decide(TABLE, null)).result).toBe('duplicate');
+  });
+
+  it('never queues the question, which the server would refuse with every scan beside it', async () => {
+    const store = await withTable();
+
+    await store.enqueue({
+      client_id: '6f1c2a4e-3b7d-4c55-9a0e-2d8f1b3c4a5e',
+      event_id: 'evt_1',
+      code: TABLE,
+      party: null,
+      offline_result: 'choose_party',
+      scanned_at: '2026-09-26T21:10:00Z',
+    });
+
+    expect(await store.pending('evt_1')).toEqual([]);
+  });
+});

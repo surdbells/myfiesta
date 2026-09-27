@@ -119,6 +119,65 @@
 }
 
 <!--
+  A ticket for more than one, read with nothing in How many. Nobody has gone
+  in yet: the door says how many are standing there, and the scan goes again
+  with that number. Where the verdict goes and as big, because nothing else
+  happens until it is answered — the camera holds still meanwhile, so the next
+  ticket in the queue is not read over it. No keyboard shortcuts: a scanner
+  that types codes into this page would be choosing numbers.
+-->
+@if (asking(); as asked) {
+  <section
+    #chooser
+    class="chooser mb-6 grid gap-4 rounded-lg border-2 border-primary bg-surface-raised px-6 py-6 text-center"
+    role="group"
+    aria-labelledby="chooser-heading"
+    aria-describedby="chooser-about"
+  >
+    <h2 id="chooser-heading" class="text-3xl font-bold leading-[1.15]">How many are here?</h2>
+    <p id="chooser-about" class="text-base text-text-muted">{{ askingAbout() }}</p>
+
+    @if (choices().all; as all) {
+      <button uiButton size="lg" [block]="true" class="chooser__all py-5 text-2xl" type="button" (click)="choose(all)">
+        All {{ all }} here
+      </button>
+    }
+
+    @if (choices().each.length > 0) {
+      <div class="chooser__each grid gap-3" [style.grid-template-columns]="'repeat(' + choices().each.length + ', minmax(0, 1fr))'">
+        @for (n of choices().each; track n) {
+          <button uiButton variant="secondary" size="lg" class="py-5 text-2xl tabular-nums" type="button" [attr.aria-label]="n + ' here'" (click)="choose(n)">
+            {{ n }}
+          </button>
+        }
+      </div>
+    } @else if (choices().upTo; as upTo) {
+      <div class="chooser__stepper flex flex-wrap items-center justify-center gap-3">
+        <button uiButton variant="secondary" size="lg" class="text-2xl" type="button" aria-label="One fewer" [disabled]="stepped() <= 1" (click)="step(-1)">−</button>
+        <output class="min-w-16 text-3xl font-bold tabular-nums" aria-live="polite">{{ stepped() }}</output>
+        <button uiButton variant="secondary" size="lg" class="text-2xl" type="button" aria-label="One more" [disabled]="stepped() >= upTo" (click)="step(1)">+</button>
+        <button uiButton variant="secondary" size="lg" type="button" (click)="choose(stepped())">Let {{ stepped() }} in</button>
+      </div>
+    }
+
+    <p class="m-0 text-xs text-text-muted">
+      @if (scanning()) {
+        The camera is paused until you choose.
+      }
+      The rest can come in later on the same ticket.
+    </p>
+
+    <button
+      class="mx-auto cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+      type="button"
+      (click)="notNow()"
+    >
+      Not now
+    </button>
+  </section>
+}
+
+<!--
   The verdict panel is first and fills the width, because at a door in the dark
   this is the only thing anybody looks at. Everything below is for the
   conversation that follows a refusal.
@@ -142,7 +201,7 @@
           Let them in
         }
         @case ('partial') {
-          {{ result.admitted }} in · {{ result.remaining }} still outside
+          {{ partOfParty(result) }}
         }
         @default {
           Do not admit
@@ -239,7 +298,7 @@
       min="1"
       max="50"
       step="1"
-      placeholder="All"
+      placeholder="Ask"
       [ngModel]="party()"
       (ngModelChange)="party.set($event)"
       (keydown)="wholeNumbersOnly($event)"
@@ -257,9 +316,9 @@
 </form>
 
 <p id="party-hint" class="help mt-3 max-w-[60ch] text-xs text-text-muted">
-  Leave the number blank for an ordinary ticket. For a table arriving in two
-  groups, put in how many are going in now, from 1 to 50 — the rest stay
-  outstanding.
+  Leave the number blank: a ticket for more than one asks how many are here
+  when it is scanned. Or put it in first, from 1 to 50, and it is used without
+  asking — the rest of the table stays outstanding.
 </p>
 
 <section class="camera-block mt-12 max-sm:data-[works=true]:order-first max-sm:data-[works=true]:mt-0 max-sm:data-[works=true]:mb-6" aria-labelledby="camera-heading" [attr.data-works]="cameraSupported">

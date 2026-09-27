@@ -246,6 +246,46 @@ export class PageCamera {
   private active = false;
   private halt: (() => void) | null = null;
 
+  /** Reading held, with the camera still on — see `pause`. */
+  private held = false;
+  /** The preview of the camera now running, to hold still and let go again. */
+  private showing: HTMLVideoElement | null = null;
+
+  get paused(): boolean {
+    return this.held;
+  }
+
+  /**
+   * Stop reading for a moment, with the camera left on and the preview held on
+   * the frame it was showing.
+   *
+   * For a door that has asked a question about the ticket it has just read —
+   * how many of this table are here — and must read nothing else until it is
+   * answered: the next guest's ticket held up behind would otherwise be
+   * scanned over the question. Paused rather than stopped, because asking
+   * for the camera again is a second of black on every phone and a permission
+   * question on some, and the answer is a tap away.
+   */
+  pause(): void {
+    if (!this.active) return;
+
+    this.held = true;
+
+    try {
+      this.showing?.pause();
+    } catch {
+      // A preview that cannot be held still still reads nothing.
+    }
+  }
+
+  /** Read again after `pause`. Nothing if the camera has been stopped since. */
+  resume(): void {
+    if (!this.held) return;
+
+    this.held = false;
+    void this.showing?.play().catch(() => undefined);
+  }
+
   /**
    * Start reading. `onCode` fires for every code seen, whatever it is, and is
    * checked and deduplicated by the caller — a camera pointed at a ticket reads
@@ -333,14 +373,15 @@ export class PageCamera {
     const read = async () => {
       const began = Date.now();
 
-      // Nothing to read in a frame that has not arrived, or on a screen nobody
-      // can see.
-      if (!video.ownerDocument.hidden && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      // Nothing to read in a frame that has not arrived, on a screen nobody
+      // can see, or while the door is waiting on an answer.
+      if (!this.held && !video.ownerDocument.hidden && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         try {
           const source = grab ? grab() : video;
           const found = source ? await opened.detector.detect(source) : [];
 
-          if (live) {
+          // Not handed over if the door paused while this frame was read.
+          if (live && !this.held) {
             for (const code of found) {
               if (code.rawValue) onCode(code.rawValue);
             }
@@ -378,6 +419,7 @@ export class PageCamera {
     video.setAttribute('playsinline', '');
     video.setAttribute('autoplay', '');
     video.srcObject = stream;
+    this.showing = video;
 
     // Said before play() rather than after, so the preview unfolds as it
     // starts: WebKit may hold back a video it thinks nobody can see.
@@ -394,6 +436,8 @@ export class PageCamera {
   stop(): void {
     this.attempt++;
     this.active = false;
+    this.held = false;
+    this.showing = null;
     this.halt?.();
     this.halt = null;
   }

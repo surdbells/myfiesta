@@ -1,5 +1,5 @@
 import { DoorList, DoorListTicket, OfflineScan, ScanResult, StoredList } from './types';
-import { admittedAfter, decideOffline, hashCode } from './rules';
+import { admittedAfter, asksHowMany, decideOffline, hashCode } from './rules';
 import { unsendableScans } from './sync';
 
 const DB_NAME = 'myfiesta-door';
@@ -198,6 +198,9 @@ export class DoorOfflineStore {
    * Wrong event cannot be told apart offline — the list only holds this
    * event — so a ticket for another night reads as not recognised. That is
    * the one answer that differs, and the message says why.
+   *
+   * A ticket for more than one with no number is asked about, as online, and
+   * counts nobody until the door scans it again with how many are here.
    */
   async decide(code: string, party: number | null): Promise<ScanResult> {
     // One list from the hash to the count, whichever door opens in between.
@@ -252,7 +255,18 @@ export class DoorOfflineStore {
 
   // --- the queue -------------------------------------------------------------
 
+  /**
+   * Keep a scan to send once there is signal.
+   *
+   * Never a question. A scan answered `choose_party` let nobody in and turned
+   * nobody away, so there is nothing to tell the server — and the server takes
+   * no such result, so one in the queue would have every batch it sat in
+   * refused, all night, for a reason no door can drop it for. The scan that
+   * answers the question is the one queued.
+   */
   async enqueue(scan: OfflineScan): Promise<void> {
+    if (asksHowMany({ result: scan.offline_result })) return;
+
     const db = await this.open();
     const tx = db.transaction('queue', 'readwrite');
     tx.objectStore('queue').put(scan);

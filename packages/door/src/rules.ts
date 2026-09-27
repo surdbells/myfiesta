@@ -1,6 +1,14 @@
 import { DoorListTicket, ScanResult } from './types';
 
 /**
+ * The answer to a scan that did not say how many, on a ticket with more than
+ * one person still to come: nobody goes in, and the door asks how many are
+ * here — all of them, or some. A question rather than a verdict, so it is
+ * never counted, never buzzed as a refusal and never queued: see `asksHowMany`.
+ */
+export const CHOOSE_PARTY = 'choose_party';
+
+/**
  * What a door decides when it cannot ask the server.
  *
  * Pulled out of the storage it used to live inside, for two reasons. It is the
@@ -10,8 +18,9 @@ import { DoorListTicket, ScanResult } from './types';
  * it was to run a browser.
  *
  * It follows CheckInService on the API line for line: refunded or void is
- * cancelled, nothing left is a duplicate, more people than places is refused
- * rather than quietly rounded down.
+ * cancelled, nothing left is a duplicate, no number with more than one place
+ * left is a question, more people than places is refused rather than quietly
+ * rounded down.
  */
 export function decideOffline(ticket: DoorListTicket | null, party: number | null): ScanResult {
   if (!ticket) {
@@ -42,8 +51,16 @@ export function decideOffline(ticket: DoorListTicket | null, party: number | nul
     );
   }
 
-  // No party size means everybody left on the ticket, which is what a door
-  // holding a group's single ticket means by scanning it once.
+  // A table's ticket is held up by whoever of the table is at the front. No
+  // number used to mean everybody left on it, so the first of four scanned
+  // counted all four in and the other three walked in later, unscanned. Now
+  // the door is asked, as the server asks: the list carries how many the
+  // ticket admits and how many are in, which is all the question needs.
+  if (party === null && remaining > 1) {
+    return refusal(CHOOSE_PARTY, howManyMessage(ticket.admits, remaining), about, { remaining });
+  }
+
+  // No number and one place left: every ordinary ticket, and the last of a table.
   const wanted = party ?? remaining;
 
   if (wanted > remaining) {
@@ -78,9 +95,51 @@ export function decideOffline(ticket: DoorListTicket | null, party: number | nul
  *
  * Kept beside the decision because the two have to agree: a phone that admits
  * three and then records two has just let somebody in twice.
+ *
+ * No number is everyone the ticket has left. That is what a queued scan from a
+ * door that never asked meant, and what counting it back onto a fresh list has
+ * to mean; this door only ever lets people in on no number when one place is
+ * left.
  */
 export function admittedAfter(ticket: DoorListTicket, party: number | null): number {
   return Math.min(ticket.admits, ticket.admitted_count + (party ?? ticket.admits - ticket.admitted_count));
+}
+
+/**
+ * Whether a scan's answer is the question of how many are here, rather than
+ * a verdict. The door puts the question and scans again with the number; this
+ * answer is not an admission, not a refusal, and not a scan to send later.
+ */
+export function asksHowMany(result: Pick<ScanResult, 'result'>): boolean {
+  return result.result === CHOOSE_PARTY;
+}
+
+/**
+ * The party an offline scan is queued with.
+ *
+ * What was asked for, when a number was — typed, or chosen when the door asked.
+ * Otherwise, once people went in on a ticket for more than one, the number that
+ * did: the last place on a table, let in without a question. The server reads a
+ * queued scan with no number as everyone the ticket has left, which is what
+ * doors from before the question meant by it. Where this phone had counted
+ * somebody the server never heard of — an admission it could not send — that
+ * would count the one guest let in now as two. A single ticket keeps no number,
+ * as it always has.
+ */
+export function queuedParty(party: number | null, outcome: ScanResult): number | null {
+  if (party !== null) return party;
+
+  return outcome.accepted && (outcome.ticket?.admits ?? 1) > 1 ? outcome.admitted : null;
+}
+
+/**
+ * The question, in the server's words, for a door that shows them instead of
+ * asking: put how many in "How many" and scan again.
+ */
+function howManyMessage(admits: number, remaining: number): string {
+  const inside = admits - remaining;
+
+  return `This ticket admits ${admits}, ${inside === 0 ? 'nobody in yet' : `${inside} already in`}. Put how many are going in now in How many, and scan it again.`;
 }
 
 /**

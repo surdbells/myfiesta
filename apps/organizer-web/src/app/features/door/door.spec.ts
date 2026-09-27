@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DoorOfflineStore, zxingWasmUrl } from '@myfiesta/door';
+import { DoorOfflineStore, hashCode, zxingWasmUrl } from '@myfiesta/door';
 import { memoryIndexedDB } from '../../../../../../packages/door/src/testing/memory-indexeddb';
 import { API_BASE_URL } from '../../core/api';
 import { OfflineScan, ScanResult } from '../../core/api.types';
@@ -52,12 +52,15 @@ function engineReading(detect = vi.fn(async () => [] as { rawValue: string }[]))
   return detect;
 }
 
-/** The screen's own preview, given frames and a play() — jsdom's has neither. */
-function withFrames(page: HTMLElement): void {
+/** The screen's own preview, given frames, a play() and a pause() — jsdom's has none of them. */
+function withFrames(page: HTMLElement): HTMLVideoElement {
   const video = page.querySelector('video')!;
 
   Object.defineProperty(video, 'readyState', { value: HTMLMediaElement.HAVE_ENOUGH_DATA });
   video.play = vi.fn(async () => undefined);
+  video.pause = vi.fn();
+
+  return video;
 }
 
 /**
@@ -205,13 +208,272 @@ describe('Door', () => {
 
     // A venue wifi taking its time; the ticket stays in view throughout.
     await vi.advanceTimersByTimeAsync(4500);
-    scan.flush({ ...admitted, admitted: 2, remaining: 2, message: 'Admitted 2. 2 still to come.' });
+    scan.flush({
+      ...admitted,
+      admitted: 2,
+      remaining: 2,
+      message: 'Admitted 2. 2 still to come.',
+      ticket: { holder_name: 'Chidi Nwosu', type: 'Table of 4', admits: 4, admitted_count: 2 },
+    });
     await vi.advanceTimersByTimeAsync(10_000);
     fixture.detectChanges();
 
-    // A second scan here would go with no number, which admits everyone left.
+    // A second scan here would go with no number, which asks all over again
+    // about a table the door has just answered for.
     expect(backend.match(SCAN)).toHaveLength(0);
-    expect(fixture.nativeElement.textContent).toContain('2 in · 2 still outside');
+    expect(fixture.nativeElement.textContent).toContain('2 of 4 in — 2 still to come');
+    // The number typed first is the answer: nothing is asked.
+    expect(fixture.nativeElement.textContent).not.toContain('How many are here?');
+  });
+
+  /**
+   * A ticket for more than one, read with nothing in "How many".
+   *
+   * It used to let in everyone the ticket had left, so the first of a table
+   * holding its ticket up counted the whole table in, and the rest walked in
+   * later unscanned. The server asks now, and so does this door: the camera
+   * holds still, the door says how many are here, and the scan goes again
+   * with that number.
+   */
+  describe('a ticket for more than one', () => {
+    const TABLE = 'TBLE-ACDEFHJK';
+    const table = (inside: number) => ({ holder_name: 'Chidi Nwosu', type: 'Table of 4', admits: 4, admitted_count: inside });
+
+    /** The server's question about the table, with `inside` of four already in. */
+    const asked = (inside: number): ScanResult => ({
+      result: 'choose_party',
+      accepted: false,
+      admitted: 0,
+      remaining: 4 - inside,
+      message: `This ticket admits 4, ${inside === 0 ? 'nobody in yet' : `${inside} already in`}. Put how many are going in now in How many, and scan it again.`,
+      ticket: table(inside),
+    });
+
+    const letIn = (admittedNow: number, inside: number): ScanResult => ({
+      result: 'accepted',
+      accepted: true,
+      admitted: admittedNow,
+      remaining: 4 - inside,
+      message: inside === 4 ? `Admitted ${admittedNow}. That is everyone.` : `Admitted ${admittedNow}. ${4 - inside} still to come.`,
+      ticket: table(inside),
+    });
+
+    it('asks how many are here with the camera paused, and sends the answer at once', async () => {
+      const detect = vi.fn(async () => [{ rawValue: TABLE }]);
+      const fixture = await scanningWith(detect);
+      const door = fixture.componentInstance;
+      const page: HTMLElement = fixture.nativeElement;
+      const video = page.querySelector('video')!;
+
+      await vi.advanceTimersByTimeAsync(200);
+
+      const [first] = backend.match(SCAN);
+
+      // Nothing typed, so no number sent: the server decides whether to ask.
+      expect(first.request.body.party).toBeUndefined();
+
+      first.flush(asked(0));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('How many are here?');
+      expect(page.textContent).toContain('Chidi Nwosu · Table of 4 · none of 4 in yet');
+      expect(buttonNamed(page, 'All 4 here')).toBeDefined();
+      expect(['1', '2', '3'].map((n) => buttonNamed(page, n))).not.toContain(undefined);
+      // A question, not a refusal, and nobody counted.
+      expect(page.textContent).not.toContain('Do not admit');
+      expect(door.scannedHere()).toBe(0);
+
+      // Paused: the preview holds still and nothing is read, however long the
+      // question takes — the next guest's ticket is not scanned over it.
+      expect(page.textContent).toContain('The camera is paused until you choose.');
+      expect(video.pause).toHaveBeenCalled();
+
+      const readsBefore = detect.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(detect.mock.calls.length).toBe(readsBefore);
+      expect(backend.match(SCAN)).toHaveLength(0);
+
+      // One of the four is here. The same ticket, read seconds ago and still
+      // held up, is sent again straight away rather than held back as a repeat.
+      buttonNamed(page, '1')!.click();
+
+      const [answer] = backend.match(SCAN);
+
+      expect(answer.request.body).toMatchObject({ code: TABLE, party: 1 });
+      // Under the id of the scan that asked, which the question left free.
+      expect(answer.request.body.client_id).toBe(first.request.body.client_id);
+
+      answer.flush(letIn(1, 1));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('1 of 4 in — 3 still to come');
+      expect(page.textContent).not.toContain('How many are here?');
+      expect(door.admittedHere()).toBe(1);
+      expect(door.scannedHere()).toBe(1);
+
+      // Reading again, and the ticket still held up is the scan just answered,
+      // not the rest of the table.
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(detect.mock.calls.length).toBeGreaterThan(readsBefore);
+      expect(backend.match(SCAN)).toHaveLength(0);
+    });
+
+    it('asks again for the rest of the table later, and lets them in together', async () => {
+      const detect = vi.fn(async () => [{ rawValue: TABLE }]);
+      const fixture = await scanningWith(detect);
+      const page: HTMLElement = fixture.nativeElement;
+
+      await vi.advanceTimersByTimeAsync(200);
+      backend.expectOne(SCAN).flush(asked(0));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      buttonNamed(page, '1')!.click();
+      backend.expectOne(SCAN).flush(letIn(1, 1));
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The ticket goes away with the first guest, and comes back an hour later.
+      detect.mockResolvedValue([]);
+      await vi.advanceTimersByTimeAsync(60_000);
+      detect.mockResolvedValue([{ rawValue: TABLE }]);
+      await vi.advanceTimersByTimeAsync(200);
+
+      backend.expectOne(SCAN).flush(asked(1));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('Chidi Nwosu · Table of 4 · 1 of 4 already in');
+      expect(buttonNamed(page, '3')).toBeUndefined();
+
+      buttonNamed(page, 'All 3 here')!.click();
+
+      const rest = backend.expectOne(SCAN);
+
+      expect(rest.request.body).toMatchObject({ code: TABLE, party: 3 });
+
+      rest.flush(letIn(3, 4));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('Let them in');
+      expect(fixture.componentInstance.admittedHere()).toBe(4);
+    });
+
+    it('offers a stepper for a table too big for a button each', async () => {
+      const fixture = render();
+      const door = fixture.componentInstance;
+      const page: HTMLElement = fixture.nativeElement;
+
+      door.code.set(TABLE);
+      door.submit();
+      backend.expectOne(SCAN).flush({ ...asked(0), remaining: 12, ticket: { ...table(0), type: 'Table of 12', admits: 12 } });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(buttonNamed(page, 'All 12 here')).toBeDefined();
+      expect(buttonNamed(page, '5')).toBeUndefined();
+
+      for (let n = 0; n < 4; n++) buttonNamed(page, '+')!.click();
+      fixture.detectChanges();
+
+      buttonNamed(page, 'Let 5 in')!.click();
+
+      expect(backend.expectOne(SCAN).request.body).toMatchObject({ code: TABLE, party: 5 });
+    });
+
+    it('lets the question go without sending anything, and reads again', async () => {
+      const detect = vi.fn(async () => [{ rawValue: TABLE }]);
+      const fixture = await scanningWith(detect);
+      const page: HTMLElement = fixture.nativeElement;
+
+      await vi.advanceTimersByTimeAsync(200);
+      backend.expectOne(SCAN).flush(asked(0));
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+
+      const readsBefore = detect.mock.calls.length;
+
+      buttonNamed(page, 'Not now')!.click();
+      fixture.detectChanges();
+
+      expect(page.textContent).not.toContain('How many are here?');
+      expect(backend.match(SCAN)).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(detect.mock.calls.length).toBeGreaterThan(readsBefore);
+    });
+
+    describe('with no signal', () => {
+      beforeEach(() => {
+        const db = memoryIndexedDB();
+
+        vi.stubGlobal('indexedDB', db.indexedDB);
+        vi.stubGlobal('IDBKeyRange', db.IDBKeyRange);
+      });
+
+      it('asks from the phone’s list too, and queues only the answer, with its number', async () => {
+        const store = TestBed.inject(DoorOffline);
+
+        Object.defineProperty(store, 'supported', { value: true });
+
+        const salt = 'salt-for-evt_1';
+
+        await store.save({
+          event_id: 'evt_1',
+          salt,
+          iterations: 1,
+          generated_at: '2026-09-26T21:05:00Z',
+          tickets: [{ hash: await hashCode(TABLE, salt, 1), status: 'valid', ...table(0) }],
+        });
+
+        const fixture = render();
+        const door = fixture.componentInstance;
+        const page: HTMLElement = fixture.nativeElement;
+
+        // The list refresh on opening: no signal for it.
+        await vi.waitFor(() => expect(backend.match(LIST)).toHaveLength(1));
+
+        door.code.set(TABLE);
+        door.submit();
+
+        const first = backend.expectOne(SCAN);
+        const asked = first.request.body.client_id;
+
+        first.error(new ProgressEvent('error'));
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(page.textContent).toContain('How many are here?');
+        });
+
+        // The question let nobody in and turned nobody away: nothing to send.
+        expect(await store.pending('evt_1')).toEqual([]);
+
+        buttonNamed(page, '2')!.click();
+
+        // Under the asking scan's id, online and queued alike. The request
+        // that went unanswered may have arrived: if the server let that scan
+        // in, this is the same scan, not a second person on the ticket.
+        const answer = backend.expectOne(SCAN);
+
+        expect(answer.request.body).toMatchObject({ code: TABLE, party: 2, client_id: asked });
+
+        answer.error(new ProgressEvent('error'));
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(page.textContent).toContain('2 of 4 in — 2 still to come');
+        });
+
+        expect(await store.pending('evt_1')).toMatchObject([
+          { client_id: asked, code: TABLE, party: 2, offline_result: 'accepted' },
+        ]);
+      });
+    });
   });
 
   it('sends nothing for a QR code that is not a ticket’s, and says what it saw', async () => {

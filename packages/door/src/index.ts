@@ -7,7 +7,7 @@
  * package's README for why the decision lives here rather than in either of
  * them.
  */
-export { decideOffline, admittedAfter, hashCode } from './rules';
+export { CHOOSE_PARTY, admittedAfter, asksHowMany, decideOffline, hashCode, queuedParty } from './rules';
 export { DoorOfflineStore, scanId } from './store';
 export {
   PageCamera,
@@ -25,9 +25,17 @@ export {
   TICKET_IN_VIEW_WITHIN_MS,
   ticketCode,
 } from './reads';
-export { MOST_AT_ONCE, partyKey, partySize } from './party';
+export {
+  EACH_NUMBER_UP_TO,
+  MOST_AT_ONCE,
+  askingAbout,
+  partOfParty,
+  partyChoices,
+  partyKey,
+  partySize,
+} from './party';
 export { conflictsIn, unrecordedAdmission, unsendableScans } from './sync';
-export type { PartySize } from './party';
+export type { PartyChoices, PartySize } from './party';
 export type { CameraRefusal, CodeDetector, OpenedDetector, PageCameraEvents } from './camera';
 export type {
   DoorList,

@@ -264,6 +264,9 @@ export class MfSheet {
   /** Raised. Separate from mounted, or the sheet would appear already open. */
   protected readonly showing = signal(false);
 
+  /** The unmount waiting on the closing slide, called off if the sheet is opened again first. */
+  private unmounting: ReturnType<typeof setTimeout> | null = null;
+
   protected readonly dragging = signal(false);
   protected readonly dragged = signal(0);
 
@@ -277,7 +280,17 @@ export class MfSheet {
   }
 
   private show(): void {
-    if (this.mounted()) return;
+    // Opened again while it was still sliding away — the door asking about the
+    // next table's ticket a moment after the last was answered. The unmount is
+    // called off and the sheet comes back up from where it is. Left to run,
+    // it took the sheet off the screen under an owner that had just asked for
+    // it, and brought it back only once it had gone.
+    if (this.unmounting !== null) {
+      clearTimeout(this.unmounting);
+      this.unmounting = null;
+    } else if (this.mounted()) {
+      return;
+    }
 
     // Where focus was, so it can be given back. A sheet that closes and leaves
     // focus on the page behind puts a keyboard or switch user back at the top
@@ -294,14 +307,17 @@ export class MfSheet {
     this.document.body.style.overflow = 'hidden';
 
     // One frame later, or the panel appears already raised and nothing slides.
+    // Not if it was closed again within that frame.
     requestAnimationFrame(() => {
+      if (!this.open()) return;
+
       this.showing.set(true);
       this.panel()?.nativeElement.focus();
     });
   }
 
   private hide(): void {
-    if (!this.mounted()) return;
+    if (!this.mounted() || this.unmounting !== null) return;
 
     this.showing.set(false);
     this.stack.remove(this.closer);
@@ -314,7 +330,10 @@ export class MfSheet {
 
     // Kept mounted until it has slid away; unmounting first is a sheet that
     // vanishes rather than closes.
-    setTimeout(() => this.mounted.set(false), 340);
+    this.unmounting = setTimeout(() => {
+      this.unmounting = null;
+      this.mounted.set(false);
+    }, 340);
   }
 
   /**

@@ -1,5 +1,7 @@
 import {
   HttpClient,
+  HttpContext,
+  HttpContextToken,
   HttpErrorResponse,
   HttpEventType,
   HttpInterceptorFn,
@@ -64,7 +66,7 @@ import {
   UploadProgress,
   Overview,
 } from './api.types';
-import { SessionStore } from './session';
+import { SessionStore, type StaffSession } from './session';
 import { DoorPassStore } from './door-pass';
 
 /**
@@ -83,6 +85,13 @@ export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
 });
 
 /**
+ * A request that is its own credential and must carry nobody's session: the
+ * staff handoff, which arrives in a tab where somebody's own sign-in may be
+ * sitting in storage and must not ride along.
+ */
+export const ANONYMOUS = new HttpContextToken<boolean>(() => false);
+
+/**
  * Attaches the token, and reacts when the server stops accepting it.
  *
  * A 401 means the token is gone or expired — the session is cleared rather
@@ -91,8 +100,12 @@ export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
  *
  * A 403 is left alone. That is the server saying this account may not do this
  * particular thing, which is information, not a broken session.
+ *
+ * A request marked ANONYMOUS is passed through untouched.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  if (req.context.get(ANONYMOUS)) return next(req);
+
   const session = inject(SessionStore);
   const router = inject(Router);
   const base = inject(API_BASE_URL);
@@ -146,8 +159,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       // Only when it was this session's token that was refused. A request
       // that brought its own (throwing a door pass away) says nothing about it.
       if (error.status === 401 && session.signedIn() && !req.headers.has('Authorization')) {
+        // A staff session that stopped working has run out or been ended:
+        // say so, rather than offer a sign-in form in a tab that was never
+        // anybody's own.
+        const wasStaff = session.impersonation() !== null;
+
         session.clear();
-        void router.navigate(['/sign-in']);
+        void router.navigate(wasStaff ? ['/impersonate/ended'] : ['/sign-in']);
       }
 
       return throwError(() => error);
@@ -179,6 +197,28 @@ export class Api {
 
   signOut(): Observable<unknown> {
     return this.http.post(`${this.base}/api/auth/logout`, {});
+  }
+
+  // --- myFiesta staff acting as an organization ---------------------------
+
+  /**
+   * The one-minute code from the admin panel's link, for the staff session.
+   *
+   * The code is the whole credential. Marked ANONYMOUS, so whatever sign-in
+   * this browser holds for somebody — the staff member's own, or an
+   * organizer's on a shared machine — is not sent with it.
+   */
+  exchangeImpersonation(code: string): Observable<StaffSession> {
+    return this.http.post<StaffSession>(
+      `${this.base}/api/impersonation/exchange`,
+      { code },
+      { context: new HttpContext().set(ANONYMOUS, true) },
+    );
+  }
+
+  /** End the staff session: the token stops working at once. */
+  endImpersonation(): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/impersonation`);
   }
 
   // --- getting an account -------------------------------------------------
@@ -340,6 +380,8 @@ export class Api {
     /** Both ends inclusive, as yyyy-mm-dd. */
     from?: string;
     to?: string;
+    /** The zone those days are days in; Greenwich when left out. */
+    timezone?: string;
     page?: number;
   }): Observable<OrganizationOrderPage> {
     let params = new HttpParams();
@@ -628,7 +670,7 @@ export class Api {
   }
 
   /** Every order the filter matches — not only the page on screen — as a CSV. */
-  exportOrders(query: { q?: string; event_id?: string; status?: string; from?: string; to?: string }): Observable<Blob> {
+  exportOrders(query: { q?: string; event_id?: string; status?: string; from?: string; to?: string; timezone?: string }): Observable<Blob> {
     let params = new HttpParams();
 
     for (const [key, value] of Object.entries(query)) {
@@ -872,8 +914,9 @@ export class Api {
   /**
    * One scan.
    *
-   * The party size is how many of a table are going in now; omitting it admits
-   * everyone still outstanding, which is right for an ordinary ticket.
+   * The party size is how many of a table are going in now. Omitting it admits
+   * the one place left, which is right for an ordinary ticket; with more than
+   * one left it admits nobody and the answer is `choose_party`.
    */
   scan(eventId: string, code: string, party?: number, clientId?: string): Observable<ScanResult> {
     return this.http.post<ScanResult>(`${this.base}/api/events/${eventId}/scan`, {

@@ -5,6 +5,10 @@ import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import {
   NotATicketNote,
   RepeatReads,
+  askingAbout,
+  asksHowMany,
+  partOfParty,
+  partyChoices,
   partyKey,
   partySize,
   scanId,
@@ -15,7 +19,7 @@ import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { Scanner } from '../../core/scanner';
-import { MfBadge, MfButton, MfCard, MfField, MfScreen, ToastStore } from '../../ui';
+import { MfBadge, MfButton, MfCard, MfField, MfScreen, MfSheet, MfStepper, ToastStore } from '../../ui';
 import { DoorSell } from './door-sell';
 
 interface Outcome {
@@ -41,7 +45,7 @@ interface Outcome {
  */
 @Component({
   selector: 'mf-door',
-  imports: [FormsModule, MfScreen, MfCard, MfField, MfButton, MfBadge, DoorSell],
+  imports: [FormsModule, MfScreen, MfCard, MfField, MfButton, MfBadge, MfSheet, MfStepper, DoorSell],
   template: `
     <mf-screen title="Door" [subtitle]="eventTitle()">
       <button mfButton variant="ghost" size="sm" screenActions (click)="leave()">
@@ -73,6 +77,10 @@ interface Outcome {
 
           @if (scanning() && notATicket()) {
             <p class="not-a-ticket" role="status">That QR code is not a ticket. Ask to see the ticket itself.</p>
+          }
+
+          @if (scanning() && asking()) {
+            <p class="paused" role="status">Paused until you say how many are here</p>
           }
 
           @if (scanning()) {
@@ -161,15 +169,16 @@ interface Outcome {
             aria-live="assertive"
           >
             <p class="word">{{ outcome.result.accepted ? 'Let them in' : 'Do not admit' }}</p>
+            <!-- Only for a table that was let in part-way: how many of it are
+                 in now and how many are still to come, which is what decides
+                 whether this ticket is shown again tonight. On a refusal it
+                 reads as a reason to let somebody in. -->
+            @if (partOfParty(outcome.result); as part) {
+              <p class="part">{{ part }}</p>
+            }
             <p class="why">{{ outcome.result.message }}</p>
             @if (outcome.result.ticket?.holder_name) {
               <p class="who">{{ outcome.result.ticket?.holder_name }}</p>
-            }
-            <!-- Only for a table that was let in part-way: how many are
-                 still to come. On a refusal it reads as a reason to let
-                 somebody in. -->
-            @if (outcome.result.accepted && outcome.result.remaining > 0) {
-              <p class="who">{{ outcome.result.remaining }} of the party still outside</p>
             }
 
             <!-- What this person answered at checkout: the name to check
@@ -214,12 +223,13 @@ interface Outcome {
             />
           </mf-field>
 
-          <!-- For a table arriving in two groups. Whole people only: step 1
+          <!-- The shortcut past the question a table's ticket asks: filled in
+               before the scan, it is sent with it. Whole people only: step 1
                and a numeric keypad, and the keys a number box allows that no
                party needs are kept out as they are typed. -->
           <mf-field
             label="How many"
-            hint="Leave blank for an ordinary ticket. For a table arriving in two groups, how many are going in now."
+            hint="Leave blank and a ticket for more than one asks how many are here. Put a number in first to skip the question."
             [error]="partyError()"
           >
             <input
@@ -231,7 +241,7 @@ interface Outcome {
               max="50"
               step="1"
               enterkeyhint="go"
-              placeholder="All"
+              placeholder="Ask"
               [ngModel]="party()"
               (ngModelChange)="party.set($event); partyError.set(null)"
               (keydown)="wholeNumbersOnly($event)"
@@ -258,6 +268,45 @@ interface Outcome {
           (closed)="sellingClosed($event)"
           (admitted)="admitSold($event)"
         />
+
+        <!--
+          A ticket for more than one, read with nothing in How many. Nobody has
+          gone in: the door says how many are standing there, and the scan goes
+          again with that number. A sheet, with an opaque panel, because on
+          Android the camera fills the screen behind a page that has gone see-
+          through, and the question has to be read over it. Swiping it away is
+          "not now".
+        -->
+        <mf-sheet
+          [open]="!!asking()"
+          heading="How many are here?"
+          [subheading]="askingAbout()"
+          (closed)="notNow()"
+        >
+          <div class="chooser">
+            @if (choices().all; as all) {
+              <button mfButton class="chooser__all" size="lg" block (click)="choose(all)">All {{ all }} here</button>
+            }
+
+            @if (choices().each.length > 0) {
+              <div class="chooser__each" [style.grid-template-columns]="'repeat(' + choices().each.length + ', minmax(0, 1fr))'">
+                @for (n of choices().each; track n) {
+                  <button mfButton variant="secondary" size="lg" [attr.aria-label]="n + ' here'" (click)="choose(n)">
+                    {{ n }}
+                  </button>
+                }
+              </div>
+            } @else if (choices().upTo; as upTo) {
+              <mf-stepper label="Fewer than everyone" [min]="1" [max]="upTo" [(value)]="stepped" />
+              <button mfButton variant="secondary" size="lg" block (click)="choose(stepped())">
+                Let {{ stepped() }} in
+              </button>
+            }
+
+            <p class="chooser__note">The rest can come in later on the same ticket.</p>
+            <button mfButton variant="ghost" block (click)="notNow()">Not now</button>
+          </div>
+        </mf-sheet>
 
         @if (recent().length > 0) {
           <h2 class="section">Last few</h2>
@@ -346,6 +395,50 @@ interface Outcome {
       color: #fff;
       font-size: var(--font-size-sm);
       line-height: var(--font-leading-snug);
+      text-align: center;
+    }
+
+    /* Over the preview while the door is asked how many are here: the camera
+       is still on, and reading nothing. */
+    .paused {
+      position: absolute;
+      inset: auto var(--space-3) calc(var(--space-3) + var(--mf-tap) + var(--space-2));
+      margin: 0;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      background: rgb(0 0 0 / 0.72);
+      color: #fff;
+      font-size: var(--font-size-sm);
+      text-align: center;
+    }
+
+    .chooser {
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    /* The whole table is the common answer, and the biggest thing to hit. */
+    .chooser__all {
+      min-height: calc(var(--mf-tap) * 1.5);
+      font-size: var(--font-size-xl);
+    }
+
+    .chooser__each {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .chooser__each button {
+      min-height: calc(var(--mf-tap) * 1.25);
+      padding: 0;
+      font-size: var(--font-size-xl);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chooser__note {
+      margin: 0;
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
       text-align: center;
     }
 
@@ -442,6 +535,12 @@ interface Outcome {
       font-size: var(--font-size-base);
     }
 
+    .part {
+      font-size: var(--font-size-xl);
+      font-weight: var(--font-weight-bold);
+      line-height: var(--font-leading-tight);
+    }
+
     .answer {
       margin: var(--space-2) 0 0;
       font-size: var(--font-size-lg);
@@ -530,8 +629,9 @@ export class Door implements OnDestroy {
   readonly outcomes = signal<Outcome[]>([]);
 
   /**
-   * "How many": blank, or the number Angular reads out of the box. Blank lets
-   * in everyone still outstanding on the ticket — see `partySize`.
+   * "How many": blank, or the number Angular reads out of the box. Blank is
+   * the one place left on a ticket, or the question of how many are here when
+   * it has more — see `partySize` and `asking`.
    */
   readonly party = signal<string | number | null>('');
   readonly partyError = signal<string | null>(null);
@@ -571,6 +671,39 @@ export class Door implements OnDestroy {
   readonly admitted = computed(() =>
     this.outcomes().reduce((total, outcome) => total + outcome.result.admitted, 0),
   );
+
+  /** "2 of 4 in — 2 still to come", for a table let in part-way. */
+  readonly partOfParty = partOfParty;
+
+  // --- how many are here -----------------------------------------------------
+
+  /**
+   * A ticket for more than one, scanned with nothing in "How many": the code,
+   * what the server (or this phone's list) said about it, and the id the scan
+   * went with.
+   *
+   * Nobody has gone in. It used to let in everyone the ticket had left, so a
+   * table's ticket shown by the first of its guests counted the whole table
+   * in, and the rest walked in later past a door that had already counted
+   * them. Now the door says how many are standing there, and the scan goes
+   * again with that number — under the same id: see `choose`. Nothing the
+   * camera reads is acted on meanwhile: the next ticket in the queue is not
+   * scanned over the question.
+   */
+  readonly asking = signal<{ code: string; result: ScanResult; clientId: string } | null>(null);
+
+  /** "All 4 here", and each smaller number or a stepper — see `partyChoices`. */
+  readonly choices = computed(() => partyChoices(this.asking()?.result.remaining ?? 0));
+
+  /** Whose ticket, what it is and how many are in, under the question. */
+  readonly askingAbout = computed(() => {
+    const asked = this.asking();
+
+    return asked ? askingAbout(asked.result) : null;
+  });
+
+  /** The stepper's number, for a table too big for a button each. */
+  readonly stepped = signal(1);
 
   private next = 0;
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -693,7 +826,7 @@ export class Door implements OnDestroy {
    * server then refused every sync with it in, so nothing else scanned without
    * signal got through. And it ignored the same code for four seconds from the
    * first sighting only: a ticket held up through a slow answer was sent again,
-   * with the party size already cleared, which on a table's ticket lets in
+   * with the party size already cleared, which on a table's ticket let in
    * everyone still outside. See `ticketCode` and `RepeatReads`.
    *
    * A QR code that is not a ticket's is not a scan, but it is said over the
@@ -701,6 +834,11 @@ export class Door implements OnDestroy {
    * it is only something behind. See `NotATicketNote`.
    */
   private read(raw: string): void {
+    // Paused while the door is asked how many are here. The camera itself is
+    // left on, since turning it off and on again is a second of black on
+    // every phone, and nothing it reads is acted on until there is an answer.
+    if (this.asking()) return;
+
     const code = ticketCode(raw);
     const now = Date.now();
 
@@ -741,9 +879,11 @@ export class Door implements OnDestroy {
   openSell(): void {
     // The camera and a sheet over it is a phone doing two things with one
     // lens; the scanner stops while money is being taken and starts again
-    // after, which is also what a person does.
+    // after, which is also what a person does. A question about a table's
+    // ticket is dropped with it: one sheet at a time.
     void this.scanner.stop();
     this.scanning.set(false);
+    this.notNow();
     this.selling.set(true);
   }
 
@@ -769,6 +909,10 @@ export class Door implements OnDestroy {
 
     if (!this.code().trim() || !eventId || this.busy()) return;
 
+    // Typed while the door was asking: this is the next scan, and the
+    // question is dropped rather than left up answering nothing.
+    this.notNow();
+
     // Checked before it goes anywhere, typed or read: a code no ticket could
     // have, queued while offline, would hold every scan behind it.
     const code = ticketCode(this.code());
@@ -783,10 +927,10 @@ export class Door implements OnDestroy {
 
     // And the number, before anything is sent or decided: offline, a party of
     // 1.5 would be decided like any other, then refused with its whole batch.
-    // A box the browser could not read reports itself empty, which would let
-    // the whole table in, so it is refused as what it is instead. Buzzed like
-    // any refusal: a camera held up to a table's ticket otherwise does
-    // nothing that anybody looking at the guest would notice.
+    // A box the browser could not read reports itself empty, which would send
+    // what somebody typed as no number at all, so it is refused as what it is
+    // instead. Buzzed like any refusal: a camera held up to a table's ticket
+    // otherwise does nothing that anybody looking at the guest would notice.
     const size = partySize(this.partyBox()?.nativeElement.validity?.badInput ? NaN : this.party());
 
     if (!size.ok) {
@@ -798,10 +942,68 @@ export class Door implements OnDestroy {
       return;
     }
 
-    const party = size.party;
-    // The scan's own id, the same online and queued: see `Api.scan`.
-    const clientId = scanId();
+    await this.check(eventId, code, size.party);
+  }
 
+  /**
+   * Let this many of the party in.
+   *
+   * Sent straight away, never back through the camera: the ticket was read a
+   * moment ago and is very likely still held up, and the camera would take a
+   * read of it now for the same scan again and hold it back. See
+   * `RepeatReads.again`.
+   *
+   * Under the id of the scan that asked. Nothing is recorded for a question,
+   * so the id is free when the server asked it. When this phone asked, from
+   * its list after the server took too long, the server may have let that
+   * scan in on the one place left and the answer never came back: sent under
+   * a new id, the answer was refused as a second person on a spent ticket,
+   * or synced as a conflict, for the guest the server had just counted in.
+   */
+  async choose(party: number): Promise<void> {
+    const asked = this.asking();
+    const eventId = this.eventId();
+
+    if (!asked || !eventId || this.busy()) return;
+
+    this.asking.set(null);
+    this.reads.again(asked.code);
+
+    try {
+      await this.check(eventId, asked.code, party, asked.clientId);
+    } finally {
+      this.reads.answered(asked.code);
+    }
+  }
+
+  /**
+   * Nobody after all — the guest went back for the others, or it was the wrong
+   * ticket. Nothing was recorded, so there is nothing to undo; the camera acts
+   * again, on the same ticket once it has been out of sight for a moment.
+   */
+  notNow(): void {
+    const asked = this.asking();
+
+    if (!asked) return;
+
+    this.asking.set(null);
+    this.reads.answered(asked.code);
+  }
+
+  private ask(code: string, result: ScanResult, clientId: string): void {
+    this.stepped.set(1);
+    this.asking.set({ code, result, clientId });
+    this.notATicketNote.clear();
+  }
+
+  /**
+   * One scan, sent with the number it is for: typed, chosen, or none.
+   *
+   * @param clientId the scan's own id, the same online and queued: see
+   *                 `Api.scan`. The asking scan's, for the one answering it —
+   *                 see `choose`.
+   */
+  private async check(eventId: string, code: string, party: number | null, clientId: string = scanId()): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     this.partyError.set(null);
@@ -826,6 +1028,18 @@ export class Door implements OnDestroy {
 
         this.offline.connectionLost.set(true);
         result = await this.offline.decideAndQueue(eventId, code, party, clientId);
+      }
+
+      // Not a verdict, so not one of the scans counted or listed here: the
+      // one that answers it is. The last guest's verdict comes down, or its
+      // green "Let them in" reads as the answer for the table here now.
+      if (asksHowMany(result)) {
+        this.verdictStands.set(false);
+        this.code.set('');
+        this.ask(code, result, clientId);
+        await this.buzz('ask');
+
+        return;
       }
 
       this.outcomes.update((all) => [{ id: this.next++, at: new Date(), code, result }, ...all].slice(0, 40));
@@ -861,11 +1075,13 @@ export class Door implements OnDestroy {
    *
    * A refusal is a heavier pattern than an admission on purpose: the two have
    * to be told apart without looking, since whoever is scanning is looking at
-   * the guest, not the phone.
+   * the guest, not the phone. A question is neither, and says only "look":
+   * a table's ticket held up with nothing to feel would be scanned again.
    */
-  private async buzz(accepted: boolean): Promise<void> {
+  private async buzz(accepted: boolean | 'ask'): Promise<void> {
     try {
-      if (accepted) await Haptics.impact({ style: ImpactStyle.Light });
+      if (accepted === 'ask') await Haptics.notification({ type: NotificationType.Warning });
+      else if (accepted) await Haptics.impact({ style: ImpactStyle.Light });
       else await Haptics.notification({ type: NotificationType.Error });
     } catch {
       // No haptics on this device, or in a browser. The verdict is on screen.

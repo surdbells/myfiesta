@@ -23,9 +23,16 @@ src/testing/    IndexedDB in memory, for both apps' specs; never in either app
 ## The rules
 
 `decideOffline` follows the API's `CheckInService` line for line: refunded or
-void is cancelled, nothing left is a duplicate, more people than places is
-refused rather than quietly rounded down. `admittedAfter` says what to write
-down — a phone that admits three and records two has let somebody in twice.
+void is cancelled, nothing left is a duplicate, no number with more than one
+place left is a question (`choose_party` — see "How many" below), more people
+than places is refused rather than quietly rounded down. `admittedAfter` says
+what to write down — a phone that admits three and records two has let somebody
+in twice. `queuedParty` says what number a scan made with no signal is queued
+with: the server reads none as everyone the ticket had left, which is what
+doors from before the question meant, so a door that asks sends the number that
+went in on anything for more than one. The question itself is never queued —
+`DoorOfflineStore.enqueue` refuses it, since the server takes no such result
+and would refuse every batch it sat in.
 
 Both are pure functions over a ticket, which is what makes them testable
 without a browser. They are tested in `apps/organizer-web`.
@@ -98,6 +105,10 @@ on fewer:
   again only after it has been out of sight for four seconds, counted from the
   last time it was seen and from the answer arriving — not from the first read,
   which let a ticket held up through a slow answer or an ID check scan twice.
+  The door's own second scan of a table's ticket, once it has been told how many
+  are here, goes straight out and is marked with `again`, so it is not held back
+  as a repeat and the camera does not ask about the rest of the table while the
+  ticket is still up.
 
 Both doors read through these, the console's and the phone's: the phone's used
 to act on any QR in view, and to start its four seconds from the first read.
@@ -113,14 +124,36 @@ screen in `door.spec.ts`) and through the phone's door in `apps/mobile`
 
 ## How many
 
-Beside the code on both doors is "How many", for a table arriving in two
-groups. `partySize` reads it: blank is everyone still outstanding, and anything
-else is a whole number from 1 to 50 (`MOST_AT_ONCE`, the API's own limit) or a
-sentence saying so. Forms here are novalidate, so the box's min and max never
-stopped 0 — sent as blank, which let a whole table in — or 1.5, which a door
-with no signal decided like any other number. `partyKey` keeps the decimal
-point, the minus sign and the exponent a number box allows out of it as they
-are typed.
+A ticket for more than one is never let in whole on a scan that did not say how
+many. No number used to mean everyone the ticket had left, so the first of a
+table holding up its ticket counted the whole table in and the rest walked in
+later unscanned. Now, with more than one place left, the server — and
+`decideOffline`, from the list's `admits` and `admitted_count` — answers
+`choose_party` and lets nobody in (`asksHowMany`). Both doors pause the camera
+(`PageCamera.pause`, or on the phone by acting on nothing it reads) and ask:
+`partyChoices` gives "All N here" and a button for each smaller number, or a
+stepper past `EACH_NUMBER_UP_TO`, never past what one scan may let in.
+`askingAbout` says whose ticket it is and how many are already in, and once
+part of a table is in, `partOfParty` is the verdict: "2 of 4 in — 2 still to
+come". The last place on a ticket, which is every single ticket, is let in with
+no question.
+
+The scan that answers goes under the id of the scan that asked. Nothing was
+recorded for the question, so the id is free; and a question this phone put
+from its own list, after the server took too long, may be about a scan the
+server had already let in on the last place. Under the same id the answer is
+that scan — "already recorded" online, and compared with the server's answer
+like any retried scan once the queue syncs — rather than a second person on a
+spent ticket.
+
+Beside the code on both doors is "How many", the shortcut past the question: a
+number put in before the scan is sent with it and nothing is asked. `partySize`
+reads it: blank is no number, and anything else is a whole number from 1 to 50
+(`MOST_AT_ONCE`, the API's own limit) or a sentence saying so. Forms here are
+novalidate, so the box's min and max never stopped 0 — sent as blank, which
+then let a whole table in — or 1.5, which a door with no signal decided like
+any other number. `partyKey` keeps the decimal point, the minus sign and the
+exponent a number box allows out of it as they are typed.
 
 Tested in `apps/organizer-web` (`door-party.spec.ts`), and through both doors'
 screens.

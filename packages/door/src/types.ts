@@ -8,11 +8,19 @@
 
 /** What the server says about one scan, online or off. */
 export interface ScanResult {
+  /**
+   * The verdict — or `choose_party`, which is not one: a ticket for more than
+   * one scanned without a number, with nobody let in until the door says how
+   * many are here. See `asksHowMany`.
+   */
   result: string;
   /** Whether anybody went in. A table can be partly admitted. */
   accepted: boolean;
   admitted: number;
-  /** Still outstanding on this ticket — what keeps a table open. */
+  /**
+   * Still outstanding on this ticket — what keeps a table open, and on
+   * `choose_party` the most the door can offer to let in.
+   */
   remaining: number;
   message: string;
   ticket: {
@@ -65,6 +73,11 @@ export interface OfflineScan {
   client_id: string;
   event_id: string;
   code: string;
+  /**
+   * How many went in, or were asked for. Null only on a single ticket or a
+   * refusal from this door (see `queuedParty`); the server reads a null as
+   * everyone the ticket had left, which is what doors that never asked meant.
+   */
   party: number | null;
   offline_result: string;
   scanned_at: string;

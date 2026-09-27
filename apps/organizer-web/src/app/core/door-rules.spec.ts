@@ -1,5 +1,14 @@
 import fixture from '../../../../../packages/contract/fixtures/door-hash.json';
-import { DoorListTicket, admittedAfter, decideOffline, hashCode } from '@myfiesta/door';
+import {
+  CHOOSE_PARTY,
+  DoorListTicket,
+  ScanResult,
+  admittedAfter,
+  asksHowMany,
+  decideOffline,
+  hashCode,
+  queuedParty,
+} from '@myfiesta/door';
 
 const ticket = (over: Partial<DoorListTicket> = {}): DoorListTicket =>
   ({
@@ -66,8 +75,51 @@ describe('deciding at a door with no signal', () => {
   });
 
   describe('a ticket that admits several', () => {
-    it('lets the whole party in when no number is given', () => {
-      const outcome = decideOffline(ticket({ admits: 4 }), null);
+    /**
+     * No number used to mean everyone the ticket had left. The first of a
+     * table held its ticket up, the whole table was counted in, and the rest
+     * walked in later unscanned. The server asks now, and so does the list.
+     */
+    it('lets nobody in when no number is given, and asks how many are here', () => {
+      const outcome = decideOffline(ticket({ admits: 4, type: 'Table of 4' }), null);
+
+      expect(outcome.result).toBe(CHOOSE_PARTY);
+      expect(asksHowMany(outcome)).toBe(true);
+      expect(outcome.accepted).toBe(false);
+      expect(outcome.admitted).toBe(0);
+      // Everything the question needs, from the list alone.
+      expect(outcome.remaining).toBe(4);
+      expect(outcome.ticket).toMatchObject({ holder_name: 'Ada Okoro', type: 'Table of 4', admits: 4, admitted_count: 0 });
+      // The server's words, for a door that shows them rather than asking.
+      expect(outcome.message).toBe(
+        'This ticket admits 4, nobody in yet. Put how many are going in now in How many, and scan it again.',
+      );
+      expect(outcome.offline).toBe(true);
+    });
+
+    it('asks again for the rest of a table, saying how many are already in', () => {
+      const outcome = decideOffline(ticket({ admits: 4, admitted_count: 1 }), null);
+
+      expect(outcome.result).toBe(CHOOSE_PARTY);
+      expect(outcome.remaining).toBe(3);
+      expect(outcome.message).toContain('This ticket admits 4, 1 already in.');
+    });
+
+    it('lets the last of a table in without a question', () => {
+      const outcome = decideOffline(ticket({ admits: 4, admitted_count: 3 }), null);
+
+      expect(outcome.result).toBe('accepted');
+      expect(outcome.admitted).toBe(1);
+      expect(outcome.remaining).toBe(0);
+    });
+
+    it('refuses a table that is spent or cancelled rather than asking about it', () => {
+      expect(decideOffline(ticket({ admits: 4, admitted_count: 4 }), null).result).toBe('duplicate');
+      expect(decideOffline(ticket({ admits: 4, status: 'void' }), null).result).toBe('void');
+    });
+
+    it('lets the whole party in when the door says all of them are here', () => {
+      const outcome = decideOffline(ticket({ admits: 4 }), 4);
 
       expect(outcome.admitted).toBe(4);
       expect(outcome.remaining).toBe(0);
@@ -121,7 +173,42 @@ describe('deciding at a door with no signal', () => {
     });
 
     it('takes the rest of the ticket when no number was given', () => {
+      // What a queued scan from a door that never asked meant by it.
       expect(admittedAfter(ticket({ admits: 4, admitted_count: 1 }), null)).toBe(4);
+    });
+  });
+
+  /**
+   * The server reads a queued scan with no number as everyone the ticket had
+   * left: what doors from before the question meant. So a door that asks puts
+   * the number that went in on anything for more than one.
+   */
+  describe('what a scan made with no signal is queued with', () => {
+    const decided = (over: Partial<ScanResult>): ScanResult => ({
+      result: 'accepted',
+      accepted: true,
+      admitted: 1,
+      remaining: 0,
+      message: 'Admitted.',
+      ticket: { holder_name: 'Ada Okoro', type: 'General', admits: 1, admitted_count: 1 },
+      offline: true,
+      ...over,
+    });
+
+    it('is the number asked for, typed or chosen', () => {
+      expect(queuedParty(2, decided({ admitted: 2 }))).toBe(2);
+      expect(queuedParty(3, decided({ result: 'over_capacity', accepted: false, admitted: 0 }))).toBe(3);
+    });
+
+    it('is the number that went in on the last place of a table, let in without a question', () => {
+      const last = decideOffline(ticket({ admits: 4, admitted_count: 3 }), null);
+
+      expect(queuedParty(null, last)).toBe(1);
+    });
+
+    it('is still no number on an ordinary ticket, or a refusal', () => {
+      expect(queuedParty(null, decideOffline(ticket(), null))).toBeNull();
+      expect(queuedParty(null, decideOffline(ticket({ admits: 4, admitted_count: 4 }), null))).toBeNull();
     });
   });
 });

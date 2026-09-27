@@ -101,6 +101,32 @@ describe('what a door acts on', () => {
       expect(reads.take('WFY7-F77K4EJW', true, 0)).toBe(false);
       expect(reads.take('WFY7-F77K4EJW', false, 200)).toBe(true);
     });
+
+    /**
+     * A table's ticket read with nothing in "How many" is a question, not an
+     * admission. The door sends it again itself once it has the answer —
+     * never by waiting for the camera to take a ticket it read a moment ago,
+     * which it would hold back as the same scan.
+     */
+    it('holds the ticket as in sight while the door sends it again with how many are here', () => {
+      const reads = new RepeatReads();
+
+      expect(reads.take('WFY7-F77K4EJW', false, 0)).toBe(true);
+      reads.answered('WFY7-F77K4EJW', 300);
+
+      // The door asks; somebody taps "2" a few seconds later.
+      reads.again('WFY7-F77K4EJW', 3 * second);
+
+      // Still held up when the camera comes back, through a slow answer.
+      for (let at = 3 * second + 200; at <= 10 * second; at += 200) {
+        expect(reads.take('WFY7-F77K4EJW', false, at)).toBe(false);
+      }
+
+      reads.answered('WFY7-F77K4EJW', 10 * second);
+
+      // Lowered, and shown again when the rest of the table arrives.
+      expect(reads.take('WFY7-F77K4EJW', false, 10 * second + SAME_TICKET_AGAIN_AFTER_MS)).toBe(true);
+    });
   });
 
   /**

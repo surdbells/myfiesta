@@ -36,10 +36,9 @@ export function ticketCode(raw: string): string | null {
  * One ticket held up to the camera is one scan.
  *
  * The camera reads the same ticket several times a second for as long as it is
- * in frame, and a scan is not free: it admits somebody, and a table ticket
- * scanned again with no number typed admits everyone still outside. So a code
- * is acted on once, and again only once it has been out of sight for a few
- * seconds.
+ * in frame, and a scan is not free: it admits somebody, or asks the door how
+ * many of a table are here when it has just been told. So a code is acted on
+ * once, and again only once it has been out of sight for a few seconds.
  *
  * Out of sight counts from the last time the camera saw it, not the first. A
  * guest who keeps their phone up through the ID check is still one scan. While
@@ -76,6 +75,22 @@ export class RepeatReads {
     this.waiting = true;
 
     return true;
+  }
+
+  /**
+   * The door is scanning `code` again itself, not because the camera saw it:
+   * it asked how many of a party are here and has the answer.
+   *
+   * Sent by the door straight away, never through `take` — the ticket was read
+   * moments ago and is very likely still in view, so the camera's own read of
+   * it would be held back as a repeat and the answer would go nowhere. Counted
+   * from here as in sight until `answered`, as a camera scan is, so a guest
+   * still holding the ticket up when the camera comes back is not asked the
+   * same question about the rest of their table.
+   */
+  again(code: string, now = Date.now()): void {
+    this.last = { code, at: now };
+    this.waiting = true;
   }
 
   /** The scan of `code` has its answer, whatever it was: its quiet time starts again from now. */
