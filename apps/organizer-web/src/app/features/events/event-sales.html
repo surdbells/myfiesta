@@ -59,7 +59,7 @@
     </div>
 
     <!-- ------------------------------------------------------ by ticket type -->
-    <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
+    <div class="card card--flush">
       <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
         <h3 class="text-base font-semibold">By ticket</h3>
         <p class="text-sm text-text-muted tabular-nums">
@@ -70,24 +70,24 @@
         </p>
       </header>
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[40rem] border-collapse text-sm">
+        <table class="w-full min-w-[40rem] text-sm">
           <thead>
             <tr>
-              <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Ticket</th>
-              <th class="bg-surface-inset px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</th>
-              <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Comps</th>
-              <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Arrived</th>
-              <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+              <th uiSort="name" label="Ticket" [sort]="typeSort()" (sorted)="typeSort.set($event)"></th>
+              <th uiSort="sold" label="Sold" [sort]="typeSort()" (sorted)="typeSort.set($event)"></th>
+              <th uiSort="comps" label="Comps" class="numeric" [sort]="typeSort()" (sorted)="typeSort.set($event)"></th>
+              <th uiSort="arrived" label="Arrived" class="numeric" [sort]="typeSort()" (sorted)="typeSort.set($event)"></th>
+              <th uiSort="revenue" label="Sold for" class="numeric" [sort]="typeSort()" (sorted)="typeSort.set($event)"></th>
             </tr>
           </thead>
           <tbody>
-            @for (type of r.ticket_types; track type.id) {
-              <tr class="border-t border-border">
-                <td class="px-6 py-3">
+            @for (type of ticketTypes(); track type.id) {
+              <tr>
+                <td>
                   <span class="block font-medium">{{ type.name }}</span>
                   <span class="text-xs text-text-muted tabular-nums">{{ type.price.amount === 0 ? 'Free' : money(type.price) }}</span>
                 </td>
-                <td class="px-4 py-3">
+                <td>
                   @let percent = taken(type);
                   <span class="grid gap-1.5">
                     <span class="tabular-nums">
@@ -115,8 +115,8 @@
                     }
                   </span>
                 </td>
-                <td class="px-4 py-3 text-right tabular-nums" [class.text-text-subtle]="type.comps === 0">{{ type.comps }}</td>
-                <td class="px-4 py-3 text-right tabular-nums">
+                <td class="numeric" [class.text-text-subtle]="type.comps === 0">{{ type.comps }}</td>
+                <td class="numeric">
                   <!-- People, not tickets: a Table of 5 is five people through the door. -->
                   @if (type.people === 0) {
                     <span class="text-text-subtle">—</span>
@@ -124,7 +124,7 @@
                     {{ type.arrived }} <span class="text-text-muted">of {{ type.people }}</span>
                   }
                 </td>
-                <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(type.revenue) }}</td>
+                <td class="numeric font-medium">{{ money(type.revenue) }}</td>
               </tr>
             } @empty {
               <tr><td class="px-6 py-4 text-text-muted" colspan="5">No tickets on this event yet.</td></tr>
@@ -141,7 +141,7 @@
       thing; per till after that, because a night with two doors has two tins.
     -->
     @if (r.door.tickets > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
+      <div class="card card--flush">
         <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">At the door</h3>
           <p class="text-sm text-text-muted tabular-nums">
@@ -185,24 +185,24 @@
       read from would make both numbers wrong.
     -->
     @if (r.add_ons.length > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
+      <div class="card card--flush">
         <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">Sold with a ticket</h3>
           <p class="text-sm text-text-muted">Extras admit nobody, so they are counted apart from the room.</p>
         </header>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[34rem] border-collapse text-sm">
+          <table class="w-full min-w-[34rem] text-sm">
             <thead>
               <tr>
-                <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Extra</th>
-                <th class="bg-surface-inset px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold</th>
-                <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+                <th scope="col">Extra</th>
+                <th scope="col">Sold</th>
+                <th scope="col" class="numeric">Sold for</th>
               </tr>
             </thead>
             <tbody>
               @for (extra of r.add_ons; track extra.id) {
-                <tr class="border-t border-border">
-                  <td class="px-6 py-3">
+                <tr>
+                  <td>
                     <span class="block font-medium">
                       {{ extra.name }}
                       @if (extra.status !== 'on_sale') {
@@ -213,13 +213,13 @@
                     </span>
                     <span class="text-xs text-text-muted tabular-nums">{{ extra.price.amount === 0 ? 'Free' : money(extra.price) }}</span>
                   </td>
-                  <td class="px-4 py-3 tabular-nums">
+                  <td class="tabular-nums">
                     {{ extra.sold }}
                     @if (extra.capacity !== null) {
                       <span class="text-text-muted">of {{ extra.capacity }}</span>
                     }
                   </td>
-                  <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(extra.revenue) }}</td>
+                  <td class="numeric font-medium">{{ money(extra.revenue) }}</td>
                 </tr>
               }
             </tbody>
@@ -230,25 +230,25 @@
 
     <!-- ------------------------------------------------------------ by code -->
     @if (r.codes.length > 0) {
-      <div class="overflow-hidden rounded-xl border border-border bg-surface-raised shadow-(--shadow-card)">
+      <div class="card card--flush">
         <header class="px-6 pb-3 pt-5">
           <h3 class="text-base font-semibold">By code and promoter link</h3>
         </header>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[40rem] border-collapse text-sm">
+          <table class="w-full min-w-[40rem] text-sm">
             <thead>
               <tr>
-                <th class="bg-surface-inset px-6 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Code</th>
-                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Orders</th>
-                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</th>
-                <th class="bg-surface-inset px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Discount given</th>
-                <th class="bg-surface-inset px-6 py-2.5 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Sold for</th>
+                <th uiSort="code" label="Code" [sort]="codeSort()" (sorted)="codeSort.set($event)"></th>
+                <th uiSort="orders" label="Orders" class="numeric" [sort]="codeSort()" (sorted)="codeSort.set($event)"></th>
+                <th uiSort="tickets" label="Tickets" class="numeric" [sort]="codeSort()" (sorted)="codeSort.set($event)"></th>
+                <th uiSort="discount" label="Discount given" class="numeric" [sort]="codeSort()" (sorted)="codeSort.set($event)"></th>
+                <th uiSort="revenue" label="Sold for" class="numeric" [sort]="codeSort()" (sorted)="codeSort.set($event)"></th>
               </tr>
             </thead>
             <tbody>
-              @for (code of r.codes; track code.code_id ?? code.ref_slug) {
-                <tr class="border-t border-border">
-                  <td class="px-6 py-3">
+              @for (code of codes(); track code.code_id ?? code.ref_slug) {
+                <tr>
+                  <td>
                     <span class="flex flex-wrap items-center gap-2">
                       <span class="font-mono font-medium">{{ codeName(code) }}</span>
                       @if (code.deleted) {
@@ -259,10 +259,10 @@
                       <span class="text-xs text-text-muted">{{ code.promoter ?? code.label }}</span>
                     }
                   </td>
-                  <td class="px-4 py-3 text-right tabular-nums">{{ code.orders }}</td>
-                  <td class="px-4 py-3 text-right tabular-nums">{{ code.tickets }}</td>
-                  <td class="px-4 py-3 text-right tabular-nums" [class.text-text-subtle]="code.discount.amount === 0">{{ money(code.discount) }}</td>
-                  <td class="px-6 py-3 text-right font-medium tabular-nums">{{ money(code.revenue) }}</td>
+                  <td class="numeric">{{ code.orders }}</td>
+                  <td class="numeric">{{ code.tickets }}</td>
+                  <td class="numeric" [class.text-text-subtle]="code.discount.amount === 0">{{ money(code.discount) }}</td>
+                  <td class="numeric font-medium">{{ money(code.revenue) }}</td>
                 </tr>
               }
             </tbody>

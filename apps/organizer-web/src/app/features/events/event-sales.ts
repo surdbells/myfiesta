@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { Api } from '../../core/api';
 import { Money, SalesReport } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
+import { UiSortHeader, sortLocally, type Sort } from '@myfiesta/ui';
 import { EventInsights } from './event-insights';
 
 /** One bar of the daily chart, in viewBox units. */
@@ -23,7 +24,7 @@ interface Bar {
  */
 @Component({
   selector: 'app-event-sales',
-  imports: [EventInsights],
+  imports: [EventInsights, UiSortHeader],
   templateUrl: './event-sales.html',
 })
 export class EventSales {
@@ -36,6 +37,30 @@ export class EventSales {
 
   /** A month by default: the pace that matters is recent. */
   readonly showAll = signal(false);
+
+  /** The best seller first: the question this table is opened to answer. */
+  readonly typeSort = signal<Sort>({ column: 'revenue', direction: 'desc' });
+  readonly codeSort = signal<Sort>({ column: 'revenue', direction: 'desc' });
+
+  readonly ticketTypes = computed(() =>
+    sortLocally(this.report()?.ticket_types ?? [], this.typeSort(), {
+      name: (type) => type.name,
+      sold: (type) => type.sold,
+      comps: (type) => type.comps,
+      arrived: (type) => type.arrived,
+      revenue: (type) => type.revenue.amount,
+    }),
+  );
+
+  readonly codes = computed(() =>
+    sortLocally(this.report()?.codes ?? [], this.codeSort(), {
+      code: (code) => this.codeName(code),
+      orders: (code) => code.orders,
+      tickets: (code) => code.tickets,
+      discount: (code) => code.discount.amount,
+      revenue: (code) => code.revenue.amount,
+    }),
+  );
 
   readonly chartWidth = 600;
   readonly chartHeight = 120;
