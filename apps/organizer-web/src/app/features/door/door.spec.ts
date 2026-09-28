@@ -1,5 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -138,6 +138,74 @@ describe('Door', () => {
     expect(page.querySelector('video')).not.toBeNull();
 
     await vi.waitFor(() => expect(fetched).toEqual([zxingWasmUrl()]));
+  });
+
+  describe('the list saved on this phone', () => {
+    beforeEach(() => {
+      const db = memoryIndexedDB();
+
+      vi.stubGlobal('indexedDB', db.indexedDB);
+      vi.stubGlobal('IDBKeyRange', db.IDBKeyRange);
+    });
+
+    async function oneTicketSaved() {
+      const store = TestBed.inject(DoorOffline);
+      Object.defineProperty(store, 'supported', { value: true });
+
+      const salt = 'salt-for-evt_1';
+      const list = {
+        event_id: 'evt_1',
+        salt,
+        iterations: 1,
+        generated_at: new Date().toISOString(),
+        tickets: [{ hash: await hashCode('WFY7-F77K4EJW', salt, 1), status: 'valid' as const, admits: 1, admitted_count: 0, holder_name: 'Ada Okoro', type: 'General' }],
+      };
+
+      await store.save(list);
+
+      return list;
+    }
+
+    /** The fresh list the door asks for once its saved one is loaded. */
+    async function listAsked(): Promise<TestRequest> {
+      let asked: TestRequest[] = [];
+
+      await vi.waitFor(() => {
+        asked = [...asked, ...backend.match(LIST)];
+        expect(asked).toHaveLength(1);
+      });
+
+      return asked[0];
+    }
+
+    // "1 ticket", not "1 tickets".
+    it('counts one ticket as one, with signal and without', async () => {
+      const list = await oneTicketSaved();
+      const fixture = render();
+      const page: HTMLElement = fixture.nativeElement;
+
+      (await listAsked()).flush(list);
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(page.textContent).toContain('1 ticket saved on this phone');
+      });
+      expect(page.textContent).not.toContain('1 tickets');
+    });
+
+    it('counts one ticket as one when there is no signal', async () => {
+      await oneTicketSaved();
+      const fixture = render();
+      const page: HTMLElement = fixture.nativeElement;
+
+      (await listAsked()).error(new ProgressEvent('error'));
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(page.textContent).toContain('No connection');
+      });
+      expect(page.textContent).toContain('1 ticket, updated');
+    });
   });
 
   it('says the camera needs https where the page was opened over plain http', () => {

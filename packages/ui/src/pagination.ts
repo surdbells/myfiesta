@@ -20,8 +20,8 @@ import { UiButton } from './button';
     @if (total() > 0) {
       <nav class="pager" [attr.aria-label]="'Pages of ' + noun()">
         <p class="pager__range" aria-live="polite">
-          <strong>{{ first() }}–{{ last() }}</strong> of
-          <strong>{{ total() }}</strong> {{ noun() }}
+          <strong>{{ first() === last() ? first() : first() + '–' + last() }}</strong> of
+          <strong>{{ total() }}</strong> {{ total() === 1 ? one() : noun() }}
         </p>
 
         <div class="pager__buttons">
@@ -76,6 +76,14 @@ export class UiPagination {
 
   /** What is being counted, plural and lowercase: "attendees", "orders". */
   readonly noun = input('results');
+
+  /**
+   * The same for exactly one, when it is not the plural without its final
+   * "s": "1 of 1 order", never "1–1 of 1 orders".
+   */
+  readonly singular = input<string | null>(null);
+
+  readonly one = computed(() => this.singular() ?? this.noun().replace(/s$/, ''));
 
   readonly changed = output<number>();
 

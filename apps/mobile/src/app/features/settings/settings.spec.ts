@@ -19,6 +19,8 @@ import { Discover } from '../../core/discovery';
 import { Reminders } from '../../core/reminders';
 import { SessionStore } from '../../core/session';
 import { Theme } from '../../core/theme';
+import { Dialogs, type ConfirmRequest } from '../../ui';
+import manifest from '../../../../package.json';
 import { Settings } from './settings';
 
 /**
@@ -210,5 +212,100 @@ describe('Settings, deleting the account', () => {
     expect(page.erasure()?.refused).toBe('You are the only owner of Lagos Nights.');
     expect(page.deleteReady()).toBe(false);
     expect(clear).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Signing out, and which build this is.
+ *
+ * "Sign out" opened a sheet asking "Sign out?", whose own Sign out button then
+ * asked again in the confirmation every action uses — two questions, saying
+ * two different things about the tickets. And the foot of the screen said
+ * "myFiesta 2.0.0", typed by hand, while the stores had 18.0.0.
+ */
+describe('Settings, signing out and the version', () => {
+  let asked: ConfirmRequest[];
+  let yes: boolean;
+  let signOut: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    asked = [];
+    yes = true;
+    signOut = vi.fn(async () => undefined);
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'sign-in', children: [] }]),
+        { provide: Api, useValue: { me: async () => ({ name: 'Ada Okafor', email: 'ada@example.test', email_verified: true, phone: null, timezone: null, organizations: [] }) } },
+        {
+          provide: SessionStore,
+          useValue: {
+            session: signal({ scope: 'attendee', token: 't', name: 'Ada Okafor', email: 'ada@example.test', organizations: [] }),
+            signedIn: () => true,
+            locked: () => false,
+            organization: () => null,
+            identify: async () => undefined,
+            signOut,
+          },
+        },
+        {
+          provide: Dialogs,
+          useValue: {
+            confirm: vi.fn(async (request: ConfirmRequest) => {
+              asked.push(request);
+              return yes;
+            }),
+          },
+        },
+        { provide: Theme, useValue: { choice: signal('system'), resolved: computed(() => 'light'), set: async () => undefined } },
+        { provide: Reminders, useValue: { available: false, on: signal(false), refused: signal(false), set: async () => undefined } },
+        { provide: Discover, useValue: { siteBase: () => 'https://myfiesta.test' } },
+      ],
+    });
+  });
+
+  async function open() {
+    const fixture = TestBed.createComponent(Settings);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    return fixture;
+  }
+
+  const button = (root: HTMLElement, label: string) =>
+    [...root.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.replace(/\s+/g, ' ').trim() === label);
+
+  it('asks once, and signs out on the answer', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+
+    button(root, 'Sign out')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0].title).toBe('Sign out?');
+    expect(asked[0].consequences?.join(' ')).toContain('Your tickets stay on your account.');
+    expect(signOut).toHaveBeenCalledTimes(1);
+    // No second question on the screen behind it.
+    expect(root.textContent).not.toContain('Stay signed in');
+  });
+
+  it('stays signed in when the answer is no', async () => {
+    yes = false;
+    const fixture = await open();
+
+    button(fixture.nativeElement as HTMLElement, 'Sign out')!.click();
+    await fixture.whenStable();
+
+    expect(asked).toHaveLength(1);
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('says the version the stores have, from package.json', async () => {
+    const fixture = await open();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('.version')?.textContent?.trim()).toBe(`myFiesta ${manifest.version}`);
   });
 });

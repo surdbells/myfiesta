@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, DOCUMENT, Injector, afterNextRender, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
 import { BadgeCheck, CalendarDays, Clock, Heart, MapPin, Share2 } from 'lucide-angular';
@@ -45,6 +45,11 @@ export class EventDetail {
   /** The API did not answer, which is not the same as there being no event. */
   readonly unavailable = signal(false);
   readonly shared = signal(false);
+  /** The link, shown to copy by hand where neither sharing nor the clipboard worked. */
+  readonly shareLink = signal<string | null>(null);
+
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
 
   readonly formatMoney = formatMoney;
 
@@ -95,9 +100,41 @@ export class EventDetail {
     const event = this.event();
     if (!event) return '';
     if (event.is_sold_out) return 'Sold out';
-    if (!event.from_price || event.from_price.amount === 0) return 'Free';
+    if (this.free()) return 'Free';
 
     return formatMoney(event.from_price);
+  }
+
+  /**
+   * The cheapest ticket costs nothing.
+   *
+   * Said as "Free" on its own. Every price label here used to lead with
+   * "From" or "Starting from", which read as "From Free" on a free night.
+   */
+  free(): boolean {
+    const event = this.event();
+
+    return !!event && !event.is_sold_out && (!event.from_price || event.from_price.amount === 0);
+  }
+
+  /**
+   * Where the paid tickets start, beside a free one: "or from $25.00".
+   *
+   * Null when every ticket on sale is free, or the cheapest is not — then
+   * the one price already says it.
+   */
+  paidFrom(): string | null {
+    const event = this.event();
+    if (!event || !this.free()) return null;
+
+    const cheapest = event.ticket_types
+      .filter((type) => type.status === 'on_sale' && type.price.amount > 0)
+      .reduce<EventDetailModel['ticket_types'][number] | null>(
+        (low, type) => (low === null || type.price.amount < low.price.amount ? type : low),
+        null,
+      );
+
+    return cheapest ? formatMoney(cheapest.price) : null;
   }
 
   /** A plain search link — no keys, no geocoding, and it opens their maps app. */
@@ -123,16 +160,30 @@ export class EventDetail {
 
     const url = `https://myfiesta.ca/${event.slug}`;
 
-    try {
-      if (navigator.share) {
+    if (navigator.share) {
+      try {
         await navigator.share({ title: event.title, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        this.shared.set(true);
-        setTimeout(() => this.shared.set(false), 2000);
+
+        return;
+      } catch (error) {
+        // Dismissed the sheet: nothing to do. Refused by the browser is
+        // another matter, and the clipboard is tried next.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
       }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      this.shared.set(true);
+      setTimeout(() => this.shared.set(false), 2000);
     } catch {
-      // Dismissed the sheet; nothing to clean up.
+      // Neither would take it: no share sheet, and a clipboard the browser
+      // refuses (or has none, off a secure page). The button used to do
+      // nothing at all then. The link, selected, to copy by hand.
+      this.shareLink.set(url);
+      afterNextRender(() => this.document.querySelector<HTMLInputElement>('#share-link')?.select(), {
+        injector: this.injector,
+      });
     }
   }
 

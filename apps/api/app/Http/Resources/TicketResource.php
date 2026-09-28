@@ -27,6 +27,12 @@ class TicketResource extends JsonResource
                 'starts_at' => $this->event->starts_at,
                 'timezone' => $this->event->timezone,
                 'city' => $this->event->city,
+                // Where to go, as the ticket page on the site says it. The
+                // phone said only the city — "Where: Toronto" — at a door.
+                'venue' => $this->event->relationLoaded('venue') && $this->event->venue !== null ? [
+                    'name' => $this->event->venue->name,
+                    'address' => $this->event->venue->address_line,
+                ] : null,
             ]),
             /*
              * The receipt for the order this ticket came from — only to the

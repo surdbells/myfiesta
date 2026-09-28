@@ -181,7 +181,7 @@ class EventPerformance extends Page implements HasTable
                 ['label' => 'Tickets sold', 'value' => number_format($t['tickets']),
                     'hint' => number_format($a['sold']).' still valid'
                         .($a['capacity'] !== null
-                            ? ', '.Format::percent(Metrics::ratio($a['sold'], $a['capacity'])).' of '.number_format($a['capacity']).' places'
+                            ? ', '.Format::percent(Metrics::ratio($a['sold'], $a['capacity'])).' of '.number_format($a['capacity']).' '.str('place')->plural($a['capacity'])
                             : ' · at least one tier has no ceiling')
                         .($a['comps'] > 0 ? ' · '.number_format($a['comps']).' '.str('comp')->plural($a['comps']) : '')],
                 ['label' => 'Orders', 'value' => number_format($t['orders']),
@@ -189,7 +189,8 @@ class EventPerformance extends Page implements HasTable
                 ['label' => 'Refunded', 'value' => $money($t['refunded']),
                     'hint' => Format::percent($t['refund_rate']).' of gross · '.number_format($t['refunds']).' '.str('refund')->plural($t['refunds'])],
                 ['label' => 'Checked in', 'value' => Format::percent($a['rate']),
-                    'hint' => number_format($a['arrived']).' of '.number_format($a['people']).' people · '.number_format($m['check_ins']['turned_away']).' scans turned away'],
+                    'hint' => number_format($a['arrived']).' of '.number_format($a['people']).' '.($a['people'] === 1 ? 'person' : 'people')
+                        .' · '.number_format($m['check_ins']['turned_away']).' '.str('scan')->plural($m['check_ins']['turned_away']).' turned away'],
                 ['label' => 'Page views', 'value' => number_format($m['views']),
                     'hint' => $m['views'] > 0
                         ? Format::percent(Metrics::ratio($t['online_orders'], $m['views'])).' became online orders'
@@ -212,7 +213,7 @@ class EventPerformance extends Page implements HasTable
             'typeRevenue' => array_map(fn (array $type) => [
                 'label' => $type['name'].($type['removed'] ? ' (removed)' : ''),
                 'value' => $type['revenue'],
-                'hint' => number_format($type['tickets']).' tickets',
+                'hint' => number_format($type['tickets']).' '.str('ticket')->plural($type['tickets']),
             ], $m['ticket_types']),
             'split' => [
                 ['label' => 'Organizer keeps', 'value' => $m['split']['organizer'], 'slot' => 1],

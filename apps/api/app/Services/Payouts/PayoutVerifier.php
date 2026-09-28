@@ -28,11 +28,18 @@ class PayoutVerifier
     /**
      * The details in the clear, for somebody entitled to them, logged.
      *
+     * Opened to be checked, so not for somebody on the organization's own
+     * team, who may not verify them (below). Their console shows the last
+     * four like everybody else's; the admin is not a way round that.
+     *
      * @return array<string, string|null>
+     *
+     * @throws PayoutVerificationRefused
      */
     public function reveal(OrganizationPayoutDetail $detail, User $by, ?string $ip = null): array
     {
         $this->assertMayRead($by);
+        $this->assertNotTheirOwn($detail, $by);
 
         SensitiveDataAccess::record($by, OrganizationPayoutDetail::class, $detail->id, 'viewed', $ip);
 
@@ -74,11 +81,7 @@ class PayoutVerifier
          * organization is paid into is marking your own homework, and it is
          * the one case where a second person is the whole control.
          */
-        if ($by->organizations()->whereKey($detail->organization_id)->exists()) {
-            throw PayoutVerificationRefused::because(
-                'You are a member of this organization, so somebody else has to verify where it is paid.'
-            );
-        }
+        $this->assertNotTheirOwn($detail, $by);
 
         return DB::transaction(function () use ($detail, $by, $method, $note, $seen) {
             // Locked and re-read, so the comparison is against what is stored
@@ -142,6 +145,13 @@ class PayoutVerifier
     {
         if (! ($by->platform_role?->canReadSensitiveData() ?? false)) {
             throw PayoutVerificationRefused::because('Only administrators and finance can see or verify payout details.');
+        }
+    }
+
+    private function assertNotTheirOwn(OrganizationPayoutDetail $detail, User $by): void
+    {
+        if (OwnOrganization::includes($by, $detail->organization_id)) {
+            throw PayoutVerificationRefused::because(OwnOrganization::VERIFY_DETAILS);
         }
     }
 }

@@ -110,7 +110,11 @@ import {
                   <mf-badge tone="success">On sale</mf-badge>
                 }
                 @case ('draft') {
-                  <mf-badge tone="warning">Draft</mf-badge>
+                  @if (ev.off_sale_by_suspension) {
+                    <mf-badge tone="danger">Off sale</mf-badge>
+                  } @else {
+                    <mf-badge tone="warning">Draft</mf-badge>
+                  }
                 }
                 @case ('in_review') {
                   <mf-badge>In review</mf-badge>
@@ -143,7 +147,27 @@ import {
             </mf-card>
           }
 
-          @if (ev.status === 'draft' && session.can('events.publish')) {
+          <!--
+            While the organization is suspended nothing of its goes on sale
+            or into the queue, and the API refuses both. The screen used to
+            offer "Put back on sale" all the same — on a night the suspension
+            had taken off sale, with tickets sold — and the press was refused.
+          -->
+          @if (ev.status === 'draft' && ev.review.suspended) {
+            <mf-card class="draft suspended" role="status">
+              @if (ev.off_sale_by_suspension) {
+                <p class="draft-title">Off sale while you are suspended</p>
+                <p class="muted">
+                  myFiesta took it off sale when it suspended this organization. It goes back on sale by itself when
+                  the suspension is lifted, as long as nothing a buyer sees has changed. Tickets already sold still
+                  get in.
+                </p>
+              } @else {
+                <p class="draft-title">Not on sale yet</p>
+                <p class="muted">Nothing can be sent for review while this organization is suspended.</p>
+              }
+            </mf-card>
+          } @else if (ev.status === 'draft' && session.can('events.publish')) {
             <mf-card class="draft">
               <p class="draft-title">Not on sale yet</p>
               @if (ev.review.not_ready.length > 0) {
@@ -721,7 +745,7 @@ export class EventHub implements OnInit {
     const items: MenuAction[] = [];
 
     if (this.session.can('events.edit') && !cancelled) items.push({ key: 'edit', label: 'Edit details', icon: Pencil });
-    if (this.session.can('events.publish') && ev.status === 'draft' && ev.review.not_ready.length === 0) {
+    if (this.session.can('events.publish') && ev.status === 'draft' && !ev.review.suspended && ev.review.not_ready.length === 0) {
       items.push(
         ev.review.on_submit === 'publish'
           ? { key: 'publish', label: 'Put back on sale', icon: Eye, hint: 'Unchanged since it was approved' }

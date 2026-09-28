@@ -52,6 +52,11 @@ import {
       /* Full-bleed inside a padded screen, so a card can reach the edge. */
       margin: 0 calc(var(--space-5) * -1);
       padding: 0 var(--space-5);
+      /* And snapped to the screen's gutter, not the track's edge. Without it
+         the browser snapped the first card to the padding's outer edge: the
+         row opened scrolled by the gutter, and the first card's text touched
+         the side of the phone. */
+      scroll-padding-inline: var(--space-5);
       overscroll-behavior-x: contain;
     }
 

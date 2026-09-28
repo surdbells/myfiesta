@@ -131,9 +131,16 @@ import { PosterArt } from './poster-art';
           </span>
 
           <span class="evt__body grid content-start gap-1.5 p-4 max-sm:p-3">
-            <span class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-primary-text">
+            <span class="evt__when flex items-start gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-primary-text">
               <ui-icon class="shrink-0" [icon]="whenIcon" size="sm" />
-              <span class="truncate">{{ shortWhen() }}</span>
+              <!-- Wraps between the day and the time, never inside either:
+                   cut short, it lost the "p.m.". -->
+              <span class="min-w-0">
+                <span class="whitespace-nowrap">{{ whenParts()[0] }}</span>
+                @if (whenParts()[1]; as time) {
+                  &ngsp;<span class="whitespace-nowrap">{{ time }}</span>
+                }
+              </span>
             </span>
             <span class="evt__title line-clamp-2 text-base font-semibold leading-[1.3] max-sm:text-[15px]">{{ event().title }}</span>
             <span class="evt__where flex min-w-0 items-center gap-1.5 text-sm text-text-muted">
@@ -160,13 +167,16 @@ import { PosterArt } from './poster-art';
           </span>
         </a>
 
-        <!-- Inside the card, outside the link: a bookmark, not a navigation. -->
+        <!-- Inside the card, outside the link: a bookmark, not a navigation.
+             Named for its event whether saved or not — aria-pressed says
+             which. Saved, every heart on the page used to read "Saved — tap
+             to remove", with no way to tell them apart. -->
         <button
           class="absolute right-3 top-3 grid h-9 w-9 cursor-pointer place-items-center rounded-full border-0 bg-[color-mix(in_srgb,var(--color-neutral-950)_55%,transparent)] backdrop-blur-[4px] transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-[color-mix(in_srgb,var(--color-neutral-950)_80%,transparent)]"
           [class]="saves.has(event().slug) ? 'text-gold-400' : 'text-neutral-0'"
           type="button"
           [attr.aria-pressed]="saves.has(event().slug)"
-          [attr.aria-label]="saves.has(event().slug) ? 'Saved — tap to remove' : 'Save ' + event().title"
+          [attr.aria-label]="'Save ' + event().title"
           (click)="toggleSave($event)"
         >
           <ui-icon [icon]="saveIcon" size="sm" [class]="saves.has(event().slug) ? 'fill-current' : ''" />
@@ -205,25 +215,46 @@ export class EventCard {
   /** Nothing to buy on it — sold out, or sales closed — so the card goes quiet. */
   readonly soldOut = computed(() => this.event().is_sold_out || offSale(this.event().availability));
 
-  readonly shortWhen = computed(() =>
-    new Intl.DateTimeFormat('en-CA', {
-      // A night that has gone gets its year and loses its clock: the time
-      // somebody should have arrived is no use to anybody now, and a date
-      // with no year reads as one coming up.
-      ...(this.past()
-        ? { day: 'numeric' as const, month: 'short' as const, year: 'numeric' as const }
-        : {
-            weekday: 'short' as const,
-            day: 'numeric' as const,
-            month: 'short' as const,
-            hour: 'numeric' as const,
-            minute: '2-digit' as const,
-          }),
-      // The venue's zone, never the reader's. A Lagos event says 10pm to
-      // somebody reading in Toronto.
-      timeZone: this.event().timezone,
-    }).format(new Date(this.event().starts_at)),
+  /** The venue's zone, never the reader's: a Lagos event says 10pm to somebody reading in Toronto. */
+  private readonly whenFormat = computed(
+    () =>
+      new Intl.DateTimeFormat('en-CA', {
+        // A night that has gone gets its year and loses its clock: the time
+        // somebody should have arrived is no use to anybody now, and a date
+        // with no year reads as one coming up.
+        ...(this.past()
+          ? { day: 'numeric' as const, month: 'short' as const, year: 'numeric' as const }
+          : {
+              weekday: 'short' as const,
+              day: 'numeric' as const,
+              month: 'short' as const,
+              hour: 'numeric' as const,
+              minute: '2-digit' as const,
+            }),
+        timeZone: this.event().timezone,
+      }),
   );
+
+  readonly shortWhen = computed(() => this.whenFormat().format(new Date(this.event().starts_at)));
+
+  /**
+   * The same words in two pieces that each stay whole: the day, and the time.
+   *
+   * On a phone's two-column grid the line was cut to "MON, SEP 28, 7:00 …",
+   * which lost the one part of a time that says whether it is morning or
+   * night. Now a narrow card breaks between the two instead.
+   */
+  readonly whenParts = computed(() => {
+    const parts = this.whenFormat().formatToParts(new Date(this.event().starts_at));
+    const hour = parts.findIndex((part) => part.type === 'hour');
+    const text = (from: number, to?: number) =>
+      parts
+        .slice(from, to)
+        .map((part) => part.value)
+        .join('');
+
+    return hour <= 0 ? [text(0)] : [text(0, hour).trimEnd(), text(hour)];
+  });
 
   readonly price = computed(() => {
     const event = this.event();

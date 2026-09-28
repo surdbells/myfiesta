@@ -336,6 +336,33 @@ class PayoutRequestTest extends TestCase
         $this->assertSame($admin->id, $request->fresh()->decided_by);
     }
 
+    /**
+     * The total under "Asked for" is money waiting or paid. It added two
+     * withdrawn requests to a paid one: $2,437.90 where $100 had been asked
+     * for and sent.
+     */
+    public function test_the_total_counts_what_is_waiting_or_paid_and_nothing_withdrawn_or_refused(): void
+    {
+        $this->owed(200_000);
+        $requests = app(PayoutRequests::class);
+        $finance = $this->staff(PlatformRole::Finance);
+
+        $requests->cancel($requests->request($this->org, $this->owner, new Money(116_895, 'CAD')), $this->owner);
+        $requests->cancel($requests->request($this->org, $this->owner, new Money(116_895, 'CAD')), $this->owner);
+        $requests->reject($requests->request($this->org, $this->owner, new Money(50_000, 'CAD')), $finance, 'Not verified yet.');
+        $requests->pay($requests->request($this->org, $this->owner, new Money(10_000, 'CAD')), $finance, new Money(10_000, 'CAD'), 'interac');
+
+        $this->actingAs($this->staff(PlatformRole::Finance));
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(ListPayoutRequests::class)
+            ->filterTable('status', null)
+            ->assertSee('Waiting or paid')
+            ->assertSee('$100.00')
+            ->assertDontSee('$2,437.90')
+            ->assertDontSee('$2,937.90');
+    }
+
     public function test_rejecting_from_the_panel(): void
     {
         $request = $this->pending();

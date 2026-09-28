@@ -335,7 +335,8 @@ export class EventDetail {
   }
 
   /**
-   * When the email goes out, in the event's zone.
+   * When the email goes out, or when the event was sent for review, in the
+   * event's zone and saying which.
    *
    * Not the browser's. Everything else on this page is shown at the venue, and
    * an organizer in Lagos running a Toronto night reading "10:00 p.m." next to

@@ -108,6 +108,16 @@ role-restricted, and access is logged. Stripe Connect and Paystack split
 payments remain available later — that is why the gateway sits behind an
 interface.
 
+**Nobody decides money for their own organization.** Staff can also run
+events. A member of staff on an organization's team cannot pay or refuse its
+payout requests, record a settlement or a repayment for it, or open or verify
+its payout details: each of those is somebody else checking, and the person
+who asked for the money is never the one who pays it. The services refuse it
+(`OwnOrganization`), and the admin's buttons are shown switched off with the
+reason rather than refusing after the form is filled in. The same rule as an
+event's review, where the member of staff who sent it for review does not
+approve it.
+
 **An overdraft is an advance, and it is on the record.** Paying a payout
 request for more than the organization is owed is allowed in one place — staff
 paying the request — for administrators and finance only, after a second
@@ -185,7 +195,9 @@ password) ends it at once, including a link not yet opened.
 else.** Administrators suspend from the organization's page in the admin
 panel, with a reason kept on the record; staff choose whether the
 organization is shown it. Every event on sale goes back to a draft and is
-marked as taken off by the suspension; checkout, door sales, handing tickets
+marked as taken off by the suspension — not a night already over by its own
+listing, which sells nothing and stays among the organization's past events
+with its sales; checkout, door sales, handing tickets
 back for resale, telling the waitlist, campaigns and publishing are refused
 (the API answers 403 with one plain sentence and where to write); new payout
 requests are refused, waiting ones are held — not rejected — and nothing can
@@ -206,7 +218,10 @@ since they were on sale as they stood — or changed since they came off (the
 mark keeps a fingerprint of what buyers saw; an edit made during the
 suspension goes through review, since lifting it is a decision about the
 organization, not a look at its listings, and approves nothing) — and the
-rest stay drafts; the owners' email names both lists. An event the organizer takes off sale themselves
+rest stay drafts; the owners' email names both lists. A marked night that
+ended while the suspension lasted, unchanged, goes back among the past events
+instead: a past event left a draft could never be put back, since sending one
+for review needs a date to come. An event the organizer takes off sale themselves
 during the suspension loses its mark and stays a draft. One taken down during
 it counts as on sale before the takedown, so lifting both, in either order,
 puts it back. Held requests go back to waiting in their place. Suspending

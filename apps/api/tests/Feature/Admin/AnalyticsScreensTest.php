@@ -185,7 +185,8 @@ class AnalyticsScreensTest extends TestCase
             ->assertSee('Paid out in period')
             ->assertSee('33.3%')                    // repeat buyers
             // ada@ ordered twice this week and never before: more than once, not "before".
-            ->assertSee('1 of 3 buyers have ordered from them more than once')
+            // Said so that one, or none of one, reads as well as three.
+            ->assertSee('1 of 3 buyers ordered from them more than once')
             ->assertDontSee('had bought from them before')
             ->assertSee('4.0%')                     // views to orders
             ->assertSee('5 / 120 (4%)')             // tickets against capacity

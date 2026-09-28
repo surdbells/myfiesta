@@ -2,10 +2,10 @@ const { readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 /**
- * Writes the phone app's version into both native projects.
+ * Writes the phone app's version into both native projects, and into the app.
  *
  *   node tools/stamp-mobile-version.cjs           write it
- *   node tools/stamp-mobile-version.cjs --check   fail if either project disagrees
+ *   node tools/stamp-mobile-version.cjs --check   fail if any of them disagrees
  *
  * The version lives in one place, apps/mobile/package.json: `version` is what
  * people see in the store ("18.0.0") and `buildNumber` is what the stores
@@ -23,12 +23,18 @@ const { join } = require('node:path');
  * projects Android Studio and Xcode open already carry the right numbers. It
  * changes the files only when they disagree, so a sync with nothing new to
  * say leaves git clean.
+ *
+ * The app says its own version at the foot of Settings, from a constant
+ * stamped here with the rest (src/app/core/app-version.ts). It said 2.0.0,
+ * typed by hand, while the stores had 18.0.0; `--check` holds it to the
+ * manifest now, so a release cannot ship one number and show another.
  */
 
 const ROOT = join(__dirname, '..');
 const MANIFEST = join(ROOT, 'apps/mobile/package.json');
 const GRADLE = join(ROOT, 'apps/mobile/android/app/build.gradle');
 const XCODE = join(ROOT, 'apps/mobile/ios/App/App.xcodeproj/project.pbxproj');
+const APP = join(ROOT, 'apps/mobile/src/app/core/app-version.ts');
 
 /** Google Play's ceiling for versionCode. */
 const MAX_BUILD = 2100000000;
@@ -63,6 +69,14 @@ const targets = [
       [/CURRENT_PROJECT_VERSION = [^;]*;/g, `CURRENT_PROJECT_VERSION = ${buildNumber};`],
     ],
   },
+  {
+    file: APP,
+    name: 'src/app/core/app-version.ts',
+    rules: [
+      [/APP_VERSION = '[^']*'/g, `APP_VERSION = '${version}'`],
+      [/APP_BUILD = \d+/g, `APP_BUILD = ${buildNumber}`],
+    ],
+  },
 ];
 
 const stale = [];
@@ -95,7 +109,7 @@ if (check && stale.length > 0) {
 
 console.log(
   stale.length === 0 || check
-    ? `mobile: version ${version} (build ${buildNumber}), already in both native projects`
+    ? `mobile: version ${version} (build ${buildNumber}), already in both native projects and the app`
     : `mobile: version ${version} (build ${buildNumber}) written to ${stale.join(' and ')}`,
 );
 

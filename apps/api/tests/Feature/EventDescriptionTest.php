@@ -191,7 +191,38 @@ class EventDescriptionTest extends TestCase
         // one fewer entity for a client to decode.
         $this->assertSame("<h3>Lineup</h3><p>Doors\u{00A0}at <strong>9pm</strong></p>", $response->json('data.description'));
 
-        // For meta tags and link previews, where markup would show as tags.
-        $this->assertSame('Lineup Doors at 9pm', $response->json('data.description_text'));
+        // For meta tags and link previews, where markup would show as tags —
+        // each block its own sentence, so the heading does not run into the
+        // line under it.
+        $this->assertSame('Lineup. Doors at 9pm', $response->json('data.description_text'));
+    }
+
+    /**
+     * A list, as words.
+     *
+     * Its items were joined with a space, and an item rarely ends with a full
+     * stop, so the link preview, the search snippet, the structured data and
+     * the calendar entry all read "Photo ID may be requested Tickets are
+     * transferable up to the day" as one sentence.
+     */
+    public function test_plain_words_keep_list_items_apart(): void
+    {
+        $event = $this->event('<p>Good to know</p><ul><li>Photo ID may be requested</li>'
+            .'<li>Tickets are transferable up to the day</li><li>No re-entry!</li></ul><p>See you there.</p>');
+
+        $text = $this->getJson("/api/events/{$event->slug}")->assertOk()->json('data.description_text');
+
+        $this->assertSame(
+            'Good to know. Photo ID may be requested. Tickets are transferable up to the day. No re-entry! See you there.',
+            $text,
+        );
+        $this->assertSame($text, RichText::toText($event->description));
+    }
+
+    public function test_plain_words_leave_the_punctuation_the_organizer_typed(): void
+    {
+        $this->assertSame('Lineup: DJ Tunez, Wizkid', RichText::toText('<h3>Lineup:</h3><p>DJ Tunez, Wizkid</p>'));
+        $this->assertSame('Doors at nine', RichText::toText('<p>Doors at nine</p>'));
+        $this->assertNull(RichText::toText('<p>&nbsp;</p><p><br></p>'));
     }
 }

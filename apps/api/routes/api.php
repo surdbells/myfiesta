@@ -68,11 +68,26 @@ Route::get('/health/ready', ReadinessController::class)->middleware(ThrottleHeal
  * Quoting is rate limited more loosely than ordering: a cart recalculates on
  * every change, while creating an order takes locks and reserves stock.
  */
-Route::get('/discover', DiscoverController::class);
+
+/*
+ * The public reads that pages are rendered from: the same answer for
+ * everybody, whoever asks.
+ *
+ * Said so ("public"), and never kept past the moment (max-age=0 and
+ * must-revalidate), so nothing serves one stale and the event page's badges
+ * still agree with checkout. Laravel's default for a response that says
+ * nothing is "no-cache, private", and the public site's server render will
+ * not hand a private answer on to the browser — Angular's transfer cache
+ * refuses one — so every page it rendered fetched all of it again on
+ * arrival, and a city's page flashed back to its skeletons while it did.
+ */
+$publicRead = 'cache.headers:public;max_age=0;must_revalidate';
+
+Route::get('/discover', DiscoverController::class)->middleware($publicRead);
 // The listing's filters, and the pages each category and city has of its own.
-Route::get('/discover/facets', [DiscoverController::class, 'facets']);
-Route::get('/discover/categories/{slug}', [DiscoverController::class, 'category']);
-Route::get('/discover/cities/{slug}', [DiscoverController::class, 'city']);
+Route::get('/discover/facets', [DiscoverController::class, 'facets'])->middleware($publicRead);
+Route::get('/discover/categories/{slug}', [DiscoverController::class, 'category'])->middleware($publicRead);
+Route::get('/discover/cities/{slug}', [DiscoverController::class, 'city'])->middleware($publicRead);
 
 // Proxied by the public site as its own /sitemap.xml.
 Route::get('/sitemap.xml', SitemapController::class)->middleware('throttle:30,1');
@@ -82,8 +97,8 @@ Route::get('/event-categories', EventCategoryController::class);
 
 // Who operates the platform, for the site's contact and legal pages.
 Route::get('/contact', ContactController::class);
-Route::get('/events', [EventController::class, 'index']);
-Route::get('/events/{slug}', [EventController::class, 'show']);
+Route::get('/events', [EventController::class, 'index'])->middleware($publicRead);
+Route::get('/events/{slug}', [EventController::class, 'show'])->middleware($publicRead);
 Route::get('/events/{slug}/calendar.ics', [EventController::class, 'calendar'])->middleware('throttle:60,1');
 
 /*
@@ -104,7 +119,7 @@ Route::get('/orders/{reference}', OrderStatusController::class);
  * Public, because it is the link a promoter puts in a bio — and the page that
  * makes following somebody lead somewhere.
  */
-Route::get('/organizers/{slug}', [OrganizerController::class, 'show']);
+Route::get('/organizers/{slug}', [OrganizerController::class, 'show'])->middleware($publicRead);
 
 /*
  * A buyer's tickets, with the QR the door reads.

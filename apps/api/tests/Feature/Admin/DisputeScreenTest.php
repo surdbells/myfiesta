@@ -125,6 +125,27 @@ class DisputeScreenTest extends TestCase
             ->assertSee('What was sent');
     }
 
+    /**
+     * Rebuilt, the page shows what was put together at once. It said
+     * "Nothing has been put together yet" until reloaded: the form had
+     * been built, empty, before the button was pressed.
+     */
+    public function test_rebuilding_shows_the_fields_without_a_reload(): void
+    {
+        $this->signIn(PlatformRole::Finance);
+        $dispute = $this->dispute('product_not_received', 5);
+        $dispute->evidence()->delete();
+
+        Livewire::test(ViewDispute::class, ['record' => $dispute->getRouteKey()])
+            ->assertSee('Nothing has been put together yet.')
+            ->callAction('rebuild')
+            ->assertNotified('Evidence put together again')
+            ->assertDontSee('Nothing has been put together yet.')
+            ->assertSee('Tickets emailed to the buyer')
+            ->assertSchemaStateSet(['customer_name' => 'Ada Okafor'], 'form')
+            ->assertActionVisible('submit');
+    }
+
     public function test_accepting_from_the_page_asks_why(): void
     {
         $this->signIn(PlatformRole::Admin);

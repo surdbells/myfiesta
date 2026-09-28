@@ -305,10 +305,23 @@ class ViewDispute extends ViewRecord
                 : null);
     }
 
-    /** Read the dispute again after something changed it, and refill the words. */
+    /**
+     * Read the dispute again after something changed it, and refill the words.
+     *
+     * The form is built again first. It was built from the evidence as this
+     * request found it — before a rebuild, none, and so "nothing has been put
+     * together yet" and no fields — and filling that would leave the page
+     * saying so until it was reloaded. The same for the overview and the
+     * details, which say where the dispute stands.
+     */
     private function afterwards(): void
     {
         $this->dispute()->refresh()->unsetRelation('evidence');
+
+        foreach (['infolist', 'form', 'details'] as $schema) {
+            $this->cacheSchema($schema);
+        }
+
         $this->fillEvidence();
     }
 

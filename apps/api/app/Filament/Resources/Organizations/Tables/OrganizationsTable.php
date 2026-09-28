@@ -8,6 +8,8 @@ use App\Filament\Support\Listing;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
+use App\Services\Discovery\EventWindows;
+use App\Services\Payouts\OwnOrganization;
 use App\Services\Payouts\SettlementRecorder;
 use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
@@ -55,7 +57,9 @@ class OrganizationsTable
                 ->withCount([
                     'members',
                     'events',
-                    'events as on_sale_count' => fn (Builder $events) => $events->where('status', 'published'),
+                    // Not a night that is over: it stays published, among
+                    // their past events, and sells nothing.
+                    'events as on_sale_count' => fn (Builder $events) => EventWindows::onSale($events, now()),
                 ])
                 ->addSelect([
                     // The first owner, which is who support usually needs to
@@ -226,8 +230,8 @@ class OrganizationsTable
                     ->trueLabel('Has events on sale')
                     ->falseLabel('Nothing on sale')
                     ->queries(
-                        true: fn (Builder $query) => $query->whereHas('events', fn (Builder $events) => $events->where('status', 'published')),
-                        false: fn (Builder $query) => $query->whereDoesntHave('events', fn (Builder $events) => $events->where('status', 'published')),
+                        true: fn (Builder $query) => $query->whereHas('events', fn (Builder $events) => EventWindows::onSale($events, now())),
+                        false: fn (Builder $query) => $query->whereDoesntHave('events', fn (Builder $events) => EventWindows::onSale($events, now())),
                     ),
 
                 Listing::dateRange('joined', 'created_at', 'Joined'),
@@ -283,6 +287,8 @@ class OrganizationsTable
                         PlatformRole::Admin,
                         PlatformRole::Finance,
                     ) ?? false))
+                    ->disabled(fn (Organization $record) => OwnOrganization::includesCurrentUser($record))
+                    ->tooltip(fn (Organization $record) => OwnOrganization::includesCurrentUser($record) ? OwnOrganization::RECORD_PAYOUT : null)
                     ->modalHeading(fn (Organization $record) => 'Record a settlement to '.$record->name.'?')
                     ->modalDescription('For money that has already left myFiesta’s account. It is written to the ledger and lowers what they are owed in that currency, and it cannot be taken back from here. Recorded under your name.')
                     ->modalSubmitActionLabel('Record settlement')

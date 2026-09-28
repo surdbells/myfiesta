@@ -30,8 +30,9 @@ class EventController extends Controller
 
     public function show(string $slug, Availability $availability)
     {
-        // Never cached: this is the page the ticket steppers are on, and its
-        // badges have to agree with what checkout is about to allow.
+        // Never served from a cache: this is the page the ticket steppers are
+        // on, and its badges have to agree with what checkout is about to
+        // allow. Public, but asked again every time (routes/api.php).
         $event = Event::query()
             ->where('slug', $slug)
             ->where('status', 'published')

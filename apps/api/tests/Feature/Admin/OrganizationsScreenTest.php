@@ -19,6 +19,7 @@ use App\Models\PayoutRequest;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Organizations\Suspension;
+use Filament\Infolists\Components\TextEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
@@ -196,6 +197,45 @@ class OrganizationsScreenTest extends TestCase
             ->assertSuccessful();
     }
 
+    /**
+     * "On sale" is what can still be bought: published, and not over by its
+     * own listing. It counted every published event, so Lagos Nights, with
+     * one night to come and three behind it, read "4 on sale now".
+     */
+    public function test_on_sale_counts_only_nights_that_can_still_sell(): void
+    {
+        $this->actAs($this->staff(PlatformRole::Finance));
+
+        $lagos = $this->organization('Lagos Nights');
+        $this->event($lagos, ['title' => 'Detty December', 'starts_at' => now()->addMonths(2)]);
+        foreach (['Afrobeats Rooftop' => 31, 'Amapiano Sundays' => 27, 'Lagos to Toronto' => 2] as $title => $daysAgo) {
+            $this->event($lagos, ['title' => $title, 'starts_at' => now()->subDays($daysAgo)]);
+        }
+        // Began an hour ago and on until two: still selling.
+        $tonight = $this->organization('Tonight Only');
+        $this->event($tonight, ['starts_at' => now()->subHour(), 'ends_at' => now()->addHours(4)]);
+        $finished = $this->organization('Finished Nights');
+        $this->event($finished, ['starts_at' => now()->subWeek()]);
+
+        Livewire::test(ListOrganizations::class)
+            ->assertTableColumnStateSet('on_sale_count', 1, $lagos)
+            ->assertTableColumnStateSet('on_sale_count', 1, $tonight)
+            ->assertTableColumnStateSet('on_sale_count', 0, $finished)
+            ->filterTable('on_sale', true)
+            ->assertCanSeeTableRecords([$lagos, $tonight])
+            ->assertCanNotSeeTableRecords([$finished])
+            ->resetTableFilters()
+            ->filterTable('on_sale', false)
+            ->assertCanSeeTableRecords([$finished])
+            ->assertCanNotSeeTableRecords([$lagos, $tonight]);
+
+        $page = Livewire::test(ViewOrganization::class, ['record' => $lagos->getKey()]);
+        $onSale = collect($page->instance()->getSchema('infolist')->getFlatComponents(withHidden: true))
+            ->first(fn ($component) => $component instanceof TextEntry && $component->getName() === 'on_sale_total');
+
+        $this->assertSame('1', $onSale->getState());
+    }
+
     public function test_an_administrator_suspends_from_the_page_and_lifts_it(): void
     {
         $admin = $this->actAs($this->staff(PlatformRole::Admin));
@@ -216,7 +256,9 @@ class OrganizationsScreenTest extends TestCase
         Livewire::test(ViewOrganization::class, ['record' => $organization->getKey()])
             ->callAction('suspend', data: ['reason' => 'Chargebacks on three events in a week.', 'share_reason' => true])
             ->assertHasNoActionErrors()
-            ->assertNotified('Organization suspended');
+            ->assertNotified('Organization suspended')
+            // The "1 suspended" beside Organizations is drawn again now, not on the next page.
+            ->assertDispatched('refresh-sidebar');
 
         $organization->refresh();
         $this->assertTrue($organization->isSuspended());
@@ -232,7 +274,8 @@ class OrganizationsScreenTest extends TestCase
             ->assertActionHidden('suspend')
             ->callAction('unsuspend', data: ['note' => 'Bank confirmed they were errors.'])
             ->assertHasNoActionErrors()
-            ->assertNotified('Suspension lifted');
+            ->assertNotified('Suspension lifted')
+            ->assertDispatched('refresh-sidebar');
 
         $this->assertFalse($organization->fresh()->isSuspended());
         $this->assertSame('published', $event->fresh()->status);

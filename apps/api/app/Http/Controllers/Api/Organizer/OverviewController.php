@@ -149,9 +149,12 @@ class OverviewController extends Controller
 
         return [
             'upcoming_events' => (int) (clone $upcoming)->count(),
+            // The organizer's own drafts, not the nights a suspension took
+            // off sale (attention() has why).
             'draft_events' => (int) Event::query()
                 ->where('organization_id', $organization->id)
                 ->where('status', 'draft')
+                ->whereNull('unpublished_by_suspension_at')
                 ->count(),
             'tickets_upcoming' => (int) DB::table('tickets')
                 ->whereIn('event_id', (clone $upcoming)->select('id'))
@@ -348,9 +351,15 @@ class OverviewController extends Controller
 
         // Drafts whose date is approaching. Not an error, but the thing an
         // organizer most often means to do and forgets.
+        //
+        // Not one the suspension took off sale. It is a draft only in the
+        // column: it was on sale, with tickets sold, until the platform
+        // suspended the organization, and it goes back by itself when that is
+        // lifted. Listed here it read "It is not visible to anybody yet".
         $stuckDrafts = Event::query()
             ->where('organization_id', $organization->id)
             ->where('status', 'draft')
+            ->whereNull('unpublished_by_suspension_at')
             ->whereBetween('starts_at', [now(), now()->addDays(21)])
             ->get();
 

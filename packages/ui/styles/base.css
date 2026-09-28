@@ -475,6 +475,11 @@ textarea[aria-invalid='true'] {
 
 .field {
   display: grid;
+  /* Rows at their own height, from the top. A field beside a taller one — a
+     hint under its neighbour — is stretched to the row's height, and a grid
+     shares the extra between its rows: the label grew and pushed the input
+     down, so two inputs side by side no longer lined up. */
+  align-content: start;
   gap: var(--space-2);
 }
 

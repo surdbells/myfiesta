@@ -4,6 +4,7 @@ namespace App\Filament\Resources\PayoutDetails\Tables;
 
 use App\Filament\Support\Listing;
 use App\Models\OrganizationPayoutDetail;
+use App\Services\Payouts\OwnOrganization;
 use App\Services\Payouts\PayoutVerificationRefused;
 use App\Services\Payouts\PayoutVerifier;
 use Filament\Actions\Action;
@@ -126,13 +127,22 @@ class PayoutDetailsTable
             ->icon('heroicon-o-shield-check')
             ->color('success')
             ->visible(fn (OrganizationPayoutDetail $record) => ! $record->isVerified())
+            // Somebody on the organization's own team may not verify its
+            // details, so the details are not opened for them either.
+            ->disabled(fn (OrganizationPayoutDetail $record) => OwnOrganization::includesCurrentUser($record->organization_id))
+            ->tooltip(fn (OrganizationPayoutDetail $record) => OwnOrganization::includesCurrentUser($record->organization_id) ? OwnOrganization::VERIFY_DETAILS : null)
             ->modalHeading(fn (OrganizationPayoutDetail $record) => 'Payout details for '.$record->organization?->name)
             ->modalDescription('Opening this is logged. Confirm the details with the organizer through a channel they did not just give you — never a phone number or address from the same change.')
             ->modalSubmitActionLabel('Mark verified')
-            ->fillForm(function (OrganizationPayoutDetail $record): array {
-                $details = app(PayoutVerifier::class)->reveal($record, auth()->user(), request()->ip());
+            ->fillForm(function (OrganizationPayoutDetail $record, Action $action): array {
+                try {
+                    return app(PayoutVerifier::class)->reveal($record, auth()->user(), request()->ip())
+                        + ['seen' => $record->fingerprint()];
+                } catch (PayoutVerificationRefused $refused) {
+                    Notification::make()->title('Not opened')->body($refused->getMessage())->danger()->send();
 
-                return $details + ['seen' => $record->fingerprint()];
+                    $action->cancel();
+                }
             })
             ->schema(fn (OrganizationPayoutDetail $record) => [
                 ...collect([

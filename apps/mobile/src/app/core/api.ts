@@ -25,7 +25,19 @@ export interface Ticket {
   status: 'valid' | 'checked_in' | string;
   type: string | null;
   holder_name: string | null;
-  event: { slug: string; title: string; starts_at: string; timezone: string; city: string };
+  event: {
+    slug: string;
+    title: string;
+    starts_at: string;
+    timezone: string;
+    city: string;
+    /**
+     * Where the door is: the venue and its street. Null for a night with no
+     * venue on file, and absent from a list saved on this phone before the
+     * API sent it.
+     */
+    venue?: { name: string; address: string | null } | null;
+  };
   /**
    * What was paid for the order it came from, only on a ticket this account
    * bought. Null on one somebody passed on, and absent from a list saved

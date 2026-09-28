@@ -16,6 +16,8 @@ use App\Models\OrganizationPayoutDetail;
 use App\Models\SensitiveDataAccess;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Staff\StaffAccess;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -210,6 +212,112 @@ class AuditLogScreenTest extends TestCase
             ->assertSee('Payout details')
             ->filterTable('kind', 'identity')
             ->assertCanNotSeeTableRecords([$read]);
+    }
+
+    /**
+     * As they were when they did it, not as they are now.
+     *
+     * Found after an organizer was made an administrator for a click-through:
+     * every payout she had asked for and every key she had made the week
+     * before read "myFiesta staff · Administrator", and the staff filter
+     * found 52 of 59 entries, because both asked what her role was now.
+     */
+    public function test_who_did_it_is_read_as_they_were_then_not_as_they_are_now(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00:00', 'UTC'));
+        $admin = $this->signIn($this->staffMember(PlatformRole::Admin));
+        $organization = Organization::factory()->create(['name' => 'Lagos Nights']);
+        $ada = User::factory()->create(['name' => 'Ada Okoro', 'email_verified_at' => now()]);
+        $auditor = app(Auditor::class);
+
+        // An organizer, asking to be paid.
+        $this->travelTo(CarbonImmutable::parse('2026-09-12 10:00:00', 'UTC'));
+        $asked = $auditor->record('payout_request.created', $organization, $ada, $organization->id);
+
+        // Made an administrator from the server's console, and paying one as staff.
+        $this->travelTo(CarbonImmutable::parse('2026-09-28 10:32:55', 'UTC'));
+        app(StaffAccess::class)->grant($ada->email, PlatformRole::Admin, null);
+        $granted = AuditLog::query()->where('action', 'staff.granted')->sole();
+
+        $this->travelTo(CarbonImmutable::parse('2026-09-28 11:00:00', 'UTC'));
+        $paid = $auditor->record('payout_request.paid', $organization, $ada->fresh(), $organization->id);
+
+        // Revoked the next day, and an organizer again.
+        $this->travelTo(CarbonImmutable::parse('2026-09-29 09:00:00', 'UTC'));
+        app(StaffAccess::class)->revoke($ada->fresh(), $admin);
+        $revoked = AuditLog::query()->where('action', 'staff.revoked')->sole();
+
+        $this->travelTo(CarbonImmutable::parse('2026-09-30 09:00:00', 'UTC'));
+        $later = $auditor->record('api_key.created', $organization, $ada->fresh(), $organization->id);
+
+        Livewire::test(ListAuditLogs::class)
+            ->assertTableColumnHasDescription('actor_label', null, $asked)
+            ->assertTableColumnHasDescription('actor_label', 'myFiesta staff · Administrator', $paid)
+            ->assertTableColumnHasDescription('actor_label', null, $later)
+            ->assertTableColumnHasDescription('actor_label', 'myFiesta staff · Administrator', $revoked)
+            // Only what was done as staff — hers while she was, and the
+            // revoking administrator's — and not the console's grant.
+            ->filterTable('staff', true)
+            ->assertCanSeeTableRecords([$paid, $revoked])
+            ->assertCanNotSeeTableRecords([$asked, $later, $granted])
+            ->resetTableFilters()
+            ->filterTable('staff', false)
+            ->assertCanSeeTableRecords([$asked, $later, $granted])
+            ->assertCanNotSeeTableRecords([$paid, $revoked]);
+
+        $this->get(AuditLogResource::getUrl('view', ['record' => $asked]))
+            ->assertSuccessful()
+            ->assertSee('Ada Okoro')
+            ->assertDontSee('Ada Okoro (myFiesta staff');
+
+        $this->get(AuditLogResource::getUrl('view', ['record' => $paid]))
+            ->assertSuccessful()
+            ->assertSee('Ada Okoro (myFiesta staff · Administrator)');
+    }
+
+    /** Scheduled work and the server's console are not a person whose account has gone. */
+    public function test_what_nobody_signed_in_did_is_named_for_what_did_it(): void
+    {
+        $this->signIn($this->staffMember(PlatformRole::Admin));
+        $someone = User::factory()->create(['name' => 'Kemi Ade', 'email_verified_at' => now()]);
+
+        $scheduled = app(Auditor::class)->record('door_pass.opened');
+        app(StaffAccess::class)->grant($someone->email, PlatformRole::Support, null);
+        $fromTheConsole = AuditLog::query()->where('action', 'staff.granted')->sole();
+
+        $this->assertSame('System', $scheduled->actorName());
+        $this->assertSame('Server console', $fromTheConsole->actorName());
+
+        Livewire::test(ListAuditLogs::class)
+            ->assertTableColumnStateSet('actor_label', 'System', $scheduled)
+            ->assertTableColumnStateSet('actor_label', 'Server console', $fromTheConsole)
+            ->assertTableColumnHasDescription('actor_label', null, $scheduled)
+            ->assertDontSee('Someone no longer on the account');
+    }
+
+    public function test_a_sensitive_read_is_labelled_with_the_role_held_when_it_was_read(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00:00', 'UTC'));
+        $admin = $this->signIn($this->staffMember(PlatformRole::Admin));
+        $organization = Organization::factory()->create(['name' => 'Abuja Sounds']);
+        $detail = OrganizationPayoutDetail::query()->forceCreate([
+            'organization_id' => $organization->id,
+            ...$this->payoutDetailColumns(),
+        ]);
+        $fola = User::factory()->create(['name' => 'Fola Finance', 'email_verified_at' => now()]);
+
+        $this->travelTo(CarbonImmutable::parse('2026-09-02 09:00:00', 'UTC'));
+        app(StaffAccess::class)->grant($fola->email, PlatformRole::Finance, $admin);
+
+        $this->travelTo(CarbonImmutable::parse('2026-09-03 09:00:00', 'UTC'));
+        $read = SensitiveDataAccess::record($fola, OrganizationPayoutDetail::class, $detail->id, 'viewed');
+
+        // Gone since: the read was still made as finance.
+        $this->travelTo(CarbonImmutable::parse('2026-09-04 09:00:00', 'UTC'));
+        app(StaffAccess::class)->revoke($fola->fresh(), $admin);
+
+        Livewire::test(ListSensitiveDataAccesses::class)
+            ->assertTableColumnHasDescription('user.name', 'myFiesta staff · Finance', $read);
     }
 
     /** @return array<string, mixed> the columns a payout detail cannot be saved without */

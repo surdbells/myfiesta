@@ -7,6 +7,7 @@ use App\Filament\Support\Listing;
 use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Audit\StaffRoles;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -39,11 +40,12 @@ final class AuditLogsTable
                 TextColumn::make('actor_label')
                     ->label('Who')
                     ->state(fn (AuditLog $record): string => $record->actorName())
+                    // As they were when they did it, not as they are now: an
+                    // organizer made staff since did not do this as staff.
                     ->description(fn (AuditLog $record): ?string => match (true) {
-                        $record->actor_id === null && $record->actor_label === null => 'System',
+                        $record->isSystem() => null,
                         AuditEntries::isImpersonation($record) => 'myFiesta staff, acting as the organization',
-                        $record->actor?->platform_role !== null => 'myFiesta staff · '.$record->actor->platform_role->label(),
-                        default => null,
+                        default => StaffRoles::shared()->describe($record->actor, $record->created_at),
                     })
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $q) => $q
                         ->where('audit_logs.actor_label', 'ilike', self::like($search))
@@ -99,16 +101,19 @@ final class AuditLogsTable
                         ->mapWithKeys(fn (string $type) => [$type => Str::headline(class_basename($type))])
                         ->sort()
                         ->all()),
+                // Staff when they did it (StaffRoles), not staff now.
                 TernaryFilter::make('staff')
                     ->label('Done by')
                     ->placeholder('Anybody')
                     ->trueLabel('myFiesta staff')
                     ->falseLabel('Organizers, buyers and the system')
                     ->queries(
-                        true: fn (Builder $query): Builder => $query->whereIn('audit_logs.actor_id', User::query()->whereNotNull('platform_role')->select('id')),
-                        false: fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                            ->whereNull('audit_logs.actor_id')
-                            ->orWhereNotIn('audit_logs.actor_id', User::query()->whereNotNull('platform_role')->select('id'))),
+                        true: fn (Builder $query): Builder => $query->whereRaw(...StaffRoles::heldSql('audit_logs.actor_id', 'audit_logs.created_at')),
+                        false: function (Builder $query): Builder {
+                            [$held, $bindings] = StaffRoles::heldSql('audit_logs.actor_id', 'audit_logs.created_at');
+
+                            return $query->whereRaw('not '.$held, $bindings);
+                        },
                     ),
                 TernaryFilter::make('impersonating')
                     ->label('Acting as an organization')

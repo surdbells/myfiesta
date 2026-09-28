@@ -454,6 +454,19 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '502':
+          description: |
+            The payment page could not be opened. Nothing was charged, and the
+            order keeps its hold; send its reference back as `retry_of` with
+            the next attempt, which takes that hold over.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, reference]
+                properties:
+                  message: { type: string }
+                  reference: { type: string }
 
   /api/orders/{reference}:
     get:
@@ -2420,6 +2433,16 @@ components:
               description: |
                 Placed inside an organizer's own website through the embed.
                 A label for their reports; it changes nothing about the sale.
+            retry_of:
+              type: [string, 'null']
+              maxLength: 16
+              description: |
+                The reference a 502 came back with, when the payment page
+                could not be opened for the last press. That attempt, if it
+                is still an unpaid order of this event with no payment page,
+                is closed and its hold passed to the new order in the same
+                transaction, so a retry never holds the same places twice. A
+                reference that is anything else is ignored.
             # No return_url. The spec used to declare one and the API has
             # never read it: where a buyer lands after paying is built from
             # the platform's own PUBLIC_URL, which is what keeps it from being

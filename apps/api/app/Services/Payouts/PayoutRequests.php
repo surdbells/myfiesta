@@ -36,6 +36,9 @@ use Illuminate\Support\Facades\Mail;
  *   so the balance goes below zero by the advance and nothing else.
  * - While the balance is not above zero nothing more can be asked for. The
  *   next sales pay the advance back first (see Overdrafts).
+ * - Staff on the organization's own team do not decide its requests, so the
+ *   person who asked for the money is never the one who pays it
+ *   (OwnOrganization).
  * - Nothing is asked for or paid while the organization is suspended. A
  *   request already waiting is held, not rejected (see Suspension), and can
  *   still be withdrawn by the organizer or refused by staff with a reason.
@@ -162,6 +165,11 @@ class PayoutRequests
             throw PayoutRequestRefused::because('Only platform administrators and finance can pay payout requests.');
         }
 
+        // Advance or not: never by somebody on the organization's own team.
+        if (OwnOrganization::includes($by, $request->organization_id)) {
+            throw PayoutRequestRefused::because(OwnOrganization::DECIDE_REQUEST);
+        }
+
         if ($amount->currency !== $request->currency) {
             throw PayoutRequestRefused::because('A request in '.$request->currency.' is paid in '.$request->currency.'.');
         }
@@ -253,6 +261,10 @@ class PayoutRequests
     {
         if (! $by->platform_role?->canSettle()) {
             throw PayoutRequestRefused::because('Only platform administrators and finance can decide payout requests.');
+        }
+
+        if (OwnOrganization::includes($by, $request->organization_id)) {
+            throw PayoutRequestRefused::because(OwnOrganization::DECIDE_REQUEST);
         }
 
         if (trim($reason) === '') {

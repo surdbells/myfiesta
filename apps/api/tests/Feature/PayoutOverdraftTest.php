@@ -972,12 +972,29 @@ class PayoutOverdraftTest extends TestCase
 
         $this->assertSame(0, Repayment::count());
 
+        // The row says what it is now as soon as the repayment is recorded,
+        // not after a reload: $125.00 outstanding, $75.00 repaid.
         Livewire::test(OverdraftsPage::class)
+            ->assertTableColumnStateSet('repaid_text', '$0.00', $key)
             ->callTableAction('recordRepayment', $key, ['amount' => '75.00', 'reference' => 'INTERAC-555', 'reason' => 'Sent by the owner.', 'received' => true])
-            ->assertHasNoTableActionErrors();
+            ->assertHasNoTableActionErrors()
+            ->assertSee('$125.00')
+            ->assertDontSee('$200.00')
+            ->assertDispatched('refresh-sidebar');
 
         $this->assertSame(7_500, (int) Repayment::sole()->amount);
         $this->assertSame(-12_500, $this->balance());
+
+        // Repaid in full: the count beside Overdrafts goes with it, rather
+        // than for up to a minute after.
+        $this->assertSame('1', OverdraftsPage::getNavigationBadge());
+
+        Livewire::test(OverdraftsPage::class)
+            ->callTableAction('recordRepayment', $key, ['amount' => '125.00', 'reference' => 'INTERAC-556', 'reason' => 'The rest, sent by the owner.', 'received' => true])
+            ->assertHasNoTableActionErrors()
+            ->assertSee('Nobody owes myFiesta money');
+
+        $this->assertNull(OverdraftsPage::getNavigationBadge());
     }
 
     public function test_the_organization_page_shows_what_is_owed_and_who_decided_it(): void

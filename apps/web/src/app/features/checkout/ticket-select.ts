@@ -8,7 +8,7 @@ import { Api } from '../../core/api';
 import { AddOn, Availability, EventDetail, Money, Quote, TicketType } from '../../core/api.types';
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, viewedOnce } from '../../core/embed';
-import { formatMoney } from '../../core/money';
+import { formatMoney, formatPrice } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { AvailabilityBadge } from '../../shared/availability-badge';
 import { CheckoutSteps } from '../../shared/checkout-steps';
@@ -43,6 +43,7 @@ export class TicketSelect {
   readonly quote = signal<Quote | null>(null);
 
   readonly formatMoney = formatMoney;
+  readonly formatPrice = formatPrice;
 
   readonly slug = this.route.snapshot.paramMap.get('slug')!;
 

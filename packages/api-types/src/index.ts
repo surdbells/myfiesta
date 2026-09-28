@@ -111,8 +111,12 @@ export interface CampaignDraft {
   scheduled_for: string | null;
 }
 
-/** Something another system is told about. */
-export type WebhookEventName = 'order.paid' | 'order.refunded' | 'ticket.checked_in';
+/**
+ * Something another system is told about — exactly WebhookEndpoint::EVENTS
+ * (WebhookEventMirrorTest), so every screen that labels them has a label for
+ * each.
+ */
+export type WebhookEventName = 'order.paid' | 'order.refunded' | 'ticket.checked_in' | 'order.disputed';
 
 export interface WebhookEndpoint {
   id: string;
@@ -338,9 +342,15 @@ export interface EventReviewState {
    * (nothing a buyer sees changed since it was approved, or it is the approved
    * night of a series on a new date, and staff have not sent it back since);
    * `review` sends it to the queue. Null when it is not a draft that can be
-   * sent.
+   * sent — among them every draft of a suspended organization.
    */
   on_submit: 'publish' | 'review' | null;
+  /**
+   * The organization is suspended: nothing of its can be sent for review or
+   * put on sale until that is lifted, so no screen should offer to.
+   * Optional for an answer a client kept from before the API said.
+   */
+  suspended?: boolean;
   /**
    * Whether what a buyer sees is still exactly what was last approved, and
    * staff have not sent it back since. For an event on sale: taken off now,
@@ -382,6 +392,13 @@ export interface OrganizerEvent {
   title: string;
   kind: 'ticketed' | 'invitation';
   status: EventStatus;
+  /**
+   * A draft only because myFiesta suspended the organization while it was on
+   * sale: not one the organizer is still writing, and it goes back on sale by
+   * itself when the suspension is lifted, unless it has changed since.
+   * Optional for a row a client kept from before the API said.
+   */
+  off_sale_by_suspension?: boolean;
   starts_at: string;
   timezone: string;
   city: string;

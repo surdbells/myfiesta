@@ -74,7 +74,14 @@
         @if (ev.from_price || ev.availability) {
           <p class="mt-1 flex flex-wrap items-center gap-3 text-sm text-text-muted">
             @if (ev.from_price && anythingOnSale()) {
-              <span>From <span class="figure text-lg text-text">{{ startingFrom() }}</span></span>
+              @if (free()) {
+                <span class="price-line"
+                  ><span class="figure text-lg text-text">Free</span
+                  >@if (paidFrom(); as paid) {, or from <span class="figure text-lg text-text">{{ paid }}</span>}</span
+                >
+              } @else {
+                <span class="price-line">From <span class="figure text-lg text-text">{{ startingFrom() }}</span></span>
+              }
             }
             <app-availability [value]="ev.availability" [exact]="true" size="md" />
           </p>
@@ -183,8 +190,11 @@
       <!-- ---------------------------------------------------- the price -->
       <section class="buy rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" aria-label="Tickets">
         @if (anythingOnSale()) {
-          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Starting from</p>
-          <p class="mt-1 text-3xl font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">{{ free() ? 'Tickets' : 'Starting from' }}</p>
+          <p class="card-price mt-1 text-3xl font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
+          @if (paidFrom(); as paid) {
+            <p class="mt-1 text-sm text-text-muted">or from {{ paid }}</p>
+          }
           @if (ev.availability?.state === 'almost_sold_out' || ev.availability?.left) {
             <p class="mt-3"><app-availability [value]="ev.availability" [exact]="true" size="md" /></p>
           }
@@ -241,6 +251,15 @@
             {{ shared() ? 'Link copied' : 'Share' }}
           </button>
         </div>
+
+        @if (shareLink(); as link) {
+          <!-- Where this browser would neither share nor copy: the link
+               itself, selected, for copying by hand. -->
+          <div class="field mt-3">
+            <label for="share-link">Copy this link to share it</label>
+            <input id="share-link" type="url" readonly [value]="link" (focus)="$any($event.target).select()" />
+          </div>
+        }
       </section>
 
       <!--
@@ -301,7 +320,7 @@
     >
       <div class="mx-auto flex max-w-[640px] items-center gap-4">
         <div class="min-w-0">
-          <p class="text-xs text-text-subtle">From</p>
+          <p class="text-xs text-text-subtle">{{ free() ? 'Tickets' : 'From' }}</p>
           <p class="text-lg font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
         </div>
         <a

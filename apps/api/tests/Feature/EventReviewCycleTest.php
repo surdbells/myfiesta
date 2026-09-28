@@ -1046,6 +1046,34 @@ class EventReviewCycleTest extends TestCase
             ->assertSee('America/Toronto');
     }
 
+    /**
+     * The member of staff who sent it is told on the button that somebody
+     * else decides — not offered the button, asked to confirm, and refused
+     * with the modal left open.
+     */
+    public function test_the_review_page_does_not_offer_approval_to_whoever_sent_it(): void
+    {
+        // The owner works here too.
+        $this->owner->forceFill(['platform_role' => PlatformRole::Support, 'email_verified_at' => now()])->save();
+        $this->asOrganizer($this->owner->fresh());
+        $this->submit()->assertOk()->assertJsonPath('status', 'in_review');
+
+        $this->actingAs($this->owner->fresh());
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(ReviewEvent::class, ['record' => $this->event->getKey()])
+            ->assertActionVisible('approveEvent')
+            ->assertActionDisabled('approveEvent')
+            ->assertSee(EventReviews::OWN_SUBMISSION)
+            ->assertActionEnabled('rejectEvent');
+
+        $this->actingAs($this->staff(PlatformRole::Support, 'support@myfiesta.test'));
+
+        Livewire::test(ReviewEvent::class, ['record' => $this->event->getKey()])
+            ->assertActionEnabled('approveEvent')
+            ->assertDontSee(EventReviews::OWN_SUBMISSION);
+    }
+
     public function test_the_review_page_approves_and_rejects_with_confirmation_and_finance_only_reads(): void
     {
         $this->submit()->assertOk();

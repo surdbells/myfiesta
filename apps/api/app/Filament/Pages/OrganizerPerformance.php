@@ -193,11 +193,13 @@ class OrganizerPerformance extends Page implements HasTable
                     'hint' => number_format($m['payouts']['settlements']).' '.str('settlement')->plural($m['payouts']['settlements'])] : null,
                 ['label' => 'Views to orders', 'value' => Format::percent($m['conversion']['rate']),
                     'hint' => $m['conversion']['views'] > 0
-                        ? number_format($m['conversion']['online_orders']).' online orders from '.number_format($m['conversion']['views']).' page views'
+                        ? number_format($m['conversion']['online_orders']).' online '.str('order')->plural($m['conversion']['online_orders'])
+                            .' from '.number_format($m['conversion']['views']).' page '.str('view')->plural($m['conversion']['views'])
                         : 'No page views recorded in this period'],
                 // Two or more orders up to the end of the period, one of them in it.
                 ['label' => 'Repeat buyers', 'value' => Format::percent($m['buyers']['rate']),
-                    'hint' => number_format($m['buyers']['repeat']).' of '.number_format($m['buyers']['buyers']).' buyers have ordered from them more than once'],
+                    'hint' => number_format($m['buyers']['repeat']).' of '.number_format($m['buyers']['buyers']).' '.str('buyer')->plural($m['buyers']['buyers'])
+                        .' ordered from them more than once'],
             ])),
             'labels' => $m['series']['labels'],
             'sales' => [

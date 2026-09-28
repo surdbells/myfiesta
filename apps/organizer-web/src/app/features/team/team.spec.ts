@@ -111,6 +111,32 @@ describe('Team', () => {
     expect(page.displayRole(tolu)).toBe('door');
   });
 
+  it('does not offer Leave to the only owner, and says what to do instead', () => {
+    const fixture = TestBed.createComponent(Team);
+    backend.expectOne(TEAM).flush(team());
+    fixture.detectChanges();
+
+    const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('li'));
+    const ada = rows.find((row) => row.textContent?.includes('Ada Okafor'))!;
+    const tolu = rows.find((row) => row.textContent?.includes('Tolu Bello'))!;
+
+    expect(Array.from(ada.querySelectorAll('button')).map((b) => b.textContent?.trim())).not.toContain('Leave');
+    expect(ada.textContent).toContain('The only owner. Make somebody else an owner before you leave.');
+    expect(Array.from(tolu.querySelectorAll('button')).map((b) => b.textContent?.trim())).toContain('Remove');
+  });
+
+  it('offers Leave to an owner when there is another', () => {
+    const fixture = TestBed.createComponent(Team);
+    const page = team();
+    page.members[1].role = 'owner';
+    backend.expectOne(TEAM).flush(page);
+    fixture.detectChanges();
+
+    const ada = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('li')).find((row) => row.textContent?.includes('Ada Okafor'))!;
+
+    expect(Array.from(ada.querySelectorAll('button')).map((b) => b.textContent?.trim())).toContain('Leave');
+  });
+
   it('asks before withdrawing an invitation, and withdraws nothing when the answer is no', async () => {
     const page = render();
 

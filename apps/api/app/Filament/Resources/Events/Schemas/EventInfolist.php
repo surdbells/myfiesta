@@ -22,11 +22,14 @@ class EventInfolist
 {
     public static function configure(Schema $schema): Schema
     {
-        return $schema->components([
+        // Two cards a row only where a card has room for its figures: at a
+        // laptop's width the gross read "$72.6 0" and the zone "(America/T oronto)".
+        return $schema->columns(['default' => 1, 'lg' => 1, 'xl' => 2])->components([
             Section::make('Taken down')
                 ->icon('heroicon-o-eye-slash')
                 ->iconColor('danger')
                 ->visible(fn (Event $record) => $record->taken_down_at !== null)
+                ->columnSpanFull()
                 ->columns(3)
                 ->schema([
                     TextEntry::make('taken_down_reason')->label('Reason sent to the organizer')->columnSpan(2),
@@ -43,6 +46,7 @@ class EventInfolist
 
             Section::make('Key numbers')
                 ->description(fn (Event $record) => 'In '.$record->currency.', the only currency this event sells in.')
+                ->columnSpanFull()
                 ->columns(['default' => 2, 'md' => 4])
                 ->schema([
                     TextEntry::make('fig_sold')
@@ -60,7 +64,7 @@ class EventInfolist
                     TextEntry::make('fig_gross')
                         ->label('Gross taken')
                         ->state(fn (Event $record) => EventFigures::for($record)['gross'])
-                        ->helperText(fn (Event $record) => number_format(EventFigures::for($record)['orders']).' orders, '
+                        ->helperText(fn (Event $record) => number_format(EventFigures::for($record)['orders']).' '.str('order')->plural(EventFigures::for($record)['orders']).', '
                             .number_format(EventFigures::for($record)['door_orders']).' at the door')
                         ->size('lg')
                         ->weight('semibold'),
@@ -83,7 +87,7 @@ class EventInfolist
                 ]),
 
             Section::make('Event')
-                ->columns(3)
+                ->columns(['default' => 1, 'sm' => 2, 'lg' => 3, 'xl' => 2, '2xl' => 3])
                 ->collapsible()
                 ->schema([
                     TextEntry::make('status_label')
@@ -183,7 +187,7 @@ class EventInfolist
         return match (true) {
             $figures['capacity'] === null => 'No ticket types set up',
             $figures['capacity'] === 'unlimited' => 'No cap on at least one type',
-            default => 'of '.number_format((int) $figures['capacity']).' places',
+            default => 'of '.number_format((int) $figures['capacity']).' '.str('place')->plural((int) $figures['capacity']),
         };
     }
 }

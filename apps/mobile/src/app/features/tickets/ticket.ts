@@ -70,7 +70,18 @@ import { MfReceipt } from './receipt';
             </div>
             <div>
               <dt>Where</dt>
-              <dd>{{ held.event.city }}</dd>
+              <!-- The venue and its street, as the site's ticket page has
+                   them — a city is not somewhere a door can be found. A
+                   ticket saved on this phone before the venue came with it
+                   still has its city. -->
+              <dd class="where">
+                @if (held.event.venue; as venue) {
+                  <span class="venue">{{ venue.name }}</span>
+                  <span class="subtle">{{ venue.address ? venue.address + ', ' : '' }}{{ held.event.city }}</span>
+                } @else {
+                  {{ held.event.city }}
+                }
+              </dd>
             </div>
             <div>
               <dt>Ticket</dt>
@@ -173,6 +184,17 @@ import { MfReceipt } from './receipt';
       margin: 0;
       font-weight: var(--font-weight-medium);
       text-align: right;
+    }
+
+    .where {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .where .subtle {
+      font-weight: var(--font-weight-regular);
     }
 
     .actions {

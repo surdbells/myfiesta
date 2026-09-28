@@ -14,6 +14,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -47,6 +48,8 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
             ])
+            // Record headers that wrap rather than run off a laptop's screen.
+            ->renderHook(PanelsRenderHook::STYLES_AFTER, fn () => view('filament.admin-layout'))
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             // The dashboard is App\Filament\Pages\Dashboard, found here. Naming
             // Filament's own as well would put its welcome screen back at

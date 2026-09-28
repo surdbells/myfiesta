@@ -68,9 +68,14 @@ class Dashboard extends BaseDashboard
         ];
     }
 
+    /**
+     * Two columns only on a window wide enough for a chart in each beside
+     * the sidebar: at xl a half-width card is narrower than a chart's
+     * smallest width, and it scrolls sideways with its figures cut off.
+     */
     public function getColumns(): int|array
     {
-        return ['md' => 1, 'xl' => 2];
+        return ['md' => 1, '2xl' => 2];
     }
 
     public function content(Schema $schema): Schema

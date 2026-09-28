@@ -33,3 +33,13 @@ export function formatFrom(money: Money | null, currency: Money['currency']): st
 
   return formatMoney(money);
 }
+
+/**
+ * What a ticket costs, as the buyer reads it: "Free" rather than "$0.00".
+ *
+ * For a price on its own — a tier, an add-on. A bill keeps its figures, zeros
+ * and all, because a total has to add up from the lines above it.
+ */
+export function formatPrice(money: Money | null): string {
+  return money?.amount === 0 ? 'Free' : formatMoney(money);
+}

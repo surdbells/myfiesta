@@ -9,6 +9,9 @@ import { SessionStore } from '../../core/session';
 import { COUNTRIES, COUNTRY_OPTIONS, PROVINCE_OPTIONS, categoryOptions } from '../../core/places';
 import { COMMON_ZONES, describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 
+/** Where a new event is, until the organizer says otherwise. */
+const DEFAULT_COUNTRY = 'CA';
+
 @Component({
   selector: 'app-event-create',
   imports: [FormsModule, RouterLink, UiButton, UiSelect, RichTextEditor],
@@ -48,10 +51,15 @@ export class EventCreate {
   readonly title = signal('');
   readonly kind = signal<'ticketed' | 'invitation'>('ticketed');
   readonly description = signal('');
-  readonly country = signal('CA');
+  readonly country = signal(DEFAULT_COUNTRY);
   readonly subdivision = signal('ON');
   readonly city = signal('');
-  readonly timezone = signal(localZone());
+  /**
+   * The default country's zone, as choosing that country sets it — not the
+   * browser's. A Toronto night made on a laptop in Lagos otherwise started at
+   * Lagos time unless somebody noticed the zone below the clock.
+   */
+  readonly timezone = signal(COUNTRIES.find((c) => c.code === DEFAULT_COUNTRY)?.zone ?? localZone());
   readonly startsAt = signal('');
   readonly endsAt = signal('');
   readonly category = signal('');

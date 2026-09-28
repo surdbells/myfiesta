@@ -10,6 +10,8 @@ use App\Models\Organization;
 use App\Models\PayoutRequest;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Checkout\TurnedAway;
+use App\Services\Discovery\EventWindows;
 use App\Services\Events\EventSnapshot;
 use App\Services\Follows\Announcements;
 use App\Services\StaffSupport\StaffAction;
@@ -40,6 +42,10 @@ use Illuminate\Support\Facades\Mail;
  *   still says that goes back: the organization can edit while it is
  *   suspended, and lifting the suspension is a decision about the
  *   organization, not a review of what it changed meanwhile (EventReviews);
+ * - a night that is over by its own listing is not on sale, so it is not
+ *   taken off: it stays among the organization's past events, with its
+ *   sales, as it was. One that ends while the suspension lasts goes back to
+ *   being a past event when it is lifted, rather than a draft for good;
  * - payout requests waiting at the time are held, not rejected, and go back
  *   to waiting with their place in the queue.
  *
@@ -117,7 +123,10 @@ class Suspension
             // Every event on sale now. Marked one by one rather than in a
             // single update, so each keeps its own entry in the trail below
             // and anything listening to an event being saved hears about it.
-            $events = Event::query()
+            // Not the nights already over: nothing sells for them, and made
+            // drafts they would stop being past events with sales behind
+            // them, which is what they are.
+            $events = EventWindows::notOver(Event::query(), now())
                 ->where('organization_id', $locked->id)
                 ->where('status', 'published')
                 ->lockForUpdate()
@@ -188,17 +197,22 @@ class Suspension
      *
      * Back on sale: the events it took off sale that have not started, have
      * not since been cancelled, deleted or taken down, and say what they said
-     * when they came off. The rest stay drafts — an event that has already
-     * happened stays off the site, and one changed meanwhile waits for the
-     * organizer to send it for review. An event the organizer took off sale
-     * themselves while it lasted carries no mark any more (their own
-     * unpublish clears it), so it is not here to put back.
+     * when they came off. The rest stay drafts — an event that has started
+     * stays off sale, and one changed meanwhile waits for the organizer to
+     * send it for review — except a night that ended while the suspension
+     * lasted. That has nothing left to sell, and goes back to being one of the
+     * organization's past events, as it was before, rather than a draft
+     * nobody can put back (sending one for review needs a date to come).
+     *
+     * An event the organizer took off sale themselves while it lasted carries
+     * no mark any more (their own unpublish clears it), so it is not here to
+     * put back.
      *
      * Nothing here counts as approving an event. What goes back is what was
      * on sale, or what staff approved while the suspension lasted, so the
      * event's own approval says what it always did.
      *
-     * @return array{lifted: bool, republished: list<string>, left: array<string, string>, released: list<string>, told: int}
+     * @return array{lifted: bool, republished: list<string>, finished: list<string>, left: array<string, string>, released: list<string>, told: int}
      *
      * @throws StaffActionRefused
      */
@@ -227,6 +241,7 @@ class Suspension
 
             $republished = [];
             $firstTime = [];
+            $finished = [];
             $left = [];
 
             $marked = Event::withTrashed()
@@ -242,6 +257,15 @@ class Suspension
                 if ($why !== null) {
                     $event->forceFill($unmarked)->save();
                     $left[$event->id] = $why;
+
+                    continue;
+                }
+
+                // Over by its own listing: back among the past events, with
+                // nothing on sale — online checkout stops at the listed end.
+                if (TurnedAway::pastSelling($event, now())) {
+                    $event->forceFill(['status' => 'published'] + $unmarked)->save();
+                    $finished[] = $event->id;
 
                     continue;
                 }
@@ -267,11 +291,11 @@ class Suspension
                 PayoutRequest::query()->whereKey($released)->update(['held_at' => null, 'updated_at' => now()]);
             }
 
-            return ['was' => $was, 'republished' => $republished, 'first_time' => $firstTime, 'left' => $left, 'released' => $released];
+            return ['was' => $was, 'republished' => $republished, 'first_time' => $firstTime, 'finished' => $finished, 'left' => $left, 'released' => $released];
         });
 
         if ($done === null) {
-            return ['lifted' => false, 'republished' => [], 'left' => [], 'released' => [], 'told' => 0];
+            return ['lifted' => false, 'republished' => [], 'finished' => [], 'left' => [], 'released' => [], 'told' => 0];
         }
 
         $organization->refresh();
@@ -283,12 +307,13 @@ class Suspension
             'suspended_at' => $done['was']['suspended_at'],
             'reason' => $done['was']['reason'],
             'events_republished' => $done['republished'],
+            'events_finished' => $done['finished'] ?: null,
             'events_left_unpublished' => $done['left'] ?: null,
             'payout_requests_released' => $done['released'],
             'owners_told' => $owners->count(),
         ], fn ($value) => $value !== null));
 
-        $this->recordEach($done['republished'], $done['released'], $staff, $organization, suspended: false);
+        $this->recordEach([...$done['republished'], ...$done['finished']], $done['released'], $staff, $organization, suspended: false);
 
         // Approved while the suspension lasted and never on sale until now:
         // its followers hear about it the first time it is. Only those — one
@@ -309,6 +334,7 @@ class Suspension
         return [
             'lifted' => true,
             'republished' => $done['republished'],
+            'finished' => $done['finished'],
             'left' => $done['left'],
             'released' => $done['released'],
             'told' => $owners->count(),
@@ -316,15 +342,16 @@ class Suspension
     }
 
     /**
-     * Why a remembered event does not go back on sale, or null when it does.
+     * Why a remembered event does not go back on sale, or null when it does
+     * — on sale, or among the past events when its night is over by now.
      *
      * Only what has happened to it since: deleted, cancelled or taken down,
-     * or its night has come. Not the publish button's test of a ticket type
-     * on sale. The event passed that when it was published, and was on sale
-     * as it stood — a presale sold only through hidden types, or a page kept
-     * up after its types closed. Asked again here, it would take such an
-     * event off the site for good, since that same button would then refuse
-     * the organizer too.
+     * its night begun and not yet over, or changed. Not the publish button's
+     * test of a ticket type on sale. The event passed that when it was
+     * published, and was on sale as it stood — a presale sold only through
+     * hidden types, or a page kept up after its types closed. Asked again
+     * here, it would take such an event off the site for good, since that
+     * same button would then refuse the organizer too.
      */
     private function whyItStaysOff(Event $event): ?string
     {
@@ -332,8 +359,12 @@ class Suspension
             $event->trashed() => 'deleted by the organizer',
             $event->status !== 'draft' => 'now '.$event->status,
             $event->taken_down_at !== null => 'taken down by myFiesta',
-            $event->starts_at === null || ! $event->starts_at->isFuture() => 'already happened',
+            $event->starts_at === null => 'it has no date',
+            ! $event->starts_at->isFuture() && ! TurnedAway::pastSelling($event, now()) => 'already started',
             ! $this->saysWhatItSaidWhenItCameOff($event) => 'changed since it came off sale, so it needs a review',
+            // Approved while the suspension lasted and over before it was
+            // lifted: never on sale, so not a past event of theirs either.
+            $event->published_at === null && TurnedAway::pastSelling($event, now()) => 'over before it ever went on sale',
             default => null,
         };
     }

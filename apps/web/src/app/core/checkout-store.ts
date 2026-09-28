@@ -39,6 +39,16 @@ export class CheckoutStore {
   /** A promoter's ref, captured on the event page and carried to the order. */
   readonly ref = signal<string | null>(null);
 
+  /**
+   * The order the last press placed, when its payment page could not be
+   * opened (the API's 502 names it).
+   *
+   * Sent back with the next press, which takes over its hold rather than
+   * holding the same places a second time. Kept with the basket, because a
+   * reload, or going back to change the tickets, is still the same attempt.
+   */
+  readonly unpaid = signal<string | null>(null);
+
   readonly lines = computed(() =>
     Object.entries(this.items())
       .filter(([, quantity]) => quantity > 0)
@@ -64,6 +74,7 @@ export class CheckoutStore {
     this.addOns.set(this.read(slug)?.addOns ?? {});
     this.code.set(this.read(slug)?.code ?? '');
     this.access.set(this.read(slug)?.access ?? null);
+    this.unpaid.set(this.read(slug)?.unpaid ?? null);
   }
 
   setAccess(slug: string, access: AccessUnlock | null): void {
@@ -95,6 +106,13 @@ export class CheckoutStore {
     this.persist(slug);
   }
 
+  /** The order a failed payment page left behind, or null once it is dealt with. */
+  setUnpaid(slug: string, reference: string | null): void {
+    this.loadFor(slug);
+    this.unpaid.set(reference);
+    this.persist(slug);
+  }
+
   setCode(slug: string, code: string): void {
     this.loadFor(slug);
     this.code.set(code);
@@ -107,6 +125,7 @@ export class CheckoutStore {
     this.addOns.set({});
     this.code.set('');
     this.access.set(null);
+    this.unpaid.set(null);
     try {
       sessionStorage.removeItem(this.key(slug));
     } catch {
@@ -123,6 +142,7 @@ export class CheckoutStore {
     addOns?: Record<string, number>;
     code: string;
     access?: AccessUnlock | null;
+    unpaid?: string | null;
   } | null {
     try {
       const raw = sessionStorage.getItem(this.key(slug));
@@ -141,6 +161,7 @@ export class CheckoutStore {
           addOns: this.addOns(),
           code: this.code(),
           access: this.access(),
+          unpaid: this.unpaid(),
         }),
       );
     } catch {

@@ -130,6 +130,22 @@ final class EventReviews
         return $user instanceof User && self::mayDecide($user);
     }
 
+    /**
+     * Whether this member of staff sent the event for review themselves, and
+     * so may not approve it (approve() refuses; OWN_SUBMISSION says why).
+     * For the button, so it can say so before it is pressed.
+     */
+    public function isOwnSubmission(Event $event, ?User $staff): bool
+    {
+        if ($staff === null) {
+            return false;
+        }
+
+        $submitter = $this->lastSubmission($event)?->actor_id;
+
+        return $submitter !== null && $submitter === $staff->id;
+    }
+
     // --- the lock ------------------------------------------------------------------
 
     /**
@@ -185,6 +201,13 @@ final class EventReviews
     public function whatSubmittingDoes(Event $event): ?string
     {
         if ($event->status !== EventStatus::Draft->value || $event->taken_down_at !== null) {
+            return null;
+        }
+
+        // Nothing goes on sale or into the queue while the organization is
+        // suspended (submit() refuses it), so sending does nothing at all. The
+        // phone offered "Put back on sale" here, and was refused with a 403.
+        if (Suspension::inForce($event->organization_id)) {
             return null;
         }
 

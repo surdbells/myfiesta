@@ -14,7 +14,7 @@ We have lifted the suspension on **{{ $organization->name }}**. You can sell tic
 @if (count($leftAsDrafts) > 0)
 **Not back on sale**
 
-These were on sale when the suspension began and have not gone back on sale: they have already happened, or were cancelled, deleted or taken down since.
+These were on sale when the suspension began and have not gone back on sale: they have already started, were cancelled, deleted or taken down since, or were changed and need to be sent for review.
 
 @foreach ($leftAsDrafts as $title)
 - {{ $title }}

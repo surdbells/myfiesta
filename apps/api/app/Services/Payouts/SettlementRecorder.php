@@ -68,6 +68,12 @@ class SettlementRecorder
             throw SettlementRefused::because('A settlement has to be a positive amount.');
         }
 
+        // Money leaving for an organization is recorded by somebody outside
+        // it. Nothing about a payout to your own team is a second pair of eyes.
+        if (OwnOrganization::includes($by, $organization)) {
+            throw SettlementRefused::because(OwnOrganization::RECORD_PAYOUT);
+        }
+
         /*
          * A suspended organization's payouts are frozen.
          *

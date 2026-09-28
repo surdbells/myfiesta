@@ -97,12 +97,31 @@ class Eraser
      */
     public function refusal(Subject $subject): ?string
     {
-        if ($subject->user?->isPlatformStaff()) {
-            return 'This account has myFiesta staff access, and its admin sign-in codes go to this address, so it '
-                .'cannot be erased from here. Ask another administrator to remove your staff access first, and then '
-                .'ask again.';
-        }
+        // Both, when both stand. Somebody who is staff and the only owner of
+        // an organization was told only about the staff access, and the app
+        // then offered to open that organization's team with no sentence
+        // saying why — and removing the access would only have led to the
+        // second refusal.
+        $staff = (bool) $subject->user?->isPlatformStaff();
+        $owner = $this->onlyOwnerOf($subject, also: $staff);
 
+        $reasons = array_values(array_filter([
+            $staff
+                ? 'This account has myFiesta staff access, and its admin sign-in codes go to this address, so it '
+                    .'cannot be erased from here. Ask another administrator to remove your staff access first'
+                : null,
+            $owner,
+        ]));
+
+        return $reasons === [] ? null : implode('. ', $reasons).', and then ask again.';
+    }
+
+    /**
+     * Why being the only owner of something stops it, or null when nobody
+     * depends on this person that way. Unfinished: refusal() ends it.
+     */
+    private function onlyOwnerOf(Subject $subject, bool $also = false): ?string
+    {
         $stranded = $this->stranded($subject);
 
         if ($stranded->isEmpty()) {
@@ -110,6 +129,7 @@ class Eraser
         }
 
         $names = $stranded->pluck('name')->implode(', ');
+        $you = $also ? 'You are also the only owner' : 'You are the only owner';
 
         $owing = $stranded
             ->filter(fn (Organization $organization) => collect(app(Overdrafts::class)->positionsFor($organization))
@@ -117,15 +137,15 @@ class Eraser
             ->pluck('name');
 
         if ($owing->isNotEmpty()) {
-            return "You are the only owner of {$names}. Erasing your account would leave its events, its money and "
+            return "{$you} of {$names}. Erasing your account would leave its events, its money and "
                 .'its ticket holders with nobody who can reach them, and '.$owing->implode(', ')
                 .' owes myFiesta money, so it cannot be closed until that is recovered from its '
-                .'sales or repaid. Make somebody else an owner, and then ask again.';
+                .'sales or repaid. Make somebody else an owner';
         }
 
-        return "You are the only owner of {$names}. Erasing your account would leave its events, its money and "
+        return "{$you} of {$names}. Erasing your account would leave its events, its money and "
             .'its ticket holders with nobody who can reach them. Make somebody else an owner, or close the '
-            .'organization, and then ask again.';
+            .'organization';
     }
 
     /**
