@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { OrganizerEventDetail, SoldOrder } from '@myfiesta/api-types';
 import { API_BASE_URL } from '../../core/api';
@@ -108,7 +109,8 @@ describe('Event screens: asking first', () => {
         { provide: API_BASE_URL, useValue: 'http://api.test' },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'ev-1' }) }, parent: null },
+          // The query too: the orders screen keeps its filters in the address.
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'ev-1' }), queryParams: {} }, queryParams: of({}), parent: null },
         },
       ],
     });
@@ -131,6 +133,9 @@ describe('Event screens: asking first', () => {
 
   it('names the money, who gets it and what stops working before a refund, and refunds nothing on no', async () => {
     const screen = TestBed.createComponent(EventOrders).componentInstance;
+    // The list is asked for once its signals settle; its saved views load beside it.
+    TestBed.tick();
+    backend.match((request) => request.url.endsWith('/saved-views')).forEach((request) => request.flush({ data: [] }));
     backend.expectOne((request) => request.url === `${BASE}/orders`).flush(page([order()]));
 
     screen.open(order());
@@ -150,6 +155,9 @@ describe('Event screens: asking first', () => {
 
   it('refunds once it is confirmed', async () => {
     const screen = TestBed.createComponent(EventOrders).componentInstance;
+    // The list is asked for once its signals settle; its saved views load beside it.
+    TestBed.tick();
+    backend.match((request) => request.url.endsWith('/saved-views')).forEach((request) => request.flush({ data: [] }));
     backend.expectOne((request) => request.url === `${BASE}/orders`).flush(page([order()]));
 
     screen.open(order());
@@ -166,6 +174,7 @@ describe('Event screens: asking first', () => {
       ticket_ids: ['t-1', 't-2'],
       created_at: '2026-10-02T10:00:00Z',
     });
+    TestBed.tick();
     backend.expectOne((request) => request.url === `${BASE}/orders`).flush(page([]));
   });
 

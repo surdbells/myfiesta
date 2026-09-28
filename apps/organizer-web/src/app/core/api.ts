@@ -718,8 +718,10 @@ export class Api {
   // --- guests -------------------------------------------------------------
 
   /** The guest list as a CSV. Ticket codes are never in it. */
-  exportGuests(eventId: string): Observable<Blob> {
+  /** The guest list as a CSV: the list's filters and order, or only `ids`. */
+  exportGuests(eventId: string, query: ListQuery = {}): Observable<Blob> {
     return this.http.get(`${this.base}/api/organizer/events/${eventId}/guests/export`, {
+      params: listParams(query),
       responseType: 'blob',
     });
   }
@@ -748,20 +750,9 @@ export class Api {
     return this.http.get(`${this.base}/api/organizer/orders/export`, { params: listParams(query), responseType: 'blob' });
   }
 
-  guests(
-    eventId: string,
-    search?: string,
-    page = 1,
-    filters: { status?: string; ticket_type_id?: string } = {},
-  ): Observable<GuestPage> {
-    let params = new HttpParams().set('page', page);
-    if (search) params = params.set('q', search);
-    if (filters.status) params = params.set('status', filters.status);
-    if (filters.ticket_type_id) params = params.set('ticket_type_id', filters.ticket_type_id);
-
-    return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, {
-      params,
-    });
+  /** Who is coming: search, arrived or not, tiers and sort as ListState asks. */
+  guests(eventId: string, query: ListQuery = {}): Observable<GuestPage> {
+    return this.http.get<GuestPage>(`${this.base}/api/organizer/events/${eventId}/guests`, { params: listParams(query) });
   }
 
   // --- pictures -----------------------------------------------------------
@@ -1031,11 +1022,9 @@ export class Api {
 
   // --- orders and refunds -------------------------------------------------
 
-  orders(eventId: string, page = 1, search?: string): Observable<Page<SoldOrder>> {
-    let params = new HttpParams().set('page', page);
-    if (search) params = params.set('q', search);
-
-    return this.http.get<Page<SoldOrder>>(`${this.base}/api/organizer/events/${eventId}/orders`, { params });
+  /** An event's orders, with what is left to refund on each: search, status and sort as ListState asks. */
+  orders(eventId: string, query: ListQuery = {}): Observable<Page<SoldOrder>> {
+    return this.http.get<Page<SoldOrder>>(`${this.base}/api/organizer/events/${eventId}/orders`, { params: listParams(query) });
   }
 
   /**

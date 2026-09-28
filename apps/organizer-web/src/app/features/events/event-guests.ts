@@ -1,14 +1,22 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import {
   ConfirmDialog,
+  Selection,
   ToastStore,
+  UiBulkBar,
   UiButton,
+  UiColumnMenu,
+  UiEmpty,
+  UiErrorState,
+  UiFilterBar,
   UiIcon,
   UiPagination,
   UiSelect,
-  type SelectOption,
-  UiFilterBar,
+  UiSortHeader,
+  UiTable,
+  createListState,
   type FilterChip,
+  type SelectOption,
 } from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
 import { saveFile, today } from '../../core/download';
@@ -18,7 +26,9 @@ import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { Guest, PageMeta, TicketType } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
+import { loadList, searchBox } from '../../core/list-loader';
 import { SessionStore } from '../../core/session';
+import { SavedViews } from '../../shared/saved-views';
 
 /**
  * Who is coming, who has arrived, and putting somebody on the list.
@@ -29,7 +39,21 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-guests',
-  imports: [FormsModule, UiButton, UiIcon, UiPagination, UiSelect, UiFilterBar],
+  imports: [
+    FormsModule,
+    SavedViews,
+    UiBulkBar,
+    UiButton,
+    UiColumnMenu,
+    UiEmpty,
+    UiErrorState,
+    UiFilterBar,
+    UiIcon,
+    UiPagination,
+    UiSelect,
+    UiSortHeader,
+    UiTable,
+  ],
   templateUrl: './event-guests.html',
 })
 export class EventGuests {
@@ -43,12 +67,16 @@ export class EventGuests {
    * or send to a venue. No ticket codes: a forwarded list must not be a set of
    * working tickets.
    */
-  exportList(): void {
+  /** The list as filtered and sorted — or only the ticked guests. */
+  exportList(onlySelected = false): void {
     if (this.exporting()) return;
 
     this.exporting.set(true);
 
-    this.api.exportGuests(this.eventId).subscribe({
+    const sort = this.list.sort();
+    const query = onlySelected ? { ids: this.selection.ids(), sort: sort?.column, dir: sort?.direction } : this.list.criteria();
+
+    this.api.exportGuests(this.eventId, query).subscribe({
       next: (file) => {
         this.exporting.set(false);
         saveFile(file, `guest-list-${today()}.csv`);
@@ -66,19 +94,46 @@ export class EventGuests {
 
   readonly eventId = eventIdFrom(this.route);
 
-  readonly guests = signal<Guest[]>([]);
-  readonly meta = signal<PageMeta | null>(null);
-  readonly page = signal(1);
+  readonly list = createListState({
+    list: 'guests',
+    filters: {
+      q: { kind: 'text' },
+      status: { kind: 'one' },
+      ticket_type_id: { kind: 'many' },
+    },
+    sort: { column: 'name', direction: 'asc' },
+    columns: [
+      { id: 'name', label: 'Guest', required: true },
+      { id: 'ticket', label: 'Ticket' },
+      { id: 'answers', label: 'Answers' },
+      { id: 'arrival', label: 'Arrival' },
+    ],
+  });
+
+  readonly search = searchBox(this.list, 'q');
+  readonly selection = new Selection();
+
+  readonly page = loadList(this.list.query, () => this.api.guests(this.eventId, this.list.query()));
+
+  readonly guests = computed<Guest[]>(() => this.page.result()?.data ?? []);
+  readonly meta = computed<PageMeta | null>(() => this.page.result()?.meta ?? null);
+  readonly loading = computed(() => this.page.loading() && this.page.result() === null);
+  readonly refreshing = computed(() => this.page.loading() && this.page.result() !== null);
+  readonly failed = this.page.failed;
+  readonly rowIds = computed(() => this.guests().map((guest) => guest.id));
+
+  /**
+   * The whole list's size, for "12 of 80 arrived". A filter narrows the rows,
+   * not the room — taking a filtered count here read as 12 of 3 — so it is
+   * only taken from an unfiltered answer.
+   */
   readonly total = signal(0);
-  readonly arrived = signal(0);
-  readonly loading = signal(true);
+  readonly arrived = computed(() => this.page.result()?.meta.checked_in ?? 0);
+
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
 
-  readonly search = signal('');
-  /** Everyone, or only the half of the room that matters at this moment. */
-  readonly status = signal('');
-  readonly tier = signal('');
+  readonly filtered = computed(() => this.list.active() > 0);
 
   readonly statusOptions: SelectOption[] = [
     { value: '', label: 'Everyone' },
@@ -89,10 +144,7 @@ export class EventGuests {
   readonly ticketTypes = signal<TicketType[]>([]);
 
   /** For filtering, which needs an "any" row the issue form does not. */
-  readonly tierOptions = computed<SelectOption[]>(() => [
-    { value: '', label: 'Any tier' },
-    ...this.ticketTypes().map((type) => ({ value: type.id, label: type.name })),
-  ]);
+  readonly tierOptions = computed<SelectOption[]>(() => this.ticketTypes().map((type) => ({ value: type.id, label: type.name })));
 
   readonly ticketTypeOptions = computed<SelectOption[]>(() =>
     this.ticketTypes().map((type) => ({
@@ -112,7 +164,21 @@ export class EventGuests {
   });
 
   constructor() {
-    this.load();
+    effect(() => {
+      const result = this.page.result();
+      if (result && this.list.active() === 0) untracked(() => this.total.set(result.meta.total));
+    });
+
+    // A different set of rows makes the ticks meaningless.
+    effect(() => {
+      this.list.criteria();
+      untracked(() => this.selection.clear());
+    });
+
+    effect(() => {
+      const ids = this.rowIds();
+      untracked(() => this.selection.keep(ids));
+    });
 
     this.api.ticketTypes(this.eventId).subscribe({
       next: ({ data }) => {
@@ -128,49 +194,26 @@ export class EventGuests {
     });
   }
 
+  /** After a failure: the same question again. */
   load(): void {
-    this.loading.set(true);
-
-    const search = this.search().trim() || undefined;
-
-    this.api
-      .guests(this.eventId, search, this.page(), { status: this.status(), ticket_type_id: this.tier() })
-      .subscribe({
-        next: (page) => {
-          this.guests.set(page.data);
-          this.meta.set(page.meta);
-          // The whole list's size, for "12 of 80 arrived". A filter narrows
-          // the rows, not the room — taking its count here read as 12 of 3.
-          if (!search && !this.status() && !this.tier()) this.total.set(page.meta.total);
-          this.arrived.set(page.meta.checked_in);
-          this.loading.set(false);
-        },
-        error: (response) => {
-          this.loading.set(false);
-          this.error.set(messageFor(response, 'Could not load the guest list.'));
-        },
-      });
-  }
-
-  /** Any change to the terms starts again at the first page. */
-  refine(): void {
-    this.page.set(1);
-    this.load();
+    this.page.retry();
   }
 
   readonly chips = computed<FilterChip[]>(() => {
     const chips: FilterChip[] = [];
+    const values = this.list.values();
 
-    if (this.search().trim()) chips.push({ key: 'q', label: 'Search', value: this.search().trim() });
+    if (values.q) chips.push({ key: 'q', label: 'Search', value: String(values.q) });
 
-    if (this.status()) {
-      const option = this.statusOptions.find((o) => o.value === this.status());
-      chips.push({ key: 'status', label: 'Showing', value: option?.label ?? this.status() });
+    if (values.status) {
+      const option = this.statusOptions.find((o) => o.value === values.status);
+      chips.push({ key: 'status', label: 'Showing', value: option?.label ?? String(values.status) });
     }
 
-    if (this.tier()) {
-      const type = this.ticketTypes().find((t) => t.id === this.tier());
-      chips.push({ key: 'tier', label: 'Tier', value: type?.name ?? 'One tier' });
+    const tiers = values.ticket_type_id as readonly string[];
+    if (tiers.length > 0) {
+      const names = tiers.map((id) => this.ticketTypes().find((t) => t.id === id)?.name ?? 'One tier');
+      chips.push({ key: 'ticket_type_id', label: tiers.length === 1 ? 'Tier' : 'Tiers', value: names.join(', ') });
     }
 
     return chips;
@@ -189,30 +232,14 @@ export class EventGuests {
   });
 
   remove(key: string): void {
-    if (key === 'q') this.search.set('');
-    if (key === 'status') this.status.set('');
-    if (key === 'tier') this.tier.set('');
-
-    this.refine();
+    this.list.clear(key as 'q');
   }
 
-  clearFilters(): void {
-    this.search.set('');
-    this.status.set('');
-    this.tier.set('');
-    this.refine();
-  }
+  /** When somebody arrived, in the reader's own time. */
+  arrivedAt(iso: string | null): string {
+    if (!iso) return '';
 
-  /** Another page of the list. */
-  goToPage(page: number): void {
-    this.page.set(page);
-    this.load();
-  }
-
-  /** Searching starts again from the first page. */
-  runSearch(): void {
-    this.page.set(1);
-    this.load();
+    return new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' }).format(new Date(iso));
   }
 
   async submitIssue(): Promise<void> {
@@ -260,7 +287,7 @@ export class EventGuests {
           );
 
           this.issue.set({ ...this.issue(), name: '', email: '', quantity: '1', note: '' });
-          this.load();
+          this.page.retry();
         },
         error: (response) => {
           this.issuing.set(false);

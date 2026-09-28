@@ -1,12 +1,35 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ConfirmDialog, UiButton, UiPagination } from '@myfiesta/ui';
+import {
+  ConfirmDialog,
+  UiBadge,
+  UiButton,
+  UiColumnMenu,
+  UiEmpty,
+  UiErrorState,
+  UiFilterBar,
+  UiPagination,
+  UiSelect,
+  UiSortHeader,
+  UiTable,
+  createListState,
+  type FilterChip,
+  type SelectOption,
+} from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import { OrderTicket, PageMeta, SoldOrder } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
+import { loadList, searchBox } from '../../core/list-loader';
 import { formatMoney } from '../../core/money';
+import { SavedViews } from '../../shared/saved-views';
+
+const STATUSES: SelectOption[] = [
+  { value: 'paid', label: 'Paid' },
+  { value: 'partially_refunded', label: 'Part refunded' },
+  { value: 'refunded', label: 'Refunded' },
+];
 import { SessionStore } from '../../core/session';
 
 /**
@@ -23,7 +46,20 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-event-orders',
-  imports: [FormsModule, UiButton, UiPagination],
+  imports: [
+    FormsModule,
+    SavedViews,
+    UiBadge,
+    UiButton,
+    UiColumnMenu,
+    UiEmpty,
+    UiErrorState,
+    UiFilterBar,
+    UiPagination,
+    UiSelect,
+    UiSortHeader,
+    UiTable,
+  ],
   templateUrl: './event-orders.html',
 })
 export class EventOrders {
@@ -35,66 +71,79 @@ export class EventOrders {
   readonly eventId = eventIdFrom(this.route);
   readonly money = formatMoney;
 
-  readonly orders = signal<SoldOrder[]>([]);
-  readonly meta = signal<PageMeta | null>(null);
-  readonly page = signal(1);
-  readonly loading = signal(true);
+  readonly statusOptions = STATUSES;
+
+  readonly list = createListState({
+    list: 'event-orders',
+    filters: {
+      q: { kind: 'text' },
+      status: { kind: 'many' },
+    },
+    sort: { column: 'paid_at', direction: 'desc' },
+    columns: [
+      { id: 'buyer', label: 'Buyer', required: true },
+      { id: 'reference', label: 'Reference' },
+      { id: 'tickets', label: 'Tickets' },
+      { id: 'when', label: 'When' },
+      { id: 'total', label: 'Total' },
+      { id: 'status', label: 'Status' },
+    ],
+  });
+
+  readonly search = searchBox(this.list, 'q');
+
+  readonly page = loadList(this.list.query, () => this.api.orders(this.eventId, this.list.query()));
+
+  readonly orders = computed<SoldOrder[]>(() => this.page.result()?.data ?? []);
+  readonly meta = computed<PageMeta | null>(() => this.page.result()?.meta ?? null);
+  readonly loading = computed(() => this.page.loading() && this.page.result() === null);
+  readonly refreshing = computed(() => this.page.loading() && this.page.result() !== null);
+  readonly failed = this.page.failed;
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
 
-  /** Which order is being refunded, and which of its tickets are picked. */
   readonly openId = signal<string | null>(null);
   readonly picked = signal<Set<string>>(new Set());
   readonly reason = signal('');
   readonly working = signal(false);
 
-  readonly search = signal('');
+  readonly canRefund = computed(() => this.session.canSeeMoney() || this.session.canEditEvents());
 
-  /**
-   * Searched on the server.
-   *
-   * It used to filter the orders already on screen, which were the first
-   * thirty — so the reference somebody read out over the phone was "not
-   * found" whenever the order was the thirty-first.
-   */
-  readonly visible = computed(() => this.orders());
+  readonly filtered = computed(() => this.list.active() > 0);
 
-  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+  readonly chips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    const values = this.list.values();
 
-  constructor() {
-    this.load();
-  }
+    if (values.q) chips.push({ key: 'q', label: 'Search', value: String(values.q) });
 
+    const statuses = values.status as readonly string[];
+    if (statuses.length > 0) {
+      chips.push({
+        key: 'status',
+        label: 'Status',
+        value: statuses.map((s) => STATUSES.find((o) => o.value === s)?.label ?? s).join(' or '),
+      });
+    }
+
+    return chips;
+  });
+
+  readonly summary = computed(() => {
+    const meta = this.meta();
+    if (!meta) return null;
+
+    const noun = meta.total === 1 ? 'order' : 'orders';
+    return `${meta.total.toLocaleString()} ${noun}`;
+  });
+
+  /** After a failure: the same question again. */
   load(): void {
-    this.loading.set(true);
-
-    this.api.orders(this.eventId, this.page(), this.search().trim() || undefined).subscribe({
-      next: ({ data, meta }) => {
-        this.orders.set(data);
-        this.meta.set(meta);
-        this.loading.set(false);
-      },
-      error: (response) => {
-        this.loading.set(false);
-        this.error.set(messageFor(response, 'Could not load orders for this event.'));
-      },
-    });
+    this.page.retry();
   }
 
-  /** Another page of the list. */
-  goToPage(page: number): void {
-    this.page.set(page);
-    this.load();
-  }
-
-  /** A new search starts at the first page, once typing pauses. */
-  searchChanged(value: string): void {
-    this.search.set(value);
-    clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => {
-      this.page.set(1);
-      this.load();
-    }, 300);
+  remove(key: string): void {
+    this.list.clear(key as 'q');
   }
 
   open(order: SoldOrder): void {
@@ -194,7 +243,7 @@ export class EventOrders {
           this.working.set(false);
           this.openId.set(null);
           this.notice.set(`${this.money(refund.amount)} sent back to ${order.buyer_name}.`);
-          this.load();
+          this.page.retry();
         },
         error: (response) => {
           this.working.set(false);
@@ -204,10 +253,14 @@ export class EventOrders {
   }
 
   label(order: SoldOrder): string {
-    if (order.status === 'refunded') return 'Refunded';
-    if (order.status === 'partially_refunded') return 'Part refunded';
+    return STATUSES.find((status) => status.value === order.status)?.label ?? 'Paid';
+  }
 
-    return 'Paid';
+  tone(order: SoldOrder): 'success' | 'warning' | 'danger' {
+    if (order.status === 'refunded') return 'danger';
+    if (order.status === 'partially_refunded') return 'warning';
+
+    return 'success';
   }
 
   when(iso: string | null): string {
