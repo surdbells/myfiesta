@@ -94,6 +94,12 @@ describe('Event screens: asking first', () => {
   beforeAll(allowDialogs);
 
   beforeEach(() => {
+    // Signed out, whatever an earlier spec left behind: these screens ask for
+    // the money figures only for somebody who may see them, and a session
+    // leaked from another file used to add a request these tests never make.
+    localStorage.clear();
+    sessionStorage.clear();
+
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),

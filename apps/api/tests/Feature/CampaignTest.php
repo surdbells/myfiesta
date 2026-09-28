@@ -541,6 +541,30 @@ class CampaignTest extends TestCase
         $this->assertSame(['Come to Afro Fest'], collect($body['data'])->pluck('subject')->all());
     }
 
+    public function test_the_list_takes_several_of_each_and_a_sort(): void
+    {
+        $this->spread();
+
+        $subjects = fn (array $query) => collect($this->getJson('/api/organizer/campaigns?'.http_build_query($query))
+            ->assertOk()
+            ->json('data'))
+            ->pluck('subject')
+            ->all();
+
+        $this->assertSame(
+            ['Doors at nine', 'Last chance for Afro Fest', 'Thank you for coming'],
+            $subjects(['status' => ['sent', 'cancelled'], 'sort' => 'subject']),
+        );
+        $this->assertSame(
+            ['Last chance for Afro Fest', 'Thank you for coming', 'We are back on the 14th'],
+            $subjects(['event_id' => [$this->next->id, $this->last->id], 'sort' => 'subject']),
+        );
+        $this->assertSame(
+            ['We are back on the 14th', 'Thank you for coming', 'Last chance for Afro Fest', 'Doors at nine'],
+            $subjects(['sort' => 'subject', 'dir' => 'desc']),
+        );
+    }
+
     public function test_a_status_that_is_not_one_is_refused_rather_than_ignored(): void
     {
         $this->getJson('/api/organizer/campaigns?status=posted')

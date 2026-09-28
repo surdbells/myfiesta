@@ -12,6 +12,7 @@ use App\Models\Ticket;
 use App\Services\Audit\Auditor;
 use App\Services\Campaigns\Audiences;
 use App\Services\Campaigns\CampaignSender;
+use App\Support\Listing;
 use App\Support\Paging;
 use App\Support\Search;
 use Carbon\CarbonImmutable;
@@ -53,25 +54,31 @@ class CampaignController extends Controller
          * there is nothing to index here that would not cost more to keep.
          */
         $filters = $request->validate([
-            'status' => ['nullable', Rule::in(Campaign::STATUSES)],
-            'audience' => ['nullable', Rule::in(array_keys(Audiences::LABELS))],
-            'event_id' => ['nullable', 'uuid'],
             'q' => ['nullable', 'string', 'max:150'],
         ]);
 
+        // One value or several of each, as a single or a multi-select sends it.
+        $statuses = Listing::many($request, 'status', Campaign::STATUSES);
+        $audiences = Listing::many($request, 'audience', array_keys(Audiences::LABELS));
+        $events = Listing::ids($request, 'event_id', 200);
+
         $page = Campaign::query()
             ->where('organization_id', $organization->id)
-            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($filters['audience'] ?? null, fn ($query, $audience) => $query->where('audience', $audience))
+            ->when($statuses, fn ($query, $values) => $query->whereIn('status', $values))
+            ->when($audiences, fn ($query, $values) => $query->whereIn('audience', $values))
             // An event the organizer cannot see is simply an empty page, not
             // an error: the organization scope above already decides that.
-            ->when($filters['event_id'] ?? null, fn ($query, $id) => $query->where('event_id', $id))
+            ->when($events, fn ($query, $ids) => $query->whereIn('event_id', $ids))
             ->when(
                 filled($filters['q'] ?? null),
                 fn ($query) => $query->where('subject', 'ilike', Search::contains($filters['q'])),
             )
-            ->with('event:id,title,slug,starts_at,currency')
-            ->orderByDesc('created_at')
+            ->with('event:id,title,slug,starts_at,currency');
+
+        $page = Listing::sort($page, $request, [
+            'created' => 'created_at',
+            'subject' => 'lower(subject)',
+        ], ['created', 'desc'], [['id', 'desc']])
             ->paginate(Paging::perPage($request, 20))
             ->withQueryString();
 

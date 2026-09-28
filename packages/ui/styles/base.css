@@ -505,6 +505,85 @@ fieldset {
   border: 0;
 }
 
+/*
+ * A checkbox drawn from the tokens: the row ticks in a table, the columns in
+ * a column menu. The native box is drawn in the OS's colours and at the OS's
+ * size, which is wrong in dark mode and a different size on every platform.
+ * Still a real checkbox — keyboard, form value and screen reader unchanged —
+ * and it shows "some of these" (indeterminate) for a heading whose rows are
+ * partly ticked.
+ */
+.check {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  vertical-align: middle;
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--field-border);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+.check:checked,
+.check:indeterminate {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+.check:checked::after,
+.check:indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  background-color: var(--on-primary);
+  -webkit-mask: center / 12px 12px no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2 5 8.5l4.5-5'/%3E%3C/svg%3E");
+  mask: center / 12px 12px no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2 5 8.5l4.5-5'/%3E%3C/svg%3E");
+}
+.check:indeterminate::after {
+  -webkit-mask: center / 10px 2px no-repeat linear-gradient(black, black);
+  mask: center / 10px 2px no-repeat linear-gradient(black, black);
+}
+.check:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.check:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/*
+ * A table's rows at two densities, chosen in its column menu. Compact is for
+ * somebody reconciling two hundred orders against a bank statement; the
+ * comfortable default is for everybody else.
+ */
+.density-compact th,
+.density-compact td {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* The narrow first column that holds a row's tick box. */
+th.select-cell,
+td.select-cell {
+  width: 44px;
+  padding-right: 0;
+}
+
+/* A ticked row reads as ticked from across the table. */
+tbody tr.is-selected {
+  background-color: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+tbody tr.is-selected:hover {
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
 /* --- surfaces ------------------------------------------------------------ */
 
 .card {

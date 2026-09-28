@@ -9,7 +9,9 @@ use App\Models\OrderAnswer;
 use App\Models\Ticket;
 use App\Services\Audit\Auditor;
 use App\Support\Csv;
+use App\Support\Listing;
 use App\Support\Paging;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -41,9 +43,9 @@ class GuestController extends Controller
     {
         $this->authorize('viewGuests', $event);
 
-        $query = Ticket::query()
-            ->where('event_id', $event->id)
-            ->whereIn('status', ['valid', 'checked_in']);
+        // The guests the list shows, filtered the same way — or only the ones
+        // ticked — so the spreadsheet is never a different set from the screen.
+        $query = $this->guests($request, $event);
 
         $this->auditor->record(
             'guests.exported',
@@ -57,11 +59,9 @@ class GuestController extends Controller
         // dietary requirements with no heading is a column nobody can read.
         $questions = $this->questionsAnswered($event);
 
-        $rows = (function () use ($query, $event, $questions) {
-            $tickets = $query
-                ->with(['ticketType:id,name', 'order:id,reference', 'answers', 'order.answers'])
-                ->orderBy('holder_name')
-                ->orderBy('id');
+        $rows = (function () use ($query, $request, $event, $questions) {
+            $tickets = $this->sorted($query, $request)
+                ->with(['ticketType:id,name', 'order:id,reference', 'answers', 'order.answers']);
 
             foreach ($tickets->lazy(500) as $ticket) {
                 $answers = $this->answersFor($ticket);
@@ -146,43 +146,13 @@ class GuestController extends Controller
     {
         $this->authorize('viewGuests', $event);
 
-        $filters = $request->validate([
-            'q' => ['nullable', 'string', 'max:120'],
-            'status' => ['nullable', 'in:valid,checked_in'],
-            // One tier at a time, which is how a door with a VIP list and a
-            // general queue actually works.
-            'ticket_type_id' => ['nullable', 'uuid'],
+        $perPage = $request->validate([
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
-        ]);
+        ])['per_page'] ?? 50;
 
-        $guests = Ticket::query()
-            ->where('event_id', $event->id)
-            ->whereIn('status', ['valid', 'checked_in'])
-            ->when(
-                $filters['status'] ?? null,
-                fn ($q, $status) => $q->where('status', $status),
-            )
-            ->when(
-                $filters['ticket_type_id'] ?? null,
-                fn ($q, $id) => $q->where('ticket_type_id', $id),
-            )
-            ->when($filters['q'] ?? null, function ($q, $term) {
-                // Names get typed at a door under time pressure, so matching is
-                // loose on both the name and the address.
-                $like = '%'.str_replace('%', '\%', mb_strtolower($term)).'%';
-
-                $q->where(function ($inner) use ($like) {
-                    $inner->whereRaw('lower(holder_name) LIKE ?', [$like])
-                        ->orWhereRaw('lower(owner_email) LIKE ?', [$like]);
-                });
-            })
+        $guests = $this->sorted($this->guests($request, $event), $request)
             ->with(['ticketType:id,name', 'answers.question', 'order:id', 'order.answers.question'])
-            ->orderBy('holder_name')
-            // Names repeat, and a comp issued without one has none at all;
-            // ordered by name alone, the same guest could appear on two pages
-            // and another on neither.
-            ->orderBy('id')
-            ->paginate($filters['per_page'] ?? 50);
+            ->paginate($perPage);
 
         return response()->json([
             'data' => $guests->getCollection()->map(fn (Ticket $ticket) => [
@@ -213,5 +183,62 @@ class GuestController extends Controller
                     ->count(),
             ],
         ]);
+    }
+
+    /**
+     * The guests a request asks for: the list and the export read the same.
+     *
+     * @return Builder<Ticket>
+     */
+    private function guests(Request $request, Event $event): Builder
+    {
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', 'in:valid,checked_in'],
+            // One tier or several: a door with a VIP list and a general queue
+            // reads one, a manager checking the comps reads two.
+            'ticket_type_id' => ['nullable'],
+        ]);
+
+        $ticketTypes = Listing::ids($request, 'ticket_type_id', 100);
+        // The rows somebody ticked, for exporting only those.
+        $ids = Listing::ids($request, 'ids');
+
+        return Ticket::query()
+            ->where('event_id', $event->id)
+            ->whereIn('status', ['valid', 'checked_in'])
+            ->when(
+                $filters['status'] ?? null,
+                fn ($q, $status) => $q->where('status', $status),
+            )
+            ->when($ticketTypes, fn ($q, $types) => $q->whereIn('ticket_type_id', $types))
+            ->when($ids, fn ($q, $ticked) => $q->whereIn('id', $ticked))
+            ->when($filters['q'] ?? null, function ($q, $term) {
+                // Names get typed at a door under time pressure, so matching is
+                // loose on both the name and the address.
+                $like = '%'.str_replace('%', '\%', mb_strtolower($term)).'%';
+
+                $q->where(function ($inner) use ($like) {
+                    $inner->whereRaw('lower(holder_name) LIKE ?', [$like])
+                        ->orWhereRaw('lower(owner_email) LIKE ?', [$like]);
+                });
+            });
+    }
+
+    /**
+     * By name unless asked otherwise. Names repeat, and a comp issued without
+     * one has none at all; the id last means the same guest never appears on
+     * two pages and another on neither.
+     *
+     * @param  Builder<Ticket>  $query
+     * @return Builder<Ticket>
+     */
+    private function sorted(Builder $query, Request $request): Builder
+    {
+        return Listing::sort($query, $request, [
+            'name' => 'lower(holder_name)',
+            'email' => 'lower(owner_email)',
+            'checked_in_at' => 'checked_in_at',
+        ], ['name', 'asc'], [['id', 'asc']]);
     }
 }

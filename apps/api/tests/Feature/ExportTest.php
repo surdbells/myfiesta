@@ -283,6 +283,48 @@ class ExportTest extends TestCase
         $this->assertSame('Arrived', $ada['Status']);
     }
 
+    public function test_the_guest_export_is_the_list_as_filtered_and_sorted(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $vip = TicketType::create(['event_id' => $this->event->id, 'name' => 'VIP', 'price_amount' => 9000, 'status' => 'on_sale']);
+        $comp = TicketType::create(['event_id' => $this->event->id, 'name' => 'Comp', 'price_amount' => 0, 'status' => 'on_sale']);
+
+        $this->ticket(['holder_name' => 'Ada General']);
+        $this->ticket(['holder_name' => 'Bisi Vip', 'ticket_type_id' => $vip->id]);
+        $this->ticket(['holder_name' => 'Chidi Comp', 'ticket_type_id' => $comp->id, 'status' => 'checked_in', 'admitted_count' => 1, 'checked_in_at' => now()]);
+
+        $names = function (array $query) {
+            [, $rows] = $this->csv($this->get("/api/organizer/events/{$this->event->id}/guests/export?".http_build_query($query))->assertOk());
+
+            return array_column(array_slice($rows, 1), 0);
+        };
+
+        $this->assertSame(['Chidi Comp', 'Bisi Vip'], $names(['ticket_type_id' => [$vip->id, $comp->id], 'sort' => 'name', 'dir' => 'desc']));
+        $this->assertSame(['Chidi Comp'], $names(['status' => 'checked_in']));
+        $this->assertSame(['Bisi Vip'], $names(['q' => 'bisi']));
+
+        // Only the rows somebody ticked.
+        $ada = Ticket::query()->where('holder_name', 'Ada General')->sole();
+        $this->assertSame(['Ada General'], $names(['ids' => [$ada->id]]));
+    }
+
+    public function test_the_guest_list_takes_several_tiers_and_a_sort(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $vip = TicketType::create(['event_id' => $this->event->id, 'name' => 'VIP', 'price_amount' => 9000, 'status' => 'on_sale']);
+
+        $this->ticket(['holder_name' => 'ada', 'owner_email' => 'z@example.com']);
+        $this->ticket(['holder_name' => 'Bisi', 'owner_email' => 'a@example.com', 'ticket_type_id' => $vip->id]);
+
+        $list = fn (array $query) => collect($this->getJson("/api/organizer/events/{$this->event->id}/guests?".http_build_query($query))->assertOk()->json('data'))->pluck('name')->all();
+
+        $this->assertSame(['ada', 'Bisi'], $list([]));
+        $this->assertSame(['Bisi', 'ada'], $list(['sort' => 'email']));
+        $this->assertSame(['ada', 'Bisi'], $list(['ticket_type_id' => [$this->type->id, $vip->id]]));
+
+        $this->getJson("/api/organizer/events/{$this->event->id}/guests?sort=code")->assertUnprocessable();
+    }
+
     public function test_door_staff_cannot_take_the_guest_list_away(): void
     {
         $this->signedInAs(Role::Door);

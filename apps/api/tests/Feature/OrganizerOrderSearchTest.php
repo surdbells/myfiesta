@@ -99,6 +99,137 @@ class OrganizerOrderSearchTest extends TestCase
         return $this->getJson('/api/organizer/orders?'.http_build_query($query))->assertOk()->json();
     }
 
+    /** An order's money that adds up (the table checks it): a total, with a $4 service charge in it. */
+    private function priced(int $total): array
+    {
+        return [
+            'subtotal_amount' => $total - 400,
+            'net_revenue_amount' => $total - 400,
+            'service_charge_amount' => 400,
+            'total_amount' => $total,
+        ];
+    }
+
+    public function test_several_statuses_and_events_at_once(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $other = $this->event($this->org, 'Amapiano Sundays');
+        $third = $this->event($this->org, 'Jazz Brunch');
+
+        $this->order(['status' => 'paid']);
+        $this->order(['status' => 'refunded']);
+        $this->order(['status' => 'pending', 'paid_at' => null]);
+        $this->order(['event_id' => $other->id, 'status' => 'paid']);
+        $this->order(['event_id' => $third->id, 'status' => 'paid']);
+
+        // As a multi-select sends it, and as somebody types it into a link.
+        $this->assertCount(2, $this->orders(['status' => ['refunded', 'pending']])['data']);
+        $this->assertCount(2, $this->orders(['status' => 'refunded,pending'])['data']);
+        $this->assertCount(4, $this->orders(['event_id' => [$this->event->id, $other->id]])['data']);
+        $this->assertCount(1, $this->orders(['event_id' => [$this->event->id, $other->id], 'status' => ['pending']])['data']);
+    }
+
+    public function test_a_status_it_does_not_know_is_refused_rather_than_matching_nothing(): void
+    {
+        $this->signedInAs(Role::Owner);
+
+        $this->getJson('/api/organizer/orders?status[]=paid&status[]=stolen')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+        $this->getJson('/api/organizer/orders?event_id[]=not-an-id')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('event_id');
+    }
+
+    public function test_what_the_buyer_paid_bounds_the_list(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $this->order([...$this->priced(2000)]);
+        $this->order([...$this->priced(5400)]);
+        $this->order([...$this->priced(60000)]);
+
+        $this->assertSame([5400, 60000], collect($this->orders(['min_total' => 5400, 'sort' => 'total'])['data'])->pluck('total.amount')->all());
+        $this->assertSame([2000, 5400], collect($this->orders(['max_total' => 5400, 'sort' => 'total'])['data'])->pluck('total.amount')->all());
+        $this->assertSame([2000], collect($this->orders(['min_total' => 0, 'max_total' => 2000])['data'])->pluck('total.amount')->all());
+
+        $this->getJson('/api/organizer/orders?min_total=500&max_total=100')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('max_total');
+    }
+
+    public function test_sorted_by_the_column_asked_for_and_newest_first_otherwise(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $this->order(['buyer_name' => 'bisi', ...$this->priced(3000), 'paid_at' => now()->subDays(2)]);
+        $this->order(['buyer_name' => 'Ada', ...$this->priced(9000), 'paid_at' => now()->subDay()]);
+        $this->order(['buyer_name' => 'Chidi', ...$this->priced(1000), 'paid_at' => now()]);
+        // Still confirming: no payment date, dated by when it was placed.
+        $this->order(['buyer_name' => 'Dayo', ...$this->priced(5000), 'paid_at' => null, 'status' => 'pending', 'created_at' => now()->subDays(5)]);
+
+        $names = fn (array $query) => collect($this->orders($query)['data'])->pluck('buyer_name')->all();
+
+        $this->assertSame(['Chidi', 'Ada', 'bisi', 'Dayo'], $names([]));
+        $this->assertSame(['Dayo', 'bisi', 'Ada', 'Chidi'], $names(['sort' => 'paid_at', 'dir' => 'asc']));
+        $this->assertSame(['Ada', 'Dayo', 'bisi', 'Chidi'], $names(['sort' => 'total', 'dir' => 'desc']));
+        // Case does not decide who comes first.
+        $this->assertSame(['Ada', 'bisi', 'Chidi', 'Dayo'], $names(['sort' => 'buyer']));
+
+        $this->getJson('/api/organizer/orders?sort=password')->assertUnprocessable()->assertJsonValidationErrors('sort');
+        $this->getJson('/api/organizer/orders?sort=total&dir=sideways')->assertUnprocessable()->assertJsonValidationErrors('dir');
+    }
+
+    public function test_orders_of_the_same_moment_never_repeat_across_pages(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $moment = now()->startOfMinute();
+
+        foreach (range(1, 7) as $i) {
+            $this->order(['paid_at' => $moment, 'created_at' => $moment, ...$this->priced(1000)]);
+        }
+
+        $seen = collect([1, 2, 3, 4])
+            ->flatMap(fn ($page) => collect($this->orders(['sort' => 'total', 'per_page' => 2, 'page' => $page])['data'])->pluck('id'));
+
+        $this->assertCount(7, $seen);
+        $this->assertCount(7, $seen->unique());
+    }
+
+    public function test_the_ticked_orders_can_be_exported_alone_in_the_order_shown(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $small = $this->order([...$this->priced(1000), 'reference' => 'SMALL00001']);
+        $big = $this->order([...$this->priced(9000), 'reference' => 'BIG0000001']);
+        $this->order([...$this->priced(5000), 'reference' => 'NOTTICKED1']);
+
+        $response = $this->get('/api/organizer/orders/export?'.http_build_query([
+            'ids' => [$small->id, $big->id],
+            'sort' => 'total',
+            'dir' => 'desc',
+        ]))->assertOk();
+
+        $csv = $response->streamedContent();
+
+        $this->assertStringNotContainsString('NOTTICKED1', $csv);
+        $this->assertLessThan(strpos($csv, 'SMALL00001'), strpos($csv, 'BIG0000001'));
+    }
+
+    public function test_ticked_orders_of_another_organization_stay_out(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $theirs = Organization::create(['name' => 'Harbour Club', 'slug' => 'harbour-club']);
+        $their = $this->order([
+            'organization_id' => $theirs->id,
+            'event_id' => $this->event($theirs, 'Their night')->id,
+            'reference' => 'THEIRS0001',
+        ]);
+
+        $this->assertCount(0, $this->orders(['ids' => [$their->id]])['data']);
+        $this->assertStringNotContainsString(
+            'THEIRS0001',
+            $this->get('/api/organizer/orders/export?ids[]='.$their->id)->assertOk()->streamedContent(),
+        );
+    }
+
     public function test_a_reference_read_over_the_phone_finds_the_order_in_any_case(): void
     {
         $this->signedInAs(Role::Owner);

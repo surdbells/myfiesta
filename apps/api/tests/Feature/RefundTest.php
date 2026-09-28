@@ -533,6 +533,26 @@ class RefundTest extends TestCase
             ->assertJsonCount(2, 'data.0.tickets');
     }
 
+    public function test_the_order_list_narrows_by_status_and_sorts_by_the_total(): void
+    {
+        $one = $this->paidOrder(quantity: 1);
+        $three = $this->paidOrder(quantity: 3);
+        $two = $this->paidOrder(quantity: 2);
+        app(RefundService::class)->refund($two);
+
+        $this->asOrganizer($this->member(Role::Manager));
+
+        $references = fn (array $query) => collect($this->getJson("/api/organizer/events/{$this->event->id}/orders?".http_build_query($query))
+            ->assertOk()
+            ->json('data'))->pluck('reference')->all();
+
+        $this->assertSame([$three->reference, $one->reference], $references(['status' => 'paid', 'sort' => 'total', 'dir' => 'desc']));
+        $this->assertSame([$two->reference], $references(['status' => ['refunded']]));
+        $this->assertSame([$one->reference, $two->reference, $three->reference], $references(['sort' => 'total']));
+
+        $this->getJson("/api/organizer/events/{$this->event->id}/orders?status=pending")->assertUnprocessable();
+    }
+
     public function test_the_order_list_never_carries_ticket_codes(): void
     {
         $order = $this->paidOrder(quantity: 1);

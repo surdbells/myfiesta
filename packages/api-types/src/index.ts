@@ -1259,3 +1259,26 @@ export interface Receipt {
   /** Money given back since, if any. */
   refunded: Money;
 }
+
+/** The console lists somebody can keep views of (SavedViewController::LISTS). */
+export type SavedViewList =
+  | 'orders'
+  | 'event-orders'
+  | 'codes'
+  | 'event-codes'
+  | 'guests'
+  | 'campaigns'
+  | 'payouts'
+  | 'events';
+
+/** One flat value a view keeps: a filter's setting, a sort, the columns. */
+export type SavedViewValue = string | number | boolean | null | readonly (string | number | boolean)[];
+
+/** A list's filters, sort and columns, kept under a name by one person. */
+export interface SavedView {
+  id: string;
+  list: SavedViewList;
+  name: string;
+  state: Record<string, SavedViewValue>;
+  updated_at: string;
+}

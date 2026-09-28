@@ -9,6 +9,7 @@ use App\Models\Refund;
 use App\Models\Ticket;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
+use App\Support\Listing;
 use App\Support\Paging;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,9 +33,10 @@ class RefundController extends Controller
         $this->authorize('viewSales', $event);
 
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
+        $statuses = Listing::many($request, 'status', ['paid', 'partially_refunded', 'refunded']);
 
         $orders = $event->orders()
-            ->whereIn('status', ['paid', 'partially_refunded', 'refunded'])
+            ->whereIn('status', $statuses ?: ['paid', 'partially_refunded', 'refunded'])
             // Searched here rather than in the browser, which could only ever
             // search the page it had.
             ->when($filters['q'] ?? null, function ($q, $term) {
@@ -47,11 +49,17 @@ class RefundController extends Controller
                 });
             })
             ->with(['tickets', 'lines'])
-            ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
-            ->orderByDesc('paid_at')
-            // A tiebreak, or two orders paid in the same second can swap
-            // between pages and one of them is never shown.
-            ->orderByDesc('id')
+            ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount');
+
+        // Newest first unless asked otherwise. The id is the tiebreak, or two
+        // orders paid in the same second can swap between pages and one of
+        // them is never shown.
+        $orders = Listing::sort($orders, $request, [
+            'paid_at' => 'paid_at',
+            'total' => 'total_amount',
+            'buyer' => 'lower(buyer_name)',
+            'reference' => 'reference',
+        ], ['paid_at', 'desc'], [['id', 'desc']])
             ->paginate(Paging::perPage($request, 30));
 
         return response()->json([

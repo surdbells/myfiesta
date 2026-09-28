@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\Organizer\PayoutController;
 use App\Http\Controllers\Api\Organizer\QuestionController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\ReminderController;
+use App\Http\Controllers\Api\Organizer\SavedViewController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
 use App\Http\Controllers\Api\Organizer\StandingController;
 use App\Http\Controllers\Api\Organizer\TeamController;
@@ -306,6 +307,12 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::get('/orders', [OrganizerOrderController::class, 'index']);
         Route::get('/orders/export', [OrganizerOrderController::class, 'export']);
 
+        // The views somebody keeps of a list: its filters, sort and columns,
+        // under a name. Theirs alone, for this organization.
+        Route::get('/saved-views', [SavedViewController::class, 'index']);
+        Route::post('/saved-views', [SavedViewController::class, 'store'])->middleware('throttle:60,1');
+        Route::delete('/saved-views/{view}', [SavedViewController::class, 'destroy'])->whereUuid('view');
+
         // Where the money goes, and asking for it, wait for a proved address
         // (verified.email): an account made under somebody else's address
         // must not be able to point an organization's money anywhere.
@@ -430,6 +437,8 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
 
         // Every code across the organization's events, for the Discount codes screen.
         Route::get('/codes', [CodeController::class, 'all']);
+        // Several at once, off or back on: the codes list's bulk action.
+        Route::post('/codes/active', [CodeController::class, 'setActive'])->middleware('throttle:30,1');
 
         Route::get('/events/{event:id}/codes', [CodeController::class, 'index']);
         Route::post('/events/{event:id}/codes', [CodeController::class, 'store']);

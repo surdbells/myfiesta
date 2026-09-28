@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Organizer;
 
+use App\Enums\EventStatus;
 use App\Enums\Permission;
 use App\Http\Controllers\Controller;
 use App\Models\Code;
@@ -9,14 +10,19 @@ use App\Models\Event;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventReviews;
+use App\Support\Listing;
 use App\Support\Paging;
 use App\Support\Search;
 use Carbon\Carbon;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use LogicException;
 
 /**
  * Discount and promoter codes.
@@ -45,18 +51,54 @@ class CodeController extends Controller
         $organization = $this->organization($request);
 
         $filters = $request->validate([
-            'event_id' => ['nullable', 'string', 'max:64'],
             'q' => ['nullable', 'string', 'max:64'],
         ]);
+
+        // Several events at once, and "all-events" for the codes that work at
+        // every one of them, alongside or instead.
+        $events = Listing::many($request, 'event_id', null, 200);
+        $everywhere = in_array('all-events', $events, true);
+        $eventIds = array_values(array_diff($events, ['all-events']));
+
+        foreach ($eventIds as $id) {
+            if (! Str::isUuid($id)) {
+                throw ValidationException::withMessages(['event_id' => 'Each one must be an event.']);
+            }
+        }
+
+        $states = Listing::many($request, 'state', self::STATES);
+        $kinds = Listing::many($request, 'kind', ['discount', 'promoter', 'presale']);
 
         $codes = Code::query()
             ->where('organization_id', $organization->id)
             ->whereNull('batch_id')
-            ->when(($filters['event_id'] ?? null) === 'all-events', fn ($query) => $query->whereNull('event_id'))
-            ->when(
-                filled($filters['event_id'] ?? null) && $filters['event_id'] !== 'all-events',
-                fn ($query) => $query->where('event_id', $filters['event_id']),
-            )
+            ->when($events !== [], fn ($query) => $query->where(function ($inner) use ($everywhere, $eventIds) {
+                if ($everywhere) {
+                    $inner->orWhereNull('event_id');
+                }
+
+                if ($eventIds !== []) {
+                    $inner->orWhereIn('event_id', $eventIds);
+                }
+            }))
+            // Where each code stands now: the question an organizer is asking
+            // when they open this list. Any of those chosen.
+            ->when($states !== [], fn ($query) => $query->where(function ($inner) use ($states) {
+                foreach ($states as $state) {
+                    $inner->orWhere(fn ($one) => self::whereState($one, $state));
+                }
+            }))
+            ->when($kinds !== [], fn ($query) => $query->where(function ($inner) use ($kinds) {
+                foreach ($kinds as $kind) {
+                    match ($kind) {
+                        'discount' => $inner->orWhereNotNull('discount_type'),
+                        'promoter' => $inner->orWhereNotNull('ref_slug'),
+                        'presale' => $inner->orWhere('unlocks_tickets', true),
+                        // Listing::many refused anything else before this.
+                        default => throw new LogicException("Unknown kind of code: {$kind}"),
+                    };
+                }
+            }))
             ->when(filled($filters['q'] ?? null), function ($query) use ($filters) {
                 $like = Search::contains($filters['q']);
 
@@ -64,9 +106,14 @@ class CodeController extends Controller
                     ->where('code', 'ilike', $like)
                     ->orWhere('label', 'ilike', $like)
                     ->orWhere('promoter_name', 'ilike', $like));
-            })
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
+            });
+
+        $codes = Listing::sort($codes, $request, [
+            'created' => 'created_at',
+            'code' => 'lower(code)',
+            'used' => 'redemption_count',
+            'ends' => 'ends_at',
+        ], ['created', 'desc'], [['id', 'desc']])
             ->paginate(Paging::perPage($request, 50));
 
         $codes->getCollection()->load(['event:id,title,starts_at,timezone,currency,status', 'ticketTypes:id,name', 'unlocks:id,name']);
@@ -85,6 +132,94 @@ class CodeController extends Controller
                 ])
                 ->values(),
             'meta' => Paging::meta($codes),
+        ]);
+    }
+
+    /** Where a code can stand, as the console names it. */
+    private const STATES = ['usable', 'paused', 'used_up', 'expired', 'scheduled'];
+
+    /**
+     * Where a code stands, as SQL: the same answers the console gives.
+     *
+     * Read from the columns rather than from `usable`, which is worked out per
+     * row — a filter has to be a query, or it can only ever filter a page.
+     *
+     * @param  Builder<Code>  $q
+     */
+    private static function whereState(Builder $q, string $state): void
+    {
+        match ($state) {
+            'usable' => $q->where('is_active', true)
+                ->where(fn ($w) => $w->whereNull('max_redemptions')->orWhereColumn('redemption_count', '<', 'max_redemptions'))
+                ->where(fn ($w) => $w->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn ($w) => $w->whereNull('ends_at')->orWhere('ends_at', '>', now())),
+            'paused' => $q->where('is_active', false),
+            'used_up' => $q->whereNotNull('max_redemptions')->whereColumn('redemption_count', '>=', 'max_redemptions'),
+            'expired' => $q->whereNotNull('ends_at')->where('ends_at', '<=', now()),
+            'scheduled' => $q->whereNotNull('starts_at')->where('starts_at', '>', now()),
+            // Listing::many refused anything else before this.
+            default => throw new LogicException("Unknown state of a code: {$state}"),
+        };
+    }
+
+    /**
+     * Turn several codes off, or back on, at once.
+     *
+     * The list's bulk action: a promoter leaving takes their dozen codes with
+     * them, and a sale ending turns off every code that pointed at it. Only
+     * on or off — anything more is a decision about one code, made on it.
+     *
+     * A code on an event waiting for review is left as it is and named in
+     * `skipped`, as its own edit would be refused (EventReviews): the review
+     * is of what buyers would be able to use. Codes that are not this
+     * organization's are simply not found.
+     */
+    public function setActive(Request $request): JsonResponse
+    {
+        $organization = $this->organization($request);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['uuid'],
+            'active' => ['required', 'boolean'],
+        ]);
+
+        $codes = Code::query()
+            ->where('organization_id', $organization->id)
+            ->whereNull('batch_id')
+            ->whereIn('id', $data['ids'])
+            ->with('event:id,status')
+            ->get();
+
+        $changed = [];
+        $skipped = [];
+
+        foreach ($codes as $code) {
+            if ($code->event !== null && $code->event->status === EventStatus::InReview->value) {
+                $skipped[] = ['id' => $code->id, 'code' => $code->code, 'reason' => 'Its event is waiting for review.'];
+
+                continue;
+            }
+
+            if ($code->is_active !== (bool) $data['active']) {
+                $code->forceFill(['is_active' => (bool) $data['active']])->save();
+                $changed[] = $code->code;
+            }
+        }
+
+        if ($changed !== []) {
+            $this->auditor->record(
+                $data['active'] ? 'codes.resumed' : 'codes.paused',
+                $organization,
+                $request->user(),
+                $organization->id,
+                metadata: ['codes' => $changed],
+            );
+        }
+
+        return response()->json([
+            'changed' => count($changed),
+            'skipped' => $skipped,
         ]);
     }
 

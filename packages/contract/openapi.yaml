@@ -1476,6 +1476,127 @@ paths:
         '429':
           description: Too many tries at the password in the last hour. Said against `current_password`, like a validation error.
 
+  /api/organizer/saved-views:
+    get:
+      operationId: listSavedViews
+      summary: The views this person keeps of one list
+      description: |
+        A view is a list's filters, sort and columns kept under a name — by one
+        person, for one organization. Applying one asks the list's own
+        endpoint, so a view never shows anybody more than the list would.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+        - name: list
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/SavedViewList' }
+      responses:
+        '200':
+          description: Their views of that list, by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SavedView' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    post:
+      operationId: saveView
+      summary: Keep a view, or replace the one with the same name
+      description: |
+        The state is flat data: up to 40 keys (lowercase, digits and
+        underscores), each a string of up to 200 characters, a number, a
+        boolean, null, or a list of up to 50 of those; 4 KB in all. At most 30
+        views per list. Saving a name that exists replaces that view (200).
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [list, name, state]
+              properties:
+                list: { $ref: '#/components/schemas/SavedViewList' }
+                name: { type: string, maxLength: 60 }
+                state: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: The view of that name, replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SavedView' }
+        '201':
+          description: A new view, kept.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SavedView' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/saved-views/{view}:
+    delete:
+      operationId: deleteSavedView
+      summary: Stop keeping a view
+      description: Somebody else's view, or another organization's, is not found.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+        - name: view
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Gone.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/organizer/standing:
     get:
       operationId: getOrganizationStanding
@@ -2874,6 +2995,22 @@ components:
           type: array
           items: { $ref: '#/components/schemas/EventReviewStep' }
 
+    SavedViewList:
+      type: string
+      description: Which console list a view is of.
+      enum: [orders, event-orders, codes, event-codes, guests, campaigns, payouts, events]
+    SavedView:
+      type: object
+      required: [id, list, name, state, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        list: { $ref: '#/components/schemas/SavedViewList' }
+        name: { type: string }
+        state:
+          type: object
+          additionalProperties: true
+          description: The console's own shape — filters, sort, columns. Always an object, empty included.
+        updated_at: { type: string, format: date-time }
     OrganizationStanding:
       type: object
       required: [organization, suspended, suspension]

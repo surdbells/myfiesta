@@ -71,6 +71,9 @@ import {
   AccountErasurePreview,
   AccountErasureResult,
   TermsStanding,
+  SavedView,
+  SavedViewList,
+  SavedViewValue,
 } from './api.types';
 import { EmailVerification } from './email-verification';
 import { isEmailUnverified } from './errors';
@@ -737,6 +740,22 @@ export class Api {
     return this.http.get(`${this.base}/api/organizer/events/${eventId}/guests/export`, {
       responseType: 'blob',
     });
+  }
+
+  /** The views this person keeps of one list, for the current organization. */
+  savedViews(list: SavedViewList): Observable<{ data: SavedView[] }> {
+    return this.http.get<{ data: SavedView[] }>(`${this.base}/api/organizer/saved-views`, {
+      params: new HttpParams().set('list', list),
+    });
+  }
+
+  /** Keep a view; saving a name that exists replaces it. */
+  saveView(list: SavedViewList, name: string, state: Record<string, SavedViewValue>): Observable<{ data: SavedView }> {
+    return this.http.post<{ data: SavedView }>(`${this.base}/api/organizer/saved-views`, { list, name, state });
+  }
+
+  deleteSavedView(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/api/organizer/saved-views/${encodeURIComponent(id)}`);
   }
 
   /** Every order the filter matches — not only the page on screen — as a CSV. */

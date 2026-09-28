@@ -34,7 +34,7 @@ export interface Sort {
   selector: 'ui-table',
   template: `
     <div class="table__scroll" [attr.aria-busy]="loading() ? 'true' : null">
-      <table class="table">
+      <table class="table" [class.density-compact]="density() === 'compact'">
         <caption class="sr-only">{{ caption() }}</caption>
         <ng-content select="[tableHead]" />
 
@@ -93,6 +93,9 @@ export class UiTable {
   readonly caption = input.required<string>();
 
   readonly loading = input(false);
+
+  /** From the list's column menu (ListState.density). */
+  readonly density = input<'comfortable' | 'compact'>('comfortable');
 
   /** Whether there is nothing to show. The caller knows; the table cannot. */
   readonly empty = input(false);

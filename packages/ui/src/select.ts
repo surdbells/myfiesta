@@ -47,6 +47,12 @@ let sequence = 0;
  * dialogs and scrolled cards it most often sits in.
  *
  * Works with ngModel (it is a value accessor) and with `[(value)]`.
+ *
+ * `multiple` makes it a multi-select for filters — "Paid or refunded", three
+ * events at once. Choosing ticks and unticks without closing, the control
+ * reads "Paid, Refunded" or "3 statuses" (`noun`), the list says
+ * aria-multiselectable, and the value is `[(values)]` — or an array through
+ * ngModel.
  */
 @Component({
   selector: 'ui-select',
@@ -66,12 +72,15 @@ let sequence = 0;
       [attr.aria-label]="ariaLabel()"
       [attr.aria-invalid]="invalid() || null"
       [disabled]="isDisabled()"
-      [class.is-placeholder]="!selected()"
+      [class.is-placeholder]="!summary()"
       [class.is-compact]="compact()"
       (click)="toggle()"
       (keydown)="onTriggerKey($event)"
     >
-      <span class="ui-select__value">{{ selected()?.label ?? placeholder() }}</span>
+      <span class="ui-select__value">{{ summary() ?? placeholder() }}</span>
+      @if (multiple() && values().length > 1) {
+        <span class="ui-select__count" aria-hidden="true">{{ values().length }}</span>
+      }
     </button>
 
     <div
@@ -101,28 +110,46 @@ let sequence = 0;
         (keydown)="onSearchKey($event)"
       />
 
-      <ul class="ui-select__list" role="listbox" [id]="listId" [attr.aria-label]="ariaLabel()">
+      <ul
+        class="ui-select__list"
+        role="listbox"
+        [id]="listId"
+        [attr.aria-label]="ariaLabel()"
+        [attr.aria-multiselectable]="multiple() || null"
+      >
         @for (option of filtered(); track option.value; let i = $index) {
           <li
             class="ui-select__option"
             role="option"
             [id]="listId + '-' + i"
-            [attr.aria-selected]="option.value === value()"
+            [attr.aria-selected]="isChosen(option.value)"
             [attr.aria-disabled]="option.disabled || null"
             [class.is-active]="i === active()"
             (mousedown)="$event.preventDefault()"
             (mouseenter)="active.set(i)"
             (click)="choose(option)"
           >
-            <span class="ui-select__label">{{ option.label }}</span>
-            @if (option.hint) {
-              <span class="ui-select__hint">{{ option.hint }}</span>
+            @if (multiple()) {
+              <span class="ui-select__tick" aria-hidden="true"></span>
             }
+            <span class="ui-select__text">
+              <span class="ui-select__label">{{ option.label }}</span>
+              @if (option.hint) {
+                <span class="ui-select__hint">{{ option.hint }}</span>
+              }
+            </span>
           </li>
         } @empty {
           <li class="ui-select__none" role="presentation">No matches for “{{ query() }}”</li>
         }
       </ul>
+
+      @if (multiple() && values().length > 0) {
+        <div class="ui-select__foot">
+          <span>{{ values().length }} chosen</span>
+          <button type="button" class="ui-select__clear" (mousedown)="$event.preventDefault()" (click)="clearAll()">Clear</button>
+        </div>
+      }
     </div>
   `,
   styles: `
@@ -169,6 +196,20 @@ let sequence = 0;
     :host(.is-compact) { display: inline-block; }
     .ui-select__trigger.is-compact { width: auto; border-radius: 9999px; font-weight: var(--font-weight-medium); }
     .ui-select__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ui-select__count {
+      flex: none;
+      margin-left: var(--space-2);
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      display: inline-grid;
+      place-items: center;
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-semibold);
+      color: var(--primary-soft-text);
+      background: var(--primary-soft);
+      border-radius: var(--radius-full);
+    }
 
     .ui-select__panel {
       position: fixed;
@@ -203,8 +244,9 @@ let sequence = 0;
       overscroll-behavior: contain;
     }
     .ui-select__option {
-      display: grid;
-      gap: 2px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
       min-height: 40px;
       align-content: center;
       padding: var(--space-2) var(--space-3);
@@ -212,7 +254,54 @@ let sequence = 0;
       border-radius: var(--radius-sm);
       cursor: pointer;
     }
+    .ui-select__text { display: grid; gap: 2px; min-width: 0; }
     .ui-select__option.is-active { background: var(--surface-hover); }
+    /* A drawn box rather than an input: the option is the control, and a real
+       checkbox inside it would be a second focus stop announcing itself. */
+    .ui-select__tick {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--field-border);
+      border-radius: var(--radius-xs);
+      background: var(--surface-raised);
+      transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+    }
+    .ui-select__tick { position: relative; }
+    .ui-select__option[aria-selected='true'] .ui-select__tick {
+      border-color: var(--primary);
+      background: var(--primary);
+    }
+    /* The tick is a mask filled with the on-primary colour, so it stays
+       readable on the primary in both themes (dark mode's primary is light). */
+    .ui-select__option[aria-selected='true'] .ui-select__tick::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-color: var(--on-primary);
+      -webkit-mask: center / 12px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2 5 8.5l4.5-5'/%3E%3C/svg%3E");
+      mask: center / 12px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2 5 8.5l4.5-5'/%3E%3C/svg%3E");
+    }
+    .ui-select__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) var(--space-2) 0;
+      border-top: 1px solid var(--border-subtle);
+      font-size: var(--font-size-xs);
+      color: var(--text-muted);
+    }
+    .ui-select__clear {
+      padding: var(--space-1) var(--space-2);
+      font: inherit;
+      font-weight: var(--font-weight-semibold);
+      color: var(--primary-text);
+      background: none;
+      border: 0;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .ui-select__clear:hover { background: var(--surface-hover); }
     .ui-select__option[aria-selected='true'] { font-weight: var(--font-weight-semibold); color: var(--primary-text); }
     .ui-select__option[aria-disabled='true'] { color: var(--text-subtle); cursor: not-allowed; }
     .ui-select__hint { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: var(--font-weight-regular); }
@@ -222,6 +311,12 @@ let sequence = 0;
 export class UiSelect implements ControlValueAccessor {
   readonly options = input.required<readonly SelectOption[]>();
   readonly value = model<string | null>(null);
+
+  /** Several at once; the choice is then `values`. */
+  readonly multiple = input(false, { transform: booleanAttribute });
+  readonly values = model<readonly string[]>([]);
+  /** What several of them are called: "3 statuses". */
+  readonly noun = input<string | null>(null);
 
   /** Shown while nothing is chosen. */
   readonly placeholder = input('Choose…');
@@ -263,6 +358,29 @@ export class UiSelect implements ControlValueAccessor {
   readonly selected = computed(() => this.options().find((o) => o.value === this.value()) ?? null);
 
   /**
+   * What the closed control says. One choice by name, two by name when they
+   * fit, more as a count — a trigger that runs "Paid, Part refunded, Refun…"
+   * off its edge says less than "3 statuses".
+   */
+  readonly summary = computed<string | null>(() => {
+    if (!this.multiple()) return this.selected()?.label ?? null;
+
+    const chosen = this.options().filter((o) => this.values().includes(o.value));
+
+    if (chosen.length === 0) return null;
+    if (chosen.length === 1) return chosen[0].label;
+
+    const both = `${chosen[0].label}, ${chosen[1].label}`;
+    if (chosen.length === 2 && both.length <= 24) return both;
+
+    return `${chosen.length} ${this.noun() ?? 'chosen'}`;
+  });
+
+  isChosen(value: string): boolean {
+    return this.multiple() ? this.values().includes(value) : value === this.value();
+  }
+
+  /**
    * Matching options. Accents and case are ignored, and the hint is searched
    * too — "ON" finds Ontario, "montreal" finds Montréal.
    */
@@ -279,16 +397,21 @@ export class UiSelect implements ControlValueAccessor {
     this.open() && this.filtered().length > 0 ? `${this.listId}-${this.active()}` : null,
   );
 
-  private onChange: (value: string | null) => void = () => undefined;
+  private onChange: (value: string | null | readonly string[]) => void = () => undefined;
   private onTouched: () => void = () => undefined;
 
   // --- value accessor ------------------------------------------------------
 
   writeValue(value: unknown): void {
+    if (this.multiple()) {
+      this.values.set(Array.isArray(value) ? value.map(String) : value === null || value === undefined || value === '' ? [] : [String(value)]);
+      return;
+    }
+
     this.value.set(value === null || value === undefined ? null : String(value));
   }
 
-  registerOnChange(fn: (value: string | null) => void): void {
+  registerOnChange(fn: (value: string | null | readonly string[]) => void): void {
     this.onChange = fn;
   }
 
@@ -310,7 +433,7 @@ export class UiSelect implements ControlValueAccessor {
     if (this.isDisabled() || this.open()) return;
 
     this.query.set(seed);
-    const index = this.filtered().findIndex((o) => o.value === this.value());
+    const index = this.filtered().findIndex((o) => this.isChosen(o.value));
     this.active.set(Math.max(0, index));
     this.place();
     this.open.set(true);
@@ -357,12 +480,31 @@ export class UiSelect implements ControlValueAccessor {
   choose(option: SelectOption): void {
     if (option.disabled) return;
 
+    // Ticked or unticked, and the list stays open for the next one.
+    if (this.multiple()) {
+      const current = this.values();
+      const next = current.includes(option.value)
+        ? current.filter((v) => v !== option.value)
+        : [...current, option.value];
+
+      this.values.set(next);
+      this.onChange(next);
+
+      return;
+    }
+
     if (option.value !== this.value()) {
       this.value.set(option.value);
       this.onChange(option.value);
     }
 
     this.close(true);
+  }
+
+  clearAll(): void {
+    this.values.set([]);
+    this.onChange([]);
+    this.search().nativeElement.focus();
   }
 
   onSearch(event: Event): void {

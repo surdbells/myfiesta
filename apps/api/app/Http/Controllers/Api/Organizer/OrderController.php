@@ -12,11 +12,13 @@ use App\Services\Disputes\RiskSignals;
 use App\Services\Receipts\Receipt;
 use App\Services\Settings\SellerOfRecord;
 use App\Support\Csv;
+use App\Support\Listing;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -42,13 +44,10 @@ class OrderController extends Controller
 
         $filters = $this->filters($request);
 
-        $orders = $this->filtered($organization, $filters)
+        $orders = $this->sorted($this->filtered($organization, $filters), $request)
             ->with('event:id,title')
             ->withCount('tickets')
             ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
-            // Newest first, and the unpaid ones have no paid_at to sort by.
-            ->orderByDesc('paid_at')
-            ->orderByDesc('created_at')
             ->paginate($filters['per_page'] ?? 25)
             ->withQueryString();
 
@@ -101,15 +100,14 @@ class OrderController extends Controller
         $organization = $this->organization($request);
         $filters = $this->filters($request);
 
-        $query = $this->filtered($organization, $filters)
+        // In the order the screen showed them, so a spreadsheet of "the
+        // biggest first" is the biggest first.
+        $query = $this->sorted($this->filtered($organization, $filters), $request)
             // The rate, for an order from before orders kept their own tax
             // lines: its one tax is named from the row it points at.
             ->with(['event:id,title,timezone', 'taxRate'])
             ->withCount('tickets')
-            ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('created_at')
-            ->orderBy('id');
+            ->withSum(['refunds as refunded_amount' => fn ($q) => $q->where('status', 'succeeded')], 'amount');
 
         $this->auditor->record(
             'orders.exported',
@@ -190,12 +188,40 @@ class OrderController extends Controller
     }
 
     /** @return array<string, mixed> */
+    /** What an order list can be sorted by, and what each is in SQL. */
+    private const SORTS = [
+        'paid_at' => 'coalesce(paid_at, created_at)',
+        'total' => 'total_amount',
+        'buyer' => 'lower(buyer_name)',
+        'reference' => 'reference',
+    ];
+
+    /**
+     * Newest first unless the reader asked otherwise, with the id last so a
+     * page break never falls between two orders of the same moment and shows
+     * one twice.
+     *
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
+     */
+    private function sorted(Builder $query, Request $request): Builder
+    {
+        return Listing::sort($query, $request, self::SORTS, ['paid_at', 'desc'], [['created_at', 'desc'], ['id', 'asc']]);
+    }
+
     private function filters(Request $request): array
     {
         return $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
-            'event_id' => ['nullable', 'uuid'],
-            'status' => ['nullable', 'in:paid,partially_refunded,refunded,pending,failed,cancelled'],
+            // One value or several: a single select and a multi-select both
+            // land here, read by Listing::many below.
+            'event_id' => ['nullable'],
+            'status' => ['nullable'],
+            // What the buyer paid, in the smallest unit of the currency, both
+            // ends inclusive. "Over $500" is how a finance person looks for
+            // the orders worth a second look.
+            'min_total' => ['nullable', 'integer', 'min:0'],
+            'max_total' => ['nullable', 'integer', 'min:0', Rule::when($request->filled('min_total'), ['gte:min_total'])],
             // When it happened, as whole days. An organizer asking about
             // Friday is not asking about 00:00:00Z, and both ends are
             // inclusive because that is what a person means by "to the 14th".
@@ -207,7 +233,12 @@ class OrderController extends Controller
             // what some browsers still report.
             'timezone' => ['nullable', 'timezone:all_with_bc'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        ]) + [
+            'event_ids' => Listing::ids($request, 'event_id', 200),
+            'statuses' => Listing::many($request, 'status', ['paid', 'partially_refunded', 'refunded', 'pending', 'failed', 'cancelled']),
+            // The rows somebody ticked, for exporting only those.
+            'ids' => Listing::ids($request, 'ids'),
+        ];
     }
 
     /**
@@ -227,12 +258,24 @@ class OrderController extends Controller
             // thing somebody rings about.
             ->whereIn('status', ['paid', 'partially_refunded', 'refunded', 'pending'])
             ->when(
-                $filters['event_id'] ?? null,
-                fn ($q, $id) => $q->where('event_id', $id),
+                $filters['event_ids'],
+                fn ($q, $ids) => $q->whereIn('event_id', $ids),
             )
             ->when(
-                $filters['status'] ?? null,
-                fn ($q, $status) => $q->where('status', $status),
+                $filters['statuses'],
+                fn ($q, $statuses) => $q->whereIn('status', $statuses),
+            )
+            ->when(
+                $filters['ids'],
+                fn ($q, $ids) => $q->whereIn('id', $ids),
+            )
+            ->when(
+                isset($filters['min_total']),
+                fn ($q) => $q->where('total_amount', '>=', (int) $filters['min_total']),
+            )
+            ->when(
+                isset($filters['max_total']),
+                fn ($q) => $q->where('total_amount', '<=', (int) $filters['max_total']),
             )
             /*
              * Dated by when the money arrived, falling back to when the order
