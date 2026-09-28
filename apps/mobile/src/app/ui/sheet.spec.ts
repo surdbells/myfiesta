@@ -209,3 +209,77 @@ describe('MfSheet and the keyboard', () => {
     expect(document.activeElement?.id).toBe('opener');
   });
 });
+
+@Component({
+  imports: [MfSheet],
+  template: `
+    <mf-sheet [open]="open()" expandable heading="Choose a city" (closed)="closed.set($event); open.set(false)">
+      <p>A long list</p>
+    </mf-sheet>
+  `,
+})
+class TallHost {
+  readonly open = signal(true);
+  readonly closed = signal<string | null>(null);
+}
+
+describe('MfSheet, expandable', () => {
+  async function mountTall() {
+    const fixture = TestBed.createComponent(TallHost);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    const root: HTMLElement = fixture.nativeElement;
+    const panel = () => root.querySelector<HTMLElement>('.panel')!;
+
+    /** A drag on the sheet's chrome from one height to another, over some milliseconds. */
+    const drag = async (from: number, to: number, ms = 400) => {
+      const grip = root.querySelector<HTMLElement>('.head')!;
+      grip.dispatchEvent(new MouseEvent('pointerdown', { clientY: from, bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      grip.dispatchEvent(new MouseEvent('pointermove', { clientY: to, bubbles: true }));
+      grip.dispatchEvent(new MouseEvent('pointerup', { clientY: to, bubbles: true }));
+      await fixture.whenStable();
+    };
+
+    return { fixture, host: fixture.componentInstance, root, panel, drag };
+  }
+
+  it('opens halfway, goes taller when dragged up, and back down before it closes', async () => {
+    const ui = await mountTall();
+
+    expect(ui.panel().classList).toContain('expandable');
+    expect(ui.panel().classList).not.toContain('expanded');
+
+    await ui.drag(500, 380);
+    expect(ui.panel().classList).toContain('expanded');
+
+    await ui.drag(300, 380);
+    expect(ui.panel().classList).not.toContain('expanded');
+    expect(ui.host.closed()).toBeNull();
+
+    // From halfway, a long drag down closes it.
+    await ui.drag(300, 600);
+    expect(ui.host.closed()).toBe('drag');
+  });
+
+  it('has a grip a keyboard can use, and starts short every time it opens', async () => {
+    const ui = await mountTall();
+
+    const grip = ui.root.querySelector<HTMLButtonElement>('button.grip')!;
+    expect(grip.getAttribute('aria-label')).toBe('Make taller');
+
+    grip.click();
+    await ui.fixture.whenStable();
+    expect(ui.panel().classList).toContain('expanded');
+    expect(grip.getAttribute('aria-expanded')).toBe('true');
+
+    ui.host.open.set(false);
+    await ui.fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    ui.host.open.set(true);
+    await ui.fixture.whenStable();
+
+    expect(ui.panel().classList).not.toContain('expanded');
+  });
+});

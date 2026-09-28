@@ -51,6 +51,11 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
  * enough, and a quick flick down closes it however short the flick — a sheet
  * that only closes by button, or only on a long drag, is one people fight.
  *
+ * `expandable` gives it two heights to rest at, the way a map or a long list
+ * sheet does: it opens halfway, a drag or flick up takes it nearly to the top,
+ * and down brings it back before a longer drag closes it. The grip becomes a
+ * button that does the same, for anybody not dragging.
+ *
  * Actions go in the footer (`sheetFooter`), pinned below the scrolling body so
  * Save is never scrolled out of reach, and the whole sheet rides above the
  * keyboard — the WebView is told not to resize for it.
@@ -70,6 +75,8 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
         class="panel"
         [class.docked]="docked()"
         [class.showing]="showing()"
+        [class.expandable]="expandable()"
+        [class.expanded]="expanded()"
         [style.transform]="dragging() ? 'translateY(' + dragged() + 'px)' : null"
         [style.transition]="dragging() ? 'none' : null"
         [style.--mf-sheet-lift.px]="chrome.keyboardHeight()"
@@ -83,7 +90,19 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
         (pointerup)="release()"
         (pointercancel)="release()"
       >
-        <div class="grip" aria-hidden="true"><span></span></div>
+        @if (expandable()) {
+          <button
+            type="button"
+            class="grip grip--button"
+            [attr.aria-label]="expanded() ? 'Make smaller' : 'Make taller'"
+            [attr.aria-expanded]="expanded()"
+            (click)="expanded.set(!expanded())"
+          >
+            <span></span>
+          </button>
+        } @else {
+          <div class="grip" aria-hidden="true"><span></span></div>
+        }
 
         @if (heading() || closable()) {
           <header class="head">
@@ -147,7 +166,7 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
       max-height: calc(100dvh - var(--mf-safe-top) - var(--mf-safe-bottom) - var(--mf-sheet-lift) - var(--space-8));
       overflow: hidden;
       background: var(--surface-raised);
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-overlay);
       box-shadow:
         inset 0 0 0 1px var(--border-subtle),
         var(--shadow-floating);
@@ -162,12 +181,25 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
       transform: translateY(0);
     }
 
+    /* Two resting heights: halfway, and as tall as the screen allows. */
+    .panel.expandable {
+      height: min(56dvh, calc(100dvh - var(--mf-safe-top) - var(--mf-safe-bottom) - var(--mf-sheet-lift) - var(--space-8)));
+      transition:
+        transform 340ms var(--mf-ease-out),
+        bottom 240ms var(--mf-ease-out),
+        height 320ms var(--mf-ease-out);
+    }
+
+    .panel.expandable.expanded {
+      height: calc(100dvh - var(--mf-safe-top) - var(--mf-safe-bottom) - var(--mf-sheet-lift) - var(--space-8));
+    }
+
     .panel.docked {
       left: 0;
       right: 0;
       bottom: var(--mf-sheet-lift);
       padding-bottom: var(--mf-safe-bottom);
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      border-radius: var(--radius-overlay) var(--radius-overlay) 0 0;
     }
 
     .grip {
@@ -176,6 +208,18 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
       padding: var(--space-2) 0 var(--space-1);
       /* The chrome drags; the body below scrolls. */
       touch-action: none;
+    }
+
+    .grip--button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      cursor: grab;
+    }
+
+    .grip--button:focus-visible span {
+      outline: 2px solid var(--primary);
+      outline-offset: 4px;
     }
 
     .grip span {
@@ -243,6 +287,12 @@ export class MfSheet {
 
   /** Against the bottom edge rather than floating, for a sheet that needs every pixel. */
   readonly docked = input(false, { transform: booleanAttribute });
+
+  /** Rests halfway and expands to nearly full height: for long lists and pickers. */
+  readonly expandable = input(false, { transform: booleanAttribute });
+
+  /** At its taller resting height. Starts short every time it opens. */
+  readonly expanded = signal(false);
 
   /** A close button in the header, for a sheet with no footer to leave by. */
   readonly closable = input(false, { transform: booleanAttribute });
@@ -318,6 +368,7 @@ export class MfSheet {
 
     this.mounted.set(true);
     this.dragged.set(0);
+    this.expanded.set(false);
     this.stack.push(this.closer);
 
     // The page behind must not scroll under the sheet; on iOS it must not
@@ -427,7 +478,8 @@ export class MfSheet {
     // Dragging starts on the sheet's chrome, or at the top of its content.
     // Starting it inside a scrolled list would steal the scroll; starting it
     // on a control would steal the tap.
-    if (target.closest('input, textarea, select, button, a, [role="option"]')) return;
+    if (target.closest('input, textarea, select, a, [role="option"]')) return;
+    if (target.closest('button') && !target.closest('.grip--button')) return;
     if (target.closest('.body') && !this.atTop()) return;
 
     this.startY = event.clientY;
@@ -443,8 +495,10 @@ export class MfSheet {
     this.trail.push({ y: event.clientY, t: event.timeStamp });
     if (this.trail.length > 5) this.trail.shift();
 
-    // Upward drags resist rather than lift the sheet off its place.
-    this.dragged.set(delta > 0 ? delta : delta / 6);
+    // Upward drags resist rather than lift the sheet off its place — less so
+    // when there is a taller height to go to, so the finger feels the pull.
+    const resistance = this.expandable() && !this.expanded() ? 2.5 : 6;
+    this.dragged.set(delta > 0 ? delta : delta / resistance);
   }
 
   protected release(): void {
@@ -461,9 +515,25 @@ export class MfSheet {
 
     this.trail = [];
 
-    // A third of the way down closes it; so does a flick, however short.
-    const height = this.panel()?.nativeElement.offsetHeight ?? 400;
+    // Zero is a panel not laid out yet: no height to measure against.
+    const height = this.panel()?.nativeElement.offsetHeight || 400;
 
+    if (this.expandable()) {
+      // Up, by a little or a flick: to the taller height.
+      if (!this.expanded() && (travelled < -24 || velocity < -0.55)) {
+        this.expanded.set(true);
+        return;
+      }
+
+      // Down from the taller height: back to halfway, unless it was most of
+      // the way down, which is a close.
+      if (this.expanded() && (travelled > 48 || velocity > 0.55) && travelled < height / 2) {
+        this.expanded.set(false);
+        return;
+      }
+    }
+
+    // A third of the way down closes it; so does a flick, however short.
     if (travelled > height / 3 || (velocity > 0.55 && travelled > 24)) this.dismiss('drag');
   }
 

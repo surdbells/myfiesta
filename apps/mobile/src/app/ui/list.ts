@@ -42,7 +42,7 @@ import { MfIcon, type LucideIconData } from './icon';
 
     .group {
       overflow: hidden;
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-card);
       background: var(--surface-raised);
       box-shadow:
         inset 0 0 0 1px var(--border-subtle),

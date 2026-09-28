@@ -80,7 +80,7 @@ export interface MfChoice {
       gap: var(--space-3);
       min-height: 56px;
       padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
       background: var(--surface-raised);
       box-shadow: inset 0 0 0 1px var(--border);
       cursor: pointer;

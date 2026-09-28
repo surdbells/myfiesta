@@ -17,7 +17,7 @@ import { Component, booleanAttribute, input } from '@angular/core';
     :host {
       display: block;
       padding: var(--space-5);
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-card);
       background: var(--surface-raised);
       box-shadow:
         inset 0 0 0 1px var(--border-subtle),

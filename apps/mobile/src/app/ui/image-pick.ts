@@ -61,7 +61,7 @@ import { MfIcon } from './icon';
     .frame {
       position: relative;
       overflow: hidden;
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-card);
       background: var(--surface-inset);
       box-shadow: inset 0 0 0 1px var(--border);
     }

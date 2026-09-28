@@ -56,7 +56,7 @@ export class ToastStore {
     .toast {
       max-width: 32rem;
       padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-overlay);
       background: var(--text);
       color: var(--surface);
       font-size: var(--font-size-sm);

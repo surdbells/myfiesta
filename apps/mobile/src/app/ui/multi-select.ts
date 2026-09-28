@@ -31,7 +31,7 @@ import type { MfOption } from './select';
       <span class="chevron" aria-hidden="true"></span>
     </button>
 
-    <mf-sheet [open]="open()" [heading]="heading()" [subheading]="subheading()" (closed)="open.set(false)">
+    <mf-sheet [open]="open()" [expandable]="options().length > 8" [heading]="heading()" [subheading]="subheading()" (closed)="open.set(false)">
       @if (options().length > 7) {
         <div class="search">
           <input
@@ -93,7 +93,7 @@ import type { MfOption } from './select';
       min-height: var(--mf-tap);
       padding: var(--space-2) var(--space-4);
       border: 0;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-control);
       background: var(--surface-inset);
       box-shadow: inset 0 0 0 1px var(--border);
       color: var(--text);
@@ -161,7 +161,7 @@ import type { MfOption } from './select';
       min-height: 52px;
       padding: var(--space-2) var(--space-3);
       border: 0;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-control);
       background: transparent;
       color: var(--text);
       font: inherit;

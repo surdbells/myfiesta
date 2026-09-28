@@ -90,7 +90,7 @@ let nextId = 0;
       align-items: center;
       min-height: var(--mf-tap);
       padding: 0 var(--space-4);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-control);
       background: var(--surface-inset);
       /*
        * Inset rather than a border: the box has to read as a container the

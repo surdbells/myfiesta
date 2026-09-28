@@ -58,8 +58,10 @@ export interface MfOption {
     </button>
     }
 
+    <!-- A long list opens halfway and can be pulled up to full height. -->
     <mf-sheet
       [open]="open()"
+      [expandable]="options().length > 8"
       [heading]="heading()"
       [subheading]="subheading()"
       (keydown)="walk($any($event))"
@@ -124,7 +126,7 @@ export interface MfOption {
       min-height: var(--mf-tap);
       padding: var(--space-2) var(--space-4);
       border: 0;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-control);
       background: var(--surface-inset);
       /* The same hairline as mf-field: a form whose selects are flat and whose
          inputs are outlined reads as two forms. */
@@ -187,7 +189,7 @@ export interface MfOption {
       min-height: var(--mf-tap);
       padding: 0 var(--space-4);
       border: 0;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-control);
       background: var(--surface-inset);
       /* The same hairline as mf-field: a form whose selects are flat and whose
          inputs are outlined reads as two forms. */

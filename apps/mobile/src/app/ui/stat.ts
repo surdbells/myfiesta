@@ -29,7 +29,7 @@ import { Component, booleanAttribute, computed, input } from '@angular/core';
       align-content: start;
       gap: var(--space-1);
       padding: var(--space-4);
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius-card);
       background: var(--surface-raised);
       box-shadow:
         inset 0 0 0 1px var(--border-subtle),

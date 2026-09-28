@@ -23,7 +23,7 @@ import { Component, computed, input } from '@angular/core';
       display: block;
       position: relative;
       overflow: hidden;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
       background: linear-gradient(140deg, var(--primary-soft), var(--surface-inset));
     }
 
