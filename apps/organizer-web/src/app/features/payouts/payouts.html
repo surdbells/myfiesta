@@ -27,9 +27,16 @@
   <!-- ------------------------------------------------------------- balance -->
   <section class="lead flex gap-16 rounded-lg border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-linear-140 from-[color-mix(in_srgb,var(--primary)_10%,var(--surface-raised))] to-surface-raised to-70% p-8 shadow-(--shadow-raised) max-[560px]:flex-col max-[560px]:gap-6">
     <div class="lead__figure">
-      <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Owed to you</p>
-      <p class="lead__amount figure text-4xl text-primary-text">{{ cash(statement.balance) }}</p>
-      <p class="lead__note mt-1 text-xs text-text-subtle">Ask to be paid whenever you like</p>
+      @if (owedToUs(); as owed) {
+        <!-- Below zero reads as what is owed, not as a minus sign that is easy to miss. -->
+        <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">You owe myFiesta</p>
+        <p class="lead__amount figure text-4xl text-danger-text">{{ cash(owed) }}</p>
+        <p class="lead__note mt-1 text-xs text-text-subtle">Paid back from your next sales</p>
+      } @else {
+        <p class="lead__label mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Owed to you</p>
+        <p class="lead__amount figure text-4xl text-primary-text">{{ cash(statement.balance) }}</p>
+        <p class="lead__note mt-1 text-xs text-text-subtle">Ask to be paid whenever you like</p>
+      }
     </div>
 
     <div class="lead__figure lead__figure--quiet">
@@ -37,6 +44,66 @@
       <p class="lead__amount figure text-xl text-text">{{ cash(statement.settled) }}</p>
     </div>
   </section>
+
+  @if (overdraft(); as overdraft) {
+    <!--
+      Money owed back to myFiesta, and what pays it back. The sentence is the
+      server's, the same one myFiesta's staff read, so the organizer and the
+      person they phone are looking at the same words.
+    -->
+    <section
+      class="mt-4 grid gap-4 rounded-lg border px-6 py-5"
+      [class]="overdraft.outstanding.amount > 0 ? 'border-[color-mix(in_srgb,var(--warning)_34%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)]' : 'border-border bg-surface-raised'"
+      role="status"
+      aria-labelledby="overdraft-title"
+    >
+      <div class="grid gap-1">
+        <h2 id="overdraft-title" class="font-semibold">
+          @if (overdraft.outstanding.amount === 0) {
+            Your advance is paid back
+          } @else if (overdraft.advanced) {
+            An advance from myFiesta
+          } @else {
+            Your balance is below zero
+          }
+        </h2>
+        <p class="max-w-[70ch] text-pretty text-sm text-text-muted">{{ overdraft.summary }}</p>
+      </div>
+
+      <dl class="m-0 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-4">
+        @if (overdraft.advanced; as advanced) {
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Advanced</dt>
+            <dd class="m-0 mt-1 tabular-nums">{{ cash(advanced) }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Recovered from sales</dt>
+            <dd class="m-0 mt-1 tabular-nums">{{ cash(overdraft.recovered) }}</dd>
+          </div>
+        }
+        @if (overdraft.repaid.amount > 0) {
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Repaid</dt>
+            <dd class="m-0 mt-1 tabular-nums">{{ cash(overdraft.repaid) }}</dd>
+          </div>
+        }
+        @if (overdraft.added.amount > 0) {
+          <div>
+            <dt class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Added by refunds</dt>
+            <dd class="m-0 mt-1 tabular-nums">{{ cash(overdraft.added) }}</dd>
+          </div>
+        }
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Outstanding</dt>
+          <dd class="m-0 mt-1 font-semibold tabular-nums">{{ cash(overdraft.outstanding) }}</dd>
+        </div>
+      </dl>
+
+      @if (overdraft.recovery) {
+        <p class="max-w-[70ch] text-pretty text-sm">{{ overdraft.recovery }}</p>
+      }
+    </section>
+  }
 
   @if (needsDestination()) {
     <!--
@@ -178,7 +245,7 @@
             <div class="row__what min-w-0 max-[800px]:col-span-full">
               <p class="row__title flex flex-wrap items-center gap-3 font-medium text-text no-underline">
                 {{ cash(payment.amount) }}
-                <ui-badge [tone]="settlementTone(payment.type)">{{ payment.type }}</ui-badge>
+                <ui-badge [tone]="settlementTone(payment.type)">{{ settlementLabel(payment.type) }}</ui-badge>
               </p>
               <p class="row__when mt-1 text-sm text-text-muted">
                 {{ when(payment.settled_at) }} · {{ railLabel(payment.rail) }}
@@ -213,6 +280,9 @@
               <span class="text-sm text-text-muted">asked {{ day(request.requested_at) }}</span>
               @if (request.status === 'paid' && request.paid_amount && request.paid_amount.amount !== request.amount.amount) {
                 <span class="text-sm text-text-muted tabular-nums">· {{ cash(request.paid_amount) }} sent</span>
+              }
+              @if (request.advance; as advance) {
+                <span class="text-sm text-text-muted tabular-nums">· {{ cash(advance) }} of it advanced by myFiesta</span>
               }
             </p>
             @if (request.decision_note && request.status !== 'cancelled') {

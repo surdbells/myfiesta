@@ -40,6 +40,8 @@ class SettlementsTable
                 'organization:id,name,suspended_at',
                 'event:id,title',
                 'settledBy:id,name',
+                'payoutRequest:id,settlement_id,currency,overdraft_amount,approved_by',
+                'payoutRequest.approver:id,name',
             ]))
             ->searchPlaceholder('Organization, event, note or who recorded it')
             ->columns([
@@ -79,6 +81,12 @@ class SettlementsTable
                         'overdraft' => 'danger',
                         default => 'gray',
                     })
+                    // How much of an overdraft was advanced, and by whose
+                    // decision; the reason is on the request and in the note.
+                    ->description(fn ($record) => $record->payoutRequest?->overdraft_amount !== null
+                        ? Listing::format($record->payoutRequest->overdraft_amount, $record->currency).' advanced · '
+                            .($record->payoutRequest->approver->name ?? 'a former member of staff')
+                        : null)
                     ->sortable(),
 
                 TextColumn::make('rail')

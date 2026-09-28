@@ -74,9 +74,18 @@
           <ui-icon [icon]="walletIcon" size="sm" />
         </span>
         <div class="grid gap-1">
-          <p class="stat__label m-0 text-sm text-text-muted">Owed to you</p>
-          <p class="stat__figure figure m-0 text-2xl text-primary-text">{{ cash(money.balance) }}</p>
-          <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
+          @if (money.balance.amount < 0) {
+            <!-- Below zero is money owed back to myFiesta, said as that rather than as a minus sign. -->
+            <p class="stat__label m-0 text-sm text-text-muted">You owe myFiesta</p>
+            <p class="stat__figure figure m-0 text-2xl text-danger-text">{{ cash({ amount: -money.balance.amount, currency: money.balance.currency }) }}</p>
+            <p class="stat__note m-0 text-xs text-text-subtle">
+              Paid back from your next sales · <a class="underline" routerLink="/payouts">See how</a>
+            </p>
+          } @else {
+            <p class="stat__label m-0 text-sm text-text-muted">Owed to you</p>
+            <p class="stat__figure figure m-0 text-2xl text-primary-text">{{ cash(money.balance) }}</p>
+            <p class="stat__note m-0 text-xs text-text-subtle">Paid out after each event</p>
+          }
         </div>
       </div>
 

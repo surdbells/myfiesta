@@ -14,6 +14,7 @@ use App\Models\SensitiveDataAccess;
 use App\Models\Settlement;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Payouts\Overdrafts;
 use App\Services\Payouts\PayoutRequestRefused;
 use App\Services\Payouts\PayoutRequests;
 use App\Support\Money;
@@ -66,6 +67,7 @@ class PayoutController extends Controller
             'currency' => $currency,
             'balance' => $money((int) (clone $entries)->sum('amount')),
             'settled' => $money((int) abs((clone $entries)->where('type', 'settlement')->sum('amount'))),
+            'overdraft' => $this->overdraft($organization, $currency),
             'events' => $this->byEvent($organization, $currency),
             'settlements' => $this->settlements($organization),
             'destination' => $this->destination($organization),
@@ -159,6 +161,9 @@ class PayoutController extends Controller
             'id' => $payout->id,
             'amount' => ['amount' => $payout->amount, 'currency' => $payout->currency],
             'paid_amount' => $payout->paid_amount !== null ? ['amount' => $payout->paid_amount, 'currency' => $payout->currency] : null,
+            // The part paid beyond what was owed, when myFiesta advanced it.
+            // Its reason is on the settlement's note, under the payment.
+            'advance' => $payout->overdraft_amount !== null ? ['amount' => $payout->overdraft_amount, 'currency' => $payout->currency] : null,
             'status' => $payout->status,
             'note' => $payout->note,
             // The reason a request was not paid, or a note on one that was.
@@ -167,6 +172,44 @@ class PayoutController extends Controller
             'requested_by' => $payout->requester?->name,
             'requested_at' => $payout->created_at,
             'decided_at' => $payout->decided_at,
+        ];
+    }
+
+    /**
+     * Money owed back to myFiesta, and how it is coming back.
+     *
+     * Null when there is nothing to say. Otherwise the figures and the same
+     * sentence staff read on the organization's page, so the organizer and
+     * the person they phone are looking at the same words — and what pays it
+     * back, because a balance below zero with no explanation reads as money
+     * gone missing.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function overdraft(Organization $organization, string $currency): ?array
+    {
+        $position = app(Overdrafts::class)->position($organization, $currency);
+
+        if ($position === null) {
+            return null;
+        }
+
+        $money = fn (Money $amount) => ['amount' => $amount->amount, 'currency' => $amount->currency];
+
+        return [
+            'outstanding' => $money($position->outstanding),
+            'advanced' => $position->isAdvance() ? $money($position->advanced) : null,
+            'advanced_at' => $position->isAdvance() ? $position->since?->toIso8601String() : null,
+            'recovered' => $money($position->recovered),
+            'repaid' => $money($position->repaid),
+            'added' => $money($position->added),
+            'since' => $position->since?->toIso8601String(),
+            'summary' => $position->summary($this->zone($organization)),
+            'recovery' => $position->isOutstanding()
+                ? 'Your next sales in '.$currency.' pay this back automatically, before anything is paid out to you. '
+                    .'You can ask to be paid again once your balance is above zero. '
+                    .'To pay it back sooner, contact myFiesta.'
+                : null,
         ];
     }
 

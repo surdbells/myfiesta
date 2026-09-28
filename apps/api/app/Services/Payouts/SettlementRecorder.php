@@ -11,6 +11,7 @@ use App\Services\Audit\Auditor;
 use App\Services\Organizations\Suspension;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Recording that money left the building.
@@ -34,9 +35,16 @@ class SettlementRecorder
     public function __construct(private readonly Auditor $auditor) {}
 
     /**
-     * @param  bool  $overdraftApproved  Set only by PayoutRequests, when an administrator
-     *                                   pays a request for more than is owed. Nothing else
-     *                                   may record an overdraft.
+     * @param  string|null  $note  Written for the organizer, and the reason for paying to
+     *                             details nobody verified.
+     * @param  string|null  $advanceReason  Given only by PayoutRequests, when administrators
+     *                                      or finance pay a request for more than is owed: why
+     *                                      myFiesta is advancing the difference. Nothing else
+     *                                      may record an overdraft.
+     * @param  Money|null  $balance  What the organization is owed, when the caller has already
+     *                               read it under its own lock. The one figure then decides both
+     *                               the caller's advance and this settlement's type; read here
+     *                               when not given.
      *
      * @throws SettlementRefused when the payout cannot be recorded as asked
      */
@@ -46,8 +54,13 @@ class SettlementRecorder
         string $rail,
         ?string $note = null,
         ?User $by = null,
-        bool $overdraftApproved = false,
+        ?string $advanceReason = null,
+        ?Money $balance = null,
     ): Settlement {
+        if ($balance !== null && $balance->currency !== $amount->currency) {
+            throw new InvalidArgumentException('A '.$amount->currency.' payout is measured against the '.$amount->currency.' balance, not the '.$balance->currency.' one.');
+        }
+
         if ($amount->amount <= 0) {
             // Returning money is a refund against an order, not a negative
             // settlement. Allowing one here would put an entry in the ledger
@@ -71,7 +84,7 @@ class SettlementRecorder
             );
         }
 
-        $balance = LedgerEntry::balancesFor($organization)[$amount->currency]
+        $balance ??= LedgerEntry::balancesFor($organization)[$amount->currency]
             ?? Money::zero($amount->currency);
 
         $type = Settlement::classify($amount, $balance);
@@ -82,13 +95,17 @@ class SettlementRecorder
          * An overdraft is money the platform advances before it has been
          * earned. It used to be possible from any settlement, by anybody who
          * could settle. It is now given only in answer to an organizer asking
-         * to be paid, by an administrator, where the request, the balance and
-         * the reason sit side by side.
+         * to be paid, where the request, the balance and the reason sit side
+         * by side, and the request keeps the decision (PayoutRequests::pay).
+         *
+         * That includes paying anything at all while the balance is below
+         * zero: an advance not yet recovered is money they owe, and a second
+         * payment on top of it is another advance.
          */
-        if ($type === 'overdraft' && ! $overdraftApproved) {
+        if ($type === 'overdraft' && $advanceReason === null) {
             throw SettlementRefused::because(
                 'That is more than this organization is owed ('.$balance->format().'). '
-                .'Paying more than is owed is only possible when an administrator pays an organizer’s payout request.'
+                .'Paying more than is owed is only possible when administrators or finance pay an organizer’s payout request, as an advance.'
             );
         }
 
@@ -101,7 +118,7 @@ class SettlementRecorder
          * this too; refusing here is what turns a constraint violation into a
          * sentence an operator can act on.
          */
-        if ($type === 'overdraft' && trim((string) $note) === '') {
+        if ($type === 'overdraft' && trim((string) $advanceReason) === '') {
             throw SettlementRefused::because(
                 'This pays more than is owed, so it needs a reason on the record.'
             );
@@ -116,6 +133,11 @@ class SettlementRecorder
          * where the admin screens show whether the details are verified. This
          * makes skipping that a stated decision, flagged in the audit trail.
          * Stripe and Paystack pay to accounts the processor verified.
+         *
+         * Only the note answers it. Why money was advanced is a different
+         * question from why it went to details nobody checked, and an advance
+         * — money not yet earned, sent on — is the payout that most needs
+         * the second one answered.
          */
         $destination = null;
 
@@ -134,18 +156,28 @@ class SettlementRecorder
             }
         }
 
+        // The settlement's note is what the organizer reads under the payment.
+        // An advance says so there, with how much and why, beside any note
+        // written for them.
+        $written = collect([
+            filled($note) ? trim((string) $note) : null,
+            $type === 'overdraft'
+                ? 'Advance of '.(new Money($amount->amount - $balance->amount, $amount->currency))->format().': '.trim((string) $advanceReason)
+                : null,
+        ])->filter()->implode("\n");
+
         // One transaction, because the settlement and its ledger entry are the
         // same fact. Either alone leaves the balance disagreeing with the
         // payout history, and the ledger is append-only — there is no tidying
         // it up afterwards.
-        return DB::transaction(function () use ($organization, $amount, $type, $rail, $note, $by, $destination) {
+        return DB::transaction(function () use ($organization, $amount, $type, $rail, $written, $by, $destination) {
             $settlement = Settlement::create([
                 'organization_id' => $organization->id,
                 'amount' => $amount->amount,
                 'currency' => $amount->currency,
                 'rail' => $rail,
                 'type' => $type,
-                'note' => $note ?: null,
+                'note' => $written !== '' ? $written : null,
                 'status' => 'success',
                 'settled_by' => $by?->id,
                 'settled_at' => now(),

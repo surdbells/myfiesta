@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\Payouts\OverdraftOutstanding;
+use App\Services\Payouts\Overdrafts;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +32,25 @@ class Organization extends Model
             'suspended_at' => 'datetime',
             'suspension_reason_shared' => 'boolean',
         ];
+    }
+
+    /**
+     * Never closed while it owes myFiesta money.
+     *
+     * An advance not yet recovered is recovered from the organization's own
+     * sales, which stop when it closes; closing it would leave the money on
+     * the record against nobody who can repay it. Refused here, where every
+     * way of closing one ends, with the sentence that says what to do first.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Organization $organization): void {
+            $refusal = app(Overdrafts::class)->refusalToClose($organization);
+
+            if ($refusal !== null) {
+                throw OverdraftOutstanding::because($refusal);
+            }
+        });
     }
 
     /**

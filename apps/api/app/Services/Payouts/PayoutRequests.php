@@ -2,7 +2,6 @@
 
 namespace App\Services\Payouts;
 
-use App\Enums\PlatformRole;
 use App\Mail\PayoutRequestDecided;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
@@ -31,7 +30,12 @@ use Illuminate\Support\Facades\Mail;
  * - Paying goes through SettlementRecorder like every payout, so the ledger
  *   entry, the verification check and the audit trail are the same ones.
  * - Paying more than is owed — an overdraft — is possible here and nowhere
- *   else, and only by an administrator, with a reason.
+ *   else, by the people who may pay at all (administrators and finance), with
+ *   a written reason. The request keeps how much was advanced, why, who
+ *   approved it and when; the ledger records the payout exactly as any other,
+ *   so the balance goes below zero by the advance and nothing else.
+ * - While the balance is not above zero nothing more can be asked for. The
+ *   next sales pay the advance back first (see Overdrafts).
  * - Nothing is asked for or paid while the organization is suspended. A
  *   request already waiting is held, not rejected (see Suspension), and can
  *   still be withdrawn by the organizer or refused by staff with a reason.
@@ -41,6 +45,7 @@ class PayoutRequests
     public function __construct(
         private readonly SettlementRecorder $settlements,
         private readonly Auditor $auditor,
+        private readonly Overdrafts $overdrafts,
     ) {}
 
     /** What the organization is owed in this currency, now. */
@@ -78,7 +83,20 @@ class PayoutRequests
 
             $available = $this->available($organization, $amount->currency);
 
-            if ($available->amount <= 0) {
+            // Below zero: money was advanced, or refunds overtook sales after a
+            // payout, and the next sales go to paying that back first. Said in
+            // full, so nobody is left wondering where their sales went.
+            if ($available->amount < 0) {
+                $position = $this->overdrafts->position($organization, $amount->currency);
+
+                throw PayoutRequestRefused::because(
+                    'Your balance in '.$amount->currency.' is below zero. '
+                    .($position ? $position->summary(Overdrafts::zoneOf($organization->id)).' ' : '')
+                    .'Your next sales pay it back, and you can ask to be paid again once your balance is above zero.'
+                );
+            }
+
+            if ($available->amount === 0) {
                 throw PayoutRequestRefused::because('There is nothing owed to you in '.$amount->currency.' right now.');
             }
 
@@ -130,9 +148,15 @@ class PayoutRequests
      * The amount may differ from what was asked — less when the balance has
      * dropped since (a refund came in), more only as an overdraft.
      *
+     * An overdraft is the difference between what is paid and what is owed
+     * at this moment, which is how far below zero the payment takes that
+     * balance. It needs a written reason of its own, separate from the note
+     * the organizer reads — which still answers for paying to unverified
+     * details — and the request keeps both figures and the name.
+     *
      * @throws PayoutRequestRefused|SettlementRefused
      */
-    public function pay(PayoutRequest $request, User $by, Money $amount, string $rail, ?string $note = null): PayoutRequest
+    public function pay(PayoutRequest $request, User $by, Money $amount, string $rail, ?string $note = null, ?string $overdraftReason = null): PayoutRequest
     {
         if (! $by->platform_role?->canSettle()) {
             throw PayoutRequestRefused::because('Only platform administrators and finance can pay payout requests.');
@@ -142,7 +166,7 @@ class PayoutRequests
             throw PayoutRequestRefused::because('A request in '.$request->currency.' is paid in '.$request->currency.'.');
         }
 
-        return $this->decide($request, function (PayoutRequest $locked) use ($by, $amount, $rail, $note) {
+        return $this->decide($request, function (PayoutRequest $locked) use ($by, $amount, $rail, $note, $overdraftReason) {
             // Held, not rejected: it waits, with its place in the queue,
             // until the suspension is lifted. Either test is enough — the
             // flag is what the screens show, the organization is the rule.
@@ -150,45 +174,78 @@ class PayoutRequests
                 throw PayoutRequestRefused::because('This organization is suspended, so its payouts are frozen. The request is held, and can be paid once the suspension is lifted.');
             }
 
-            $organization = $locked->organization;
-            $available = $this->available($organization, $amount->currency);
-            $overdraft = $amount->amount > $available->amount;
+            // Held since before the request was (see decide), so repayments
+            // and requests for this organization wait.
+            $organization = Organization::query()->whereKey($locked->organization_id)->firstOrFail();
 
-            // The one place an overdraft can be given, and only by an admin.
-            if ($overdraft && $by->platform_role !== PlatformRole::Admin) {
+            // Sales and refunds do not wait for that lock, so the balance is
+            // read once, here, and the same figure is handed to the recorder.
+            // Read twice, a sale landing in between would leave the request
+            // and the audit trail saying money was advanced while the ledger
+            // says the payout was covered, or refuse a payment the balance
+            // covered a moment before.
+            $available = $this->available($organization, $amount->currency);
+            $overdraft = new Money(max(0, $amount->amount - $available->amount), $amount->currency);
+            $reason = trim((string) $overdraftReason);
+
+            // The one place an overdraft can be given: by the people who may
+            // pay at all (checked above), and never without saying why.
+            if (! $overdraft->isZero() && $reason === '') {
                 throw PayoutRequestRefused::because(
-                    'That is more than they are owed ('.$available->format().'). Only an administrator can pay more than is owed.'
+                    'That pays '.$overdraft->format().' more than they are owed ('.$available->format().'). '
+                    .'Say why myFiesta is advancing it.'
                 );
             }
 
+            // The note and the advance's reason go separately: the note is
+            // also what answers for paying to unverified details, and a reason
+            // to advance money is not a reason to skip checking where it goes.
             $settlement = $this->settlements->record(
                 $organization,
                 $amount,
                 $rail,
-                $note,
+                filled($note) ? trim((string) $note) : null,
                 $by,
-                overdraftApproved: $overdraft,
+                advanceReason: $overdraft->isZero() ? null : $reason,
+                balance: $available,
             );
 
             $locked->update([
                 'status' => 'paid',
                 'paid_amount' => $amount->amount,
+                'overdraft_amount' => $overdraft->isZero() ? null : $overdraft->amount,
+                'overdraft_reason' => $overdraft->isZero() ? null : $reason,
                 'settlement_id' => $settlement->id,
                 'decision_note' => filled($note) ? trim($note) : null,
                 'decided_by' => $by->id,
                 'decided_at' => now(),
+                'approved_by' => $by->id,
+                'approved_at' => now(),
             ]);
 
             $this->auditor->record('payout_request.paid', $locked, $by, $organization->id, [
                 'requested' => $locked->amount,
                 'paid' => $amount->amount,
                 'currency' => $amount->currency,
-                'overdraft' => $overdraft,
+                'overdraft' => ! $overdraft->isZero(),
                 'settlement_id' => $settlement->id,
             ]);
 
+            // The decision itself, on its own line of the trail: who, when,
+            // how much beyond the balance, and why.
+            if (! $overdraft->isZero()) {
+                $this->auditor->record('payout_request.overdraft_approved', $locked, $by, $organization->id, [
+                    'balance' => $available->amount,
+                    'paid' => $amount->amount,
+                    'overdraft_amount' => $overdraft->amount,
+                    'currency' => $amount->currency,
+                    'reason' => $reason,
+                    'settlement_id' => $settlement->id,
+                ]);
+            }
+
             return $locked;
-        }, notify: true);
+        }, notify: true, organizationFirst: true);
     }
 
     /** @throws PayoutRequestRefused */
@@ -224,10 +281,18 @@ class PayoutRequests
      *
      * Two staff opening the same request at once is exactly how one gets paid
      * twice; the second finds it already decided.
+     *
+     * Paying reads the balance, so it holds the organization too — taken
+     * before the request, the order Suspension takes them in, so paying and
+     * suspending at the same moment wait for each other rather than deadlock.
      */
-    private function decide(PayoutRequest $request, callable $act, bool $notify = false): PayoutRequest
+    private function decide(PayoutRequest $request, callable $act, bool $notify = false, bool $organizationFirst = false): PayoutRequest
     {
-        $decided = DB::transaction(function () use ($request, $act) {
+        $decided = DB::transaction(function () use ($request, $act, $organizationFirst) {
+            if ($organizationFirst) {
+                Organization::query()->whereKey($request->organization_id)->lockForUpdate()->first();
+            }
+
             $locked = PayoutRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
 
             if (! $locked->isPending()) {

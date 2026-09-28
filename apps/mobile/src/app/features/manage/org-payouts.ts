@@ -60,9 +60,26 @@ interface DestinationDraft {
         </mf-empty>
       } @else if (statement(); as s) {
         <mf-card class="balance">
-          <p class="eyebrow">Owed to you</p>
-          <p class="big figure">{{ cash(s.balance) }}</p>
+          @if (owedToUs(); as owed) {
+            <!-- Below zero reads as what is owed, not as a minus sign. -->
+            <p class="eyebrow">You owe myFiesta</p>
+            <p class="big figure owe">{{ cash(owed) }}</p>
+          } @else {
+            <p class="eyebrow">Owed to you</p>
+            <p class="big figure">{{ cash(s.balance) }}</p>
+          }
           <p class="muted">{{ cash(s.settled) }} paid out so far</p>
+
+          @if (s.overdraft; as o) {
+            <!-- The server's sentence, the same one myFiesta's staff read, and what pays it back. -->
+            <div class="advance" [class.paid-back]="o.outstanding.amount === 0" role="status">
+              <p class="advance-title">{{ o.outstanding.amount === 0 ? 'Your advance is paid back' : o.advanced ? 'An advance from myFiesta' : 'Your balance is below zero' }}</p>
+              <p>{{ o.summary }}</p>
+              @if (o.recovery) {
+                <p class="muted">{{ o.recovery }}</p>
+              }
+            </div>
+          }
 
           @if (pending(); as p) {
             <div class="waiting">
@@ -134,7 +151,7 @@ interface DestinationDraft {
         @if (past().length > 0) {
           <mf-list class="block" heading="Requests">
             @for (r of past(); track r.id) {
-              <mf-row [label]="cash(r.amount)" [sub]="day(r.requested_at) + (r.decision_note ? ' · ' + r.decision_note : '')" [chevron]="false">
+              <mf-row [label]="cash(r.amount)" [sub]="day(r.requested_at) + (r.advance ? ' · ' + cash(r.advance) + ' advanced by myFiesta' : '') + (r.decision_note ? ' · ' + r.decision_note : '')" [chevron]="false">
                 <mf-badge [tone]="requestTone(r.status)">{{ requestLabel(r.status) }}</mf-badge>
               </mf-row>
             }
@@ -220,6 +237,29 @@ interface DestinationDraft {
     .big {
       font-size: var(--font-size-4xl);
       line-height: 1.05;
+    }
+
+    .owe {
+      color: var(--danger-text);
+    }
+
+    .advance {
+      display: grid;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--warning) 12%, transparent);
+      font-size: var(--font-size-sm);
+      overflow-wrap: anywhere;
+    }
+
+    .advance.paid-back {
+      background: color-mix(in srgb, var(--success) 10%, transparent);
+    }
+
+    .advance-title {
+      font-weight: var(--font-weight-semibold);
     }
 
     .muted {
@@ -354,6 +394,19 @@ export class OrgPayouts implements OnInit {
 
   protected readonly tooMuch = computed(() => (this.askAmount() ?? 0) > (this.statement()?.balance.amount ?? 0));
 
+  /**
+   * What the organization owes myFiesta, as an amount to show.
+   *
+   * An advance, or refunds after a payout, take the balance below zero; the
+   * next sales pay it back before anything more is paid out, and asking is
+   * not offered until then (canAsk needs a balance above zero).
+   */
+  protected readonly owedToUs = computed(() => {
+    const balance = this.statement()?.balance;
+
+    return balance && balance.amount < 0 ? { ...balance, amount: -balance.amount } : null;
+  });
+
   protected readonly askMoney = computed(() => ({ amount: this.askAmount() ?? 0, currency: this.statement()?.currency ?? 'CAD' }));
 
   protected readonly canSave = computed(() => {
@@ -413,7 +466,27 @@ export class OrgPayouts implements OnInit {
 
   protected async ask(): Promise<void> {
     const amount = this.askAmount() ?? 0;
-    if (amount <= 0 || this.tooMuch()) return;
+    const balance = this.statement()?.balance;
+    if (amount <= 0 || this.tooMuch() || !balance) return;
+
+    const asked = formatMoney({ ...balance, amount });
+
+    // The amount and where it lands, said back at the moment of asking: the
+    // box starts at the whole balance.
+    const sure = await this.dialogs.confirm({
+      title: `Ask to be paid ${asked}?`,
+      body: `myFiesta sends ${asked} to ${this.destinationSummary()}, and emails you when it goes out.`,
+      consequences: [
+        amount < balance.amount
+          ? `The other ${formatMoney({ ...balance, amount: balance.amount - amount })} stays owed to you.`
+          : 'That is everything you are owed today.',
+        'Nothing more can be asked for until this one is paid or withdrawn.',
+      ],
+      confirmLabel: `Ask for ${asked}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.busy()) return;
 
     this.busy.set(true);
     this.askError.set(null);
@@ -434,9 +507,9 @@ export class OrgPayouts implements OnInit {
   protected async withdraw(request: PayoutRequestRow): Promise<void> {
     const sure = await this.dialogs.confirm({
       title: `Withdraw the request for ${formatMoney(request.amount)}?`,
-      message: 'Nothing is sent. You can ask again whenever you like.',
-      confirm: 'Withdraw',
-      danger: true,
+      body: 'Nothing is sent. You can ask again whenever you like.',
+      confirmLabel: 'Withdraw request',
+      tone: 'danger',
     });
 
     if (!sure) return;
@@ -500,6 +573,31 @@ export class OrgPayouts implements OnInit {
             institution_number: d.institution.trim() || null,
             bank_code: d.bankCode.trim() || null,
           };
+
+    // Where the money goes, said back before it is saved: a typo here sends
+    // real money to the wrong place, and a new account loses its verified
+    // mark. The account is named by its last four only, as everywhere else.
+    const digits = d.accountNumber.replace(/\D/g, '');
+    const where =
+      d.rail === 'interac'
+        ? `Interac at ${d.interacEmail.trim()}`
+        : `${d.accountName.trim()} at ${d.bankName.trim()}${digits.length >= 4 ? `, account ending ${digits.slice(-4)}` : ''}`;
+    const current = this.statement()?.destination ?? null;
+    const consequences = current
+      ? ['If this is a different account, every owner of the organization gets an email saying where payouts go now.']
+      : ['Every owner of the organization gets an email saying where payouts go.'];
+
+    if (current?.verified_at) consequences.push('A different account loses the verified mark until myFiesta has checked it.');
+
+    const sure = await this.dialogs.confirm({
+      title: current ? 'Change where payouts go?' : 'Save these payout details?',
+      body: `From now on, payouts are sent to ${where}.`,
+      consequences,
+      confirmLabel: current ? 'Change payout details' : 'Save payout details',
+      tone: current ? 'danger' : 'default',
+    });
+
+    if (!sure || this.busy()) return;
 
     this.busy.set(true);
     this.formError.set(null);

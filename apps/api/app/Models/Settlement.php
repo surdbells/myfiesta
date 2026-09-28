@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A payout recorded against the ledger.
@@ -43,6 +44,17 @@ class Settlement extends Model
     public function settledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'settled_by');
+    }
+
+    /**
+     * The organizer's request this paid, when it paid one. An overdraft's
+     * advance, its reason and who approved it are kept there.
+     *
+     * @return HasOne<PayoutRequest, $this>
+     */
+    public function payoutRequest(): HasOne
+    {
+        return $this->hasOne(PayoutRequest::class);
     }
 
     /** @return Attribute<Money, never> */

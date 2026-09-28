@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
+  ConfirmDialog,
   ToastStore,
   UiBadge,
   UiButton,
@@ -17,7 +18,7 @@ import {
 } from '@myfiesta/ui';
 import { Banknote, Landmark, Pencil, ShieldCheck } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { Money, PayoutRequestRow, PayoutStatement, PayoutDestination } from '../../core/api.types';
+import { Money, PayoutOverdraft, PayoutRequestRow, PayoutStatement, PayoutDestination } from '../../core/api.types';
 import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
 import { isEmailUnverified, messageFor } from '../../core/errors';
 
@@ -72,6 +73,7 @@ interface DestinationDraft {
 export class Payouts {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   protected readonly interacIcon = Banknote;
   protected readonly bankIcon = Landmark;
@@ -126,9 +128,30 @@ export class Payouts {
     this.load();
   }
 
-  ask(): void {
+  async ask(): Promise<void> {
     const amount = toMinorUnits(this.askAmount());
-    if (amount === null || amount <= 0 || this.askTooMuch() || this.asking()) return;
+    const balance = this.statement()?.balance;
+    if (amount === null || amount <= 0 || this.askTooMuch() || this.asking() || !balance) return;
+
+    const asked = formatMoney({ ...balance, amount });
+
+    // The amount and where it lands, said back at the moment of asking: the
+    // box is prefilled with the whole balance, and a request is paid to the
+    // destination as it stands when myFiesta pays it.
+    const sure = await this.confirmDialog.confirm({
+      title: `Ask to be paid ${asked}?`,
+      body: `myFiesta sends ${asked} to ${this.destinationSummary()}, and emails you when it goes out.`,
+      consequences: [
+        amount < balance.amount
+          ? `The other ${formatMoney({ ...balance, amount: balance.amount - amount })} stays owed to you.`
+          : 'That is everything you are owed today.',
+        'Nothing more can be asked for until this one is paid or withdrawn.',
+      ],
+      confirmLabel: `Ask for ${asked}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.asking()) return;
 
     this.asking.set(true);
     this.askError.set(null);
@@ -149,8 +172,17 @@ export class Payouts {
     });
   }
 
-  withdraw(request: PayoutRequestRow): void {
+  async withdraw(request: PayoutRequestRow): Promise<void> {
     if (this.withdrawing()) return;
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Withdraw the request for ${formatMoney(request.amount)}?`,
+      body: 'myFiesta does not pay it. The money stays owed to you, and you can ask again whenever you like.',
+      confirmLabel: 'Withdraw the request',
+      tone: 'danger',
+    });
+
+    if (!sure || this.withdrawing()) return;
 
     this.withdrawing.set(true);
 
@@ -221,6 +253,24 @@ export class Payouts {
 
   readonly balance = computed<Money | null>(() => this.statement()?.balance ?? null);
 
+  /**
+   * Money owed back to myFiesta, and how it is coming back.
+   *
+   * An advance, or refunds after a payout, take the balance below zero, and
+   * the next sales pay it back before anything more is paid out. Said in the
+   * server's own sentence — the one myFiesta's staff read too — with the
+   * figures beside it, so a balance below zero never reads as money gone
+   * missing.
+   */
+  readonly overdraft = computed<PayoutOverdraft | null>(() => this.statement()?.overdraft ?? null);
+
+  /** What the organization owes, as an amount to show rather than a minus sign. */
+  readonly owedToUs = computed<Money | null>(() => {
+    const balance = this.balance();
+
+    return balance && balance.amount < 0 ? { ...balance, amount: -balance.amount } : null;
+  });
+
   readonly events = computed(() => this.statement()?.events ?? []);
   readonly settlements = computed(() => this.statement()?.settlements ?? []);
   readonly destination = computed<PayoutDestination | null>(
@@ -272,6 +322,11 @@ export class Payouts {
     // Overdraft is money sent beyond what was earned. It is not an error, and
     // it is not routine either — it is the row somebody will ask about.
     return type === 'full' ? 'success' : type === 'partial' ? 'warning' : 'danger';
+  }
+
+  /** "overdraft" is our word; the organizer's is that part of it was advanced. */
+  settlementLabel(type: string): string {
+    return type === 'overdraft' ? 'includes an advance' : type;
   }
 
   // --- where it goes -------------------------------------------------------
@@ -326,7 +381,7 @@ export class Payouts {
     );
   });
 
-  save(): void {
+  async save(): Promise<void> {
     if (!this.canSave() || this.saving()) return;
 
     const draft = this.draft();
@@ -343,6 +398,8 @@ export class Payouts {
             institution_number: draft.institution_number.trim() || null,
             bank_code: draft.bank_code.trim() || null,
           };
+
+    if (!(await this.confirmSave(draft)) || this.saving()) return;
 
     this.saving.set(true);
     this.formError.set(null);
@@ -363,6 +420,36 @@ export class Payouts {
           error?.error?.message ?? 'Those details could not be saved. Check them and try again.',
         );
       },
+    });
+  }
+
+  /**
+   * Where the money will go, said back before it is saved.
+   *
+   * Pointing the payouts somewhere new is the one change on this screen that
+   * sends real money to the wrong place when it holds a typo, and it takes
+   * the verified mark off. So the destination is named — an account by its
+   * last four only, as everywhere else — and so is who hears about it.
+   */
+  private confirmSave(draft: DestinationDraft): Promise<boolean> {
+    const digits = draft.account_number.replace(/\D/g, '');
+    const where =
+      draft.rail === 'interac'
+        ? `Interac at ${draft.interac_email.trim()}`
+        : `${draft.account_name.trim()} at ${draft.bank_name.trim()}${digits.length >= 4 ? `, account ending ${digits.slice(-4)}` : ''}`;
+    const current = this.destination();
+    const consequences = current
+      ? ['If this is a different account, every owner of the organization gets an email saying where payouts go now.']
+      : ['Every owner of the organization gets an email saying where payouts go.'];
+
+    if (current?.verified_at) consequences.push('A different account loses the verified mark until myFiesta has checked it.');
+
+    return this.confirmDialog.confirm({
+      title: current ? 'Change where payouts go?' : 'Save these payout details?',
+      body: `From now on, payouts are sent to ${where}.`,
+      consequences,
+      confirmLabel: current ? 'Change payout details' : 'Save payout details',
+      tone: current ? 'danger' : 'default',
     });
   }
 }

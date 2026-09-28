@@ -229,31 +229,25 @@ class PayoutRequestTest extends TestCase
         Mail::assertQueued(PayoutRequestDecided::class, fn ($mail) => $mail->hasTo($this->owner->email) && $mail->request->is($request));
     }
 
-    public function test_only_an_administrator_can_pay_more_than_is_owed_and_only_with_a_reason(): void
+    public function test_paying_more_than_is_owed_needs_a_reason_of_its_own(): void
     {
         $request = $this->pending(30_000, 50_000);
 
-        try {
-            app(PayoutRequests::class)->pay($request, $this->staff(PlatformRole::Finance), new Money(80_000, 'CAD'), 'interac', 'Advance');
-            $this->fail('Finance gave an overdraft.');
-        } catch (PayoutRequestRefused $refused) {
-            $this->assertStringContainsString('Only an administrator can pay more than is owed', $refused->getMessage());
+        foreach ([PlatformRole::Finance, PlatformRole::Admin] as $role) {
+            try {
+                // A note for the organizer is not the reason for an advance.
+                app(PayoutRequests::class)->pay($request, $this->staff($role), new Money(80_000, 'CAD'), 'interac', 'Enjoy the weekend');
+                $this->fail($role->value.' gave an overdraft without a reason.');
+            } catch (PayoutRequestRefused $refused) {
+                $this->assertSame('That pays $300.00 more than they are owed ($500.00). Say why myFiesta is advancing it.', $refused->getMessage());
+            }
         }
 
-        $admin = $this->staff(PlatformRole::Admin);
-
-        try {
-            app(PayoutRequests::class)->pay($request, $admin, new Money(80_000, 'CAD'), 'interac');
-            $this->fail('An overdraft went through without a reason.');
-        } catch (SettlementRefused $refused) {
-            $this->assertStringContainsString('needs a reason', $refused->getMessage());
-        }
-
-        // Still open after both refusals: nothing half-recorded.
+        // Still open after the refusals: nothing half-recorded.
         $this->assertSame('pending', $request->fresh()->status);
         $this->assertSame(0, Settlement::count());
 
-        app(PayoutRequests::class)->pay($request, $admin, new Money(80_000, 'CAD'), 'interac', 'Advance for the festival, agreed on the phone.');
+        app(PayoutRequests::class)->pay($request, $this->staff(PlatformRole::Finance), new Money(80_000, 'CAD'), 'interac', null, 'Advance for the festival, agreed on the phone.');
 
         $this->assertSame('overdraft', $request->fresh()->settlement->type);
         $this->assertSame(-30_000, $this->balance());
@@ -361,7 +355,7 @@ class PayoutRequestTest extends TestCase
         $this->owed(10_000);
 
         $this->expectException(SettlementRefused::class);
-        $this->expectExceptionMessage('only possible when an administrator pays');
+        $this->expectExceptionMessage('only possible when administrators or finance pay');
 
         app(SettlementRecorder::class)->record(
             $this->org,

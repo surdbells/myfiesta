@@ -83,7 +83,12 @@ import { MfAcceptTerms } from './accept-terms';
 
         @if (o.money; as money) {
           <div class="figures">
-            <mf-stat class="span" lead label="Owed to you" [value]="cash(money.balance)" hint="Paid out after each event" />
+            @if (money.balance.amount < 0) {
+              <!-- Below zero is money owed back to myFiesta, said as that rather than as a minus sign. -->
+              <mf-stat class="span" lead label="You owe myFiesta" [value]="cash({ amount: -money.balance.amount, currency: money.balance.currency })" hint="Paid back from your next sales" />
+            } @else {
+              <mf-stat class="span" lead label="Owed to you" [value]="cash(money.balance)" hint="Paid out after each event" />
+            }
             <mf-stat label="Sold, last 7 days" [value]="cash(money.sold_7d)" [hint]="countOf(money.orders_7d, 'order')" />
             <mf-stat label="Tickets out" [value]="o.selling.tickets_upcoming.toLocaleString()" [hint]="countOf(o.selling.upcoming_events, 'upcoming event')" />
           </div>

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\PayoutRequests\Tables;
 
-use App\Enums\PlatformRole;
 use App\Filament\Support\Listing;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
@@ -12,6 +11,7 @@ use App\Services\Payouts\SettlementRefused;
 use App\Support\Money;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -104,7 +104,8 @@ class PayoutRequestsTable
                         default => 'gray',
                     })
                     ->description(fn (PayoutRequest $record) => match (true) {
-                        $record->status === 'paid' => Listing::format((int) $record->paid_amount, $record->currency).' by '.($record->decider?->name ?? 'staff'),
+                        $record->status === 'paid' => Listing::format((int) $record->paid_amount, $record->currency).' by '.($record->decider?->name ?? 'staff')
+                            .($record->overdraft_amount !== null ? ' · '.Listing::format($record->overdraft_amount, $record->currency).' advanced' : ''),
                         $record->status === 'rejected' => $record->decision_note,
                         // Waiting, but not to be paid: see Suspension.
                         $record->isPending() && $record->held_at !== null => 'Held — the organization is suspended',
@@ -145,6 +146,17 @@ class PayoutRequestsTable
 
                 Listing::dateRange('asked', 'created_at', 'Asked'),
 
+                // Paid beyond the balance: the decisions somebody is asked
+                // about later, and the reason is on each.
+                TernaryFilter::make('advanced')
+                    ->label('Advances')
+                    ->trueLabel('Paid with an advance')
+                    ->falseLabel('Paid from the balance, or not paid')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereNotNull('payout_requests.overdraft_amount'),
+                        false: fn (Builder $query) => $query->whereNull('payout_requests.overdraft_amount'),
+                    ),
+
                 // Waiting on an organization's suspension rather than on us.
                 TernaryFilter::make('held')
                     ->label('Held for a suspension')
@@ -167,7 +179,8 @@ class PayoutRequestsTable
      *
      * The amount starts at what was asked, or what is owed now if that is
      * less. More than is owed is an overdraft: shown as such while typing,
-     * needing a reason, and refused for anyone but an administrator.
+     * and then asked about on its own — what they are owed, what is being
+     * paid, the difference, and why — before anything is recorded.
      */
     private static function pay(): Action
     {
@@ -178,9 +191,10 @@ class PayoutRequestsTable
             // Not while held: the organization is suspended and its payouts
             // are frozen. PayoutRequests refuses it as well.
             ->visible(fn (PayoutRequest $record) => $record->isPending() && $record->held_at === null)
-            ->modalHeading(fn (PayoutRequest $record) => 'Pay '.$record->organization?->name)
+            ->modalHeading(fn (PayoutRequest $record) => 'Pay '.($record->organization->name ?? 'this organization').'’s request for '.Listing::format((int) $record->amount, $record->currency).'?')
             ->modalDescription('Send the money first, then record it here. This writes the settlement and tells the organizer it was sent.')
             ->modalSubmitActionLabel('Record payment')
+            ->registerModalActions([self::advance()])
             ->fillForm(function (PayoutRequest $record): array {
                 $owed = self::owed($record);
                 $destination = self::destination($record);
@@ -216,9 +230,7 @@ class PayoutRequestsTable
 
                         $over = (new Money($paying - $owed->amount, $record->currency))->format();
 
-                        return auth()->user()?->platform_role === PlatformRole::Admin
-                            ? "Overdraft: {$over} more than they are owed. It comes out of their future sales, and needs a reason below."
-                            : "That is {$over} more than they are owed. Only an administrator can pay more than is owed.";
+                        return "Overdraft: {$over} more than they are owed. You will be asked to confirm the advance and say why. It comes out of their next sales.";
                     }),
 
                 Select::make('rail')
@@ -247,26 +259,128 @@ class PayoutRequestsTable
 
                 Textarea::make('note')
                     ->label('Note')
-                    ->helperText('Required for an overdraft or unverified details. Shown to the organizer when the amount differs from what they asked for.')
+                    ->helperText('Required for unverified details. Shown to the organizer when the amount differs from what they asked for.')
                     ->rows(3),
             ])
-            ->action(function (PayoutRequest $record, array $data) {
-                try {
-                    app(PayoutRequests::class)->pay(
-                        $record,
-                        auth()->user(),
-                        new Money((int) round(((float) $data['amount']) * 100), $record->currency),
-                        $data['rail'],
-                        $data['note'] ?? null,
-                    );
-                } catch (PayoutRequestRefused|SettlementRefused $refused) {
-                    Notification::make()->title('Not recorded')->body($refused->getMessage())->danger()->send();
+            ->action(function (PayoutRequest $record, array $data, HasActions $livewire) {
+                $amount = new Money((int) round(((float) $data['amount']) * 100), $record->currency);
+
+                // Read again rather than from the row: the balance may have
+                // moved while the form was open.
+                $owed = app(PayoutRequests::class)->available($record->organization, $record->currency);
+
+                // More than is owed: nothing is recorded yet. The advance is
+                // asked about on its own, over this form, with the figures.
+                if ($amount->amount > $owed->amount) {
+                    $livewire->mountAction('advance', [
+                        'amount' => $amount->amount,
+                        'rail' => $data['rail'],
+                        'note' => $data['note'] ?? null,
+                    ], ['table' => true, 'recordKey' => $record->getKey()]);
 
                     return;
                 }
 
-                Notification::make()->title('Payment recorded')->body('The organizer has been told.')->success()->send();
+                self::record($record, $amount, (string) $data['rail'], $data['note'] ?? null);
             });
+    }
+
+    /**
+     * Paying more than is owed, confirmed.
+     *
+     * Opened by Pay when the amount is more than the balance. Everything the
+     * decision rests on is in front of the person making it — what the
+     * organization is owed now, what they asked for, what is being paid and
+     * the difference myFiesta is advancing — and nothing is recorded until
+     * they say why. The reason is kept on the request, in the audit trail and
+     * under the payment in the organizer's statement.
+     */
+    private static function advance(): Action
+    {
+        $figures = function (PayoutRequest $record, array $arguments): array {
+            $owed = app(PayoutRequests::class)->available($record->organization, $record->currency);
+            $paying = new Money((int) ($arguments['amount'] ?? 0), $record->currency);
+
+            return [$owed, $paying, new Money(max(0, $paying->amount - $owed->amount), $record->currency)];
+        };
+
+        return Action::make('advance')
+            ->color('warning')
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->modalHeading(function (PayoutRequest $record, array $arguments) use ($figures) {
+                [, , $over] = $figures($record, $arguments);
+
+                return 'Advance '.$over->format().' to '.$record->organization?->name.'?';
+            })
+            ->modalDescription(function (PayoutRequest $record, array $arguments) use ($figures) {
+                [, , $over] = $figures($record, $arguments);
+
+                // Paying the balance and the advance leaves exactly the
+                // advance below zero: that is the whole of the ledger's side.
+                return 'This pays more than they are owed. The difference is an advance from myFiesta: their '
+                    .$record->currency.' balance goes to '.(new Money(-$over->amount, $record->currency))->format()
+                    .'. Their next sales pay it back before anything else is paid out, and they cannot ask to be paid again until the balance is above zero. '
+                    .'It is recorded with your name, the time and your reason.';
+            })
+            ->schema(fn (PayoutRequest $record, array $arguments) => [
+                Placeholder::make('owed')
+                    ->label('Owed to them now')
+                    ->content(fn () => $figures($record, $arguments)[0]->format()),
+                Placeholder::make('asked')
+                    ->label('Asked for')
+                    ->content($record->money()->format()),
+                Placeholder::make('paying')
+                    ->label('Paying')
+                    ->content(fn () => $figures($record, $arguments)[1]->format()),
+                Placeholder::make('overdraft')
+                    ->label('Overdraft — advanced by myFiesta')
+                    ->content(fn () => $figures($record, $arguments)[2]->format()),
+                Textarea::make('reason')
+                    ->label('Why myFiesta is advancing this')
+                    ->required()
+                    ->minLength(10)
+                    ->maxLength(1000)
+                    ->rows(3)
+                    ->helperText('Kept on the request and in the audit trail, and shown under the payment in their statement.'),
+            ])
+            ->modalSubmitActionLabel(function (PayoutRequest $record, array $arguments) use ($figures) {
+                [, , $over] = $figures($record, $arguments);
+
+                return 'Advance '.$over->format().' and record payment';
+            })
+            // Done or refused, the pay form underneath has nothing left to do.
+            ->cancelParentActions()
+            ->action(function (PayoutRequest $record, array $data, array $arguments) {
+                self::record(
+                    $record,
+                    new Money((int) ($arguments['amount'] ?? 0), $record->currency),
+                    (string) ($arguments['rail'] ?? ''),
+                    $arguments['note'] ?? null,
+                    (string) $data['reason'],
+                );
+            });
+    }
+
+    /** Pay it, and say how that went. */
+    private static function record(PayoutRequest $record, Money $amount, string $rail, ?string $note, ?string $overdraftReason = null): void
+    {
+        try {
+            $paid = app(PayoutRequests::class)->pay($record, auth()->user(), $amount, $rail, $note, $overdraftReason);
+        } catch (PayoutRequestRefused|SettlementRefused $refused) {
+            Notification::make()->title('Not recorded')->body($refused->getMessage())->danger()->send();
+
+            return;
+        }
+
+        $advance = $paid->overdraft();
+
+        Notification::make()
+            ->title('Payment recorded')
+            ->body($advance
+                ? 'Including an advance of '.$advance->format().', recovered from their next sales. The organizer has been told.'
+                : 'The organizer has been told.')
+            ->success()
+            ->send();
     }
 
     private static function reject(): Action
@@ -276,9 +390,9 @@ class PayoutRequestsTable
             ->icon('heroicon-o-x-circle')
             ->color('danger')
             ->visible(fn (PayoutRequest $record) => $record->isPending())
-            ->modalHeading('Reject this payout request?')
+            ->modalHeading(fn (PayoutRequest $record) => 'Reject '.($record->organization->name ?? 'this organization').'’s request for '.Listing::format((int) $record->amount, $record->currency).'?')
             ->modalDescription('Nothing is paid. The organizer is emailed the reason below, and can ask again.')
-            ->modalSubmitActionLabel('Reject')
+            ->modalSubmitActionLabel('Reject the request')
             ->schema([
                 Textarea::make('reason')
                     ->label('Reason, for the organizer')

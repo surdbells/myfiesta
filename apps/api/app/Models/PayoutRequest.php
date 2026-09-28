@@ -20,7 +20,9 @@ class PayoutRequest extends Model
             'amount' => 'integer',
             'balance_at_request' => 'integer',
             'paid_amount' => 'integer',
+            'overdraft_amount' => 'integer',
             'decided_at' => 'datetime',
+            'approved_at' => 'datetime',
         ];
     }
 
@@ -42,6 +44,17 @@ class PayoutRequest extends Model
         return $this->belongsTo(User::class, 'decided_by');
     }
 
+    /**
+     * Who approved paying it — for an advance, the person the decision is
+     * asked of later.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
     /** @return BelongsTo<Settlement, $this> */
     public function settlement(): BelongsTo
     {
@@ -51,6 +64,12 @@ class PayoutRequest extends Model
     public function money(): Money
     {
         return new Money($this->amount, $this->currency);
+    }
+
+    /** The part paid beyond what was owed, when there was one. */
+    public function overdraft(): ?Money
+    {
+        return $this->overdraft_amount !== null ? new Money($this->overdraft_amount, $this->currency) : null;
     }
 
     public function isPending(): bool

@@ -177,12 +177,17 @@ class OrganizerPerformance extends Page implements HasTable
                     'hint' => Format::percent($now['refund_rate']).' of gross · '.number_format($now['refunds']).' '.str('refund')->plural($now['refunds'])],
                 ['label' => 'Chargebacks opened', 'value' => number_format($m['disputes']['opened']),
                     'hint' => Format::percent($m['disputes']['rate']).' of orders · '.number_format($m['disputes']['open']).' open now'],
-                ['label' => 'Owed now', 'value' => $money($m['payouts']['owed']),
-                    'hint' => match (true) {
-                        $pending === null => 'No payout requested',
-                        $seesRequests => 'Payout of '.$money($pending).' requested',
-                        default => 'A payout has been requested',
-                    }],
+                // Below zero is money they owe us — an advance, or refunds
+                // after a payout — and reads as that, not as a minus sign.
+                $m['payouts']['owed'] < 0
+                    ? ['label' => 'Owes myFiesta', 'value' => $money(-$m['payouts']['owed']),
+                        'hint' => 'Recovered from their next sales before anything is paid out']
+                    : ['label' => 'Owed now', 'value' => $money($m['payouts']['owed']),
+                        'hint' => match (true) {
+                            $pending === null => 'No payout requested',
+                            $seesRequests => 'Payout of '.$money($pending).' requested',
+                            default => 'A payout has been requested',
+                        }],
                 // What was paid out is for the staff who may open the settlements.
                 $seesSettlements ? ['label' => 'Paid out in period', 'value' => $money($m['payouts']['paid']),
                     'hint' => number_format($m['payouts']['settlements']).' '.str('settlement')->plural($m['payouts']['settlements'])] : null,
@@ -255,7 +260,9 @@ class OrganizerPerformance extends Page implements HasTable
                     ->placeholder('—'),
                 TextColumn::make('open_disputes')->label('Open chargebacks')->numeric()->alignEnd()->sortable()
                     ->color(fn ($state): ?string => (int) $state > 0 ? 'danger' : null),
-                $money('owed', 'Owed now'),
+                $money('owed', 'Owed now')
+                    ->color(fn ($state): ?string => (int) $state < 0 ? 'danger' : null)
+                    ->tooltip(fn ($state): ?string => (int) $state < 0 ? 'Below zero: they owe myFiesta this much' : null),
                 $money('paid_out', 'Paid out')->visible(fn (): bool => SettlementResource::canViewAny()),
                 TextColumn::make('events_in_period')->label('Nights')->numeric()->alignEnd()->sortable()
                     ->tooltip('Events held in the period, drafts left out'),

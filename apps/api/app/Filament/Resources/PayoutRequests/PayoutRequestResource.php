@@ -14,8 +14,9 @@ use Filament\Tables\Table;
  * Organizers asking to be paid.
  *
  * The queue staff work from: pay a request, or reject it with a reason the
- * organizer will read. Paying is the only place an overdraft can be given,
- * and only by an administrator.
+ * organizer will read. Paying is the only place an overdraft can be given:
+ * confirmed on its own, with the figures and a written reason, and kept on
+ * the request (see Overdrafts for how it comes back).
  */
 class PayoutRequestResource extends Resource
 {

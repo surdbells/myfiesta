@@ -11,6 +11,10 @@ You asked for {{ $asked }}; {{ $paid }} was sent.
 @endif
 @endif
 
+@if ($advance)
+{{ $advance }} of this is an advance from myFiesta, ahead of your sales. Your next sales in {{ $request->currency }} pay it back automatically, and you can ask to be paid again once your balance is above zero. Your Payouts page shows how much is left.
+
+@endif
 Transfers can take a day or two to arrive, depending on your bank.
 @else
 # Your payout request was not paid

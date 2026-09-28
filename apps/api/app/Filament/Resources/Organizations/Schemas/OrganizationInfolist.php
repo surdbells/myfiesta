@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Organizations\Schemas;
 
 use App\Enums\Role;
+use App\Filament\Actions\RecordRepaymentAction;
 use App\Filament\Support\AuditTrail;
 use App\Filament\Support\Listing;
 use App\Models\Event;
@@ -10,7 +11,10 @@ use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
+use App\Models\Repayment;
 use App\Models\User;
+use App\Services\Payouts\OverdraftPosition;
+use App\Services\Payouts\Overdrafts;
 use App\Support\Money;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -139,8 +143,12 @@ class OrganizationInfolist
             // The same roles that open payout details, settlements and payout
             // requests elsewhere in the panel.
             Section::make('Payouts')
+                ->key('payouts')
                 ->visible(fn () => (bool) auth()->user()?->platform_role?->canSettle())
                 ->collapsible()
+                // Money sent back to us outside the platform, against what
+                // is owed below. Shown only while something is.
+                ->afterHeader([RecordRepaymentAction::make()])
                 ->schema([
                     RepeatableEntry::make('payout_details')
                         ->label('Where payouts go')
@@ -175,6 +183,77 @@ class OrganizationInfolist
                             ->all())
                         ->listWithLineBreaks()
                         ->placeholder('None'),
+
+                    /*
+                     * Owed back to myFiesta, per currency.
+                     *
+                     * The same sentence the organizer reads on their
+                     * statement, with how long it has been owed and, for an
+                     * advance, who approved it and why — the questions an
+                     * operator is asked about one.
+                     */
+                    RepeatableEntry::make('overdrafts')
+                        ->label('Owed to myFiesta')
+                        ->state(fn (Organization $record) => collect(app(Overdrafts::class)->positionsFor($record))
+                            ->map(fn (OverdraftPosition $position) => [
+                                'currency' => $position->currency,
+                                'outstanding' => $position->isOutstanding() ? $position->outstanding->format() : 'Nothing',
+                                'summary' => $position->summary(),
+                                'since' => $position->since ? $position->since->format('j M Y').' · '.$position->since->diffForHumans(short: true) : '—',
+                                'decision' => match (true) {
+                                    $position->isAdvance() => $position->decidedBy().': '.$position->reason(),
+                                    $position->since !== null => 'No advance: refunds after a payout',
+                                    // Carried over below zero, with no payout here to count from.
+                                    default => 'No advance on record',
+                                },
+                            ])
+                            ->values()
+                            ->all())
+                        ->placeholder('Nothing. Every balance is at or above zero.')
+                        ->table([
+                            TableColumn::make('Currency'),
+                            TableColumn::make('Outstanding'),
+                            TableColumn::make('Where it stands'),
+                            TableColumn::make('Since (UTC)'),
+                            TableColumn::make('Decision'),
+                        ])
+                        ->schema([
+                            TextEntry::make('currency'),
+                            TextEntry::make('outstanding')->weight('semibold')->color(fn (string $state) => $state === 'Nothing' ? 'success' : 'danger'),
+                            TextEntry::make('summary'),
+                            TextEntry::make('since'),
+                            TextEntry::make('decision'),
+                        ]),
+
+                    RepeatableEntry::make('repayments')
+                        ->label('Repayments received')
+                        ->state(fn (Organization $record) => Repayment::query()
+                            ->where('organization_id', $record->id)
+                            ->with('recorder:id,name')
+                            ->latest()
+                            ->limit(10)
+                            ->get()
+                            ->map(fn (Repayment $repayment) => [
+                                'when' => $repayment->created_at?->format('j M Y, H:i'),
+                                'amount' => $repayment->money->format(),
+                                'reference' => $repayment->reference,
+                                'by' => $repayment->recorder->name ?? 'A former member of staff',
+                            ])
+                            ->all())
+                        ->placeholder('None recorded.')
+                        ->visible(fn (Organization $record) => Repayment::query()->where('organization_id', $record->id)->exists())
+                        ->table([
+                            TableColumn::make('Recorded (UTC)'),
+                            TableColumn::make('Amount'),
+                            TableColumn::make('Reference'),
+                            TableColumn::make('By'),
+                        ])
+                        ->schema([
+                            TextEntry::make('when'),
+                            TextEntry::make('amount'),
+                            TextEntry::make('reference'),
+                            TextEntry::make('by'),
+                        ]),
                 ]),
 
             Section::make('Members')
@@ -249,11 +328,18 @@ class OrganizationInfolist
         return $rows->map(fn (object $row) => $row->country.' ('.$row->currency.')')->implode(' · ');
     }
 
+    /**
+     * Each balance, in its own currency. One below zero is money the
+     * organization owes myFiesta, and says so rather than wearing a minus
+     * sign that is easy to miss.
+     */
     private static function owed(Organization $organization): string
     {
         $owed = collect(LedgerEntry::balancesFor($organization))
             ->reject(fn (Money $money) => $money->isZero())
-            ->map(fn (Money $money) => Listing::format($money->amount, $money->currency))
+            ->map(fn (Money $money) => $money->isNegative()
+                ? 'Owes myFiesta '.Listing::format(-$money->amount, $money->currency)
+                : Listing::format($money->amount, $money->currency))
             ->implode(' · ');
 
         return $owed !== '' ? $owed : 'Nothing';

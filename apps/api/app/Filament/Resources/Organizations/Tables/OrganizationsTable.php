@@ -157,6 +157,8 @@ class OrganizationsTable
                  * would produce a number that means nothing. Each is written
                  * as the organizer's console writes it — "$190.00", "₦5,000"
                  * — so the figure read out on a call is the one on screen.
+                 * One below zero is money the organization owes myFiesta (see
+                 * Overdrafts), and says so rather than wearing a minus sign.
                  */
                 TextColumn::make('balances')
                     ->label('Owed')
@@ -169,12 +171,18 @@ class OrganizationsTable
 
                         return collect($balances)
                             ->reject(fn (Money $m) => $m->isZero())
-                            ->map(fn (Money $m) => $m->format())
+                            ->map(fn (Money $m) => $m->isNegative()
+                                ? 'Owes myFiesta '.(new Money(-$m->amount, $m->currency))->format()
+                                : $m->format())
                             ->implode("\n") ?: '—';
                     })
                     ->badge()
                     ->separator("\n")
-                    ->color(fn (string $state) => $state === '—' ? 'gray' : 'warning')
+                    ->color(fn (string $state) => match (true) {
+                        $state === '—' => 'gray',
+                        str_starts_with($state, 'Owes myFiesta') => 'danger',
+                        default => 'warning',
+                    })
                     ->description(fn (Organization $record) => $record->isSuspended() ? 'Payouts frozen' : null),
 
                 TextColumn::make('created_at')
@@ -245,7 +253,9 @@ class OrganizationsTable
                     ->visible(fn (Organization $record) => $record->awaitsRenameCheck()
                         && (auth()->user()?->hasPlatformRole(PlatformRole::Admin, PlatformRole::Support) ?? false))
                     ->requiresConfirmation()
-                    ->modalDescription(fn (Organization $record) => 'Verified as "'.$record->verified_name.'", now called "'.$record->name.'". Confirming shows the tick again under the new name.')
+                    ->modalHeading(fn (Organization $record) => 'Confirm '.$record->name.' as the organization that was verified?')
+                    ->modalDescription(fn (Organization $record) => 'Verified as "'.$record->verified_name.'", now called "'.$record->name.'". Confirming shows the tick again under the new name, on every page.')
+                    ->modalSubmitActionLabel('Confirm the new name')
                     ->action(function (Organization $record) {
                         $record->update(['verified_name' => $record->name]);
 
@@ -258,8 +268,9 @@ class OrganizationsTable
                  * The amount is classified against the live balance rather than
                  * chosen from a list: full, partial, or overdraft is a fact
                  * about the numbers, not an opinion. Paying more than is owed
-                 * is refused here: an overdraft is only given by an
-                 * administrator paying an organizer's payout request.
+                 * is refused here: an overdraft is only given by staff paying
+                 * an organizer's payout request, with a reason, and kept on
+                 * that request (PayoutRequests::pay).
                  *
                  * Hidden while the organization is suspended, when its payouts
                  * are frozen; SettlementRecorder refuses it as well.
@@ -272,6 +283,9 @@ class OrganizationsTable
                         PlatformRole::Admin,
                         PlatformRole::Finance,
                     ) ?? false))
+                    ->modalHeading(fn (Organization $record) => 'Record a settlement to '.$record->name.'?')
+                    ->modalDescription('For money that has already left myFiesta’s account. It is written to the ledger and lowers what they are owed in that currency, and it cannot be taken back from here. Recorded under your name.')
+                    ->modalSubmitActionLabel('Record settlement')
                     ->schema(fn (Organization $record) => [
                         Select::make('currency')
                             ->label('Currency')
@@ -280,9 +294,13 @@ class OrganizationsTable
                             ->options(function () use ($record) {
                                 $balances = LedgerEntry::balancesFor($record);
 
+                                // A balance below zero has nothing to pay
+                                // from; it is still listed, saying so.
                                 return collect($balances)
                                     ->mapWithKeys(fn (Money $m, string $code) => [
-                                        $code => $code.' — '.$m->format().' owed',
+                                        $code => $m->isNegative()
+                                            ? $code.' — they owe myFiesta '.(new Money(-$m->amount, $m->currency))->format()
+                                            : $code.' — '.$m->format().' owed',
                                     ])
                                     ->all();
                             })

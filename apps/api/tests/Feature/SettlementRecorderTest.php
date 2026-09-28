@@ -80,7 +80,7 @@ class SettlementRecorderTest extends TestCase
         ]);
     }
 
-    private function record(int $amount, ?string $note = null, string $currency = 'CAD', bool $overdraftApproved = false): Settlement
+    private function record(int $amount, ?string $note = null, string $currency = 'CAD', ?string $advanceReason = null): Settlement
     {
         return app(SettlementRecorder::class)->record(
             $this->org,
@@ -88,7 +88,7 @@ class SettlementRecorderTest extends TestCase
             'interac',
             $note,
             $this->finance,
-            $overdraftApproved,
+            $advanceReason,
         );
     }
 
@@ -125,10 +125,10 @@ class SettlementRecorderTest extends TestCase
     {
         $this->owed(10_000);
 
-        // Even with a reason. An overdraft is given only by an administrator
-        // paying an organizer's request — PayoutRequestTest covers that path.
+        // Even with a reason. An overdraft is given only by staff paying an
+        // organizer's request — PayoutOverdraftTest covers that path.
         $this->expectException(SettlementRefused::class);
-        $this->expectExceptionMessage('only possible when an administrator pays');
+        $this->expectExceptionMessage('only possible when administrators or finance pay');
 
         $this->record(25_000, 'Advance agreed with the promoter before the weekend.');
     }
@@ -142,16 +142,17 @@ class SettlementRecorderTest extends TestCase
         $this->expectException(SettlementRefused::class);
         $this->expectExceptionMessage('needs a reason on the record');
 
-        $this->record(25_000, null, 'CAD', overdraftApproved: true);
+        $this->record(25_000, 'Sent before the weekend.', 'CAD', advanceReason: '');
     }
 
     public function test_an_overdraft_with_a_reason_is_recorded_and_the_balance_goes_negative(): void
     {
         $this->owed(10_000);
 
-        $settlement = $this->record(25_000, 'Advance agreed with the promoter before the weekend.', 'CAD', overdraftApproved: true);
+        $settlement = $this->record(25_000, null, 'CAD', advanceReason: 'Advance agreed with the promoter before the weekend.');
 
         $this->assertSame('overdraft', $settlement->type);
+        $this->assertSame('Advance of $150.00: Advance agreed with the promoter before the weekend.', $settlement->note);
         // Negative on purpose: they have been paid money they have not yet
         // earned, and the next sale settles it. Clamping to zero would lose
         // that.
@@ -165,7 +166,28 @@ class SettlementRecorderTest extends TestCase
         $this->expectException(SettlementRefused::class);
         $this->expectExceptionMessage('needs a reason on the record');
 
-        $this->record(25_000, '   ', 'CAD', overdraftApproved: true);
+        $this->record(25_000, null, 'CAD', advanceReason: '   ');
+    }
+
+    public function test_a_balance_given_by_the_caller_is_the_one_the_payout_is_classified_against(): void
+    {
+        $this->owed(50_000);
+
+        // The caller read $300.00 under its own lock; a sale since does not
+        // turn the advance it measured into a covered payout.
+        $settlement = app(SettlementRecorder::class)->record(
+            $this->org,
+            new Money(40_000, 'CAD'),
+            'interac',
+            null,
+            $this->finance,
+            advanceReason: 'Advance agreed with the promoter before the weekend.',
+            balance: new Money(30_000, 'CAD'),
+        );
+
+        $this->assertSame('overdraft', $settlement->type);
+        $this->assertSame('Advance of $100.00: Advance agreed with the promoter before the weekend.', $settlement->note);
+        $this->assertSame(10_000, $this->balance());
     }
 
     public function test_settling_against_nothing_owed_is_an_overdraft(): void

@@ -3,6 +3,8 @@
 namespace App\Services\PersonalData;
 
 use App\Models\Organization;
+use App\Services\Payouts\OverdraftPosition;
+use App\Services\Payouts\Overdrafts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
@@ -89,7 +91,9 @@ class Eraser
      * leave events, money and other people's tickets behind a door nobody
      * can open — and their payout details are the organization's, not
      * theirs to take with them. They are told to hand it over or close it
-     * first.
+     * first — and when it owes myFiesta money back, that closing is not open
+     * to them until the money is recovered or repaid (Overdrafts), so they
+     * are told that too rather than sent to a door that will not open.
      */
     public function refusal(Subject $subject): ?string
     {
@@ -106,6 +110,18 @@ class Eraser
         }
 
         $names = $stranded->pluck('name')->implode(', ');
+
+        $owing = $stranded
+            ->filter(fn (Organization $organization) => collect(app(Overdrafts::class)->positionsFor($organization))
+                ->contains(fn (OverdraftPosition $position) => $position->isOutstanding()))
+            ->pluck('name');
+
+        if ($owing->isNotEmpty()) {
+            return "You are the only owner of {$names}. Erasing your account would leave its events, its money and "
+                .'its ticket holders with nobody who can reach them, and '.$owing->implode(', ')
+                .' owes myFiesta money, so it cannot be closed until that is recovered from its '
+                .'sales or repaid. Make somebody else an owner, and then ask again.';
+        }
 
         return "You are the only owner of {$names}. Erasing your account would leave its events, its money and "
             .'its ticket holders with nobody who can reach them. Make somebody else an owner, or close the '

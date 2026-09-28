@@ -41,6 +41,9 @@ class PayoutRequestDecided extends Mailable implements ShouldQueue
                 'organization' => $this->request->organization,
                 'asked' => $this->request->money()->format(),
                 'paid' => $this->request->status === 'paid' ? $this->paid()->format() : null,
+                // Paid beyond what was owed: said, with how it comes back, so
+                // the next sales not reaching them is not a surprise.
+                'advance' => $this->request->status === 'paid' ? $this->request->overdraft()?->format() : null,
                 'url' => rtrim((string) config('app.console_url'), '/').'/payouts',
             ],
         );

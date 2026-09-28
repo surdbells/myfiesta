@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Pages\EventPerformance;
 use App\Filament\Pages\OrganizerPerformance;
+use App\Filament\Pages\Overdrafts;
 use App\Filament\Resources\Disputes\DisputeResource;
 use App\Filament\Resources\PayoutRequests\PayoutRequestResource;
 use App\Services\Analytics\Charts\Format;
@@ -109,6 +110,9 @@ class PlatformKpis extends AnalyticsWidget
                 'value' => $money($overview['owed']['owed']),
                 'hint' => $overview['owed']['organizations'].' '.str('organization')->plural($overview['owed']['organizations'])
                     .($overview['owed']['overdrawn'] > 0 ? ' · '.$money($overview['owed']['overdrawn']).' overdrawn' : ''),
+                // Overdrawn balances are counted beside what is owed, never
+                // netted against it; the list of who owes what is a click away.
+                'href' => $overview['owed']['overdrawn'] > 0 && Overdrafts::canAccess() ? Overdrafts::getUrl() : null,
             ],
             [
                 'label' => 'Active organizers',
