@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL } from '../../core/api';
+import { answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
 import { EmailVerification } from '../../core/email-verification';
 import { SessionStore } from '../../core/session';
 import { Account } from './account';
@@ -64,6 +65,7 @@ describe('Account', () => {
 
   afterEach(() => {
     backend.verify();
+    forgetDialogs();
     session.clear();
   });
 
@@ -97,7 +99,46 @@ describe('Account', () => {
     expect(fixture.nativeElement.textContent).toContain('ada@new.example.test');
   });
 
-  it('asks with the current password and shows what the server said', () => {
+  it('asks before sending the link, and sends nothing when the answer is no', async () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.newEmail.set('ada@new.example.test');
+    page.emailPassword.set('the right one 12');
+
+    void page.requestEmail();
+    await settle();
+
+    expect(asked()?.title).toBe('Move your account to ada@new.example.test?');
+    expect(asked()?.text).toContain('Until then you keep signing in with ada@example.test.');
+    expect(asked()?.buttons).toEqual(['Cancel', 'Send the link']);
+
+    await answer('Cancel');
+
+    backend.expectNone('http://api.test/api/auth/email');
+    expect(page.requesting()).toBe(false);
+  });
+
+  it('asks before saving a new name, and saves nothing when the answer is no', async () => {
+    const fixture = render();
+    me();
+
+    const page = fixture.componentInstance;
+    page.name.set('Ada O.');
+
+    void page.saveName();
+    await settle();
+
+    expect(asked()?.title).toBe('Change your name to Ada O.?');
+
+    await answer('Cancel');
+
+    backend.expectNone('http://api.test/api/auth/profile');
+    expect(page.savingName()).toBe(false);
+  });
+
+  it('asks with the current password and shows what the server said', async () => {
     const fixture = render();
     me();
 
@@ -106,7 +147,9 @@ describe('Account', () => {
     page.emailPassword.set('the right one 12');
     expect(page.canRequestEmail()).toBe(true);
 
-    page.requestEmail();
+    void page.requestEmail();
+    await settle();
+    await answer('Send the link');
 
     const request = backend.expectOne('http://api.test/api/auth/email');
     expect(request.request.method).toBe('POST');
@@ -125,14 +168,16 @@ describe('Account', () => {
     expect(session.user()?.email).toBe('ada@example.test');
   });
 
-  it('puts a wrong password under the password box', () => {
+  it('puts a wrong password under the password box', async () => {
     const fixture = render();
     me();
 
     const page = fixture.componentInstance;
     page.newEmail.set('ada@new.example.test');
     page.emailPassword.set('a guess');
-    page.requestEmail();
+    void page.requestEmail();
+    await settle();
+    await answer('Send the link');
 
     backend.expectOne('http://api.test/api/auth/email').flush(
       { message: 'That is not your current password.', errors: { current_password: ['That is not your current password.'] } },
@@ -155,7 +200,7 @@ describe('Account', () => {
     expect(page.sameEmail()).toBe(true);
     expect(page.canRequestEmail()).toBe(false);
 
-    page.requestEmail();
+    void page.requestEmail();
     backend.expectNone('http://api.test/api/auth/email');
   });
 

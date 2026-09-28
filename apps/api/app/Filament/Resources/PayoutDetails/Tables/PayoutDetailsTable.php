@@ -199,7 +199,9 @@ class PayoutDetailsTable
             ->color('danger')
             ->visible(fn (OrganizationPayoutDetail $record) => $record->isVerified())
             ->requiresConfirmation()
-            ->modalDescription('Manual payouts to these details will need a stated reason until they are verified again.')
+            ->modalHeading(fn (OrganizationPayoutDetail $record) => 'Withdraw the verification of '.($record->organization->name ?? 'this organization').'’s payout details?')
+            ->modalDescription('Manual payouts to these details will need a stated reason until they are verified again. Recorded in the audit trail under your name.')
+            ->modalSubmitActionLabel('Withdraw verification')
             ->schema([
                 Textarea::make('reason')
                     ->label('Why?')

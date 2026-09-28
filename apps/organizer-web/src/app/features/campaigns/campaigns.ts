@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
+  ConfirmDialog,
   ToastStore,
   UiAlert,
   UiBadge,
@@ -55,6 +56,7 @@ type When = CampaignDraft['send'];
 export class Campaigns {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly formatMoney = formatMoney;
 
@@ -282,8 +284,10 @@ export class Campaigns {
     this.eventId.set(value || null);
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (!this.ready() || this.saving()) return;
+
+    if (!(await this.confirmSend()) || this.saving()) return;
 
     this.saving.set(true);
     this.error.set(null);
@@ -316,6 +320,56 @@ export class Campaigns {
         if (response.status === 422 && response.error?.data) this.load();
       },
     });
+  }
+
+  /**
+   * Said back before it goes: which list, how many of them it reaches, and
+   * when. An email cannot be called back once it is in somebody's inbox, so
+   * the count and the subject are in front of the organizer at the moment
+   * they commit to it, not only above a form they have scrolled past.
+   */
+  private confirmSend(): Promise<boolean> {
+    const subject = this.subject().trim();
+    const list = this.audienceLabel(this.audience());
+    const about = (this.page()?.events ?? []).find((e) => e.id === this.eventId())?.title;
+    const reach = this.reach();
+    const people = reach ? `${reach.reachable.toLocaleString()} ${reach.reachable === 1 ? 'person' : 'people'}` : 'everybody on the list who may be written to';
+    const left = reach ? reach.all - reach.reachable : 0;
+    const onList = [`The list: ${list}${about ? `, for ${about}` : ''}.`];
+
+    if (left > 0) onList.push(`${left.toLocaleString()} on it may not be written to, and are left out.`);
+
+    switch (this.when()) {
+      case 'now':
+        return this.confirmDialog.confirm({
+          title: `Send “${subject}” now?`,
+          body: `It goes to ${people} straight away, and cannot be called back.`,
+          consequences: onList,
+          confirmLabel: reach ? `Send to ${people}` : 'Send now',
+          tone: 'default',
+        });
+      case 'later': {
+        const at = new Date(this.at());
+        const when = Number.isNaN(at.getTime())
+          ? 'at the time you chose'
+          : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(at);
+
+        return this.confirmDialog.confirm({
+          title: `Schedule “${subject}”?`,
+          body: `It goes out ${when}, to whoever is on the list at that moment.`,
+          consequences: [...onList, 'You can change it or cancel it until then.'],
+          confirmLabel: 'Schedule it',
+          tone: 'default',
+        });
+      }
+      default:
+        return this.confirmDialog.confirm({
+          title: `Save “${subject}” as a draft?`,
+          body: 'Nobody gets it yet. It waits here until you send or schedule it.',
+          confirmLabel: 'Save draft',
+          tone: 'default',
+        });
+    }
   }
 
   edit(campaign: Campaign): void {

@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import {
+  ConfirmDialog,
   ToastStore,
   UiBadge,
   UiButton,
@@ -66,6 +67,7 @@ export class EventQuestions {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   protected readonly addIcon = Plus;
   protected readonly editIcon = Pencil;
@@ -187,11 +189,24 @@ export class EventQuestions {
     );
   }
 
-  save(): void {
+  async save(): Promise<void> {
     if (!this.canSave() || this.saving()) return;
 
     const draft = this.draft();
     const editing = this.editing();
+
+    // A required question is one more thing between a buyer and paying, so
+    // who is asked, and whether they may skip it, is said at the moment of
+    // adding it.
+    const sure = await this.confirmDialog.confirm({
+      title: editing ? 'Save the changes to this question?' : 'Add this question to the checkout?',
+      body: `“${draft.label.trim()}” is asked ${draft.perAttendee ? 'about each person' : 'once for the whole order'}, ${draft.required ? 'and must be answered before paying' : 'and can be skipped'}.`,
+      consequences: editing ? ['Answers already given stay as they were given.'] : [],
+      confirmLabel: editing ? 'Save changes' : 'Add the question',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     const body = {
       label: draft.label.trim(),

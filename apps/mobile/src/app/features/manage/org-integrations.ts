@@ -412,12 +412,26 @@ export class OrgIntegrations implements OnInit {
   protected async saveWebhook(): Promise<void> {
     if (!this.hookReady()) return;
 
+    const editing = this.editing();
+    const url = editing?.url ?? this.url().trim();
+    const events = this.chosen();
+
+    // Buyers' names and emails leave myFiesta for this address with every
+    // sale, so where they go, and which of them, is said back first.
+    const sure = await this.dialogs.confirm({
+      title: editing ? `Change what ${url} hears about?` : `Send sales to ${url}?`,
+      body: `From now on, ${events.join(', ')} ${events.length === 1 ? 'is' : 'are'} sent there as ${events.length === 1 ? 'it happens' : 'they happen'}, with the buyer's or ticket holder's name and email.`,
+      consequences: editing ? [] : ['The signing secret is shown once, straight after. Save it then.'],
+      confirmLabel: editing ? 'Save changes' : 'Add the address',
+      tone: 'default',
+    });
+
+    if (!sure || this.busy()) return;
+
     this.busy.set(true);
     this.formError.set(null);
 
     try {
-      const editing = this.editing();
-
       if (editing) {
         await this.organizer.updateWebhook(editing.id, { events: this.chosen(), description: this.description().trim() || null });
         this.hooking.set(false);
@@ -457,6 +471,16 @@ export class OrgIntegrations implements OnInit {
     try {
       switch (chosen) {
         case 'test': {
+          const sure = await this.dialogs.confirm({
+            title: `Send a test to ${e.url}?`,
+            body: 'A test delivery goes there now, so you can see your system take it. It says nothing happened.',
+            consequences: ['It carries no order and no buyer.'],
+            confirmLabel: 'Send a test',
+            tone: 'default',
+          });
+
+          if (!sure) return;
+
           const d = await this.organizer.testWebhook(e.id);
           this.toasts.show(d.status === 'succeeded' ? `Delivered — it answered ${d.response_status}.` : 'Sent. It did not answer with a success; see recent deliveries.', d.status === 'succeeded' ? 'success' : 'danger');
           break;
@@ -473,15 +497,45 @@ export class OrgIntegrations implements OnInit {
           this.hooking.set(true);
           return;
         case 'on':
-        case 'off':
+        case 'off': {
+          const sure = await this.dialogs.confirm(
+            chosen === 'on'
+              ? {
+                  title: `Turn ${e.url} back on?`,
+                  body: 'New sales are sent there again, from now on.',
+                  consequences: ['Sales made while it was off are not sent.'],
+                  confirmLabel: 'Turn it on',
+                  tone: 'default',
+                }
+              : {
+                  title: `Turn off ${e.url}?`,
+                  body: 'Nothing is sent there until you turn it back on.',
+                  consequences: ['Sales made while it is off are not sent later.'],
+                  confirmLabel: 'Turn it off',
+                  tone: 'danger',
+                },
+          );
+
+          if (!sure) return;
+
           await this.organizer.updateWebhook(e.id, { enabled: chosen === 'on' });
           this.toasts.show(chosen === 'on' ? 'Back on.' : 'Turned off.', 'success');
           break;
-        case 'remove':
-          if (!(await this.dialogs.confirm({ title: 'Remove this webhook?', message: 'Nothing more is sent to it.', confirm: 'Remove', danger: true }))) return;
+        }
+        case 'remove': {
+          const sure = await this.dialogs.confirm({
+            title: `Stop sending to ${e.url}?`,
+            body: 'Nothing more is sent there, and its history goes with it.',
+            consequences: ['To start again you would add it back and get a new secret.'],
+            confirmLabel: 'Remove the address',
+            tone: 'danger',
+          });
+
+          if (!sure) return;
           await this.organizer.removeWebhook(e.id);
           this.toasts.show('Removed.', 'success');
           break;
+        }
         default:
           return;
       }
@@ -502,6 +556,16 @@ export class OrgIntegrations implements OnInit {
     const name = this.keyName().trim();
     if (!name) return;
 
+    const sure = await this.dialogs.confirm({
+      title: `Make a key called ${name}?`,
+      body: "Whatever holds it can read this organization's events, orders and attendees through the API, until you revoke it.",
+      consequences: ['The key is shown once, straight after. Save it then.'],
+      confirmLabel: 'Make the key',
+      tone: 'default',
+    });
+
+    if (!sure || this.busy()) return;
+
     this.busy.set(true);
     this.keyError.set(null);
 
@@ -521,9 +585,10 @@ export class OrgIntegrations implements OnInit {
   protected async revokeKey(k: ApiKeySummary): Promise<void> {
     const sure = await this.dialogs.confirm({
       title: `Revoke ${k.name}?`,
-      message: 'Anything using it stops working straight away.',
-      confirm: 'Revoke',
-      danger: true,
+      body: 'Anything using it stops working straight away.',
+      consequences: ['This cannot be undone: you would make a new key and put it where this one was.'],
+      confirmLabel: 'Revoke the key',
+      tone: 'danger',
     });
 
     if (!sure) return;
@@ -542,9 +607,9 @@ export class OrgIntegrations implements OnInit {
     if (!this.copied()) {
       const sure = await this.dialogs.confirm({
         title: 'Close without copying?',
-        message: 'It is not shown again. If it is lost, you will have to make a new one.',
-        confirm: 'Close',
-        danger: true,
+        body: 'It is not shown again. If it is lost, you will have to make a new one.',
+        confirmLabel: 'Close without copying',
+        tone: 'danger',
       });
 
       if (!sure) return;

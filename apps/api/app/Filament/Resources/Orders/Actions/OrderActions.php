@@ -50,8 +50,8 @@ final class OrderActions
             ->color('danger')
             ->authorize(fn () => StaffAction::current(StaffAction::Refund))
             ->visible(fn (Order $record) => self::refundable($record))
-            ->modalHeading(fn (Order $record) => 'Refund order '.$record->reference)
-            ->modalDescription(fn (Order $record) => 'The money goes back to the card or account it came from, through '
+            ->modalHeading(fn (Order $record) => 'Refund order '.$record->reference.' to '.($record->buyer_email ?? 'its buyer').'?')
+            ->modalDescription(fn (Order $record) => 'Paid '.$record->total->format().'. The money goes back to the card or account it came from, through '
                 .ucfirst((string) $record->gateway).'. Refunded tickets stop working at the door straight away. '
                 .'The amount is worked out from the tickets you choose — it cannot be typed.')
             ->modalSubmitActionLabel('Send the refund')
@@ -100,8 +100,8 @@ final class OrderActions
             ->icon(Heroicon::OutlinedReceiptRefund)
             ->color('danger')
             ->authorize(fn () => StaffAction::current(StaffAction::Refund))
-            ->modalHeading('Refund the selected tickets?')
-            ->modalDescription('Their share of what was paid goes back through the payment processor, and they stop working at the door.')
+            ->modalHeading(fn (Collection $records) => 'Refund '.$records->count().' selected '.($records->count() === 1 ? 'ticket' : 'tickets').'?')
+            ->modalDescription('Their share of what was paid goes back to the buyer through the payment processor, and they stop working at the door straight away. A refund cannot be undone.')
             ->modalSubmitActionLabel('Send the refund')
             ->schema([
                 Textarea::make('reason')->label('Reason')->required()->maxLength(500)->rows(2),
@@ -131,7 +131,7 @@ final class OrderActions
             ->authorize(fn () => StaffAction::current(StaffAction::Resend))
             ->visible(fn (Order $record) => in_array($record->status, ['paid', 'partially_refunded'], true) && filled($record->buyer_email))
             ->requiresConfirmation()
-            ->modalHeading('Resend the tickets email?')
+            ->modalHeading(fn (Order $record) => 'Resend the tickets email for '.$record->reference.'?')
             ->modalDescription(fn (Order $record) => 'Sends the buyer\'s confirmation again to '.$record->buyer_email.', with the same link to their tickets. '
                 .'It lists only the tickets that still work and are still theirs. A ticket moved to somebody else is resent from the Tickets screen.')
             ->modalSubmitActionLabel('Resend')

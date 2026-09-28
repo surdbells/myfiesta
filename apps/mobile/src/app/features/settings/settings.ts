@@ -9,6 +9,7 @@ import { Api, ApiError, Ticket } from '../../core/api';
 import { Discover } from '../../core/discovery';
 import { messageOf, fieldErrors } from '../../core/errors';
 import {
+  Dialogs,
   MfButton,
   MfCard,
   MfField,
@@ -391,6 +392,7 @@ export class Settings {
   readonly confirming = signal(false);
 
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
 
   readonly detailsOpen = signal(false);
   readonly passwordOpen = signal(false);
@@ -527,8 +529,7 @@ export class Settings {
   }
 
   async saveDetails(): Promise<void> {
-    this.saving.set(true);
-    this.errors.set({});
+    if (this.saving()) return;
 
     const phone = this.phone().trim();
     const body: { name: string; phone?: string | null } = { name: this.name().trim() };
@@ -536,6 +537,21 @@ export class Settings {
     if (phone !== '') body.phone = phone;
     // Emptied a box that had a number in it: take the number off.
     else if (this.phoneOnFile()) body.phone = null;
+
+    const sure = await this.dialogs.confirm({
+      title: 'Save your details?',
+      body: `Your name becomes ${body.name}${
+        body.phone === null ? ', and the phone number on file is taken off' : body.phone ? `, and your phone number ${body.phone}` : ''
+      }.`,
+      consequences: ['It is the name on your tickets from now on, and the one your team sees.'],
+      confirmLabel: 'Save details',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
+    this.saving.set(true);
+    this.errors.set({});
 
     try {
       const saved = await this.api.updateProfile(body);
@@ -568,11 +584,22 @@ export class Settings {
   async saveEmail(): Promise<void> {
     if (!this.emailReady()) return;
 
+    const next = this.newEmail().trim();
+    const sure = await this.dialogs.confirm({
+      title: `Move your account to ${next}?`,
+      body: `A link goes to ${next}. Your account moves there only when it is opened, within the hour.`,
+      consequences: [`Until then you keep signing in with ${this.session.session()?.email ?? 'the address you have now'}.`],
+      confirmLabel: 'Send the link',
+      tone: 'default',
+    });
+
+    if (!sure || !this.emailReady()) return;
+
     this.saving.set(true);
     this.errors.set({});
 
     try {
-      const { message } = await this.api.requestEmailChange(this.newEmail().trim(), this.emailPassword());
+      const { message } = await this.api.requestEmailChange(next, this.emailPassword());
       this.emailPassword.set('');
       // Said in the sheet rather than a toast: which inbox to go and look in
       // is worth more than three seconds on screen.
@@ -618,6 +645,21 @@ export class Settings {
   }
 
   async signOut(): Promise<void> {
+    if (this.busy()) return;
+
+    // Asked first: the tickets on this phone go with the session, and
+    // getting them back needs the password somebody may not have to hand at
+    // a door.
+    const sure = await this.dialogs.confirm({
+      title: 'Sign out?',
+      body: 'You are signed out on this phone, and need your email and password to get back in.',
+      consequences: ['The tickets kept on this phone, and their reminders, go too until you sign in again.'],
+      confirmLabel: 'Sign out',
+      tone: 'default',
+    });
+
+    if (!sure || this.busy()) return;
+
     this.busy.set(true);
     await this.session.signOut();
     await this.router.navigate(['/sign-in'], { replaceUrl: true });

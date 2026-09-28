@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton, UiPagination } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiPagination } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -28,6 +28,7 @@ import { SessionStore } from '../../core/session';
 export class EventMessages {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
@@ -83,8 +84,31 @@ export class EventMessages {
     this.load();
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (!this.ready() || this.sending()) return;
+
+    const reach = this.willReach();
+    const people = `${reach.toLocaleString()} ${reach === 1 ? 'person' : 'people'}`;
+    const consequences: string[] = [];
+
+    if (this.important() && this.suppressed() > 0) {
+      consequences.push(`Marked important, so it also reaches the ${this.suppressed().toLocaleString()} who asked not to hear from you.`);
+    } else if (this.suppressed() > 0) {
+      consequences.push(`${this.suppressed().toLocaleString()} who asked not to hear from you are left out.`);
+    }
+
+    // An email cannot be called back once it is in somebody's inbox, so the
+    // count — and what "important" does to it — is in front of the organizer
+    // at the moment they send.
+    const sure = await this.confirmDialog.confirm({
+      title: `Send “${this.subject().trim()}” to ${people}?`,
+      body: `It goes straight away to everybody holding a ticket for this event${this.important() ? '' : ' who may be written to'}, and cannot be called back.`,
+      consequences,
+      confirmLabel: `Send to ${people}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.sending()) return;
 
     this.sending.set(true);
     this.error.set(null);

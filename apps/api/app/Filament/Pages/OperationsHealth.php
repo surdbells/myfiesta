@@ -312,7 +312,9 @@ class OperationsHealth extends Page implements HasTable
                     ->icon(Heroicon::OutlinedArrowPath)
                     ->visible(fn (): bool => FailedJobs::mayManage($this->staff()))
                     ->requiresConfirmation()
+                    ->modalHeading(fn (Collection $records) => 'Retry '.$records->count().' failed '.($records->count() === 1 ? 'job' : 'jobs').'?')
                     ->modalDescription('Each goes back on its queue and runs again; anything they send is sent again. Each is recorded in the audit trail under your name.')
+                    ->modalSubmitActionLabel('Retry them')
                     ->action(fn (Collection $records) => $this->retry($records->pluck('uuid')->all())),
             ])
             ->emptyStateHeading('No failed jobs')

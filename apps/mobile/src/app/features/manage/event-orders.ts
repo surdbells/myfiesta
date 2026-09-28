@@ -375,14 +375,16 @@ export class EventOrders implements OnInit {
     const picked = this.picked();
     const amount = (this.refundExact() ? '' : 'about ') + this.refundAmount();
 
+    const tickets = `${picked.length} ${picked.length === 1 ? 'ticket' : 'tickets'}`;
     const sure = await this.dialogs.confirm({
-      title: `Refund ${amount}?`,
-      message: `${picked.length} ${picked.length === 1 ? 'ticket' : 'tickets'} to ${order.buyer_name}. The tickets stop working at once and the money goes back the way it came.`,
-      confirm: 'Refund',
-      danger: true,
+      title: `Refund ${tickets} on ${order.reference}?`,
+      body: `${amount} goes back to ${order.buyer_email ?? order.buyer_name}, the way they paid.`,
+      consequences: [`The ${picked.length === 1 ? 'ticket stops' : 'tickets stop'} working at the door straight away.`, 'A refund cannot be undone.'],
+      confirmLabel: `Refund ${tickets}`,
+      tone: 'danger',
     });
 
-    if (!sure) return;
+    if (!sure || this.working()) return;
 
     this.working.set(true);
 

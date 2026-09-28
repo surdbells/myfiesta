@@ -97,42 +97,20 @@
                     [disabled]="busy()"
                     (click)="keep(ticket.id)"
                   >
-                    Actually, I'll keep it
+                    {{ working() === ticket.id ? 'Keeping it…' : "Actually, I'll keep it" }}
                   </button>
                 </div>
               } @else if (!ticket.return.refusal) {
-                @if (returning() === ticket.id) {
-                  <div class="mt-2 grid justify-items-center gap-2 sm:justify-items-start">
-                    <p class="text-sm text-text-muted">
-                      It stops working straight away, and you get back what you paid once somebody takes the place.
-                    </p>
-                    <div class="flex flex-wrap gap-3">
-                      <button
-                        class="h-10 cursor-pointer rounded-md border-0 bg-primary px-4 text-sm font-semibold text-on-primary [font-family:inherit]"
-                        type="button"
-                        [disabled]="busy()"
-                        (click)="giveBack(ticket.id)"
-                      >
-                        {{ busy() ? 'Giving it back…' : 'Give it back' }}
-                      </button>
-                      <button
-                        class="cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit]"
-                        type="button"
-                        (click)="returning.set(null)"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                } @else {
-                  <button
-                    class="mt-2 cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
-                    type="button"
-                    (click)="returning.set(ticket.id)"
-                  >
-                    Can't go? Give this ticket back
-                  </button>
-                }
+                <!-- The shared confirmation asks, and says when the money comes.
+                     Only the ticket being given back says so; the rest wait. -->
+                <button
+                  class="mt-2 cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text"
+                  type="button"
+                  [disabled]="busy()"
+                  (click)="giveBack(ticket.id)"
+                >
+                  {{ working() === ticket.id ? 'Giving it back…' : "Can't go? Give this ticket back" }}
+                </button>
               }
             </div>
           </li>

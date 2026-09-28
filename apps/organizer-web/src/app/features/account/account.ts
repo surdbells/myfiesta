@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { ToastStore, UiAlert, UiButton, UiField, UiModal, UiPageHeader } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiAlert, UiButton, UiField, UiModal, UiPageHeader } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import type { AccountErasurePreview } from '../../core/api.types';
 import { EmailVerification } from '../../core/email-verification';
@@ -33,6 +33,7 @@ import { SITE_URL } from '../../core/site-url';
 export class Account {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   private readonly router = inject(Router);
   private readonly verification = inject(EmailVerification);
   readonly session = inject(SessionStore);
@@ -75,13 +76,24 @@ export class Account {
     return next !== '' && next !== this.session.user()?.name;
   });
 
-  saveName(): void {
+  async saveName(): Promise<void> {
     if (!this.nameChanged() || this.savingName()) return;
+
+    const name = this.name().trim();
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Change your name to ${name}?`,
+      body: 'It is the name your team sees, and the one against everything you do in the console from now on.',
+      confirmLabel: 'Save the name',
+      tone: 'default',
+    });
+
+    if (!sure || this.savingName()) return;
 
     this.savingName.set(true);
     this.nameError.set(null);
 
-    this.api.updateProfile({ name: this.name().trim() }).subscribe({
+    this.api.updateProfile({ name }).subscribe({
       next: (profile) => {
         this.savingName.set(false);
         this.name.set(profile.name);
@@ -115,8 +127,20 @@ export class Account {
     () => this.newEmail().trim().includes('@') && !this.sameEmail() && this.emailPassword() !== '',
   );
 
-  requestEmail(): void {
+  async requestEmail(): Promise<void> {
     if (!this.canRequestEmail() || this.requesting()) return;
+
+    const next = this.newEmail().trim();
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Move your account to ${next}?`,
+      body: `A link goes to ${next}. Your account moves there only when it is opened, within the hour.`,
+      consequences: [`Until then you keep signing in with ${this.session.user()?.email ?? 'the address you have now'}.`],
+      confirmLabel: 'Send the link',
+      tone: 'default',
+    });
+
+    if (!sure || this.requesting()) return;
 
     this.requesting.set(true);
     this.emailError.set(null);
@@ -124,7 +148,7 @@ export class Account {
     this.emailPasswordError.set(null);
     this.emailSent.set(null);
 
-    this.api.requestEmailChange({ email: this.newEmail().trim(), current_password: this.emailPassword() }).subscribe({
+    this.api.requestEmailChange({ email: next, current_password: this.emailPassword() }).subscribe({
       next: ({ message }) => {
         this.requesting.set(false);
         // The password does not outlive the request. The address stays, so

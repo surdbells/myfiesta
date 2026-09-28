@@ -2,7 +2,18 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ToastStore, UiAlert, UiBadge, UiButton, UiConfirm, UiEmpty, UiErrorState, UiPageHeader, UiSkeleton } from '@myfiesta/ui';
+import {
+  ConfirmDialog,
+  ToastStore,
+  UiAlert,
+  UiBadge,
+  UiButton,
+  UiConfirm,
+  UiEmpty,
+  UiErrorState,
+  UiPageHeader,
+  UiSkeleton,
+} from '@myfiesta/ui';
 import { API_BASE_URL, Api } from '../../core/api';
 import { ApiKeySummary, Integrations, WebhookDelivery, WebhookEndpoint, WebhookEventName } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -41,6 +52,7 @@ const EVENT_LABELS: Record<WebhookEventName, { title: string; hint: string }> = 
 export class IntegrationsScreen {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly apiBase = inject(API_BASE_URL);
 
   readonly labels = EVENT_LABELS;
@@ -128,14 +140,29 @@ export class IntegrationsScreen {
     this.chosen.set(next);
   }
 
-  addWebhook(): void {
+  async addWebhook(): Promise<void> {
     if (!this.canAdd()) return;
+
+    const url = this.url().trim();
+    const events = [...this.chosen()];
+
+    // Buyers' names and emails leave myFiesta for this address with every
+    // sale, so where they go is said back before the first one does.
+    const sure = await this.confirmDialog.confirm({
+      title: `Send sales to ${url}?`,
+      body: `From now on, ${events.join(', ')} ${events.length === 1 ? 'is' : 'are'} sent to this address as ${events.length === 1 ? 'it happens' : 'they happen'}, with the buyer's or ticket holder's name and email.`,
+      consequences: ['The signing secret is shown once, straight after. Save it then.'],
+      confirmLabel: 'Add the address',
+      tone: 'default',
+    });
+
+    if (!sure || this.adding() || !this.canAdd()) return;
 
     this.adding.set(true);
     this.addError.set(null);
 
     this.api
-      .addWebhook({ url: this.url().trim(), events: [...this.chosen()], description: this.description().trim() || null })
+      .addWebhook({ url, events, description: this.description().trim() || null })
       .subscribe({
         next: ({ data, secret }) => {
           this.adding.set(false);
@@ -152,7 +179,17 @@ export class IntegrationsScreen {
       });
   }
 
-  sendTest(endpoint: WebhookEndpoint): void {
+  async sendTest(endpoint: WebhookEndpoint): Promise<void> {
+    const sure = await this.confirmDialog.confirm({
+      title: `Send a test to ${endpoint.url}?`,
+      body: 'A test delivery goes there now, so you can see your system take it. It says nothing happened.',
+      consequences: ['It carries no order and no buyer.'],
+      confirmLabel: 'Send a test',
+      tone: 'default',
+    });
+
+    if (!sure || this.busyEndpoint() !== null) return;
+
     this.busyEndpoint.set(endpoint.id);
 
     this.api.testWebhook(endpoint.id).subscribe({
@@ -175,7 +212,27 @@ export class IntegrationsScreen {
     });
   }
 
-  setEnabled(endpoint: WebhookEndpoint, enabled: boolean): void {
+  async setEnabled(endpoint: WebhookEndpoint, enabled: boolean): Promise<void> {
+    const sure = await this.confirmDialog.confirm(
+      enabled
+        ? {
+            title: `Turn ${endpoint.url} back on?`,
+            body: 'New sales are sent there again, from now on.',
+            consequences: ['Sales made while it was off are not sent.'],
+            confirmLabel: 'Turn it on',
+            tone: 'default',
+          }
+        : {
+            title: `Turn off ${endpoint.url}?`,
+            body: 'Nothing is sent there until you turn it back on.',
+            consequences: ['Sales made while it is off are not sent later.'],
+            confirmLabel: 'Turn it off',
+            tone: 'danger',
+          },
+    );
+
+    if (!sure || this.busyEndpoint() !== null) return;
+
     this.busyEndpoint.set(endpoint.id);
 
     this.api.updateWebhook(endpoint.id, { enabled }).subscribe({
@@ -241,9 +298,19 @@ export class IntegrationsScreen {
 
   // --- keys -------------------------------------------------------------------
 
-  createKey(): void {
+  async createKey(): Promise<void> {
     const name = this.keyName().trim();
     if (!name || this.making()) return;
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Make a key called ${name}?`,
+      body: "Whatever holds it can read this organization's events, orders and attendees through the API, until you revoke it.",
+      consequences: ['The key is shown once, straight after. Save it then.'],
+      confirmLabel: 'Make the key',
+      tone: 'default',
+    });
+
+    if (!sure || this.making()) return;
 
     this.making.set(true);
     this.keyError.set(null);

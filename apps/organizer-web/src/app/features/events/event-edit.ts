@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { RichTextEditor } from '../../shared/rich-text-editor';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -39,6 +39,7 @@ export class EventEdit {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
@@ -140,7 +141,7 @@ export class EventEdit {
     });
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (this.saving()) return;
 
     const form = this.form();
@@ -151,6 +152,8 @@ export class EventEdit {
 
       return;
     }
+
+    if (!(await this.confirmSave(form.title.trim(), startsAt)) || this.saving()) return;
 
     this.saving.set(true);
     this.error.set(null);
@@ -184,5 +187,35 @@ export class EventEdit {
 
   done(): void {
     void this.router.navigate(['/events', this.eventId]);
+  }
+
+  /**
+   * What saving does to this event, by where it stands.
+   *
+   * On sale, an edit is what buyers read the moment it is saved, with no
+   * review in between — and a moved date is not emailed to anybody who
+   * already holds a ticket. Both are worth knowing at the moment of saving.
+   */
+  private confirmSave(title: string, startsAt: string): Promise<boolean> {
+    const event = this.event();
+    const moved = !!event && new Date(event.starts_at).getTime() !== new Date(startsAt).getTime();
+    const onSale = event?.status === 'published';
+    const consequences: string[] = [];
+
+    if (moved) consequences.push(`It now starts ${this.preview() ?? 'at the new time'}.`);
+    if (moved && (event?.tickets_issued ?? 0) > 0) {
+      consequences.push('People who already hold tickets are not emailed about the new time. Tell them from Messages.');
+    }
+    if (onSale) consequences.push('Taking it off sale and putting it back later sends it through review, since it is no longer what was approved.');
+
+    return this.confirmDialog.confirm({
+      title: `Save the changes to ${title || 'this event'}?`,
+      body: onSale
+        ? 'It is on sale: the event page shows the changes straight away, to everybody who opens it.'
+        : 'The changes are saved to the draft. Nobody sees them until it is approved and on sale.',
+      consequences,
+      confirmLabel: 'Save changes',
+      tone: 'default',
+    });
   }
 }

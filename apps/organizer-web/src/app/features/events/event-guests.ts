@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import {
+  ConfirmDialog,
   ToastStore,
   UiButton,
   UiIcon,
@@ -34,6 +35,7 @@ import { SessionStore } from '../../core/session';
 export class EventGuests {
   protected readonly downloadIcon = Download;
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly exporting = signal(false);
 
   /**
@@ -213,10 +215,27 @@ export class EventGuests {
     this.load();
   }
 
-  submitIssue(): void {
+  async submitIssue(): Promise<void> {
     const form = this.issue();
 
-    if (!form.name.trim() || !form.email.trim() || !form.ticket_type_id) return;
+    if (!form.name.trim() || !form.email.trim() || !form.ticket_type_id || this.issuing()) return;
+
+    const quantity = Number(form.quantity) || 1;
+    const tickets = `${quantity} ${this.ticketTypes().find((t) => t.id === form.ticket_type_id)?.name ?? ''} ${quantity === 1 ? 'ticket' : 'tickets'}`.replace(/\s+/g, ' ');
+
+    // A guest ticket gets somebody in for nothing and takes a place from what
+    // is for sale, so who, how many and whether an email goes are said back.
+    const sure = await this.confirmDialog.confirm({
+      title: `Issue ${tickets} to ${form.name.trim()}?`,
+      body: form.send_email
+        ? `They are emailed to ${form.email.trim()} straight away, and work at the door like any other.`
+        : `Nothing is sent to ${form.email.trim()} now. The ${quantity === 1 ? 'ticket goes' : 'tickets go'} on the guest list under ${form.name.trim()}.`,
+      consequences: ['They are free, and count against what is left to sell.'],
+      confirmLabel: quantity === 1 ? 'Issue the ticket' : `Issue ${quantity} tickets`,
+      tone: 'default',
+    });
+
+    if (!sure || this.issuing()) return;
 
     this.issuing.set(true);
     this.error.set(null);
@@ -227,7 +246,7 @@ export class EventGuests {
         ticket_type_id: form.ticket_type_id,
         name: form.name.trim(),
         email: form.email.trim(),
-        quantity: Number(form.quantity) || 1,
+        quantity,
         note: form.note.trim() || null,
         send_email: form.send_email,
       })

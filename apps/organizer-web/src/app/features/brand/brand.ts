@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ToastStore, UiAlert, UiButton, UiField, UiPageHeader } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiAlert, UiButton, UiField, UiPageHeader } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { Brand as BrandData } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -32,6 +32,7 @@ import { SITE_URL } from '../../core/site-url';
 export class Brand {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
   private readonly siteUrl = inject(SITE_URL);
 
@@ -99,7 +100,7 @@ export class Brand {
     });
   }
 
-  save(): void {
+  async save(): Promise<void> {
     if (!this.changed() || this.saving()) return;
 
     const name = this.name().trim();
@@ -109,6 +110,22 @@ export class Brand {
 
       return;
     }
+
+    const consequences = ['Every event page, your organizer page and the emails buyers get show it straight away.'];
+
+    if (this.nameChanged() && this.brand()?.is_verified) {
+      consequences.push('The verified tick is hidden until myFiesta has looked at the new name.');
+    }
+
+    const sure = await this.confirmDialog.confirm({
+      title: this.nameChanged() ? `Rename the organization to ${name}?` : 'Save the new description?',
+      body: 'This is how the organization appears on the pages it sells from.',
+      consequences,
+      confirmLabel: 'Save changes',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.nameError.set(null);
@@ -138,6 +155,21 @@ export class Brand {
 
     if (!file) return;
 
+    void this.useLogo(file);
+  }
+
+  private async useLogo(file: File): Promise<void> {
+    const sure = await this.confirmDialog.confirm({
+      title: `Use ${file.name} as your mark?`,
+      body: this.brand()?.logo_url
+        ? 'It replaces the mark you have now, beside your name on every event page and your organizer page.'
+        : 'It appears beside your name on every event page and your organizer page.',
+      confirmLabel: 'Use this picture',
+      tone: 'default',
+    });
+
+    if (!sure || this.uploading()) return;
+
     this.uploading.set(true);
     this.logoError.set(null);
 
@@ -154,8 +186,17 @@ export class Brand {
     });
   }
 
-  removeLogo(): void {
+  async removeLogo(): Promise<void> {
     if (this.uploading()) return;
+
+    const sure = await this.confirmDialog.confirm({
+      title: 'Remove your mark?',
+      body: 'Your pages show the first letter of your name in a circle instead, until you add another.',
+      confirmLabel: 'Remove the mark',
+      tone: 'danger',
+    });
+
+    if (!sure || this.uploading()) return;
 
     this.uploading.set(true);
     this.logoError.set(null);

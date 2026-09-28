@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import {
+  ConfirmDialog,
   ToastStore,
   UiBadge,
   UiButton,
@@ -90,6 +91,7 @@ interface TicketDraft {
 export class EventTickets {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   private readonly route = inject(ActivatedRoute);
 
   protected readonly addIcon = Plus;
@@ -129,10 +131,18 @@ export class EventTickets {
     this.load();
 
     this.api.event(this.eventId).subscribe({
-      next: (event) => this.timezone.set(event.timezone),
+      next: (event) => {
+        this.timezone.set(event.timezone);
+        this.eventStatus.set(event.status);
+        this.currency.set(event.currency);
+      },
       error: () => undefined,
     });
   }
+
+  /** Where the event stands and what it sells in: what a confirmation says a save does. */
+  private readonly eventStatus = signal<string | null>(null);
+  private readonly currency = signal<Money['currency'] | null>(null);
 
   private zone(): string {
     return this.timezone() ?? localZone();
@@ -327,11 +337,13 @@ export class EventTickets {
     () => this.draft().name.trim() !== '' && toMinorUnits(this.draft().price) !== null,
   );
 
-  save(): void {
+  async save(): Promise<void> {
     if (!this.canSave() || this.saving()) return;
 
     const draft = this.draft();
     const editing = this.editing();
+
+    if (!(await this.confirmSave(draft, editing)) || this.saving()) return;
 
     const body: Record<string, unknown> = {
       name: draft.name.trim(),
@@ -373,6 +385,40 @@ export class EventTickets {
           error?.error?.message ?? 'That could not be saved. Check the figures and try again.',
         );
       },
+    });
+  }
+
+  /**
+   * The tier, its price and who can buy it, said back before it is saved.
+   *
+   * On an event that is on sale a saved tier is what buyers see and pay the
+   * moment it lands, and a price moved by a slipped digit sells at that price
+   * until somebody notices.
+   */
+  private confirmSave(draft: TicketDraft, editing: TicketType | null): Promise<boolean> {
+    const name = draft.name.trim();
+    const currency = editing?.price.currency ?? this.types()[0]?.price.currency ?? this.currency() ?? 'CAD';
+    const price = formatMoney({ amount: toMinorUnits(draft.price) ?? 0, currency });
+    const onSale = this.eventStatus() === 'published';
+    const consequences: string[] = [];
+
+    if (editing && editing.price.amount !== toMinorUnits(draft.price) && (editing.sold ?? 0) > 0) {
+      consequences.push(`The ${editing.sold} already sold keep what was paid for them.`);
+    }
+
+    if (onSale && draft.status === 'on_sale') consequences.push('The event is on sale: buyers see it on the event page straight away.');
+    else if (onSale && draft.status === 'hidden') consequences.push('Only buyers with a code that unlocks it can see and buy it.');
+    else if (onSale && draft.status === 'closed') consequences.push('It shows as unavailable. Tickets already sold still work.');
+    else consequences.push('Nobody sees it until the event is approved and on sale.');
+
+    return this.confirmDialog.confirm({
+      title: editing ? `Save the changes to ${name}?` : `Add ${name} at ${price}?`,
+      body: editing
+        ? `${name} is sold at ${price}${this.optionalNumber(draft.quantity) !== null ? `, ${this.optionalNumber(draft.quantity)} in all` : ', with no limit'}.`
+        : `A new ticket type, sold at ${price}${this.optionalNumber(draft.quantity) !== null ? `, ${this.optionalNumber(draft.quantity)} in all` : ', with no limit'}.`,
+      consequences,
+      confirmLabel: editing ? 'Save changes' : 'Add the ticket type',
+      tone: 'default',
     });
   }
 

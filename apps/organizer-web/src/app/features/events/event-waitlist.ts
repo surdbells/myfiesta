@@ -1,6 +1,6 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ToastStore, UiButton, UiField, UiModal } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiButton, UiField, UiModal } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { WaitlistPage } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -79,6 +79,7 @@ import { messageFor } from '../../core/errors';
 export class EventWaitlist implements OnInit {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly eventId = input.required<string>();
 
@@ -120,12 +121,28 @@ export class EventWaitlist implements OnInit {
     this.telling.set(true);
   }
 
-  tell(): void {
+  async tell(): Promise<void> {
     if (!this.validLimit() || this.sending()) return;
+
+    const n = Number(this.limit());
+    const people = `${n} ${n === 1 ? 'person' : 'people'}`;
+    const waiting = this.page()?.summary.waiting ?? n;
+
+    // An email cannot be called back, and telling too many sends most of
+    // them to a sold-out page: the number is said once more before it goes.
+    const sure = await this.confirmDialog.confirm({
+      title: `Email the first ${people} on the waitlist?`,
+      body: `${n === 1 ? 'They hear' : 'They all hear'} straight away that tickets are available, first come first served.`,
+      consequences: [`The other ${Math.max(0, waiting - n)} keep waiting.`],
+      confirmLabel: `Email ${people}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.sending()) return;
 
     this.sending.set(true);
 
-    this.api.notifyWaitlist(this.eventId(), Number(this.limit()), this.note().trim() || null).subscribe({
+    this.api.notifyWaitlist(this.eventId(), n, this.note().trim() || null).subscribe({
       next: ({ message }) => {
         this.sending.set(false);
         this.telling.set(false);

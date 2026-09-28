@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_BASE_URL, authInterceptor } from '../../core/api';
+import { answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
 import { SessionStore, type StaffSession } from '../../core/session';
 import { StaffBanner } from './staff-banner';
 
@@ -98,6 +99,7 @@ describe('StaffBanner', () => {
 
   afterEach(() => {
     backend.verify();
+    forgetDialogs();
     vi.useRealTimers();
     localStorage.clear();
     sessionStorage.clear();
@@ -124,7 +126,7 @@ describe('StaffBanner', () => {
     expect(text(banner)).toContain('59 minutes left');
   });
 
-  it('revokes the session on the server when End is pressed, then leaves', () => {
+  it('asks before ending, and sends nothing when the answer is no', async () => {
     const session = TestBed.inject(SessionStore);
     session.startImpersonation(staffSession());
     const banner = render();
@@ -132,6 +134,29 @@ describe('StaffBanner', () => {
     (banner.nativeElement as HTMLElement)
       .querySelector<HTMLButtonElement>('.staff-banner__end')!
       .click();
+    await settle();
+
+    expect(asked()?.title).toBe('End the staff session?');
+    expect(asked()?.text).toContain('stops acting as Lagos Nights');
+    expect(asked()?.buttons).toEqual(['Cancel', 'End staff session']);
+
+    await answer('Cancel');
+
+    backend.expectNone(END);
+    expect(session.impersonation()).not.toBeNull();
+    expect(navigated).toEqual([]);
+  });
+
+  it('revokes the session on the server when End is pressed and confirmed, then leaves', async () => {
+    const session = TestBed.inject(SessionStore);
+    session.startImpersonation(staffSession());
+    const banner = render();
+
+    (banner.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.staff-banner__end')!
+      .click();
+    await settle();
+    await answer('End staff session');
     banner.detectChanges();
 
     const request = backend.expectOne(END);
@@ -151,12 +176,14 @@ describe('StaffBanner', () => {
     expect(JSON.parse(localStorage.getItem(OWN_KEY)!).token).toBe('own-token');
   });
 
-  it('forgets the session here even when the revoke does not arrive, and says so', () => {
+  it('forgets the session here even when the revoke does not arrive, and says so', async () => {
     const session = TestBed.inject(SessionStore);
     session.startImpersonation(staffSession());
     const banner = render();
 
-    banner.componentInstance.end();
+    void banner.componentInstance.end();
+    await settle();
+    await answer('End staff session');
     backend.expectOne(END).error(new ProgressEvent('offline'), { status: 0 });
 
     expect(session.impersonation()).toBeNull();

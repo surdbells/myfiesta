@@ -1,7 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ConfirmDialog } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { Seo } from '../../core/seo';
 import { TicketAccess } from '../../core/api.types';
@@ -29,6 +30,7 @@ export class Tickets {
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly seo = inject(Seo);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly order = signal<TicketAccess | null>(null);
   readonly loading = signal(true);
@@ -37,9 +39,13 @@ export class Tickets {
   /** The link is the whole credential, and everything here is done with it. */
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
-  /** The ticket being asked about before it is handed back. */
-  readonly returning = signal<string | null>(null);
-  readonly busy = signal(false);
+  /**
+   * The ticket a request is running for. Every other ticket's link waits
+   * too, but only this one says it is being given back or kept: a page-wide
+   * "Giving it back…" on the ticket beside it reads as that one going.
+   */
+  readonly working = signal<string | null>(null);
+  readonly busy = computed(() => this.working() !== null);
   readonly notice = signal<string | null>(null);
 
   constructor() {
@@ -67,32 +73,61 @@ export class Tickets {
    * code and a different set of things its holder can do, and that shape is
    * the server's answer rather than a second copy of the rules here.
    */
-  giveBack(ticketId: string): void {
-    this.act(this.api.returnTicket(this.token, ticketId));
-  }
-
-  keep(ticketId: string): void {
-    this.act(this.api.keepTicket(this.token, ticketId));
-  }
-
-  private act(request: Observable<{ message: string; access: TicketAccess }>): void {
+  async giveBack(ticketId: string): Promise<void> {
     if (this.busy()) return;
 
-    this.busy.set(true);
+    // Said plainly before it happens: the money comes when somebody takes the
+    // place, not now — the part people get wrong — and the ticket stops
+    // working straight away either way.
+    const sure = await this.confirmDialog.confirm({
+      title: `Give back your ${this.describe(ticketId)}?`,
+      body: 'It stops working straight away, and you get back what you paid once somebody takes the place.',
+      consequences: ['If nobody takes it, nothing is paid back. You can keep it again until somebody does.'],
+      confirmLabel: 'Give it back',
+      tone: 'danger',
+    });
+
+    if (sure) this.act(ticketId, this.api.returnTicket(this.token, ticketId));
+  }
+
+  async keep(ticketId: string): Promise<void> {
+    if (this.busy()) return;
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Keep your ${this.describe(ticketId)}?`,
+      body: 'It works again at the door straight away, and nobody else can take the place.',
+      consequences: ['Nothing is paid back.'],
+      confirmLabel: 'Keep the ticket',
+      tone: 'default',
+    });
+
+    if (sure) this.act(ticketId, this.api.keepTicket(this.token, ticketId));
+  }
+
+  /** "General ticket for Afro Fest", from what the page already holds. */
+  private describe(ticketId: string): string {
+    const order = this.order();
+    const ticket = order?.tickets.find((t) => t.id === ticketId);
+
+    return `${ticket?.type ? `${ticket.type} ` : ''}ticket${order ? ` for ${order.event.title}` : ''}`;
+  }
+
+  private act(ticketId: string, request: Observable<{ message: string; access: TicketAccess }>): void {
+    if (this.busy()) return;
+
+    this.working.set(ticketId);
     this.notice.set(null);
 
     request.subscribe({
       next: ({ message, access }) => {
-        this.busy.set(false);
-        this.returning.set(null);
+        this.working.set(null);
         this.notice.set(message);
         // The server's own answer, not a second fetch: an identical GET can
         // come back from the hydration cache showing the page as it was.
         this.order.set(access);
       },
       error: (response) => {
-        this.busy.set(false);
-        this.returning.set(null);
+        this.working.set(null);
         this.notice.set(response?.error?.message ?? 'That could not be done just now.');
       },
     });

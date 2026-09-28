@@ -40,7 +40,7 @@ final class TicketRowActions
             ->authorize(fn () => StaffAction::current(StaffAction::Resend))
             ->visible(fn (Ticket $record) => $record->status === 'valid')
             ->requiresConfirmation()
-            ->modalHeading('Resend this ticket?')
+            ->modalHeading(fn (Ticket $record) => 'Resend '.self::named($record).'?')
             ->modalDescription(fn (Ticket $record) => 'Emails the ticket to '.($record->owner_email ?: $record->order?->buyer_email ?: 'its holder').'.')
             ->modalSubmitActionLabel('Resend')
             ->action(fn (Ticket $record, Action $action) => Outcome::run(
@@ -58,7 +58,7 @@ final class TicketRowActions
             ->color('danger')
             ->authorize(fn () => StaffAction::current(StaffAction::Void))
             ->visible(fn (Ticket $record) => $record->status === 'valid' && (int) $record->admitted_count === 0)
-            ->modalHeading('Void this ticket?')
+            ->modalHeading(fn (Ticket $record) => 'Void '.self::named($record).'?')
             ->modalDescription('It stops working at the door immediately. No money is returned — to give the buyer their money back, refund the ticket from its order instead, which voids it too.')
             ->modalSubmitActionLabel('Void ticket')
             ->schema([
@@ -86,7 +86,7 @@ final class TicketRowActions
             ->color('warning')
             ->authorize(fn () => StaffAction::current(StaffAction::Reissue))
             ->visible(fn (Ticket $record) => $record->status === 'valid' && (int) $record->admitted_count === 0)
-            ->modalHeading('Move this ticket to somebody else')
+            ->modalHeading(fn (Ticket $record) => 'Move '.self::named($record).' to somebody else?')
             ->modalDescription('The ticket is recorded as transferred and emailed to the new address. '
                 .'Only do this when the buyer has asked, from the address they bought with. '
                 .'It leaves the buyer\'s order link and their account, and resending the order no longer includes it.')
@@ -127,5 +127,19 @@ final class TicketRowActions
                     return 'Emailed to '.strtolower(trim((string) $data['email'])).'.';
                 },
             ));
+    }
+
+    /**
+     * The ticket as the person asking about it would say it: whose, which
+     * tier, which night. Never its code — codes stay off every screen that
+     * lists tickets.
+     */
+    private static function named(Ticket $record): string
+    {
+        $whose = filled($record->holder_name) ? $record->holder_name.'’s ' : 'the ';
+        $tier = $record->ticketType->name ?? null;
+        $night = $record->event->title ?? null;
+
+        return $whose.($tier ? $tier.' ' : '').'ticket'.($night ? ' for '.$night : '');
     }
 }

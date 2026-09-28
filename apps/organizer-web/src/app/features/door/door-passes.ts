@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ToastStore, UiBadge, UiButton, UiConfirm } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiBadge, UiButton, UiConfirm } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { DoorPass, DoorPassState } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
@@ -29,6 +29,7 @@ interface FreshPass {
 export class DoorPasses {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly eventId = input.required<string>();
   readonly timezone = input<string>('UTC');
@@ -77,9 +78,21 @@ export class DoorPasses {
     });
   }
 
-  make(): void {
+  async make(): Promise<void> {
     const label = this.label().trim();
     if (!label || this.making()) return;
+
+    const until = this.until();
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Make a door pass for ${label}?`,
+      body: `Whoever opens its link can scan tickets for this event on one phone${until ? `, until ${until}` : ''}. Nothing else: no guest list, no orders.`,
+      consequences: ['The link is shown once, here. Send it straight away, or make another.', 'You can take it back at any time.'],
+      confirmLabel: 'Make the pass',
+      tone: 'default',
+    });
+
+    if (!sure || this.making()) return;
 
     this.making.set(true);
     this.makeError.set(null);

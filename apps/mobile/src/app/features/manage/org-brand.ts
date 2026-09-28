@@ -149,10 +149,29 @@ export class OrgBrand implements OnInit {
   }
 
   protected async save(): Promise<void> {
+    if (this.saving()) return;
+
+    const name = this.name().trim();
+    const renamed = name !== this.brand()?.name;
+    const consequences = ['Every event page, your organizer page and the emails buyers get show it straight away.'];
+
+    if (renamed && this.brand()?.is_verified) consequences.push('The verified tick is hidden until myFiesta has looked at the new name.');
+
+    // How the organization appears everywhere it sells, said back first.
+    const sure = await this.dialogs.confirm({
+      title: renamed ? `Rename the organization to ${name}?` : 'Save the new description?',
+      body: 'This is how the organization appears on the pages it sells from.',
+      consequences,
+      confirmLabel: 'Save changes',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
 
     try {
-      const saved = await this.organizer.saveBrand({ name: this.name().trim(), description: this.about().trim() || null });
+      const saved = await this.organizer.saveBrand({ name, description: this.about().trim() || null });
       this.adopt(saved);
       this.toasts.show(saved.verification_pending_name ? 'Saved. The new name shows once it is checked.' : 'Saved.', 'success');
       await this.session.sync();
@@ -169,6 +188,17 @@ export class OrgBrand implements OnInit {
       return;
     }
 
+    const sure = await this.dialogs.confirm({
+      title: `Use ${file.name} as your logo?`,
+      body: this.brand()?.logo_url
+        ? 'It replaces the logo you have now, beside your name on every event page and your organizer page.'
+        : 'It appears beside your name on every event page and your organizer page.',
+      confirmLabel: 'Use this picture',
+      tone: 'default',
+    });
+
+    if (!sure || this.uploading()) return;
+
     this.uploading.set(true);
     this.progress.set(0);
 
@@ -184,7 +214,14 @@ export class OrgBrand implements OnInit {
   }
 
   protected async removeLogo(): Promise<void> {
-    if (!(await this.dialogs.confirm({ title: 'Remove the logo?', confirm: 'Remove', danger: true }))) return;
+    const sure = await this.dialogs.confirm({
+      title: 'Remove your logo?',
+      body: 'Your pages show the first letter of your name instead, until you add another.',
+      confirmLabel: 'Remove the logo',
+      tone: 'danger',
+    });
+
+    if (!sure) return;
 
     try {
       this.brand.set(await this.organizer.removeLogo());

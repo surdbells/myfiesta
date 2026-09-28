@@ -97,6 +97,12 @@ class ViewOrganizationIdentityDocument extends ViewRecord
                 ->label('Open document image')
                 ->icon('heroicon-o-document-magnifying-glass')
                 ->visible(fn (OrganizationIdentityDocument $record) => filled($record->document_path))
+                // Asked first because opening it is itself recorded: the
+                // sensitive-data log is how somebody asks later who looked.
+                ->requiresConfirmation()
+                ->modalHeading(fn (OrganizationIdentityDocument $record) => 'Open '.($record->organization->name ?? 'this organization').'’s identity document?')
+                ->modalDescription('It opens for five minutes. That you opened it is recorded in the sensitive-data log under your name.')
+                ->modalSubmitActionLabel('Open document')
                 ->action(function (OrganizationIdentityDocument $record) {
                     SensitiveDataAccess::record(
                         user: auth()->user(),
@@ -121,7 +127,9 @@ class ViewOrganizationIdentityDocument extends ViewRecord
                 ->color('success')
                 ->visible(fn (OrganizationIdentityDocument $record) => $record->review_status === 'pending')
                 ->requiresConfirmation()
-                ->modalDescription('The organization will be marked verified.')
+                ->modalHeading(fn (OrganizationIdentityDocument $record) => 'Approve '.($record->organization->name ?? 'this organization').'’s identity?')
+                ->modalDescription(fn (OrganizationIdentityDocument $record) => 'The organization is marked verified: the tick shows beside its name on every page, for as long as it is still called '.($record->organization->name ?? 'what it is called now').'.')
+                ->modalSubmitActionLabel('Approve and verify')
                 ->action(function (OrganizationIdentityDocument $record) {
                     $record->update([
                         'review_status' => 'approved',
@@ -145,6 +153,9 @@ class ViewOrganizationIdentityDocument extends ViewRecord
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
                 ->visible(fn (OrganizationIdentityDocument $record) => $record->review_status === 'pending')
+                ->modalHeading(fn (OrganizationIdentityDocument $record) => 'Reject '.($record->organization->name ?? 'this organization').'’s identity document?')
+                ->modalDescription('The organization stays unverified, and the reason is kept with this document. Tell the organizer what to send instead.')
+                ->modalSubmitActionLabel('Reject the document')
                 // A rejection the organizer cannot act on is a dead end, so the
                 // reason is required rather than optional.
                 ->schema([

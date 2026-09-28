@@ -4,6 +4,7 @@ import { Organizer } from '../../core/organizer';
 import { messageOf } from '../../core/errors';
 import { ago } from '../../core/when';
 import {
+  Dialogs,
   MfAvatar,
   MfBadge,
   MfButton,
@@ -160,6 +161,7 @@ export class EventWaitlist implements OnInit {
   private readonly organizer = inject(Organizer);
   private readonly context = inject(EventContext);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
 
   protected readonly event = signal<OrganizerEventDetail | null>(null);
   protected readonly page = signal<WaitlistPage | null>(null);
@@ -208,6 +210,23 @@ export class EventWaitlist implements OnInit {
   }
 
   protected async tell(): Promise<void> {
+    if (this.sending()) return;
+
+    const n = this.limit();
+    const people = `${n} ${n === 1 ? 'person' : 'people'}`;
+
+    // An email cannot be called back, and telling too many sends most of
+    // them to a sold-out page: the number is said once more before it goes.
+    const sure = await this.dialogs.confirm({
+      title: `Email the first ${people} on the waitlist?`,
+      body: `${n === 1 ? 'They hear' : 'They all hear'} straight away that tickets are available, first come first served.`,
+      consequences: [`The other ${Math.max(0, this.waiting() - n)} keep waiting.`],
+      confirmLabel: `Email ${people}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.sending()) return;
+
     this.sending.set(true);
 
     try {

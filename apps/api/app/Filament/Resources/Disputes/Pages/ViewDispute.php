@@ -105,6 +105,10 @@ class ViewDispute extends ViewRecord
                 ->color('gray')
                 ->visible(fn () => $this->mayAnswer() && $this->dispute()->isOpen())
                 ->authorize(fn () => $this->mayAnswer())
+                ->requiresConfirmation()
+                ->modalHeading(fn () => 'Ask '.ucfirst((string) $this->dispute()->gateway).' where this dispute stands?')
+                ->modalDescription('Reads the processor’s answer and updates this page with it. Nothing is sent to the buyer or their bank.')
+                ->modalSubmitActionLabel('Check now')
                 ->action(function (Action $action) {
                     Outcome::run($action, 'Checked', function () {
                         $answer = app(DisputeDesk::class)->refresh($this->dispute());
@@ -217,18 +221,45 @@ class ViewDispute extends ViewRecord
             EmbeddedSchema::make('infolist'),
             Form::make([EmbeddedSchema::make('form')])
                 ->id('form')
-                ->livewireSubmitHandler('saveDraft')
+                // To the question, not to saveDraft(): see confirmSaveDraft().
+                ->livewireSubmitHandler('confirmSaveDraft')
                 ->footer([
                     Actions::make([
                         Action::make('saveDraft')
                             ->label('Save draft')
-                            ->submit('saveDraft')
+                            ->submit('confirmSaveDraft')
                             ->visible(fn () => $this->mayEdit())
                             ->keyBindings(['mod+s']),
                     ])->key('evidence-actions'),
                 ]),
             EmbeddedSchema::make('details'),
         ]);
+    }
+
+    /**
+     * Asked before the draft is kept, like every other write here — and
+     * saying plainly that keeping it sends nothing, since the next button
+     * along is the one that does.
+     */
+    public function confirmSaveDraft(): void
+    {
+        if (! $this->mayEdit()) {
+            abort(403);
+        }
+
+        $this->form->validate();
+
+        $this->mountAction('confirmSaveDraft');
+    }
+
+    public function confirmSaveDraftAction(): Action
+    {
+        return Action::make('confirmSaveDraft')
+            ->requiresConfirmation()
+            ->modalHeading('Save the evidence as a draft?')
+            ->modalDescription(fn () => 'The fields are kept as they read now, for you or a colleague to finish. Nothing goes to '.ucfirst((string) $this->dispute()->gateway).' until the evidence is submitted.')
+            ->modalSubmitActionLabel('Save draft')
+            ->action(fn () => $this->saveDraft());
     }
 
     /** Keep the words as they are on the screen. */

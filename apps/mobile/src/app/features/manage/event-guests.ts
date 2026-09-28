@@ -7,6 +7,7 @@ import { fieldErrors, messageOf } from '../../core/errors';
 import { shareFile } from '../../core/share-file';
 import { ago } from '../../core/when';
 import {
+  Dialogs,
   MfAvatar,
   MfBadge,
   MfButton,
@@ -271,6 +272,7 @@ export class EventGuests implements OnInit {
   private readonly session = inject(SessionStore);
   private readonly context = inject(EventContext);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
 
   protected readonly event = signal<OrganizerEventDetail | null>(null);
   protected readonly guests = signal<Guest[]>([]);
@@ -377,6 +379,22 @@ export class EventGuests implements OnInit {
 
   protected async issue(): Promise<void> {
     if (!this.issueReady()) return;
+
+    const quantity = this.issueQuantity();
+    const tier = this.types().find((t) => t.id === this.issueTier())?.name ?? '';
+    const tickets = `${quantity} ${tier} ${quantity === 1 ? 'ticket' : 'tickets'}`.replace(/\s+/g, ' ');
+
+    // A guest ticket gets somebody in for nothing and takes a place from what
+    // is for sale, so who, how many and where it goes are said back first.
+    const sure = await this.dialogs.confirm({
+      title: `Issue ${tickets} to ${this.issueName().trim()}?`,
+      body: `They are emailed to ${this.issueEmail().trim()} straight away, and work at the door like any other.`,
+      consequences: ['They are free, and count against what is left to sell.'],
+      confirmLabel: quantity === 1 ? 'Issue the ticket' : `Issue ${quantity} tickets`,
+      tone: 'default',
+    });
+
+    if (!sure || this.sending()) return;
 
     this.sending.set(true);
     this.issueError.set(null);

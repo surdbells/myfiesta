@@ -8,7 +8,7 @@ import {
   Sellable,
 } from '../../core/api';
 import { formatMoney } from '../../core/money';
-import { MfBadge, MfButton, MfCard, MfField, MfSegmented, MfSheet, ToastStore, type MfSegment } from '../../ui';
+import { Dialogs, MfBadge, MfButton, MfCard, MfField, MfSegmented, MfSheet, ToastStore, type MfSegment } from '../../ui';
 
 /**
  * Selling to somebody standing in front of you.
@@ -284,6 +284,7 @@ export class DoorSell {
 
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
 
   readonly sellable = signal<Sellable | null>(null);
   readonly loading = signal(false);
@@ -368,30 +369,72 @@ export class DoorSell {
     void this.reprice();
   }
 
-  /** Ask the server what to say out loud. */
+  /**
+   * Which quote is the basket's own. Each change asks again, and on a slow
+   * door connection the answers can arrive out of order.
+   */
+  private quoting = 0;
+
+  /**
+   * Ask the server what to say out loud.
+   *
+   * The old figure goes the moment the basket changes, not when the new one
+   * arrives. Kept on screen in between, it is the number read out and taken
+   * for a basket that no longer exists — and Take payment stays enabled on it.
+   */
   private async reprice(): Promise<void> {
+    const asked = ++this.quoting;
+
     this.wrong.set(null);
+    this.total.set(null);
 
     const items = this.items();
 
-    if (items.length === 0) {
-      this.total.set(null);
-
-      return;
-    }
+    if (items.length === 0) return;
 
     try {
       const quote = await this.api.doorQuote(this.eventId(), items, this.token() ?? undefined);
 
-      this.total.set(quote.total);
+      if (asked === this.quoting) this.total.set(quote.total);
     } catch (error) {
+      if (asked !== this.quoting) return;
+
       this.total.set(null);
       this.wrong.set(error instanceof Error ? error.message : 'That could not be priced.');
     }
   }
 
   async sell(): Promise<void> {
-    if (this.chosen() === 0 || this.selling()) return;
+    const total = this.total();
+
+    // No figure, no question: the question is the figure. The button is off
+    // until the server has priced this basket; this is the same rule for a
+    // tap that lands in between.
+    if (this.chosen() === 0 || this.selling() || total === null) return;
+
+    // What the figure was priced for, sold as it was asked about.
+    const items = this.items();
+    const amount = this.money(total);
+
+    // Unlike scanning, a sale is money on the record and tickets that did not
+    // exist: one more tap, with the total and how it was paid, before it is.
+    // The admission chooser and the scan itself stay one tap.
+    const what = this.tiers()
+      .filter((tier) => this.count(tier.id) > 0)
+      .map((tier) => `${this.count(tier.id)} ${tier.name}`)
+      .join(', ');
+    const tickets = `${this.chosen()} ${this.chosen() === 1 ? 'ticket' : 'tickets'}`;
+    const how = this.method() === 'cash' ? 'in cash' : this.method() === 'card' ? 'by card' : 'by transfer';
+
+    const sure = await this.dialogs.confirm({
+      title: `Take ${amount} ${how}?`,
+      body: `${what}: ${tickets} sold, and recorded as paid ${how}.`,
+      consequences: ['Take the money before you press it. A sale made in error is refunded from the orders.'],
+      confirmLabel: `Take ${amount}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.selling()) return;
 
     this.selling.set(true);
     this.wrong.set(null);
@@ -400,7 +443,7 @@ export class DoorSell {
       const sale = await this.api.sellAtDoor(
         this.eventId(),
         {
-          items: this.items(),
+          items,
           method: this.method() as DoorPaymentMethod,
           name: this.name().trim() || undefined,
           email: this.email().trim() || undefined,
@@ -434,6 +477,8 @@ export class DoorSell {
   }
 
   again(): void {
+    // A quote still on its way belongs to the last person's basket.
+    this.quoting++;
     this.sold.set(null);
     this.basket.set({});
     this.total.set(null);

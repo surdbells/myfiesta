@@ -6,6 +6,7 @@ use App\Filament\Resources\TaxRates\TaxRateResource;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\StaffSupport\TaxRateChanges;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +23,35 @@ class EditTaxRate extends EditRecord
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    /**
+     * The form submits to a question, not to save().
+     *
+     * Only a rate nothing has used yet can be edited, but from its first day
+     * it multiplies every buyer's total in its place, so the button — and
+     * Enter in any box — asks first. The form is checked before the question.
+     */
+    protected function getSubmitFormLivewireMethodName(): string
+    {
+        return 'confirmSave';
+    }
+
+    public function confirmSave(): void
+    {
+        $this->form->validate();
+
+        $this->mountAction('confirmSave');
+    }
+
+    public function confirmSaveAction(): Action
+    {
+        return Action::make('confirmSave')
+            ->requiresConfirmation()
+            ->modalHeading(fn () => 'Save '.CreateTaxRate::summary($this->data ?? []).'?')
+            ->modalDescription('Checkout charges it as saved on every order in that place on the days it covers. A replacement moved here moves the end of the rate before it too. Recorded in the audit trail under your name.')
+            ->modalSubmitActionLabel('Save the rate')
+            ->action(fn () => $this->save());
     }
 
     /**

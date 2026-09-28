@@ -6,6 +6,7 @@ import { Api, ApiError, Ticket } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { longEventTime } from '../../core/event-time';
 import {
+  Dialogs,
   MfBadge,
   MfButton,
   MfCard,
@@ -193,6 +194,7 @@ export class TicketDetail {
   private readonly held = inject(HeldTicketStore);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
   readonly session = inject(SessionStore);
 
   /** From the route. */
@@ -242,11 +244,26 @@ export class TicketDetail {
     const held = this.ticket();
     if (!held || this.sending()) return;
 
+    const name = this.name().trim();
+    const email = this.email().trim();
+
+    // Said back with the address in it: a ticket sent to a typo is a ticket
+    // gone, and this one cannot be taken back.
+    const sure = await this.dialogs.confirm({
+      title: `Send your ${held.type ?? ''} ticket to ${name}?`.replace(/\s+/g, ' '),
+      body: `Your ticket for ${held.event.title} goes to ${email}, and stops working on this phone straight away.`,
+      consequences: ['You cannot take it back.'],
+      confirmLabel: 'Send the ticket',
+      tone: 'danger',
+    });
+
+    if (!sure || this.sending()) return;
+
     this.sending.set(true);
     this.error.set(null);
 
     try {
-      await this.api.transfer(held.id, this.email().trim(), this.name().trim());
+      await this.api.transfer(held.id, email, name);
 
       this.transferring.set(false);
       this.toasts.show(`Sent to ${this.email().trim()}.`, 'success');

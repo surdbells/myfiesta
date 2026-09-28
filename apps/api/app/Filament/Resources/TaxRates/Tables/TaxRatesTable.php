@@ -136,10 +136,10 @@ class TaxRatesTable
                     ->color('warning')
                     ->authorize(fn () => TaxRateChanges::allows(auth()->user()))
                     ->visible(fn (TaxRate $rate) => $rate->effective_to === null)
-                    ->modalHeading(fn (TaxRate $rate) => 'Supersede '.$rate->name.' ('.self::percent($rate->rate_bps).')')
+                    ->modalHeading(fn (TaxRate $rate) => 'Supersede '.$rate->name.' ('.self::percent($rate->rate_bps).') in '.$rate->country.($rate->subdivision ? '-'.$rate->subdivision : '').'?')
                     ->modalDescription(
                         'The current rate is closed on the date you choose and a new one takes '
-                        .'over. Orders already placed keep pointing at the old rate.'
+                        .'over, on every order in that place from that day. Orders already placed keep pointing at the old rate. Recorded in the audit trail under your name.'
                     )
                     ->modalSubmitActionLabel('Supersede')
                     ->fillForm(fn (TaxRate $rate) => [

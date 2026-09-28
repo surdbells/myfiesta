@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  ConfirmDialog,
   ToastStore,
   UiBadge,
   UiButton,
@@ -33,6 +34,7 @@ import { messageFor } from '../../core/errors';
 export class Team {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly page = signal<TeamPage | null>(null);
 
@@ -90,14 +92,30 @@ export class Team {
     });
   }
 
-  invite(): void {
+  async invite(): Promise<void> {
     const email = this.inviteEmail().trim();
     if (!email || this.inviting()) return;
+
+    const role = this.inviteRole();
+    const described = this.page()?.roles.find((r) => r.value === role);
+
+    // Said back before it goes: an invitation is an email to somebody
+    // outside, and the role in it is what they can see the moment they
+    // accept — the payouts screen, for some of them.
+    const sure = await this.confirmDialog.confirm({
+      title: `Invite ${email} as ${described?.label ?? this.roleLabel(role)}?`,
+      body: `An email goes to ${email} with a link to join. Once they accept, they can ${described?.description ?? 'do what the role allows'}.`,
+      consequences: ['The link works for a week. You can withdraw it until they accept.'],
+      confirmLabel: 'Send the invitation',
+      tone: 'default',
+    });
+
+    if (!sure || this.inviting()) return;
 
     this.inviting.set(true);
     this.inviteError.set(null);
 
-    this.api.inviteMember(email, this.inviteRole()).subscribe({
+    this.api.inviteMember(email, role).subscribe({
       next: ({ message }) => {
         this.inviting.set(false);
         this.inviteEmail.set('');
@@ -111,10 +129,32 @@ export class Team {
     });
   }
 
-  changeRole(member: TeamMember, role: string | null): void {
+  async changeRole(member: TeamMember, role: string | null): Promise<void> {
     if (!role || role === this.displayRole(member)) return;
 
+    const was = this.displayRole(member);
+
+    // The dropdown shows the choice while it is asked about, and goes back
+    // to what the server holds when the answer is no.
     this.roleDrafts.set({ ...this.roleDrafts(), [member.id]: role });
+
+    const described = this.page()?.roles.find((r) => r.value === role);
+    const who = member.is_you ? 'You' : member.name;
+
+    const sure = await this.confirmDialog.confirm({
+      title: member.is_you
+        ? `Change your own role to ${described?.label ?? this.roleLabel(role)}?`
+        : `Make ${member.name} ${described?.label ?? this.roleLabel(role)}?`,
+      body: `${who} ${member.is_you ? 'go' : 'goes'} from ${this.roleLabel(was)} to ${described?.label ?? this.roleLabel(role)} straight away, and can then ${described?.description ?? 'do what the role allows'}.`,
+      consequences: member.is_you ? ['Anything the new role cannot do is closed to you until an owner changes it back.'] : [],
+      confirmLabel: 'Change the role',
+      tone: member.is_you ? 'danger' : 'default',
+    });
+
+    if (!sure) {
+      this.clearDraft(member.id);
+      return;
+    }
 
     this.api.updateMemberRole(member.id, role).subscribe({
       next: ({ message }) => {
@@ -151,7 +191,19 @@ export class Team {
     });
   }
 
-  revoke(invitationId: string): void {
+  async revoke(invitationId: string): Promise<void> {
+    const invitation = this.page()?.invitations.find((i) => i.id === invitationId);
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Withdraw the invitation to ${invitation?.email ?? 'this person'}?`,
+      body: 'The link in their email stops working, and they cannot join with it.',
+      consequences: ['You can invite them again at any time, with a new link.'],
+      confirmLabel: 'Withdraw the invitation',
+      tone: 'danger',
+    });
+
+    if (!sure) return;
+
     this.api.revokeInvitation(invitationId).subscribe({
       next: ({ message }) => {
         this.toasts.show(message, 'success');

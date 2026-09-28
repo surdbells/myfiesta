@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { UiButton, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiPagination, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { CodeBatches } from './code-batches';
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +11,7 @@ import { messageFor } from '../../core/errors';
 import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
 import { describeZone, isoToZonedWallClock, localZone, zonedWallClockToIso } from '../../core/zoned-time';
 import { SessionStore } from '../../core/session';
+import { whenCodeWorks } from '@myfiesta/shared/code-window';
 
 /**
  * Discount and promoter codes.
@@ -36,6 +37,7 @@ import { SessionStore } from '../../core/session';
 export class EventCodes implements OnInit {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   private readonly document = inject(DOCUMENT);
@@ -295,17 +297,39 @@ export class EventCodes implements OnInit {
     );
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     // Said under the box already. Sent anyway, it would go as no discount.
     if (this.saving() || this.discountProblem()) return;
 
     const form = this.form();
+    const editing = this.editing();
+    const name = editing?.code ?? form.code.trim().toUpperCase();
+
+    // What the code does, said back as a buyer would meet it: when it works,
+    // from its own From and Until, and that it works for whoever has it —
+    // it travels further than the people it was made for.
+    const sure = await this.confirmDialog.confirm({
+      title: editing ? `Save the changes to ${name}?` : `Make the code ${name}?`,
+      body: `${this.draftEffect()}.`,
+      consequences: [
+        form.max_redemptions ? `It works ${Number(form.max_redemptions).toLocaleString()} times in all.` : 'It works any number of times.',
+        whenCodeWorks({
+          startsAt: form.starts_at ? zonedWallClockToIso(form.starts_at, this.zone()) : null,
+          endsAt: form.ends_at ? zonedWallClockToIso(form.ends_at, this.zone()) : null,
+          format: (iso) => this.moment(iso),
+          editing: editing !== null,
+        }),
+        ...(editing ? ['Orders already placed with it keep what they paid.'] : []),
+      ],
+      confirmLabel: editing ? 'Save changes' : 'Make the code',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.error.set(null);
     this.notice.set(null);
-
-    const editing = this.editing();
 
     if (editing) {
       this.saveEdit(editing, form);
@@ -467,17 +491,21 @@ export class EventCodes implements OnInit {
     return iso ? (isoToZonedWallClock(iso, this.zone()) ?? '') : '';
   }
 
+  /** A moment in a code's window, on the event's wall clock. */
+  private moment(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: this.zone(),
+    }).format(new Date(iso));
+  }
+
   /** "Until Fri, 12 Sep" — the fact an organizer is scanning for. */
   describeWindow(code: PromoCode): string | null {
-    const when = (iso: string) =>
-      new Intl.DateTimeFormat('en-CA', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZone: this.zone(),
-      }).format(new Date(iso));
+    const when = (iso: string) => this.moment(iso);
 
     if (code.starts_at && code.ends_at) return `${when(code.starts_at)} → ${when(code.ends_at)}`;
     if (code.ends_at) return `Until ${when(code.ends_at)}`;
@@ -486,10 +514,48 @@ export class EventCodes implements OnInit {
     return null;
   }
 
+  /** What the form's code will do, in the words a buyer would use: "Takes 20% off, and credits Tolu". */
+  private draftEffect(): string {
+    const form = this.form();
+    const parts: string[] = [];
+
+    if (this.discounts()) {
+      const value = this.discountValue() ?? 0;
+
+      parts.push(
+        form.discount_type === 'percentage'
+          ? `Takes ${value / 100}% off`
+          : `Takes ${formatMoney({ amount: value, currency: this.currency() })} off`,
+      );
+    }
+
+    if (this.attributes()) {
+      parts.push(`${parts.length ? 'credits' : 'Credits'} ${form.promoter_name.trim() || 'a promoter'} with the sales`);
+    }
+
+    const unlocks = this.ticketTypes()
+      .filter((type) => form.unlock_ticket_type_ids.includes(type.id))
+      .map((type) => type.name);
+
+    if (unlocks.length) parts.push(`${parts.length ? 'opens' : 'Opens'} ${unlocks.join(', ')}`);
+
+    return parts.length ? parts.join(', and ') : 'Tracks the orders that use it';
+  }
+
   /** Back on, keeping its uses and its sales. */
-  turnOn(code: PromoCode): void {
+  async turnOn(code: PromoCode): Promise<void> {
     this.error.set(null);
     this.notice.set(null);
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Turn ${code.code} back on?`,
+      body: `Anybody who has it can use it again straight away: ${this.describeDiscount(code).toLowerCase()}.`,
+      consequences: ['It keeps the uses and sales it had.'],
+      confirmLabel: 'Turn it on',
+      tone: 'default',
+    });
+
+    if (!sure) return;
 
     this.api.updateCode(this.eventId, code.id, { is_active: true }).subscribe({
       next: () => {
@@ -500,9 +566,19 @@ export class EventCodes implements OnInit {
     });
   }
 
-  turnOff(code: PromoCode): void {
+  async turnOff(code: PromoCode): Promise<void> {
     this.error.set(null);
     this.notice.set(null);
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Turn off ${code.code}?`,
+      body: 'It stops working at checkout straight away, for everybody who has it.',
+      consequences: ['Orders already placed with it keep what they paid. You can turn it back on.'],
+      confirmLabel: 'Turn it off',
+      tone: 'danger',
+    });
+
+    if (!sure) return;
 
     this.api.deactivateCode(this.eventId, code.id).subscribe({
       next: (result) => {

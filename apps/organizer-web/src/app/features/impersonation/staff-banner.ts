@@ -1,6 +1,6 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { UiIcon } from '@myfiesta/ui';
+import { ConfirmDialog, UiIcon } from '@myfiesta/ui';
 import { Eye } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { SessionStore } from '../../core/session';
@@ -67,6 +67,7 @@ import { SessionStore } from '../../core/session';
 export class StaffBanner {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   protected readonly eyeIcon = Eye;
@@ -109,9 +110,25 @@ export class StaffBanner {
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
   }
 
-  /** Revoke on the server, then forget in this tab. */
-  end(): void {
-    if (this.ending() || !this.session.impersonation()) return;
+  /**
+   * Revoke on the server, then forget in this tab — once it is confirmed,
+   * because a session ended by a stray click cannot be picked up again
+   * without going back to the admin for a new one.
+   */
+  async end(): Promise<void> {
+    const staff = this.session.impersonation();
+    if (this.ending() || !staff) return;
+
+    const sure = await this.confirmDialog.confirm({
+      title: 'End the staff session?',
+      body: `This tab stops acting as ${staff.organization.name}, and the session is closed for good.`,
+      consequences: ['Opening the console again takes a new session from the admin, with a new reason.'],
+      confirmLabel: 'End staff session',
+      tone: 'default',
+    });
+
+    // Answered after the hour ran out: tick() has already left.
+    if (!sure || this.ending() || !this.session.impersonation()) return;
 
     this.ending.set(true);
 

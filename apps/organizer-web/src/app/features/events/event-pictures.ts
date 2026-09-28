@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
 import {
+  ConfirmDialog,
   ToastStore,
   UiButton,
   UiConfirm,
@@ -13,6 +14,7 @@ import {
 import { ChevronLeft, ChevronRight, GripVertical, ImagePlus, Star, Trash2, Upload } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { EventImage, EventImages, UploadProgress } from '../../core/api.types';
+import { EventWorkspace } from './event-workspace';
 
 /** One file on its way up, with enough to draw a row for it. */
 interface Upload {
@@ -50,6 +52,10 @@ export class EventPictures {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
+
+  /** The event this sits inside, already loaded: whether it is on sale. */
+  private readonly workspace = inject(EventWorkspace, { optional: true });
 
   protected readonly uploadIcon = Upload;
   protected readonly addIcon = ImagePlus;
@@ -102,7 +108,8 @@ export class EventPictures {
   onPicked(event: Event, kind: 'banner' | 'gallery'): void {
     const input = event.target as HTMLInputElement;
 
-    this.accept(input.files, kind);
+    // Read before the input is cleared below: the list is live.
+    void this.accept(input.files ? Array.from(input.files) : null, kind);
 
     // Cleared so choosing the same file twice in a row still fires a change.
     input.value = '';
@@ -111,7 +118,7 @@ export class EventPictures {
   onDropped(event: DragEvent, kind: 'banner' | 'gallery'): void {
     event.preventDefault();
     this.setDragging(kind, false);
-    this.accept(event.dataTransfer?.files ?? null, kind);
+    void this.accept(event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : null, kind);
   }
 
   onDragOver(event: DragEvent, kind: 'banner' | 'gallery'): void {
@@ -131,7 +138,7 @@ export class EventPictures {
    * images onto the banner uses the first and says so rather than silently
    * discarding five.
    */
-  private accept(files: FileList | null, kind: 'banner' | 'gallery'): void {
+  private async accept(files: File[] | null, kind: 'banner' | 'gallery'): Promise<void> {
     if (!files || files.length === 0) return;
 
     const chosen = kind === 'banner' ? [files[0]] : Array.from(files);
@@ -139,6 +146,8 @@ export class EventPictures {
     if (kind === 'banner' && files.length > 1) {
       this.toasts.show('An event has one banner. Using the first image.', 'info');
     }
+
+    const usable: File[] = [];
 
     for (const file of chosen) {
       const rejection = this.reject(file);
@@ -149,8 +158,50 @@ export class EventPictures {
         continue;
       }
 
-      this.upload(file, kind);
+      usable.push(file);
     }
+
+    if (usable.length === 0 || !(await this.confirmUpload(usable, kind))) return;
+
+    for (const file of usable) this.upload(file, kind);
+  }
+
+  /**
+   * Said before anything is sent. A drop lands wherever the pointer was let
+   * go, and a new flyer deletes the one it replaces — the one picture shown
+   * wherever the link is shared.
+   */
+  private confirmUpload(files: File[], kind: 'banner' | 'gallery'): Promise<boolean> {
+    const onSale = this.onSale();
+
+    if (kind === 'banner') {
+      const replacing = this.banner() !== null;
+
+      return this.confirmDialog.confirm({
+        title: replacing ? `Replace the flyer with ${files[0].name}?` : `Use ${files[0].name} as the flyer?`,
+        body: replacing
+          ? 'The flyer there now is deleted, and this one takes its place on the event page and wherever the link is shared.'
+          : 'It is the picture on the event page and wherever the link is shared.',
+        consequences: onSale ? ['The event is on sale: buyers see it straight away.'] : [],
+        confirmLabel: replacing ? 'Replace the flyer' : 'Use this picture',
+        tone: replacing ? 'danger' : 'default',
+      });
+    }
+
+    const many = files.length === 1 ? files[0].name : `${files.length} pictures`;
+
+    return this.confirmDialog.confirm({
+      title: `Add ${many} to the gallery?`,
+      body: `${files.length === 1 ? 'It goes' : 'They go'} at the end of the gallery on the event page.`,
+      consequences: onSale ? ['The event is on sale: buyers see the gallery straight away.'] : [],
+      confirmLabel: files.length === 1 ? 'Add the picture' : `Add ${files.length} pictures`,
+      tone: 'default',
+    });
+  }
+
+  /** Whether what changes here is in front of buyers the moment it lands. */
+  private onSale(): boolean {
+    return this.workspace?.event()?.status === 'published';
   }
 
   /**
@@ -230,7 +281,17 @@ export class EventPictures {
    * the bigger drop zone — and the fix should not be delete, find the file
    * again, re-upload.
    */
-  promote(image: EventImage): void {
+  async promote(image: EventImage): Promise<void> {
+    const sure = await this.confirmDialog.confirm({
+      title: 'Make this picture the flyer?',
+      body: 'It becomes the picture on the event page and wherever the link is shared.',
+      consequences: this.banner() ? ['The flyer there now moves into the gallery. Nothing is deleted.'] : [],
+      confirmLabel: 'Make it the flyer',
+      tone: 'default',
+    });
+
+    if (!sure) return;
+
     this.api.setBanner(this.eventId, image.id).subscribe({
       next: () => {
         this.toasts.show('Banner updated.');

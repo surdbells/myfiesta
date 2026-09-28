@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
 import { CalendarDays, LayoutDashboard, LogOut, Mail, Menu, Plug, PanelLeftClose, PanelLeftOpen, ReceiptText, Store, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
@@ -29,6 +29,7 @@ const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 export class App {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   protected readonly menuIcon = Menu;
@@ -174,11 +175,35 @@ export class App {
 
   readonly signOutLabel = computed(() => (this.session.impersonation() ? 'End staff session' : 'Sign out'));
 
-  signOut(): void {
+  async signOut(): Promise<void> {
     // A staff session is ended, not signed out of: the server revokes it and
     // records who ended it, and this tab goes to the page that says so
     // rather than to a sign-in form nobody here should use.
     const staff = this.session.impersonation() !== null;
+    const organization = this.session.impersonation()?.organization.name ?? 'the organization';
+
+    // Asked first, because the button sits at the bottom of the sidebar
+    // where a missed click lands, and a staff session cannot be picked up
+    // again without going back to the admin for a new one.
+    const sure = await this.confirmDialog.confirm(
+      staff
+        ? {
+            title: 'End the staff session?',
+            body: `This tab stops acting as ${organization}, and the session is closed for good.`,
+            consequences: ['Opening the console again takes a new session from the admin, with a new reason.'],
+            confirmLabel: 'End staff session',
+            tone: 'default',
+          }
+        : {
+            title: 'Sign out?',
+            body: 'You are signed out of the console in this browser, and need your email and password to get back in.',
+            confirmLabel: 'Sign out',
+            tone: 'default',
+          },
+    );
+
+    if (!sure) return;
+
     const request = staff ? this.api.endImpersonation() : this.api.signOut();
 
     // The local session is cleared either way. A network failure must not

@@ -229,14 +229,36 @@ export class OrgTeam implements OnInit {
     this.inviting.set(true);
   }
 
+  /** The role's name and what it lets somebody do, as said where it is chosen. */
+  private described(role: string): { label: string; can: string } {
+    const found = this.page()?.roles.find((r) => r.value === role);
+
+    return { label: found?.label ?? role, can: found?.description ?? 'do what the role allows' };
+  }
+
   protected async invite(): Promise<void> {
     if (!this.inviteReady()) return;
+
+    const email = this.email().trim();
+    const role = this.described(this.role());
+
+    // An invitation is an email to somebody outside, and the role in it is
+    // what they can see the moment they accept.
+    const sure = await this.dialogs.confirm({
+      title: `Invite ${email} as ${role.label}?`,
+      body: `An email goes to ${email} with a link to join. Once they accept, they can ${role.can}.`,
+      consequences: ['The link works for a week. You can take it back until they accept.'],
+      confirmLabel: 'Send the invitation',
+      tone: 'default',
+    });
+
+    if (!sure || !this.inviteReady()) return;
 
     this.busy.set(true);
     this.inviteError.set(null);
 
     try {
-      const { message } = await this.organizer.invite(this.email().trim(), this.role());
+      const { message } = await this.organizer.invite(email, this.role());
       this.inviting.set(false);
       this.toasts.show(message, 'success');
       await this.load();
@@ -267,9 +289,10 @@ export class OrgTeam implements OnInit {
     if (chosen === 'remove') {
       const sure = await this.dialogs.confirm({
         title: `Take ${member.name} off the team?`,
-        message: 'They lose access straight away, on every device. What they did stays in the record.',
-        confirm: 'Take them off',
-        danger: true,
+        body: 'They lose access straight away, on every device. What they did stays in the record.',
+        consequences: ['You can invite them again later.'],
+        confirmLabel: 'Take them off the team',
+        tone: 'danger',
       });
 
       if (!sure) return;
@@ -287,6 +310,17 @@ export class OrgTeam implements OnInit {
   protected async changeRole(): Promise<void> {
     const member = this.changing();
     if (!member) return;
+
+    const to = this.described(this.newRole());
+
+    const sure = await this.dialogs.confirm({
+      title: `Make ${member.name} ${to.label}?`,
+      body: `${member.name} goes from ${this.roleLabel(member.role)} to ${to.label} straight away, and can then ${to.can}.`,
+      confirmLabel: 'Change the role',
+      tone: 'default',
+    });
+
+    if (!sure || this.changing() !== member) return;
 
     this.busy.set(true);
 
@@ -312,6 +346,28 @@ export class OrgTeam implements OnInit {
         { key: 'revoke', label: 'Take the invitation back', danger: true },
       ],
     });
+
+    if (chosen !== 'again' && chosen !== 'revoke') return;
+
+    const sure = await this.dialogs.confirm(
+      chosen === 'again'
+        ? {
+            title: `Invite ${invitation.email} again?`,
+            body: `A new email goes to ${invitation.email}, as ${this.roleLabel(invitation.role)}, with a link that works for a week.`,
+            consequences: ['The old link stops working.'],
+            confirmLabel: 'Send a new invitation',
+            tone: 'default',
+          }
+        : {
+            title: `Take back the invitation to ${invitation.email}?`,
+            body: 'The link in their email stops working, and they cannot join with it.',
+            consequences: ['You can invite them again at any time.'],
+            confirmLabel: 'Take the invitation back',
+            tone: 'danger',
+          },
+    );
+
+    if (!sure) return;
 
     try {
       if (chosen === 'again') {

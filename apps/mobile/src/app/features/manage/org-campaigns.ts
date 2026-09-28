@@ -501,10 +501,13 @@ export class OrgCampaigns implements OnInit {
 
   private async cancel(c: Campaign): Promise<void> {
     const sure = await this.dialogs.confirm({
-      title: c.status === 'draft' ? 'Throw this draft away?' : 'Stop this from sending?',
-      message: c.status === 'scheduled' ? `It was going ${this.when(c.scheduled_for)}. Nobody will get it.` : undefined,
-      confirm: c.status === 'draft' ? 'Throw away' : 'Do not send',
-      danger: true,
+      title: c.status === 'draft' ? `Throw away “${c.subject}”?` : `Stop “${c.subject}” from sending?`,
+      body:
+        c.status === 'scheduled'
+          ? `It was going ${this.when(c.scheduled_for)}. Nobody will get it.`
+          : 'The draft is gone, and nobody gets it.',
+      confirmLabel: c.status === 'draft' ? 'Throw the draft away' : 'Do not send it',
+      tone: 'danger',
     });
 
     if (!sure) return;
@@ -531,15 +534,36 @@ export class OrgCampaigns implements OnInit {
       scheduled_for: this.send() === 'later' ? new Date(this.at()).toISOString() : null,
     };
 
-    if (draft.send === 'now') {
-      const n = this.reach()?.reachable ?? 0;
-      const sure = await this.dialogs.confirm({
-        title: `Email ${n} ${n === 1 ? 'person' : 'people'} now?`,
-        message: 'It goes straight away and cannot be taken back.',
-        confirm: 'Send',
-      });
-      if (!sure) return;
-    }
+    // Said back before it goes, whichever way it goes: an email cannot be
+    // called back once it is in somebody's inbox, and a scheduled one goes
+    // while nobody is looking.
+    const n = this.reach()?.reachable ?? 0;
+    const people = `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
+    const sure = await this.dialogs.confirm(
+      draft.send === 'now'
+        ? {
+            title: `Send “${draft.subject}” to ${people} now?`,
+            body: 'It goes straight away and cannot be called back.',
+            confirmLabel: `Send to ${people}`,
+            tone: 'default',
+          }
+        : draft.send === 'later'
+          ? {
+              title: `Schedule “${draft.subject}”?`,
+              body: `It goes out ${this.when(draft.scheduled_for)}, to whoever is on the list at that moment.`,
+              consequences: ['You can change it or stop it until then.'],
+              confirmLabel: 'Schedule it',
+              tone: 'default',
+            }
+          : {
+              title: `Save “${draft.subject}” as a draft?`,
+              body: 'Nobody gets it yet. It waits here until you send or schedule it.',
+              confirmLabel: 'Save the draft',
+              tone: 'default',
+            },
+    );
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.formError.set(null);

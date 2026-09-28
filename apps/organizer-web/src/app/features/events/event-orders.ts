@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton, UiPagination } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiPagination } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -29,6 +29,7 @@ import { SessionStore } from '../../core/session';
 export class EventOrders {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
@@ -145,7 +146,7 @@ export class EventOrders {
     });
   }
 
-  submit(order: SoldOrder): void {
+  async submit(order: SoldOrder): Promise<void> {
     if (this.working()) return;
 
     const refundable = order.tickets.filter((t) => t.refundable);
@@ -156,6 +157,26 @@ export class EventOrders {
 
       return;
     }
+
+    // Money leaving and tickets dying, both for good: the amount, who gets it
+    // and what stops working are named before anything is sent.
+    const tickets = `${picked.length} ${picked.length === 1 ? 'ticket' : 'tickets'}`;
+    const whole = picked.length === refundable.length;
+    const amount = whole ? this.money(order.refundable) : `about ${this.estimate(order)}`;
+    const to = order.buyer_email ?? order.buyer_name;
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Refund ${tickets} on ${order.reference}?`,
+      body: `${amount} goes back to ${to}, the way they paid.`,
+      consequences: [
+        `The ${picked.length === 1 ? 'ticket stops' : 'tickets stop'} working at the door straight away.`,
+        'A refund cannot be undone.',
+      ],
+      confirmLabel: `Refund ${tickets}`,
+      tone: 'danger',
+    });
+
+    if (!sure || this.working()) return;
 
     this.working.set(true);
     this.error.set(null);

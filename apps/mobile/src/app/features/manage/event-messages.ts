@@ -333,13 +333,15 @@ export class EventMessages implements OnInit {
     if (!this.ready()) return;
 
     const reach = this.willReach();
+    const people = `${reach} ${reach === 1 ? 'person' : 'people'}`;
     const sure = await this.dialogs.confirm({
-      title: `Email ${reach} ${reach === 1 ? 'person' : 'people'}?`,
-      message: 'It goes out now and cannot be taken back.',
-      confirm: 'Send',
+      title: `Send “${this.subject().trim()}” to ${people}?`,
+      body: `It goes straight away to everybody holding a ticket for this event${this.important() ? ', even those who asked not to hear from you' : ' who may be written to'}, and cannot be called back.`,
+      confirmLabel: `Send to ${people}`,
+      tone: 'default',
     });
 
-    if (!sure) return;
+    if (!sure || this.sending()) return;
 
     this.sending.set(true);
     this.formError.set(null);

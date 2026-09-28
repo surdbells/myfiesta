@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL, authInterceptor } from '../../core/api';
+import { answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
 import { EmailVerification } from '../../core/email-verification';
 import { isEmailUnverified } from '../../core/errors';
 import { SessionStore } from '../../core/session';
@@ -59,6 +60,7 @@ describe('VerifyEmail', () => {
 
   afterEach(() => {
     backend.verify();
+    forgetDialogs();
     session.clear();
   });
 
@@ -108,10 +110,28 @@ describe('VerifyEmail', () => {
     expect(fixture.nativeElement.querySelector('.verify-email')).toBeNull();
   });
 
-  it('sends the link again and says where it went', () => {
+  it('asks before sending the link again, and sends nothing when the answer is no', async () => {
     const fixture = render(false);
 
-    fixture.componentInstance.resend();
+    void fixture.componentInstance.resend();
+    await settle();
+
+    expect(asked()?.title).toBe('Send the link again?');
+    expect(asked()?.text).toContain('A new email goes to ada@example.test');
+    expect(asked()?.buttons).toEqual(['Cancel', 'Send the link']);
+
+    await answer('Cancel');
+
+    backend.expectNone('http://api.test/api/auth/email/verification');
+    expect(fixture.componentInstance.sending()).toBe(false);
+  });
+
+  it('sends the link again and says where it went', async () => {
+    const fixture = render(false);
+
+    void fixture.componentInstance.resend();
+    await settle();
+    await answer('Send the link');
 
     const request = backend.expectOne('http://api.test/api/auth/email/verification');
     expect(request.request.method).toBe('POST');
@@ -125,10 +145,12 @@ describe('VerifyEmail', () => {
     expect(store.verified()).toBe(false);
   });
 
-  it('passes on how long to wait when asked too often', () => {
+  it('passes on how long to wait when asked too often', async () => {
     const fixture = render(false);
 
-    fixture.componentInstance.resend();
+    void fixture.componentInstance.resend();
+    await settle();
+    await answer('Send the link');
     backend.expectOne('http://api.test/api/auth/email/verification').flush(
       { message: 'A link went to ada@example.test a moment ago. Check that inbox, including spam, or ask again in 40 minutes.', verified: false },
       { status: 429, statusText: 'Too Many Requests' },
@@ -138,10 +160,12 @@ describe('VerifyEmail', () => {
     expect(fixture.componentInstance.answer()).toContain('ask again in 40 minutes');
   });
 
-  it('goes away when the address turns out to be proved already', () => {
+  it('goes away when the address turns out to be proved already', async () => {
     const fixture = render(false);
 
-    fixture.componentInstance.resend();
+    void fixture.componentInstance.resend();
+    await settle();
+    await answer('Send the link');
     backend.expectOne('http://api.test/api/auth/email/verification').flush({ message: 'Your email address is already confirmed.', verified: true });
     fixture.detectChanges();
 

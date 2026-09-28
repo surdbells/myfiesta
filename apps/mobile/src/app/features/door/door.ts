@@ -19,7 +19,7 @@ import { DoorOffline } from '../../core/door-offline';
 import { Api, ApiError, ScanResult } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { Scanner } from '../../core/scanner';
-import { MfBadge, MfButton, MfCard, MfField, MfScreen, MfSheet, MfStepper, ToastStore } from '../../ui';
+import { Dialogs, MfBadge, MfButton, MfCard, MfField, MfScreen, MfSheet, MfStepper, ToastStore } from '../../ui';
 import { DoorSell } from './door-sell';
 
 interface Outcome {
@@ -617,6 +617,7 @@ export class Door implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly scanner = inject(Scanner);
   private readonly offline = inject(DoorOffline);
   readonly session = inject(SessionStore);
@@ -1093,15 +1094,31 @@ export class Door implements OnDestroy {
   }
 
   async leave(): Promise<void> {
-    await this.scanner.stop();
-
     if (this.locked()) {
+      // Ending a shift ends the door pass for good, and scans made without
+      // signal and not yet sent would go with it. Leaving the door screen
+      // otherwise is navigation, and asks nothing.
+      const unsent = this.waiting();
+      const sure = await this.dialogs.confirm({
+        title: 'End your shift?',
+        body:
+          unsent > 0
+            ? `${unsent} ${unsent === 1 ? 'scan made without signal has' : 'scans made without signal have'} not been sent yet and will be lost. Wait for signal until nothing is waiting, then end the shift.`
+            : `This phone stops scanning for ${this.eventTitle() ?? 'this event'}. The link cannot be opened again — you would need a new one.`,
+        confirmLabel: unsent > 0 ? 'End anyway' : 'End shift',
+        tone: 'danger',
+      });
+
+      if (!sure) return;
+
+      await this.scanner.stop();
       await this.session.signOut();
       await this.router.navigate(['/sign-in'], { replaceUrl: true });
 
       return;
     }
 
+    await this.scanner.stop();
     await this.router.navigate(['/events']);
   }
 }

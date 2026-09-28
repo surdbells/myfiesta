@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import {
+  ConfirmDialog,
   ToastStore,
   UiBadge,
   UiButton,
@@ -21,6 +22,7 @@ import { AddOn } from '../../core/api.types';
 import { eventIdFrom } from '../../core/event-id';
 import { messageFor } from '../../core/errors';
 import { amountProblem, formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
+import { EventWorkspace } from './event-workspace';
 
 /** An add-on as the form holds it, before it becomes an API body. */
 interface AddOnDraft {
@@ -68,6 +70,10 @@ export class EventAddOns {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
+
+  /** The event this sits inside, already loaded: its currency and whether it is on sale. */
+  private readonly workspace = inject(EventWorkspace, { optional: true });
 
   protected readonly addIcon = Plus;
   protected readonly editIcon = Pencil;
@@ -172,16 +178,35 @@ export class EventAddOns {
     this.formError.set(null);
   }
 
-  save(): void {
+  async save(): Promise<void> {
     const draft = this.draft();
     const price = toMinorUnits(draft.price);
 
     if (!this.canSave() || this.saving() || price === null) return;
 
     const editing = this.editing();
+    const name = draft.name.trim();
+    const currency = editing?.price.currency ?? this.addOns()[0]?.price.currency ?? this.workspace?.event()?.currency;
+    const cost = currency ? formatMoney({ amount: price, currency }) : draft.price.trim();
+    const offered = draft.status === 'on_sale';
+    const onSale = this.workspace?.event()?.status === 'published';
+
+    // Said back before it is offered: an extra is a line on somebody's bill,
+    // and on an event that is on sale the next checkout offers it at this price.
+    const sure = await this.confirmDialog.confirm({
+      title: editing ? `Save the changes to ${name}?` : `Add ${name} at ${cost}?`,
+      body: offered
+        ? `${onSale ? 'The checkout offers it straight away' : 'The checkout offers it once the event is on sale'}, at ${cost} each.`
+        : 'It is kept here, and the checkout does not offer it.',
+      consequences: editing && editing.sold > 0 && editing.price.amount !== price ? [`The ${editing.sold} already bought keep what was paid for them.`] : [],
+      confirmLabel: editing ? 'Save changes' : 'Add the extra',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     const body = {
-      name: draft.name.trim(),
+      name,
       description: draft.description.trim() || null,
       price_amount: price,
       quantity_available: this.number(draft.quantity),

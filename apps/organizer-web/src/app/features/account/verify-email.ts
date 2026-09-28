@@ -1,7 +1,7 @@
 import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ToastStore, UiAlert, UiButton, UiModal } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiAlert, UiButton, UiModal } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { EmailVerification } from '../../core/email-verification';
 import { messageFor } from '../../core/errors';
@@ -51,7 +51,7 @@ import { SessionStore } from '../../core/session';
       }
       <ng-container modalActions>
         <button uiButton type="button" variant="secondary" (click)="close()">{{ answer() ? 'Close' : 'Not now' }}</button>
-        <button uiButton type="button" [loading]="sending()" (click)="resend()">Send the link again</button>
+        <button uiButton type="button" [loading]="sending()" (click)="resend(true)">Send the link again</button>
       </ng-container>
     </ui-modal>
   `,
@@ -59,6 +59,7 @@ import { SessionStore } from '../../core/session';
 export class VerifyEmail {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   private readonly document = inject(DOCUMENT);
   readonly session = inject(SessionStore);
   readonly store = inject(EmailVerification);
@@ -121,8 +122,25 @@ export class VerifyEmail {
     });
   }
 
-  resend(): void {
+  /**
+   * Send the link again. From the banner it asks first; the dialog on top
+   * of a refused action is already that question, with that button, so it
+   * says it has been asked.
+   */
+  async resend(asked = false): Promise<void> {
     if (this.sending()) return;
+
+    if (!asked) {
+      const sure = await this.confirmDialog.confirm({
+        title: 'Send the link again?',
+        body: `A new email goes to ${this.session.user()?.email ?? 'your address'} with a link to confirm it.`,
+        consequences: ['Check spam if it has not arrived in a few minutes.'],
+        confirmLabel: 'Send the link',
+        tone: 'default',
+      });
+
+      if (!sure || this.sending()) return;
+    }
 
     this.sending.set(true);
     this.answer.set(null);

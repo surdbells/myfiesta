@@ -41,7 +41,7 @@ final class UserActions
             ->authorize(fn () => StaffAction::current(StaffAction::Resend))
             ->visible(fn (User $record) => ! $record->trashed() && self::mayActOn($record, StaffAction::Resend))
             ->requiresConfirmation()
-            ->modalHeading('Send a password reset link?')
+            ->modalHeading(fn (User $record) => 'Send '.$record->name.' a password reset link?')
             ->modalDescription(fn (User $record) => 'Emails '.$record->email.' the same link the forgot-password screen sends. '
                 .'You never see or choose the password. '
                 .($record->isUnclaimed() ? 'This account has no password yet — the link is how its owner claims it.' : ''))
@@ -63,7 +63,7 @@ final class UserActions
                 && $record->email_verified_at === null
                 && self::mayActOn($record, StaffAction::Resend))
             ->requiresConfirmation()
-            ->modalHeading('Resend the verification email?')
+            ->modalHeading(fn (User $record) => 'Resend the verification email to '.$record->email.'?')
             ->modalDescription(fn (User $record) => 'Emails '.$record->email.' a link that proves they read it. '
                 .'It shares the same hourly limit as the button they have themselves.')
             ->modalSubmitActionLabel('Send link')
@@ -83,7 +83,7 @@ final class UserActions
             ->authorize(fn () => StaffAction::current(StaffAction::SignOut))
             ->visible(fn (User $record) => ! $record->trashed() && self::mayActOn($record, StaffAction::SignOut))
             ->requiresConfirmation()
-            ->modalHeading('Sign this account out everywhere?')
+            ->modalHeading(fn (User $record) => 'Sign '.$record->name.' out everywhere?')
             ->modalDescription('Ends every app and browser session, every "remember me", and any door links this account handed to other phones. '
                 .'Their password does not change. Use this when somebody thinks another person is in their account.')
             ->modalSubmitActionLabel('Sign out everywhere')
@@ -135,7 +135,7 @@ final class UserActions
             ->visible(fn (User $record) => $record->trashed()
                 && ! app(AccountActions::class)->wasErased($record)
                 && self::mayActOn($record, StaffAction::Deactivate))
-            ->modalHeading('Reactivate this account?')
+            ->modalHeading(fn (User $record) => 'Reactivate '.$record->name.'’s account?')
             ->modalDescription('They can sign in again. Nothing that was ended when it was deactivated comes back: they sign in afresh.')
             ->modalSubmitActionLabel('Reactivate')
             ->schema([

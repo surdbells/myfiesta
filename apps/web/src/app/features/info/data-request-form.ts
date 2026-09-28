@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ConfirmDialog } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 
 /**
@@ -117,6 +118,7 @@ import { Api } from '../../core/api';
 })
 export class DataRequestForm {
   private readonly api = inject(Api);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly email = signal('');
   readonly kind = signal<'export' | 'erasure'>('export');
@@ -126,13 +128,40 @@ export class DataRequestForm {
 
   readonly ready = computed(() => this.email().trim().includes('@'));
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (!this.ready() || this.sending()) return;
+
+    const email = this.email().trim();
+
+    // Which of the two, said back: the dropdown sits beside the box, and
+    // asking for a copy and asking to be erased read alike at a glance.
+    const sure = await this.confirmDialog.confirm(
+      this.kind() === 'erasure'
+        ? {
+            title: 'Ask to be erased?',
+            body: `A link goes to ${email}. Once it is followed, myFiesta forgets that address, as far as the law allows.`,
+            consequences: [
+              'Orders and tickets are kept as financial records, with your name and address taken off them.',
+              'Nothing happens until the link is followed, and it stops working after a day.',
+            ],
+            confirmLabel: 'Send the erasure link',
+            tone: 'danger',
+          }
+        : {
+            title: 'Ask for a copy of your data?',
+            body: `A link goes to ${email}. Once it is followed, a copy of everything myFiesta holds about that address is sent there.`,
+            consequences: ['Nothing happens until the link is followed, and it stops working after a day.'],
+            confirmLabel: 'Send me the link',
+            tone: 'default',
+          },
+    );
+
+    if (!sure || this.sending()) return;
 
     this.sending.set(true);
     this.failed.set(false);
 
-    this.api.requestMyData(this.kind(), this.email().trim()).subscribe({
+    this.api.requestMyData(this.kind(), email).subscribe({
       next: () => {
         this.sending.set(false);
         this.sent.set(true);

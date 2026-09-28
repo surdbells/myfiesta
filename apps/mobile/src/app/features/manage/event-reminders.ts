@@ -136,6 +136,17 @@ export class EventReminders implements OnInit {
 
     if (!chosen) return;
 
+    const when = choices.find((c) => String(c.minutes) === chosen)?.label.toLowerCase() ?? 'before the event';
+    const sure = await this.dialogs.confirm({
+      title: `Add a reminder ${when}?`,
+      body: `Everyone holding a ticket for ${this.event()?.title ?? 'this event'} gets an email ${when} it starts.`,
+      consequences: ['Anyone who has unsubscribed does not.'],
+      confirmLabel: 'Add the reminder',
+      tone: 'default',
+    });
+
+    if (!sure) return;
+
     try {
       await this.organizer.addReminder(this.id(), Number(chosen));
       this.toasts.show('Reminder scheduled.', 'success');
@@ -148,9 +159,9 @@ export class EventReminders implements OnInit {
   protected async cancel(reminder: Reminder): Promise<void> {
     const sure = await this.dialogs.confirm({
       title: `Turn off “${reminder.label}”?`,
-      message: 'Nobody gets it. You can add it again while it is still ahead.',
-      confirm: 'Turn off',
-      danger: true,
+      body: 'Nobody gets it. You can add it again while it is still ahead.',
+      confirmLabel: 'Turn off the reminder',
+      tone: 'danger',
     });
 
     if (!sure) return;

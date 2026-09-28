@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { RichTextEditor } from '../../shared/rich-text-editor';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -17,6 +17,7 @@ import { COMMON_ZONES, describeZone, localZone, zonedWallClockToIso } from '../.
 export class EventCreate {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
   readonly countryOptions = COUNTRY_OPTIONS;
@@ -107,7 +108,7 @@ export class EventCreate {
     }
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (this.saving()) return;
 
     const organization = this.session.current();
@@ -127,6 +128,20 @@ export class EventCreate {
     }
 
     const endsAt = this.endsAt() ? zonedWallClockToIso(this.endsAt(), this.timezone()) : null;
+    const title = this.title().trim();
+
+    // The two things that cannot be taken back once it exists — the currency
+    // the country chose, and the instant the clock and zone make — said at
+    // the moment of creating it, not only in the preview above the button.
+    const sure = await this.confirmDialog.confirm({
+      title: `Create ${title || 'this event'}?`,
+      body: `It is saved as a draft for ${organization.name}${this.preview() ? `, starting ${this.preview()}` : ''}. Nobody can see it or buy a ticket until you send it for review and it is approved.`,
+      consequences: [`Its tickets are sold in ${this.currency()}, and that cannot be changed later.`],
+      confirmLabel: 'Create the draft',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.error.set(null);
@@ -134,7 +149,7 @@ export class EventCreate {
     this.api
       .createEvent({
         organization_id: organization.id,
-        title: this.title().trim(),
+        title,
         kind: this.kind(),
         description: this.description().trim() || null,
         currency: this.currency(),
