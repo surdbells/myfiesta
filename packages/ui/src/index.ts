@@ -21,7 +21,16 @@ export { UiButton } from './button';
 export { UiCard } from './card';
 export { UiModal } from './modal';
 export { UiDrawer } from './drawer';
-export { UiConfirm } from './confirm';
+// Every action asks first, through this: `inject(ConfirmDialog).confirm({...})`.
+// The API and an example are at the top of confirm.ts and in the README.
+export {
+  UiConfirm,
+  ConfirmDialog,
+  type ConfirmRequest,
+  type ConfirmResult,
+  type ConfirmReason,
+  type ConfirmTone,
+} from './confirm';
 
 // Navigation
 export { UiPageHeader } from './page-header';

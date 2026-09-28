@@ -120,6 +120,58 @@ areas) and nothing a person looks at. Everything else is in `src/app/ui`:
 | `mf-switch`    | on or off, drawn the same on both platforms — the native switch is the control iOS and Android differ on most |
 | `mf-segmented`, `mf-card`, `mf-badge`, `mf-empty`, `mf-skeleton`, `mf-toasts` | the rest of the kit |
 
+### Asking before an action
+
+Every action that changes something asks first, through one sheet: never
+`window.confirm`, and never a sheet of a screen's own. A screen awaits the
+answer instead of keeping an open flag, a busy flag and an error for each
+action. The one `mf-dialog-host` in the shell draws it.
+
+```ts
+private readonly dialogs = inject(Dialogs);
+
+// Yes or no. With `run`, true only once the action has gone through.
+const refunded = await this.dialogs.confirm({
+  title: 'Refund this order?',
+  body: 'Ada gets $40.00 back on the card she paid with.',
+  consequences: ['Her two tickets stop working at the door.'],
+  confirmLabel: 'Refund $40.00',     // names the action, never "OK"
+  busyLabel: 'Refunding…',
+  tone: 'danger',                    // red button, and focus starts on Cancel
+  run: () => this.organizer.refund(eventId, order.id, {}),
+});
+
+// When a written reason has to come back.
+const { confirmed, reason } = await this.dialogs.decide({
+  title: 'Cancel this night?',
+  body: 'Every buyer is refunded and told.',
+  confirmLabel: 'Cancel the night',
+  tone: 'danger',
+  requireText: 'CANCEL',             // type-to-confirm, for the irreversible only
+  reason: { label: 'What to tell buyers', required: true, minLength: 10, maxLength: 500 },
+  run: (reason) => this.organizer.cancel(eventId, reason!, true),  // `run` gets the reason too
+});
+```
+
+| Field | What it does |
+| --- | --- |
+| `title`, `body` | The question and what will actually happen. `body` is required: "are you sure?" is not a question. |
+| `consequences` | The knock-on effects, one per line. Read out with the body. |
+| `confirmLabel` | The action, named: "Submit for review", "Refund $40.00". |
+| `cancelLabel` | Defaults to "Cancel". |
+| `tone` | `'danger'` for anything that destroys or takes back: a red button, and focus starts on Cancel. |
+| `requireText` | The button stays off until this is typed (case and spaces round it aside), and Enter in the box confirms. Only for the irreversible — friction everywhere trains people past it. |
+| `reason` | A box to write in: `{ label, required?, minLength?, maxLength?, hint?, placeholder? }`. What was written comes back trimmed, from `decide()`. |
+| `run` | The action. The sheet stays up and busy while it runs, and nothing dismisses it — not a drag, the scrim, back or Escape. A failure is said in the sheet and the person can try again or cancel. |
+| `failure` | Turns a failed `run` into words. Defaults to the API's own sentence (`messageOf`). |
+
+Dismissing the sheet any other way — Cancel, a drag, the scrim, back,
+Escape — answers no. It is an `alertdialog` named by the title and described
+by the body and consequences, and it gives focus back to whatever asked. The
+first spelling (`message`, `confirm`, `danger`) is still read, and new code
+does not use it. The web has the same call, `ConfirmDialog` in
+`packages/ui`, so a screen reads the same on both.
+
 The door keeps working when the venue's wifi does not. The list it decides
 from and the scans it makes meanwhile live in IndexedDB, and the deciding
 itself is `@myfiesta/door`, shared with the console — two apps admitting people

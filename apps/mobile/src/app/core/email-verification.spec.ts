@@ -5,7 +5,7 @@ import { Api, ApiError } from './api';
 import { EmailVerification } from './email-verification';
 import { isEmailUnverified } from './errors';
 import { SessionStore } from './session';
-import { Dialogs, ToastStore } from '../ui';
+import { Dialogs, ToastStore, type ConfirmRequest } from '../ui';
 
 /**
  * "Confirm your email address", on the phone.
@@ -17,7 +17,7 @@ import { Dialogs, ToastStore } from '../ui';
  * refusal — wherever it happens — opens one sheet that can send the link again.
  */
 describe('EmailVerification', () => {
-  let asked: { title: string; message?: string; confirm: string }[];
+  let asked: ConfirmRequest[];
   let say: boolean;
   let me: ReturnType<typeof vi.fn>;
   let resend: ReturnType<typeof vi.fn>;
@@ -45,8 +45,11 @@ describe('EmailVerification', () => {
         {
           provide: Dialogs,
           useValue: {
-            confirm: async (options: { title: string; message?: string; confirm: string }) => {
+            // As the sheet does it: a yes runs the action before answering.
+            confirm: async (options: ConfirmRequest) => {
               asked.push(options);
+
+              if (say) await options.run?.(undefined);
 
               return say;
             },
@@ -89,8 +92,8 @@ describe('EmailVerification', () => {
 
     expect(verification.verified()).toBe(false);
     expect(asked).toHaveLength(1);
-    expect(asked[0].message).toContain('We have sent a link to ada@example.test');
-    expect(asked[0].confirm).toBe('Send the link again');
+    expect(asked[0].body).toContain('We have sent a link to ada@example.test');
+    expect(asked[0].confirmLabel).toBe('Send the link again');
 
     // Pressed: the link goes, and where it went is said.
     expect(resend).toHaveBeenCalledOnce();

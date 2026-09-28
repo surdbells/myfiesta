@@ -108,6 +108,7 @@ import {
       <h2 class="section">Dialogs</h2>
       <div class="row">
         <button mfButton variant="secondary" (click)="ask()">Confirm</button>
+        <button mfButton variant="secondary" (click)="askWhy()">Confirm with a reason</button>
         <button mfButton variant="secondary" (click)="menu()">Menu</button>
         <button mfButton variant="secondary" (click)="prompt()">Prompt</button>
       </div>
@@ -341,14 +342,32 @@ export class Gallery {
   }
 
   async ask(): Promise<void> {
-    const sure = await this.dialogs.confirm({
+    // With a `run`, so the sheet shows its busy state for as long as a real
+    // request would take.
+    const removed = await this.dialogs.confirm({
       title: 'Remove Tunde from the team?',
-      message: 'They lose access to this organization straight away. You can invite them again later.',
-      confirm: 'Remove',
-      danger: true,
+      body: 'They lose access to this organization straight away.',
+      consequences: ['Anything they did stays on record.', 'You can invite them again later.'],
+      confirmLabel: 'Remove Tunde',
+      busyLabel: 'Removing…',
+      tone: 'danger',
+      run: () => new Promise((resolve) => setTimeout(resolve, 1200)),
     });
 
-    if (sure) this.toasts.show('Removed.', 'success');
+    if (removed) this.toasts.show('Removed.', 'success');
+  }
+
+  async askWhy(): Promise<void> {
+    const { confirmed, reason } = await this.dialogs.decide({
+      title: 'Refund this order?',
+      body: 'Ada gets $40.00 back on the card she paid with, and her two tickets stop working.',
+      confirmLabel: 'Refund $40.00',
+      tone: 'danger',
+      requireText: 'REFUND',
+      reason: { label: 'Why', required: true, minLength: 10, maxLength: 200, placeholder: 'She could not make it' },
+    });
+
+    if (confirmed) this.toasts.show(`Refunded: ${reason}`, 'success');
   }
 
   async menu(): Promise<void> {

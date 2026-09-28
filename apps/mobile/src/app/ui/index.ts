@@ -25,7 +25,21 @@ export { MfPoster } from './poster';
 export { MfTabs, type MfTab } from './tabs';
 export { MfIcon, type MfIconSize, type LucideIconData } from './icon';
 export { MfIconButton } from './icon-button';
-export { Dialogs, MfDialogHost, type ConfirmOptions, type MenuAction, type MenuOptions, type PromptOptions } from './dialogs';
+// Every action asks first, through this: `inject(Dialogs).confirm({...})`.
+// The API and an example are in dialogs.ts and in the README.
+export {
+  Dialogs,
+  MfDialogHost,
+  type ConfirmOptions,
+  type ConfirmReason,
+  type ConfirmRequest,
+  type ConfirmResult,
+  type ConfirmTone,
+  type LegacyConfirmOptions,
+  type MenuAction,
+  type MenuOptions,
+  type PromptOptions,
+} from './dialogs';
 export { MfMoney } from './money-input';
 export { MfStepper } from './stepper';
 export { MfCheck } from './check';

@@ -101,16 +101,20 @@ export class EmailVerification {
   private async prompt(message: string): Promise<void> {
     this.verified.set(false);
 
-    const again = await this.dialogs.confirm({
+    // Sent from inside the sheet, which stays up and busy until the server has
+    // answered — a tap that closed it at once and said nothing for a second
+    // or two read as a tap that did not take.
+    const sent = await this.dialogs.confirm({
       title: 'Confirm your email address',
-      message,
-      confirm: 'Send the link again',
-      cancel: 'Not now',
+      body: message,
+      confirmLabel: 'Send the link again',
+      busyLabel: 'Sending…',
+      cancelLabel: 'Not now',
+      tone: 'default',
+      run: () => this.resend(),
     });
 
-    if (!again) return;
-
-    await this.resend();
+    if (!sent) return;
 
     const answer = this.answer();
     if (answer) this.toasts.show(answer, 'neutral', 6000);

@@ -73,9 +73,10 @@ export type SheetDismissal = 'backdrop' | 'drag' | 'escape' | 'back' | 'close';
         [style.transform]="dragging() ? 'translateY(' + dragged() + 'px)' : null"
         [style.transition]="dragging() ? 'none' : null"
         [style.--mf-sheet-lift.px]="chrome.keyboardHeight()"
-        role="dialog"
+        [attr.role]="role()"
         aria-modal="true"
         [attr.aria-label]="heading()"
+        [attr.aria-describedby]="describedBy()"
         tabindex="-1"
         (pointerdown)="grab($event)"
         (pointermove)="drag($event)"
@@ -246,6 +247,23 @@ export class MfSheet {
   /** A close button in the header, for a sheet with no footer to leave by. */
   readonly closable = input(false, { transform: booleanAttribute });
 
+  /**
+   * `alertdialog` for a question that interrupts — "Refund this order?" —
+   * which a screen reader announces with more urgency than a form.
+   */
+  readonly role = input<'dialog' | 'alertdialog'>('dialog');
+
+  /** What to read out after the heading, by id: what the question is about. */
+  readonly describedBy = input<string | null>(null);
+
+  /**
+   * Whether drag, scrim, back, Escape and the close button may close it.
+   *
+   * Off only while something the sheet started is still running: the answer,
+   * good or bad, has to land somewhere the person is still looking.
+   */
+  readonly dismissible = input(true, { transform: booleanAttribute });
+
   readonly closed = output<SheetDismissal>();
 
   protected readonly closeIcon = X;
@@ -386,12 +404,24 @@ export class MfSheet {
   dismiss(reason: SheetDismissal): void {
     if (!this.mounted()) return;
 
+    if (!this.dismissible()) {
+      // Back has already taken this sheet off the stack on its way here. It
+      // is still open, so it goes back on — or the next press of back would
+      // leave the screen with the sheet still up.
+      if (reason === 'back') this.stack.push(this.closer);
+
+      return;
+    }
+
     this.closed.emit(reason);
   }
 
   // --- dragging ------------------------------------------------------------
 
   protected grab(event: PointerEvent): void {
+    // A sheet that will not close does not follow the finger as if it might.
+    if (!this.dismissible()) return;
+
     const target = event.target as HTMLElement;
 
     // Dragging starts on the sheet's chrome, or at the top of its content.

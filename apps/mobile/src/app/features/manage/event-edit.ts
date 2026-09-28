@@ -3,9 +3,11 @@ import type { OrganizerEventDetail } from '@myfiesta/api-types';
 import { Organizer } from '../../core/organizer';
 import { Navigation } from '../../core/navigation';
 import { fieldErrors, messageOf } from '../../core/errors';
+import { longEventTime } from '../../core/event-time';
 import { Dialogs, MfButton, MfCard, MfEmpty, MfScreen, MfSkeleton, ToastStore } from '../../ui';
 import { EventContext } from './event-context';
 import { MfEventForm, bodyOf, draftOf, type EventDraft } from './event-form';
+import { MfReviewLock, lockedForReview } from './event-review';
 
 /**
  * Changing an event's details: name, time, place, words.
@@ -16,7 +18,7 @@ import { MfEventForm, bodyOf, draftOf, type EventDraft } from './event-form';
  */
 @Component({
   selector: 'mf-event-edit',
-  imports: [MfScreen, MfEventForm, MfButton, MfCard, MfEmpty, MfSkeleton],
+  imports: [MfScreen, MfEventForm, MfButton, MfCard, MfEmpty, MfSkeleton, MfReviewLock],
   template: `
     <mf-screen title="Details" [subtitle]="event()?.title ?? null" back task (backed)="leave()">
       @if (error(); as message) {
@@ -24,21 +26,34 @@ import { MfEventForm, bodyOf, draftOf, type EventDraft } from './event-form';
           <button mfButton variant="secondary" (click)="load()">Try again</button>
         </mf-empty>
       } @else if (draft(); as d) {
+        @if (locked()) {
+          <mf-review-lock [eventId]="id()" />
+        }
         <p class="fixed">Sold in {{ event()!.currency }} at <code>/{{ event()!.slug }}</code>. Neither can change — orders are in that currency, and the link is already out there.</p>
         @if (formError(); as message) {
           <p class="form-error" role="alert">{{ message }}</p>
         }
-        <mf-event-form [draft]="d" (draftChange)="draft.set($event)" [errors]="errors()" [categories]="categories()" [original]="event()!.description" />
+        <!-- Shown as it stands while myFiesta reviews it; every field inside is switched off. -->
+        <fieldset class="frozen" [disabled]="locked()">
+          <mf-event-form [draft]="d" (draftChange)="draft.set($event)" [errors]="errors()" [categories]="categories()" [original]="event()!.description" />
+        </fieldset>
       } @else {
         <mf-card><mf-skeleton height="12rem" /></mf-card>
       }
 
       <div screenFooter class="footer">
-        <button mfButton block [loading]="saving()" [disabled]="!changed() || !valid()" (click)="save()">Save changes</button>
+        <button mfButton block [loading]="saving()" [disabled]="locked() || !changed() || !valid()" (click)="save()">Save changes</button>
       </div>
     </mf-screen>
   `,
   styles: `
+    .frozen {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
     .fixed {
       margin-bottom: var(--space-4);
       font-size: var(--font-size-sm);
@@ -82,6 +97,9 @@ export class EventEdit implements OnInit {
 
   private readonly initial = signal<EventDraft | null>(null);
 
+  /** Waiting for myFiesta's review: what staff are looking at is what goes on sale, so it stays as it is. */
+  protected readonly locked = computed(() => lockedForReview(this.event()));
+
   protected readonly changed = computed(() => {
     const now = this.draft();
     const was = this.initial();
@@ -114,13 +132,40 @@ export class EventEdit implements OnInit {
   protected async save(): Promise<void> {
     const d = this.draft();
     const was = this.initial();
-    if (!d || !was || !this.valid()) return;
+    if (!d || !was || !this.valid() || this.locked()) return;
 
     const body: Record<string, unknown> = { ...bodyOf(d), resale_enabled: d.resaleEnabled };
 
     // Untouched words are not sent, so formatting written on the web survives
     // a change of start time made on the phone.
     if (d.description !== was.description) body['description'] = d.description.trim() || null;
+
+    // On sale, an edit is what buyers read the moment it is saved, with no
+    // review in between, and a moved date is not emailed to anybody who
+    // already holds a ticket.
+    const event = this.event();
+    const onSale = event?.status === 'published';
+    const moved = d.startsAt !== was.startsAt || d.timezone !== was.timezone;
+    const starts = body['starts_at'] as string | null;
+    const consequences: string[] = [];
+
+    if (moved && starts) consequences.push(`It now starts ${longEventTime(starts, d.timezone)}.`);
+    if (moved && (event?.tickets_issued ?? 0) > 0) {
+      consequences.push('People who already hold tickets are not emailed about the new time. Tell them from Messages.');
+    }
+    if (onSale) consequences.push('Taking it off sale and putting it back later sends it through review, since it is no longer what was approved.');
+
+    const sure = await this.dialogs.confirm({
+      title: `Save the changes to ${d.title.trim()}?`,
+      body: onSale
+        ? 'It is on sale: the event page shows the changes straight away, to everybody who opens it.'
+        : 'The changes are saved to the draft. Nobody sees them until it is approved and on sale.',
+      consequences,
+      confirmLabel: 'Save changes',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.formError.set(null);
@@ -145,9 +190,10 @@ export class EventEdit implements OnInit {
     if (this.changed()) {
       const discard = await this.dialogs.confirm({
         title: 'Leave without saving?',
-        message: 'What you changed here will be lost.',
-        confirm: 'Leave',
-        danger: true,
+        body: 'What you changed here will be lost.',
+        confirmLabel: 'Leave without saving',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
       });
 
       if (!discard) return;

@@ -5,15 +5,16 @@ import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
 import { Navigation } from '../../core/navigation';
 import { fieldErrors, messageOf } from '../../core/errors';
+import { longEventTime } from '../../core/event-time';
 import { Dialogs, MfButton, MfScreen, ToastStore } from '../../ui';
 import { MfEventForm, blankEvent, bodyOf, type EventDraft } from './event-form';
 
 /**
  * A new event, from the phone.
  *
- * It starts as a draft: nothing is public until it is put on sale from the
- * event's own screen, which is where this lands — with tickets the obvious
- * next thing to add.
+ * It starts as a draft: nothing is public until it is sent for review from
+ * the event's own screen and myFiesta approves it. That screen is where this
+ * lands — with tickets the obvious next thing to add.
  */
 @Component({
   selector: 'mf-event-create',
@@ -76,6 +77,22 @@ export class EventCreate implements OnInit {
 
     if (!organization || !this.valid()) return;
 
+    const currency = COUNTRIES.find((c) => c.code === d.country)?.currency ?? 'CAD';
+    const starts = bodyOf(d)['starts_at'] as string | null;
+
+    // The two things that cannot be taken back once it exists — the currency
+    // the country chose, and the instant the clock and zone make — said at
+    // the moment of making it.
+    const sure = await this.dialogs.confirm({
+      title: `Make ${d.title.trim()}?`,
+      body: `It is saved as a draft for ${organization.name}${starts ? `, starting ${longEventTime(starts, d.timezone)}` : ''}. Nobody can see it or buy a ticket until you send it for review and it is approved.`,
+      consequences: [`Its tickets are sold in ${currency}, and that cannot be changed later.`],
+      confirmLabel: 'Make the draft',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
     this.formError.set(null);
     this.errors.set({});
@@ -87,7 +104,7 @@ export class EventCreate implements OnInit {
         kind: d.kind,
         description: d.description.trim() || null,
         // Derived, never chosen, and permanent once the event exists.
-        currency: COUNTRIES.find((c) => c.code === d.country)?.currency ?? 'CAD',
+        currency,
       });
 
       const id = made.data?.id ?? made.id;
@@ -103,7 +120,13 @@ export class EventCreate implements OnInit {
 
   protected async leave(): Promise<void> {
     if (this.touched()) {
-      const discard = await this.dialogs.confirm({ title: 'Throw this away?', message: 'Nothing has been saved yet.', confirm: 'Throw away', danger: true });
+      const discard = await this.dialogs.confirm({
+        title: 'Throw this event away?',
+        body: 'Nothing has been saved yet, so what you typed here goes.',
+        confirmLabel: 'Throw it away',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
       if (!discard) return;
     }
 

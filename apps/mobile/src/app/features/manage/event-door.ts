@@ -355,6 +355,16 @@ export class EventDoor implements OnInit {
     const label = this.label().trim();
     if (!label) return;
 
+    const sure = await this.dialogs.confirm({
+      title: `Make a door pass for ${label}?`,
+      body: 'Whoever opens its link can scan tickets for this event on one phone. Nothing else: no guest list, no orders.',
+      consequences: ['The link is shown once, here. Send it straight away, or make another.', 'You can take it back at any time.'],
+      confirmLabel: 'Make the pass',
+      tone: 'default',
+    });
+
+    if (!sure || this.busy()) return;
+
     this.busy.set(true);
     this.makeError.set(null);
 
@@ -402,21 +412,25 @@ export class EventDoor implements OnInit {
 
     if (chosen !== 'revoke') return;
 
-    const sure = await this.dialogs.confirm({
+    let said = '';
+
+    // Taken back from inside the sheet, which stays up until the server has
+    // answered: a refusal is said where "Take it back" can be pressed again.
+    const done = await this.dialogs.confirm({
       title: `Take back ${pass.label}?`,
-      message: 'Whoever has it stops scanning straight away. Tickets they already let in stay in.',
-      confirm: 'Take it back',
-      danger: true,
+      body: 'Whoever has it stops scanning straight away. Tickets they already let in stay in.',
+      confirmLabel: 'Take it back',
+      busyLabel: 'Taking back…',
+      tone: 'danger',
+      run: async () => {
+        said = (await this.organizer.revokeDoorPass(this.id(), pass.id)).message;
+      },
+      failure: (error) => messageOf(error, 'That pass could not be taken back.'),
     });
 
-    if (!sure) return;
+    if (!done) return;
 
-    try {
-      const { message } = await this.organizer.revokeDoorPass(this.id(), pass.id);
-      this.toasts.show(message, 'success');
-      await this.load();
-    } catch (error) {
-      this.toasts.show(messageOf(error, 'That pass could not be taken back.'), 'danger');
-    }
+    this.toasts.show(said, 'success');
+    await this.load();
   }
 }

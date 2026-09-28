@@ -3,6 +3,7 @@ import { Copy, Download, MoreHorizontal, Pencil, Plus, Power, PowerOff, Share2 }
 import { Share } from '@capacitor/share';
 import type { CodeBatch, CodeSales, OrganizerEventDetail, PageMeta, PromoCode, TicketType } from '@myfiesta/api-types';
 import { isoToZonedWallClock, zonedWallClockToIso } from '@myfiesta/shared/zoned-time';
+import { whenCodeWorks } from '@myfiesta/shared/code-window';
 import { Organizer } from '../../core/organizer';
 import { Discover } from '../../core/discovery';
 import { formatMoney } from '../../core/money';
@@ -30,6 +31,7 @@ import {
   type MfSegment,
 } from '../../ui';
 import { EventContext } from './event-context';
+import { MfReviewLock, lockedForReview } from './event-review';
 
 type Kind = 'discount' | 'promoter' | 'both' | 'access';
 
@@ -109,6 +111,7 @@ const BLANK_BATCH: BatchDraft = {
 @Component({
   selector: 'mf-event-codes',
   imports: [
+    MfReviewLock,
     MfScreen,
     MfSegmented,
     MfIconButton,
@@ -125,8 +128,12 @@ const BLANK_BATCH: BatchDraft = {
   ],
   template: `
     <mf-screen title="Codes" [subtitle]="event()?.title ?? null" back [backTo]="'/manage/events/' + id()" refreshable [busy]="loading()" (refresh)="load()">
-      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" [label]="view() === 'codes' ? 'New code' : 'New batch'" (click)="view() === 'codes' ? startCode() : startBatch()"></button>
+      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" [label]="view() === 'codes' ? 'New code' : 'New batch'" [disabled]="locked()" (click)="view() === 'codes' ? startCode() : startBatch()"></button>
       <mf-segmented screenBar ariaLabel="Which codes" [segments]="views" [(value)]="view" />
+
+      @if (locked()) {
+        <mf-review-lock [eventId]="id()" />
+      }
 
       @if (error(); as message) {
         <mf-empty title="Could not load the codes" [hint]="message">
@@ -136,13 +143,13 @@ const BLANK_BATCH: BatchDraft = {
         @if (codes(); as all) {
           @if (all.length === 0) {
             <mf-empty title="No codes yet" hint="Money off, a promoter's link, or early access to a tier nobody else can see yet.">
-              <button mfButton (click)="startCode()">Make a code</button>
+              <button mfButton [disabled]="locked()" (click)="startCode()">Make a code</button>
             </mf-empty>
           } @else {
             <ul class="items">
               @for (code of all; track code.id) {
                 <li>
-                  <mf-card tappable (click)="editCode(code)">
+                  <mf-card [tappable]="!locked()" (click)="editCode(code)">
                     <div class="top">
                       <div class="name">
                         <h3 class="code">{{ code.code }}</h3>
@@ -177,7 +184,7 @@ const BLANK_BATCH: BatchDraft = {
         @if (batches(); as all) {
           @if (all.length === 0) {
             <mf-empty title="No batches" hint="A hundred single-use codes at once — for a sponsor's guests, a radio giveaway, the staff.">
-              <button mfButton (click)="startBatch()">Make a batch</button>
+              <button mfButton [disabled]="locked()" (click)="startBatch()">Make a batch</button>
             </mf-empty>
           } @else {
             <ul class="items">
@@ -475,6 +482,13 @@ export class EventCodes implements OnInit {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /**
+   * Waiting for myFiesta's review. A code changes what a buyer pays or can
+   * buy, so none is made, changed or turned off until it is decided; copying,
+   * sharing and exporting the ones already made stay open.
+   */
+  protected readonly locked = computed(() => lockedForReview(this.event()));
+
   protected readonly codeOpen = signal(false);
   protected readonly batchOpen = signal(false);
   protected readonly editing = signal<PromoCode | null>(null);
@@ -693,6 +707,8 @@ export class EventCodes implements OnInit {
   // ---- codes ------------------------------------------------------------
 
   protected startCode(): void {
+    if (this.locked()) return;
+
     this.editing.set(null);
     this.code.set({ ...BLANK_CODE });
     this.formError.set(null);
@@ -701,6 +717,8 @@ export class EventCodes implements OnInit {
   }
 
   protected editCode(code: PromoCode): void {
+    if (this.locked()) return;
+
     const zone = this.event()?.timezone ?? 'UTC';
     const local = (iso: string | null) => (iso ? (isoToZonedWallClock(iso, zone) ?? '') : '');
 
@@ -760,6 +778,42 @@ export class EventCodes implements OnInit {
       body['unlock_ticket_type_ids'] = d.unlocks;
     }
 
+    // What the code does, said back as a buyer would meet it: when it works,
+    // from its own From and Until, and that it works for whoever has it — it
+    // travels further than the people it was made for.
+    const name = editing?.code ?? d.code.trim().toUpperCase();
+    const value = discounts ? this.discountValue(d.discountType, d.percent, d.amount) : null;
+    const effect: string[] = [];
+
+    if (value !== null) {
+      effect.push(
+        d.discountType === 'percentage' ? `Takes ${value / 100}% off` : `Takes ${formatMoney({ amount: value, currency: this.currency() })} off`,
+      );
+    }
+    if (attributes) effect.push(`${effect.length ? 'credits' : 'Credits'} ${d.promoter.trim() || 'a promoter'} with the sales`);
+
+    const opens = this.types().filter((t) => d.unlocks.includes(t.id)).map((t) => t.name);
+    if (opens.length) effect.push(`${effect.length ? 'opens' : 'Opens'} ${opens.join(', ')}`);
+
+    const sure = await this.dialogs.confirm({
+      title: editing ? `Save the changes to ${name}?` : `Make the code ${name}?`,
+      body: `${effect.length ? effect.join(', and ') : 'Tracks the orders that use it'}.`,
+      consequences: [
+        number(d.maxUses) !== null ? `It works ${number(d.maxUses)} times in all.` : 'It works any number of times.',
+        whenCodeWorks({
+          startsAt: instant(d.startsAt),
+          endsAt: instant(d.endsAt),
+          format: (iso) => shortEventTime(iso, zone),
+          editing: editing !== null,
+        }),
+        ...(editing ? ['Orders already placed with it keep what they paid.'] : []),
+      ],
+      confirmLabel: editing ? 'Save changes' : 'Make the code',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
     this.formError.set(null);
     this.errors.set({});
@@ -785,16 +839,22 @@ export class EventCodes implements OnInit {
   protected async codeMenu(code: PromoCode): Promise<void> {
     const link = this.linkFor(code);
 
+    const locked = this.locked();
+
     const chosen = await this.dialogs.menu({
       title: code.code,
       subtitle: this.describeDiscount(code),
       actions: [
-        { key: 'edit', label: 'Edit', icon: Pencil },
+        ...(locked ? [] : [{ key: 'edit', label: 'Edit', icon: Pencil }]),
         { key: 'copy', label: 'Copy the code', icon: Copy },
         ...(link ? [{ key: 'share', label: code.unlocks.length ? 'Share the presale link' : 'Share their link', icon: Share2 }] : []),
-        code.is_active
-          ? { key: 'off', label: 'Turn it off', icon: PowerOff, danger: true, hint: 'Orders already placed keep their discount' }
-          : { key: 'on', label: 'Turn it back on', icon: Power },
+        ...(locked
+          ? []
+          : [
+              code.is_active
+                ? { key: 'off', label: 'Turn it off', icon: PowerOff, danger: true, hint: 'Orders already placed keep their discount' }
+                : { key: 'on', label: 'Turn it back on', icon: Power },
+            ]),
       ],
     });
 
@@ -811,14 +871,35 @@ export class EventCodes implements OnInit {
           await Share.share({ title: code.code, url: link! });
           return;
         case 'off': {
+          const sure = await this.dialogs.confirm({
+            title: `Turn off ${code.code}?`,
+            body: 'It stops working at checkout straight away, for everybody who has it.',
+            consequences: ['Orders already placed with it keep what they paid. You can turn it back on.'],
+            confirmLabel: 'Turn it off',
+            tone: 'danger',
+          });
+
+          if (!sure) return;
+
           const { message } = await this.organizer.deactivateCode(this.id(), code.id);
           this.toasts.show(message, 'success');
           break;
         }
-        case 'on':
+        case 'on': {
+          const sure = await this.dialogs.confirm({
+            title: `Turn ${code.code} back on?`,
+            body: `Anybody who has it can use it again straight away: ${this.describeDiscount(code).toLowerCase()}.`,
+            consequences: ['It keeps the uses and sales it had.'],
+            confirmLabel: 'Turn it on',
+            tone: 'default',
+          });
+
+          if (!sure) return;
+
           await this.organizer.updateCode(this.id(), code.id, { is_active: true });
           this.toasts.show(`${code.code} works again.`, 'success');
           break;
+        }
         default:
           return;
       }
@@ -833,6 +914,8 @@ export class EventCodes implements OnInit {
   // ---- batches ----------------------------------------------------------
 
   protected startBatch(): void {
+    if (this.locked()) return;
+
     this.batch.set({ ...BLANK_BATCH });
     this.formError.set(null);
     this.errors.set({});
@@ -846,6 +929,29 @@ export class EventCodes implements OnInit {
     const zone = this.event()?.timezone ?? 'UTC';
     const instant = (local: string) => (local ? zonedWallClockToIso(local, zone) : null);
     const discount = d.purpose === 'discount';
+    const quantity = Number(d.quantity);
+    const codes = `${quantity.toLocaleString()} ${quantity === 1 ? 'code' : 'codes'}`;
+    const value = discount ? this.discountValue(d.discountType, d.percent, d.amount) ?? 0 : 0;
+    const each = discount
+      ? d.discountType === 'percentage'
+        ? `Each one takes ${value / 100}% off an order.`
+        : `Each one takes ${formatMoney({ amount: value, currency: this.currency() })} off an order.`
+      : `Each one opens ${this.types().filter((t) => d.unlocks.includes(t.id)).map((t) => t.name).join(', ')} for whoever types it.`;
+
+    const sure = await this.dialogs.confirm({
+      title: `Make ${codes} for ${d.name.trim()}?`,
+      body: `${each} Each works once.`,
+      consequences: [
+        // From the batch's own From and Until: a batch for a Friday giveaway
+        // described as working now is handed out now, and refused until Friday.
+        whenCodeWorks({ startsAt: instant(d.startsAt), endsAt: instant(d.endsAt), format: (iso) => shortEventTime(iso, zone), plural: true }),
+        'You can turn off the unused ones later.',
+      ],
+      confirmLabel: `Make ${codes}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
 
     this.saving.set(true);
     this.formError.set(null);
@@ -855,7 +961,7 @@ export class EventCodes implements OnInit {
       const made = await this.organizer.createCodeBatch(this.id(), {
         name: d.name.trim(),
         prefix: d.prefix.trim() || null,
-        quantity: Number(d.quantity),
+        quantity,
         discount_type: discount ? d.discountType : null,
         discount_value: discount ? this.discountValue(d.discountType, d.percent, d.amount) : null,
         unlock_ticket_type_ids: discount ? [] : d.unlocks,
@@ -882,7 +988,14 @@ export class EventCodes implements OnInit {
       subtitle: `${batch.used} used · ${left} left`,
       actions: [
         { key: 'export', label: 'Share the codes', icon: Download, hint: 'As a spreadsheet' },
-        { key: 'stop', label: 'Turn the unused ones off', icon: PowerOff, danger: true, disabled: left === 0 },
+        {
+          key: 'stop',
+          label: 'Turn the unused ones off',
+          icon: PowerOff,
+          danger: true,
+          disabled: left === 0 || this.locked(),
+          hint: this.locked() ? 'Not while the event is being reviewed' : undefined,
+        },
       ],
     });
 
@@ -894,18 +1007,26 @@ export class EventCodes implements OnInit {
       }
 
       if (chosen === 'stop') {
-        const kept = batch.used === 0 ? '' : ` The ${batch.used} already used keep their orders.`;
-        const sure = await this.dialogs.confirm({
-          title: `Turn off ${left} ${left === 1 ? 'code' : 'codes'}?`,
-          message: `Nobody will be able to use them.${kept} This cannot be undone.`,
-          confirm: 'Turn off',
-          danger: true,
+        const codes = `${left} ${left === 1 ? 'code' : 'codes'}`;
+        let said = '';
+
+        // Turned off from inside the sheet: a refusal is said there, where
+        // "Turn off" can be pressed again, rather than in a passing toast.
+        const done = await this.dialogs.confirm({
+          title: `Turn off ${codes}?`,
+          body: 'Nobody will be able to use them. This cannot be undone.',
+          consequences: batch.used === 0 ? undefined : [`The ${batch.used} already used keep their orders.`],
+          confirmLabel: `Turn off ${codes}`,
+          busyLabel: 'Turning off…',
+          tone: 'danger',
+          run: async () => {
+            said = (await this.organizer.deactivateCodeBatch(this.id(), batch.id)).message;
+          },
         });
 
-        if (!sure) return;
+        if (!done) return;
 
-        const { message } = await this.organizer.deactivateCodeBatch(this.id(), batch.id);
-        this.toasts.show(message, 'success');
+        this.toasts.show(said, 'success');
         await this.load();
       }
     } catch (error) {

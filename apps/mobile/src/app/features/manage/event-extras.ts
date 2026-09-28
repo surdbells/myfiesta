@@ -21,6 +21,7 @@ import {
   type MfChoice,
 } from '../../ui';
 import { EventContext } from './event-context';
+import { MfReviewLock, lockedForReview } from './event-review';
 
 interface Draft {
   name: string;
@@ -42,28 +43,34 @@ const BLANK: Draft = { name: '', description: '', price: null, quantity: '', max
  */
 @Component({
   selector: 'mf-event-extras',
-  imports: [MfScreen, MfIconButton, MfCard, MfBadge, MfButton, MfEmpty, MfSkeleton, MfSheet, MfField, MfMoney, MfChoices],
+  imports: [MfScreen, MfIconButton, MfCard, MfBadge, MfButton, MfEmpty, MfSkeleton, MfSheet, MfField, MfMoney, MfChoices, MfReviewLock],
   template: `
     <mf-screen title="Extras" [subtitle]="event()?.title ?? null" back [backTo]="'/manage/events/' + id()" refreshable [busy]="loading()" (refresh)="load()">
-      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" label="Add an extra" (click)="startNew()"></button>
+      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" label="Add an extra" [disabled]="locked()" (click)="startNew()"></button>
+
+      @if (locked()) {
+        <mf-review-lock [eventId]="id()" />
+      }
 
       @if (items(); as all) {
         @if (all.length === 0) {
           <mf-empty title="No extras" hint="Tables, bottles, a shirt: sold with a ticket, and they admit nobody.">
-            <button mfButton (click)="startNew()">Add an extra</button>
+            <button mfButton [disabled]="locked()" (click)="startNew()">Add an extra</button>
           </mf-empty>
         } @else {
           <ul class="items">
             @for (item of all; track item.id; let first = $first; let last = $last) {
               <li>
-                <mf-card tappable (click)="edit(item)">
+                <mf-card [tappable]="!locked()" (click)="edit(item)">
                   <div class="top">
                     <div class="name">
                       <h3>{{ item.name }}</h3>
                       <p class="price">{{ cash(item.price) }}</p>
                     </div>
                     <mf-badge [tone]="item.status === 'on_sale' ? 'success' : 'neutral'">{{ item.status === 'on_sale' ? 'On sale' : 'Closed' }}</mf-badge>
-                    <button mfIconButton size="sm" [icon]="moreIcon" [label]="'More for ' + item.name" (click)="$event.stopPropagation(); menu(item, first, last)"></button>
+                    @if (!locked()) {
+                      <button mfIconButton size="sm" [icon]="moreIcon" [label]="'More for ' + item.name" (click)="$event.stopPropagation(); menu(item, first, last)"></button>
+                    }
                   </div>
                   <p class="sold"><strong>{{ item.sold }}</strong>@if (item.quantity_available !== null) { / {{ item.quantity_available }} } sold</p>
                   @if (item.description) {
@@ -182,6 +189,9 @@ export class EventExtras implements OnInit {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /** Waiting for myFiesta's review: the extras are shown, and nothing about them can change. */
+  protected readonly locked = computed(() => lockedForReview(this.event()));
+
   protected readonly formOpen = signal(false);
   protected readonly editing = signal<AddOn | null>(null);
   protected readonly draft = signal<Draft>({ ...BLANK });
@@ -229,6 +239,8 @@ export class EventExtras implements OnInit {
   }
 
   protected startNew(): void {
+    if (this.locked()) return;
+
     this.editing.set(null);
     this.draft.set({ ...BLANK });
     this.formError.set(null);
@@ -237,6 +249,8 @@ export class EventExtras implements OnInit {
   }
 
   protected edit(item: AddOn): void {
+    if (this.locked()) return;
+
     this.editing.set(item);
     this.draft.set({
       name: item.name,
@@ -265,13 +279,31 @@ export class EventExtras implements OnInit {
       status: d.status,
     };
 
+    const editing = this.editing();
+    const cost = formatMoney({ amount: body.price_amount, currency: this.event()?.currency ?? editing?.price.currency ?? 'CAD' });
+    const onSale = this.event()?.status === 'published';
+
+    // Said back before it is offered: an extra is a line on somebody's bill,
+    // and on a night that is on sale the next checkout offers it at this price.
+    const sure = await this.dialogs.confirm({
+      title: editing ? `Save the changes to ${body.name}?` : `Add ${body.name} at ${cost}?`,
+      body:
+        d.status === 'on_sale'
+          ? `${onSale ? 'The checkout offers it straight away' : 'The checkout offers it once the event is on sale'}, at ${cost} each.`
+          : 'It is kept here, and the checkout does not offer it.',
+      consequences:
+        editing && editing.sold > 0 && editing.price.amount !== body.price_amount ? [`The ${editing.sold} already bought keep what was paid for them.`] : [],
+      confirmLabel: editing ? 'Save changes' : 'Add the extra',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
     this.formError.set(null);
     this.errors.set({});
 
     try {
-      const editing = this.editing();
-
       if (editing) await this.organizer.updateAddOn(this.id(), editing.id, body);
       else await this.organizer.createAddOn(this.id(), body);
 
@@ -287,6 +319,8 @@ export class EventExtras implements OnInit {
   }
 
   protected async menu(item: AddOn, first: boolean, last: boolean): Promise<void> {
+    if (this.locked()) return;
+
     const chosen = await this.dialogs.menu({
       title: item.name,
       subtitle: `${formatMoney(item.price)} · ${item.sold} sold`,
@@ -316,15 +350,47 @@ export class EventExtras implements OnInit {
           return;
         }
         case 'open':
-        case 'close':
+        case 'close': {
+          const sure = await this.dialogs.confirm(
+            chosen === 'open'
+              ? {
+                  title: `Offer ${item.name} again?`,
+                  body: `The checkout offers it at ${formatMoney(item.price)} again, straight away.`,
+                  confirmLabel: 'Put it back on sale',
+                  tone: 'default',
+                }
+              : {
+                  title: `Stop selling ${item.name}?`,
+                  body: 'The checkout stops offering it straight away.',
+                  consequences: item.sold > 0 ? [`The ${item.sold} already bought stay on their orders.`] : [],
+                  confirmLabel: 'Stop selling it',
+                  tone: 'danger',
+                },
+          );
+
+          if (!sure) return;
+
           await this.organizer.updateAddOn(this.id(), item.id, { status: chosen === 'open' ? 'on_sale' : 'closed' });
           this.toasts.show(chosen === 'open' ? 'Back on sale.' : 'No longer on sale.', 'success');
           break;
-        case 'delete':
-          if (!(await this.dialogs.confirm({ title: `Delete ${item.name}?`, confirm: 'Delete', danger: true }))) return;
-          await this.organizer.deleteAddOn(this.id(), item.id);
+        }
+        case 'delete': {
+          // Deleted from inside the sheet, so a refusal is said where
+          // "Delete" can be pressed again.
+          const deleted = await this.dialogs.confirm({
+            title: `Delete ${item.name}?`,
+            body: 'The checkout stops offering it, and it is gone from this list. Nobody has bought it, so nothing else changes.',
+            confirmLabel: 'Delete the extra',
+            busyLabel: 'Deleting…',
+            tone: 'danger',
+            run: () => this.organizer.deleteAddOn(this.id(), item.id),
+          });
+
+          if (!deleted) return;
+
           this.toasts.show('Deleted.', 'success');
           break;
+        }
         default:
           return;
       }
