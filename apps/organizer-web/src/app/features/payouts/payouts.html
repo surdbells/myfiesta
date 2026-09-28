@@ -132,7 +132,7 @@
   <!-- ------------------------------------------------------ asking to be paid -->
   @if (pendingRequest(); as waiting) {
     <!-- Said where the balance is, so nobody asks twice or wonders if it went through. -->
-    <div class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4" role="status">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised px-6 py-4 shadow-(--shadow-card)" role="status">
       <div class="grid gap-1">
         <p class="flex flex-wrap items-center gap-2 font-semibold">
           Payout of {{ cash(waiting.amount) }} requested
@@ -147,7 +147,7 @@
       }
     </div>
   } @else if (canAsk()) {
-    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="ask()">
+    <form class="mt-4 grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="ask()">
       <div class="grid gap-1">
         <h2 class="text-base font-semibold">Ask to be paid</h2>
         <p class="text-sm text-text-muted">Up to {{ cash(statement.balance) }}, sent to {{ destinationSummary() }}. We will email you when it goes out.</p>

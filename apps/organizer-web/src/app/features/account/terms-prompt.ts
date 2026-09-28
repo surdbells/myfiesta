@@ -46,7 +46,7 @@ const LATER_KEY = 'myfiesta.console.terms-later';
           <!-- A link inside the label follows the link rather than ticking the box. -->
           <label class="terms-prompt__box mt-3 flex cursor-pointer items-start gap-3 text-text">
             <input
-              class="mt-0.5 h-4 w-4 shrink-0"
+              class="check mt-0.5"
               type="checkbox"
               name="accept_terms"
               [checked]="ticked()"

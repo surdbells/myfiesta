@@ -140,7 +140,8 @@
 
 
   @if (series(); as s) {
-    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Repeats</h2>
+    <section class="card mt-8 p-6">
+    <h2 class="section mb-3 text-base font-semibold">Repeats</h2>
 
     @if (s.status === 'ended') {
       <p class="muted">This event no longer repeats.</p>
@@ -183,6 +184,7 @@
         </p>
       }
     }
+    </section>
   }
 
   @if (session.canEditEvents()) {
@@ -249,14 +251,16 @@
 
   <!-- Anybody who can edit the event can hand it to their web person. -->
   @if (session.canEditEvents() && event.status !== 'cancelled') {
-    <app-event-embed [slug]="event.slug" [published]="event.status === 'published'" />
+    <app-event-embed class="card mt-8 block p-6" [slug]="event.slug" [published]="event.status === 'published'" />
   }
 
   @if (event.status === 'published' && session.canCancel()) {
-    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Danger</h2>
+    <!-- Red at the edge, so it reads as a different kind of button from across the page. -->
+    <section class="card mt-8 border-l-[3px] border-l-danger p-6">
+    <h2 class="section mb-1 text-base font-semibold text-danger-text">Cancel the event</h2>
 
     @if (!cancelling()) {
-      <button uiButton variant="ghost" type="button" (click)="openCancel()">
+      <button uiButton variant="secondary" class="mt-2" type="button" (click)="openCancel()">
         Cancel this event
       </button>
       <p class="help mt-2 text-xs text-text-muted">
@@ -264,7 +268,7 @@
         cannot be undone.
       </p>
     } @else {
-      <div class="cancel-panel grid max-w-[560px] gap-4 rounded-lg border border-danger bg-surface-raised p-6">
+      <div class="cancel-panel mt-3 grid max-w-[560px] gap-4">
         @if (cancelPreview(); as preview) {
           <p class="cancel-cost rounded-md bg-surface-inset px-4 py-3 text-sm leading-[1.35]">
             <strong class="text-lg tabular-nums">{{ preview.ticket_holders }}</strong>
@@ -299,9 +303,9 @@
           </p>
         </div>
 
-        <label class="check inline-flex cursor-pointer items-center gap-2 text-sm font-normal">
+        <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-normal">
           <input
-            class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
+            class="check"
             type="checkbox"
             name="cancelRefund"
             [ngModel]="cancelRefund()"
@@ -337,9 +341,11 @@
         </div>
       </div>
     }
+    </section>
   }
 
-  <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Reminders</h2>
+  <section class="card mt-8 p-6">
+  <h2 class="section mb-3 text-base font-semibold">Reminders</h2>
 
   @if (liveReminders().length === 0) {
     <p class="muted">
@@ -375,8 +381,11 @@
     </p>
   }
 
+  </section>
+
   @if (history().length > 0) {
-    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Review history</h2>
+    <section class="card mt-8 p-6">
+    <h2 class="section mb-3 text-base font-semibold">Review history</h2>
 
     <ol class="review-history m-0 grid list-none gap-3 p-0">
       @for (step of history(); track $index) {
@@ -394,6 +403,7 @@
         </li>
       }
     </ol>
+    </section>
   }
 
   <!-- Ticket types live on the Tickets tab, which manages inventory and

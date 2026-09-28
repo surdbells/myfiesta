@@ -558,6 +558,40 @@ fieldset {
   outline-offset: 2px;
 }
 
+/* A radio button from the same tokens: a ring, and a dot when chosen. */
+.radio {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  vertical-align: middle;
+  background-color: var(--surface-raised);
+  border: 1.5px solid var(--field-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+.radio:checked {
+  border-color: var(--primary);
+}
+.radio:checked::after {
+  content: '';
+  position: absolute;
+  inset: 2.5px;
+  border-radius: var(--radius-full);
+  background-color: var(--primary);
+}
+.radio:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.radio:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /*
  * A table's rows at two densities, chosen in its column menu. Compact is for
  * somebody reconciling two hundred orders against a bank statement; the
@@ -830,6 +864,17 @@ th.numeric {
     to bottom,
     color-mix(in srgb, var(--surface-sunken) 30%, transparent) 0%,
     var(--surface-sunken) 100%
+  );
+}
+
+/* On a card (a .hero), the poster fades into the card's own surface rather
+   than the page's, and keeps more of its colour at the top. */
+.hero.backdrop::after {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--surface-raised) 92%, transparent) 0%,
+    color-mix(in srgb, var(--surface-raised) 70%, transparent) 55%,
+    color-mix(in srgb, var(--surface-raised) 45%, transparent) 100%
   );
 }
 

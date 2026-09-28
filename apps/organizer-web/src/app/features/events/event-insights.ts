@@ -90,7 +90,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
       <!-- Pace: this night against the last, lined up by days to go. -->
       @if (insights().pace.this.length > 1 || (insights().pace.previous?.length ?? 0) > 1) {
-        <div class="rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+        <div class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
           <header class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h3 class="text-base font-semibold">Pace</h3>
             <p class="flex flex-wrap items-center gap-x-4 text-xs text-text-muted">
@@ -119,7 +119,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
       <!-- Where they came from. -->
       @if (insights().sources.length > 0) {
-        <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <div class="overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-card)">
           <h3 class="px-6 pt-5 text-base font-semibold">Where buyers came from</h3>
           <div class="overflow-x-auto">
             <table class="mt-3 w-full text-left text-sm tabular-nums">
@@ -155,7 +155,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
 
       <!-- Side by side with the last night, on the same measures. -->
       @if (prev) {
-        <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <div class="overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-card)">
           <h3 class="px-6 pt-5 text-base font-semibold">Against {{ prev.title }}</h3>
           <p class="px-6 text-xs text-text-muted">{{ prev.starts_at | date: 'd MMM y' }} — your last night before this one.</p>
           <div class="overflow-x-auto">

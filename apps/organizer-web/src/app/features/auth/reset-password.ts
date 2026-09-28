@@ -4,6 +4,7 @@ import { UiAlert, UiButton, UiField } from '@myfiesta/ui';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
+import { AuthStage } from '../../shared/auth-stage';
 
 /**
  * Setting a new password from an emailed link.
@@ -14,7 +15,7 @@ import { messageFor } from '../../core/errors';
  */
 @Component({
   selector: 'app-reset-password',
-  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
+  imports: [AuthStage, FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './reset-password.html',
 })
 export class ResetPassword {

@@ -18,7 +18,7 @@
 }
 
 @if (session.canMessage()) {
-  <form class="new mb-8 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
+  <form class="new mb-8 grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
     <div class="row grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-4">
       <div class="field min-w-0">
         <label for="code">Code</label>
@@ -136,7 +136,7 @@
               <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
                 <input
                   type="checkbox"
-                  class="h-4 w-4"
+                  class="check"
                   [checked]="isCovered(type.id)"
                   (change)="toggleCovered(type.id)"
                 />
@@ -197,7 +197,7 @@
         <div class="flex flex-wrap gap-x-6 gap-y-2">
           @for (type of ticketTypes(); track type.id) {
             <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
-              <input type="checkbox" class="h-4 w-4" [checked]="isUnlocked(type.id)" (change)="toggleUnlock(type.id)" />
+              <input type="checkbox" class="check" [checked]="isUnlocked(type.id)" (change)="toggleUnlock(type.id)" />
               {{ type.name }}
               @if (lockState(type); as state) {
                 <span class="text-xs text-text-subtle">({{ state }})</span>

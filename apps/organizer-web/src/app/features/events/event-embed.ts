@@ -20,7 +20,7 @@ type Style = 'button' | 'inline';
   selector: 'app-event-embed',
   imports: [UiButton],
   template: `
-    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">On your own site</h2>
+    <h2 class="section mb-3 text-base font-semibold">On your own site</h2>
 
     <div class="grid max-w-[44rem] gap-3">
       <p class="text-pretty text-sm text-text-muted">

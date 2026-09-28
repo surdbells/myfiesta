@@ -13,7 +13,7 @@
 @if (loading()) {
   <div class="stats grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
     @for (n of [0, 1, 2, 3]; track n) {
-      <div class="stat min-h-[6.5rem] content-center rounded-xl border border-border bg-surface-raised p-6">
+      <div class="stat min-h-[6.5rem] content-center rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
         <ui-skeleton height="2rem" />
       </div>
     }
@@ -89,7 +89,7 @@
         </div>
       </div>
 
-      <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+      <div class="stat grid content-start gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
         <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
           <ui-icon [icon]="soldIcon" size="sm" />
         </span>
@@ -101,7 +101,7 @@
       </div>
     }
 
-    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+    <div class="stat grid content-start gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
       <span class="grid h-10 w-10 place-items-center rounded-lg bg-primary-soft text-primary-soft-text">
         <ui-icon [icon]="ticketIcon" size="sm" />
       </span>
@@ -112,7 +112,7 @@
       </div>
     </div>
 
-    <div class="stat grid content-start gap-3 rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+    <div class="stat grid content-start gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
       <span class="grid h-10 w-10 place-items-center rounded-lg bg-surface-inset text-text-muted">
         <ui-icon [icon]="draftIcon" size="sm" />
       </span>
@@ -128,7 +128,7 @@
        for the roles the endpoint answers without it. -->
   @if (data.sales_by_day && data.recent_orders) {
     <div class="mt-6 grid grid-cols-[3fr_2fr] items-start gap-4 max-[900px]:grid-cols-1">
-      <section class="chart rounded-xl border border-border bg-surface-raised p-6" aria-label="Sales, last 30 days">
+      <section class="chart rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Sales, last 30 days">
         <header class="flex flex-wrap items-baseline gap-3">
           <h2 class="text-lg">Sales</h2>
           <p class="text-sm text-text-muted">Last 30 days</p>
@@ -166,7 +166,7 @@
         }
       </section>
 
-      <section class="orders rounded-xl border border-border bg-surface-raised p-6" aria-label="Recent orders">
+      <section class="orders rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Recent orders">
         <header class="flex items-baseline justify-between gap-3">
           <h2 class="text-lg">Recent orders</h2>
           <span class="grid h-8 w-8 place-items-center rounded-lg bg-surface-inset text-text-muted">
@@ -201,7 +201,7 @@
 
   <!-- Every upcoming event's progress, soonest first. -->
   @if (data.selling_events.length > 0) {
-    <section class="selling mt-6 rounded-xl border border-border bg-surface-raised p-6" aria-label="Selling now">
+    <section class="selling mt-6 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Selling now">
       <header class="flex items-baseline justify-between gap-3">
         <h2 class="text-lg">Selling now</h2>
         <a class="text-sm font-medium text-primary-text no-underline hover:underline" routerLink="/events">All events</a>

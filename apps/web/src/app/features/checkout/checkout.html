@@ -31,7 +31,7 @@
 
     <div class="mt-8 grid grid-cols-[minmax(0,1fr)_400px] items-start gap-8 max-[900px]:grid-cols-1">
       <!-- --------------------------------------------------- attendee -->
-      <form class="rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-sm:p-5" (ngSubmit)="placeOrder()">
+      <form class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 shadow-(--shadow-raised) max-sm:p-5" (ngSubmit)="placeOrder()">
         <h2 class="border-b border-border pb-3 text-xl">Attendee details</h2>
 
         <div class="mt-6 grid grid-cols-2 gap-4 max-sm:grid-cols-1">
@@ -111,7 +111,7 @@
         -->
         <label class="mt-6 flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
           <input
-            class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+            class="check mt-[2px]"
             type="checkbox"
             name="agreed"
             required
@@ -252,7 +252,7 @@
         readable at the moment it is agreed to.
       -->
       <aside class="sticky top-6 grid content-start gap-6 self-start max-[900px]:static max-[900px]:order-first">
-        <div class="rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-overlay)">
+        <div class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-overlay)">
           @if (ev.poster_url) {
             <div class="relative mb-5 overflow-hidden rounded-lg">
               <img class="aspect-video w-full bg-surface-inset object-cover" [src]="ev.poster_url" alt="" />

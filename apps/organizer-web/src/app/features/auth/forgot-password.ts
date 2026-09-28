@@ -4,6 +4,7 @@ import { UiAlert, UiButton, UiField } from '@myfiesta/ui';
 import { RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
+import { AuthStage } from '../../shared/auth-stage';
 
 /**
  * Asking for a way back in.
@@ -14,7 +15,7 @@ import { messageFor } from '../../core/errors';
  */
 @Component({
   selector: 'app-forgot-password',
-  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
+  imports: [AuthStage, FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './forgot-password.html',
 })
 export class ForgotPassword {

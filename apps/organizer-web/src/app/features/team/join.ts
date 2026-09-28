@@ -5,6 +5,7 @@ import { Api } from '../../core/api';
 import { InvitationDetails } from '../../core/api.types';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { AuthStage } from '../../shared/auth-stage';
 
 /**
  * Where an invitation email lands.
@@ -16,7 +17,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-join',
-  imports: [RouterLink, UiButton, UiAlert],
+  imports: [AuthStage, RouterLink, UiButton, UiAlert],
   templateUrl: './join.html',
 })
 export class Join {

@@ -18,7 +18,7 @@
 
     <!-- The mark. Drawn here the size and shape an event page draws it, so
          nobody uploads a wide banner and finds it cropped to a circle later. -->
-    <section class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)">
+    <section class="grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
       <h2 class="text-base font-semibold">Your mark</h2>
 
       <div class="flex items-center gap-5">
@@ -71,7 +71,7 @@
       }
     </section>
 
-    <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="save()">
+    <form class="grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="save()">
       <h2 class="text-base font-semibold">Name and words</h2>
 
       <ui-field

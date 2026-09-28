@@ -30,7 +30,7 @@
         <legend class="mb-1 text-sm font-medium">Who it goes to</legend>
         @for (option of all.audiences; track option.value) {
           <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border px-4 py-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
-            <input class="mt-0.5" type="radio" name="audience" [value]="option.value" [checked]="audience() === option.value" (change)="chooseAudience(option.value)" />
+            <input class="radio mt-0.5" type="radio" name="audience" [value]="option.value" [checked]="audience() === option.value" (change)="chooseAudience(option.value)" />
             <span class="font-medium">{{ option.label }}</span>
           </label>
         }
@@ -89,9 +89,9 @@
       <fieldset class="m-0 grid gap-2 border-0 p-0">
         <legend class="mb-1 text-sm font-medium">When</legend>
         <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="now" [checked]="when() === 'now'" (change)="when.set('now')" /> Now</label>
-          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="later" [checked]="when() === 'later'" (change)="when.set('later')" /> At a time</label>
-          <label class="flex cursor-pointer items-center gap-2"><input type="radio" name="when" value="draft" [checked]="when() === 'draft'" (change)="when.set('draft')" /> Save to finish later</label>
+          <label class="flex cursor-pointer items-center gap-2"><input class="radio" type="radio" name="when" value="now" [checked]="when() === 'now'" (change)="when.set('now')" /> Now</label>
+          <label class="flex cursor-pointer items-center gap-2"><input class="radio" type="radio" name="when" value="later" [checked]="when() === 'later'" (change)="when.set('later')" /> At a time</label>
+          <label class="flex cursor-pointer items-center gap-2"><input class="radio" type="radio" name="when" value="draft" [checked]="when() === 'draft'" (change)="when.set('draft')" /> Save to finish later</label>
         </div>
         @if (when() === 'later') {
           <div class="field mt-2 max-w-[16rem]">

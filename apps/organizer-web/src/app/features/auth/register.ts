@@ -6,6 +6,7 @@ import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
 import { SITE_URL } from '../../core/site-url';
+import { AuthStage } from '../../shared/auth-stage';
 
 /**
  * Signing up as an organizer.
@@ -16,7 +17,7 @@ import { SITE_URL } from '../../core/site-url';
  */
 @Component({
   selector: 'app-register',
-  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
+  imports: [AuthStage, FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './register.html',
 })
 export class Register {

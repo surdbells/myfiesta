@@ -18,7 +18,7 @@ import { messageFor } from '../../core/errors';
   template: `
     @if (page(); as page) {
       @if (total() > 0) {
-        <section class="mb-6 rounded-lg border border-border bg-surface-raised p-6" aria-labelledby="waitlist-heading">
+        <section class="mb-6 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-labelledby="waitlist-heading">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 id="waitlist-heading" class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Waitlist</h2>

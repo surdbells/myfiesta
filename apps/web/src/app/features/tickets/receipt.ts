@@ -17,7 +17,7 @@ import { formatMoney } from '../../core/money';
   selector: 'app-receipt',
   template: `
     @let r = receipt();
-    <details class="receipt mt-8 rounded-xl border border-border bg-surface-raised p-5 text-sm">
+    <details class="receipt mt-8 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5 text-sm shadow-(--shadow-card)">
       <summary class="flex cursor-pointer items-center justify-between gap-3 font-semibold">
         <span>Receipt</span>
         <span class="tabular-nums">{{ money(r.total) }}</span>

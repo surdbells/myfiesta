@@ -5,10 +5,11 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { AuthStage } from '../../shared/auth-stage';
 
 @Component({
   selector: 'app-sign-in',
-  imports: [FormsModule, RouterLink, UiButton, UiField, UiAlert],
+  imports: [AuthStage, FormsModule, RouterLink, UiButton, UiField, UiAlert],
   templateUrl: './sign-in.html',
 })
 export class SignIn {

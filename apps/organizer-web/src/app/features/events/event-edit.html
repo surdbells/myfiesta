@@ -132,9 +132,9 @@
       changes who is standing in the room: a sold-out night where nobody can
       return a ticket is the night the touts get paid.
     -->
-    <label class="mt-2 flex max-w-[44rem] cursor-pointer items-start gap-3 rounded-lg border border-border bg-surface-raised p-4 text-sm">
+    <label class="mt-2 flex max-w-[44rem] cursor-pointer items-start gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-4 text-sm shadow-(--shadow-card)">
       <input
-        class="mt-0.5"
+        class="check mt-0.5"
         type="checkbox"
         name="resaleEnabled"
         [ngModel]="form().resaleEnabled"

@@ -30,7 +30,7 @@ import { PosterArt } from './poster-art';
       <!-- The listing row: poster left, the facts in the middle, the price
            and the button holding the end. -->
       <article
-        class="evt group relative h-full min-w-0 rounded-xl border border-border bg-surface-raised p-4 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+        class="evt group relative h-full min-w-0 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-4 shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         [attr.data-sold]="soldOut() ? '' : null"
       >
         <a
@@ -88,7 +88,7 @@ import { PosterArt } from './poster-art';
     } @else {
       <article class="evt group relative h-full min-w-0" [attr.data-sold]="soldOut() && !past() ? '' : null">
         <a
-          class="evt__link grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-xl border border-border bg-surface-raised text-inherit no-underline shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+          class="evt__link grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised text-inherit no-underline shadow-(--shadow-card) transition-[transform,box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-0.5 hover:border-primary hover:shadow-(--shadow-raised) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
           [routerLink]="['/', event().slug]"
         >
           <span class="evt__frame relative block aspect-[4/3] overflow-hidden bg-surface-inset">

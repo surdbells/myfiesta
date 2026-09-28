@@ -4,8 +4,27 @@
   @if (loading()) {
     <h1 class="ws__title text-balance text-3xl font-normal leading-[1.15] tracking-[-0.02em] text-text-subtle max-sm:text-2xl">Loading…</h1>
   } @else if (event(); as event) {
-    <div class="ws__head flex items-start justify-between gap-6 max-sm:flex-col max-sm:gap-2">
-      <div class="ws__identity min-w-0">
+    <!--
+      The night's own poster, blurred into the ground behind its name: every
+      tab of this event sits under the same picture the organizer chose,
+      which is how they know at a glance which night they are working on.
+      Without a poster it is the brand wash.
+    -->
+    <div
+      class="ws__head backdrop hero flex items-center justify-between gap-6 max-sm:flex-col max-sm:items-start max-sm:gap-3"
+      [style.--backdrop]="event.poster_url ? 'url(' + event.poster_url + ')' : null"
+    >
+      <div class="ws__identity flex min-w-0 items-center gap-5 max-sm:gap-4">
+        @if (event.poster_url; as poster) {
+          <img
+            class="h-24 w-24 shrink-0 rounded-(--radius-card) object-cover shadow-(--shadow-lift) max-sm:h-16 max-sm:w-16"
+            [src]="poster"
+            alt=""
+            width="96"
+            height="96"
+          />
+        }
+        <div class="min-w-0">
         <h1 class="ws__title text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] max-sm:text-2xl">{{ event.title }}</h1>
 
         @if (fromCache() && unreachable()) {
@@ -37,6 +56,7 @@
             {{ event.city }}
           </span>
         </p>
+        </div>
       </div>
 
       <!--
@@ -49,7 +69,7 @@
       -->
       @if (event.status === 'published') {
         <a
-          class="ws__view shrink-0 whitespace-nowrap rounded-md border border-field-border bg-surface-raised px-4 py-2 text-sm font-medium text-text no-underline hover:border-border-strong hover:bg-surface-hover max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:text-primary-text max-sm:underline max-sm:underline-offset-2"
+          class="ws__view shrink-0 whitespace-nowrap rounded-(--radius-control) border border-field-border bg-surface-raised px-4 py-2 text-sm font-medium text-text no-underline shadow-(--shadow-card) hover:border-border-strong hover:bg-surface-hover max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:text-primary-text max-sm:underline max-sm:underline-offset-2 max-sm:shadow-none"
           [href]="publicUrl(event)"
           target="_blank"
           rel="noopener"

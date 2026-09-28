@@ -1,6 +1,6 @@
-<main class="shell grid min-h-dvh place-items-center bg-surface-sunken p-6 max-[420px]:items-start max-[420px]:p-0">
+<app-auth-stage>
   @if (!usable()) {
-    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
       <header class="card__head mb-1 grid gap-1">
         <h1 class="text-2xl font-semibold tracking-[-0.02em]">That link is incomplete</h1>
         <p class="sub text-pretty text-sm text-text-muted">
@@ -11,7 +11,7 @@
       <a uiButton variant="secondary" routerLink="/account">Go to your account</a>
     </div>
   } @else if (done(); as result) {
-    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
       <header class="card__head mb-1 grid gap-1">
         <h1 class="text-2xl font-semibold tracking-[-0.02em]">Email address changed</h1>
         <p class="sub text-pretty text-sm text-text-muted [overflow-wrap:anywhere]">{{ result.message }} Sign in with the new address from now on.</p>
@@ -23,7 +23,7 @@
       }
     </div>
   } @else {
-    <div class="card grid w-full max-w-[26rem] gap-4 rounded-xl border border-border bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
+    <div class="card grid w-full max-w-[26rem] gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 shadow-(--shadow-raised) max-[420px]:min-h-dvh max-[420px]:max-w-none max-[420px]:content-start max-[420px]:rounded-none max-[420px]:border-0 max-[420px]:pt-12 max-[420px]:shadow-none">
       <header class="card__head mb-1 grid gap-1">
         <h1 class="text-2xl font-semibold tracking-[-0.02em]">Use this email address?</h1>
         <p class="sub text-pretty text-sm text-text-muted">
@@ -45,4 +45,4 @@
       }
     </div>
   }
-</main>
+</app-auth-stage>

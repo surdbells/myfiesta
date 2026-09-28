@@ -24,7 +24,7 @@ import { EventSummary } from '../core/api.types';
     @if (shown()) {
       <section class="promo mx-auto mt-24 max-w-[1240px] px-6" aria-labelledby="promo-title">
         <div
-          class="relative isolate grid grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] items-center gap-10 overflow-hidden rounded-xl border border-border bg-surface-raised p-12 shadow-(--shadow-raised) max-[900px]:grid-cols-1 max-[900px]:p-8 max-sm:p-6"
+          class="relative isolate grid grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] items-center gap-10 overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised p-12 shadow-(--shadow-raised) max-[900px]:grid-cols-1 max-[900px]:p-8 max-sm:p-6"
         >
           <span
             class="pointer-events-none absolute -left-24 -top-24 -z-10 h-80 w-80 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%)]"
@@ -85,7 +85,7 @@ import { EventSummary } from '../core/api.types';
           <div class="relative mx-auto w-full max-w-[17rem] max-[900px]:hidden" aria-hidden="true">
             <div class="rounded-[2.25rem] border-[10px] border-sold bg-surface p-3 shadow-(--shadow-floating)">
               <div class="mx-auto mb-3 h-1.5 w-16 rounded-full bg-border-strong"></div>
-              <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+              <div class="overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-card)">
                 @if (sample()?.poster_url) {
                   <img class="aspect-video w-full object-cover" [src]="sample()!.poster_url" alt="" loading="lazy" decoding="async" width="320" height="180" />
                 } @else {

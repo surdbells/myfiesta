@@ -14,7 +14,7 @@
   </div>
 
   @if (formOpen()) {
-    <form class="mt-4 grid gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="create()">
+    <form class="mt-4 grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="create()">
       @if (error(); as message) {
         <p class="rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
       }
@@ -116,7 +116,7 @@
           <div class="flex flex-wrap gap-x-6 gap-y-2">
             @for (type of ticketTypes(); track type.id) {
               <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
-                <input type="checkbox" class="h-4 w-4" [checked]="form().unlock_ticket_type_ids.includes(type.id)" (change)="toggleUnlock(type.id)" />
+                <input type="checkbox" class="check" [checked]="form().unlock_ticket_type_ids.includes(type.id)" (change)="toggleUnlock(type.id)" />
                 {{ type.name }}
               </label>
             }
@@ -158,7 +158,7 @@
   @if (batches().length > 0) {
     <ul class="m-0 mt-4 grid list-none gap-2 p-0">
       @for (batch of batches(); track batch.id) {
-        <li class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+        <li class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised px-5 py-4 shadow-(--shadow-card)">
           <div class="min-w-0 flex-1">
             <p class="font-medium">{{ batch.name }}</p>
             <p class="mt-0.5 text-sm text-text-muted tabular-nums">

@@ -25,7 +25,7 @@ import { AnswerValue, Question } from '../../core/api.types';
       @case ('boolean') {
         <label class="flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
           <input
-            class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+            class="check mt-[2px]"
             type="checkbox"
             [attr.name]="name()"
             [name]="name()"
@@ -52,7 +52,7 @@ import { AnswerValue, Question } from '../../core/api.types';
           @for (option of q.options; track option) {
             <label class="flex cursor-pointer items-center gap-2 text-sm font-normal">
               <input
-                class="m-0 h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+                class="radio"
                 type="radio"
                 [attr.name]="name()"
                 [name]="name()"
@@ -80,7 +80,7 @@ import { AnswerValue, Question } from '../../core/api.types';
           @for (option of q.options; track option) {
             <label class="flex cursor-pointer items-center gap-2 text-sm font-normal">
               <input
-                class="m-0 h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+                class="check"
                 type="checkbox"
                 [attr.name]="name()"
                 [name]="name() + ':' + option"

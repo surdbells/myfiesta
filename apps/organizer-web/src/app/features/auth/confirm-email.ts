@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
 import { messageFor } from '../../core/errors';
 import { SessionStore } from '../../core/session';
+import { AuthStage } from '../../shared/auth-stage';
 
 /**
  * Moving an account to a new address, from the link sent to it.
@@ -19,7 +20,7 @@ import { SessionStore } from '../../core/session';
  */
 @Component({
   selector: 'app-confirm-email',
-  imports: [RouterLink, UiButton, UiAlert],
+  imports: [AuthStage, RouterLink, UiButton, UiAlert],
   templateUrl: './confirm-email.html',
 })
 export class ConfirmEmail {

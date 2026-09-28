@@ -46,7 +46,7 @@
           the QR code to show at the door.
         </p>
 
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
           <dt class="text-text-muted">Event</dt>
           <dd class="m-0 font-semibold">{{ o.event.title }}</dd>
           <dt class="text-text-muted">Order</dt>
@@ -78,7 +78,7 @@
           </p>
           @if (payment) {
             <a
-              class="cta inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface-raised px-6 text-sm font-semibold text-text no-underline hover:bg-surface-hover"
+              class="cta inline-flex h-11 cursor-pointer items-center justify-center rounded-(--radius-card) border border-border-subtle bg-surface-raised px-6 text-sm font-semibold text-text no-underline hover:bg-surface-hover shadow-(--shadow-card)"
               [href]="payment"
               target="_blank"
               rel="noopener"
@@ -96,7 +96,7 @@
           }
         </p>
         }
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
@@ -126,7 +126,7 @@
 
       @case ('refunded') {
         <h1 class="text-2xl text-primary">This order was refunded</h1>
-        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-xl border border-border bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
+        <dl class="summary m-0 mt-2 grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 text-left text-sm shadow-(--shadow-card)">
           <dt class="text-text-muted">Order</dt>
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>

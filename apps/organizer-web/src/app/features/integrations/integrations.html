@@ -6,7 +6,7 @@
 @if (loading()) {
   <div class="grid gap-2">
     @for (n of [0, 1]; track n) {
-      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="3rem" /></div>
+      <div class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-4 shadow-(--shadow-card)"><ui-skeleton height="3rem" /></div>
     }
   </div>
 } @else if (refused()) {
@@ -18,7 +18,7 @@
     <!-- Shown once. Everything on this screen afterwards shows the last four
          characters at most. -->
     @if (reveal(); as secret) {
-      <section class="grid gap-3 rounded-lg border border-border bg-surface-raised p-5" role="status" aria-live="polite">
+      <section class="grid gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5 shadow-(--shadow-card)" role="status" aria-live="polite">
         <div>
           <p class="font-semibold">
             {{ secret.kind === 'key' ? 'Your key for ' + secret.label : 'The signing secret for ' + secret.label }}
@@ -53,7 +53,7 @@
         <ul class="m-0 grid list-none gap-2 p-0">
           @for (endpoint of all.endpoints; track endpoint.id) {
             @let state = health(endpoint);
-            <li class="grid gap-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+            <li class="grid gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised px-5 py-4 shadow-(--shadow-card)">
               <div class="flex flex-wrap items-start gap-x-6 gap-y-2">
                 <div class="min-w-0 flex-1">
                   <p class="flex flex-wrap items-center gap-2">
@@ -110,7 +110,7 @@
                       @if (troubled() > 0) {
                         <label class="mb-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
                           <input
-                            class="m-0 h-[18px] w-[18px] cursor-pointer accent-primary"
+                            class="check"
                             type="checkbox"
                             [checked]="onlyTrouble()"
                             (change)="onlyTrouble.set(!onlyTrouble())"
@@ -169,7 +169,7 @@
         </ul>
       }
 
-      <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-5" (ngSubmit)="addWebhook()">
+      <form class="grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5 shadow-(--shadow-card)" (ngSubmit)="addWebhook()">
         <h3 class="text-sm font-semibold">Add an address</h3>
 
         <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 max-[720px]:grid-cols-1">
@@ -197,7 +197,7 @@
           <legend class="mb-1 text-sm font-medium">Tell it when</legend>
           @for (name of all.events; track name) {
             <label class="flex cursor-pointer items-start gap-3 text-sm">
-              <input class="mt-0.5" type="checkbox" [name]="'event-' + name" [checked]="chosen().has(name)" (change)="toggleEvent(name, $any($event.target).checked)" />
+              <input class="check mt-0.5" type="checkbox" [name]="'event-' + name" [checked]="chosen().has(name)" (change)="toggleEvent(name, $any($event.target).checked)" />
               <span>
                 <span class="font-medium">{{ label(name).title }}</span>
                 <span class="block text-text-muted">{{ label(name).hint }}</span>
@@ -228,7 +228,7 @@
       @if (all.keys.length > 0) {
         <ul class="m-0 grid list-none gap-2 p-0">
           @for (key of all.keys; track key.id) {
-            <li class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-raised px-5 py-3">
+            <li class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised px-5 py-3 shadow-(--shadow-card)">
               <div class="min-w-0 flex-1">
                 <p class="flex flex-wrap items-center gap-2">
                   <span class="font-medium">{{ key.name }}</span>
@@ -249,7 +249,7 @@
         </ul>
       }
 
-      <form class="grid gap-4 rounded-lg border border-border bg-surface-raised p-5" (ngSubmit)="createKey()">
+      <form class="grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5 shadow-(--shadow-card)" (ngSubmit)="createKey()">
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 max-[520px]:grid-cols-1">
           <div class="field min-w-0">
             <label for="keyName">Name it after where it will live</label>

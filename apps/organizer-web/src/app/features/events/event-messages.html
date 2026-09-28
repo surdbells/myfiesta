@@ -17,7 +17,7 @@
 }
 
 @if (session.canMessage()) {
-  <form class="compose grid max-w-[640px] gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
+  <form class="compose grid max-w-[640px] gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" (ngSubmit)="submit()">
     <div class="field">
       <label for="subject">Subject</label>
       <input
@@ -53,9 +53,9 @@
       is choosing to email people who asked not to be emailed, and the label is
       the only place that is made plain.
     -->
-    <label class="check flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
+    <label class="flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
       <input
-        class="m-0 mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-primary"
+        class="check mt-[2px]"
         type="checkbox"
         name="important"
         [ngModel]="important()"
@@ -103,7 +103,7 @@
 } @else {
   <ul class="history m-0 grid max-w-[640px] list-none gap-3 p-0">
     @for (message of sent(); track message.id) {
-      <li class="grid gap-2 rounded-lg border border-border bg-surface-raised p-4">
+      <li class="grid gap-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-4 shadow-(--shadow-card)">
         <div class="head flex flex-wrap items-center gap-2">
           <span class="subject font-semibold">{{ message.subject }}</span>
           @if (message.important) {

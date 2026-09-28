@@ -91,7 +91,7 @@
 
     <!-- ------------------------------------------------------- about -->
     <div class="grid content-start gap-8 min-[900px]:col-start-1">
-      <section class="about rounded-xl border border-border bg-surface-raised p-8 max-sm:p-5" aria-label="About the event">
+      <section class="about rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 max-sm:p-5 shadow-(--shadow-card)" aria-label="About the event">
         <h2 class="border-b border-border pb-3 text-xl">About the event</h2>
 
         @if (ev.min_age) {
@@ -118,7 +118,7 @@
       </section>
 
       @if (ev.gallery.length > 0) {
-        <section class="gallery rounded-xl border border-border bg-surface-raised p-8 max-sm:p-5" aria-label="Photographs from this event">
+        <section class="gallery rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 max-sm:p-5 shadow-(--shadow-card)" aria-label="Photographs from this event">
           <h2 class="border-b border-border pb-3 text-xl">From the night</h2>
 
           <ul class="m-0 mt-6 grid list-none grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 p-0">
@@ -151,7 +151,7 @@
       class="rail mt-8 grid content-start gap-6 min-[900px]:sticky min-[900px]:top-6 min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:max-h-[calc(100vh-var(--space-7))] min-[900px]:overflow-y-auto"
     >
       <!-- The facts, each behind its glyph. -->
-      <section class="detail rounded-xl border border-border bg-surface-raised p-6" aria-label="Event details">
+      <section class="detail rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Event details">
         <h2 class="text-lg">Event details</h2>
 
         <div class="mt-4 grid gap-4 text-sm">
@@ -188,7 +188,7 @@
       </section>
 
       <!-- ---------------------------------------------------- the price -->
-      <section class="buy rounded-xl border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" aria-label="Tickets">
+      <section class="buy rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-raised)" aria-label="Tickets">
         @if (anythingOnSale()) {
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">{{ free() ? 'Tickets' : 'Starting from' }}</p>
           <p class="card-price mt-1 text-3xl font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
@@ -270,7 +270,7 @@
         was a page to send them to, this block was a dead end.
       -->
       <a
-        class="host flex items-start gap-4 rounded-xl border border-border bg-surface-raised p-6 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong"
+        class="host flex items-start gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 text-inherit no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-border-strong shadow-(--shadow-card)"
         [routerLink]="['/o', ev.organizer.slug]"
         aria-label="Organizer"
       >
