@@ -842,6 +842,9 @@ th.numeric {
   --backdrop: none;
   position: relative;
   isolation: isolate;
+  /* The blur is drawn larger than the element; clipped, not scrolled — and
+     clip rather than hidden, so a sticky panel inside still sticks. */
+  overflow: clip;
 }
 .backdrop::before,
 .backdrop::after {

@@ -11,6 +11,12 @@
     <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (event(); as ev) {
+  <!--
+    The night's own colour, bled across the whole width behind the page: the
+    poster blurred into the ground and fading to it, so the page is lit by the
+    event rather than framed in grey. Without a poster it is the plain ground.
+  -->
+  <div class="event-stage backdrop" [style.--backdrop]="ev.poster_url ? 'url(' + ev.poster_url + ')' : null">
   <article
     class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8 max-[899px]:pb-32 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12"
   >
@@ -23,7 +29,7 @@
         Not the kit's .hero, which is a padded, bordered panel: inside one the
         poster sat framed in a band of gradient instead of filling the top.
       -->
-      <div class="event-poster relative mb-8 overflow-hidden rounded-xl shadow-(--shadow-raised) min-[900px]:col-span-full">
+      <div class="event-poster relative mb-8 overflow-hidden rounded-(--radius-overlay) shadow-(--shadow-floating) min-[900px]:col-span-full">
         <img
           class="aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-[4/5]"
           [src]="ev.poster_url"
@@ -304,6 +310,7 @@
       </a>
     </div>
   </article>
+  </div>
 
   <!--
     The way to buy, pinned to the bottom of a phone.

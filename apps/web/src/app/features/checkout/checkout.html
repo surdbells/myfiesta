@@ -1,3 +1,5 @@
+<!-- The event's poster colour carried through buying: the same light as its page. -->
+<div class="backdrop" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
 @if (notFound()) {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
     <h1>Event not found</h1>
@@ -412,3 +414,4 @@
 } @else {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }
+</div>
