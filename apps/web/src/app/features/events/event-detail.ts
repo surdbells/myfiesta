@@ -11,7 +11,9 @@ import { viewedOnce } from '../../core/embed';
 import { Saves } from '../../core/saves';
 import { formatMoney } from '../../core/money';
 import { Seo } from '../../core/seo';
+import { offSale } from '@myfiesta/shared/availability';
 import { AddToCalendar } from '../../shared/add-to-calendar';
+import { AvailabilityBadge } from '../../shared/availability-badge';
 
 /**
  * The page a shared link lands on. It sells the night; the buying moved to
@@ -21,7 +23,7 @@ import { AddToCalendar } from '../../shared/add-to-calendar';
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiIcon, AddToCalendar],
+  imports: [CommonModule, RouterLink, UiIcon, AddToCalendar, AvailabilityBadge],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {
@@ -77,15 +79,23 @@ export class EventDetail {
     });
   }
 
+  /**
+   * Something a buyer could still get. Not merely a tier marked on sale: one
+   * whose every place has gone still says "on sale" in its status, and the
+   * page used to offer "Get tickets" for a night checkout would refuse. Nor
+   * one whose sales closed: its tiers still say "on sale" after their end.
+   */
   anythingOnSale(): boolean {
-    return (this.event()?.ticket_types ?? []).some((t) => t.status === 'on_sale');
+    const event = this.event();
+
+    return !!event && !event.is_sold_out && !offSale(event.availability) && event.ticket_types.some((t) => t.status === 'on_sale');
   }
 
   startingFrom(): string {
     const event = this.event();
     if (!event) return '';
     if (event.is_sold_out) return 'Sold out';
-    if (!event.from_price) return 'Free';
+    if (!event.from_price || event.from_price.amount === 0) return 'Free';
 
     return formatMoney(event.from_price);
   }

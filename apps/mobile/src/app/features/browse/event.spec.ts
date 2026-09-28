@@ -5,13 +5,24 @@ import { Event } from './event';
 import { Discover, EventPage, TicketTypeCard } from '../../core/discovery';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
+import { Dialogs, type ConfirmRequest } from '../../ui';
 
-const browser = vi.hoisted(() => ({ opened: [] as string[] }));
+const browser = vi.hoisted(() => ({ opened: [] as string[], finished: [] as (() => void)[] }));
 
 vi.mock('@capacitor/browser', () => ({
   Browser: {
     open: async ({ url }: { url: string }) => {
       browser.opened.push(url);
+    },
+    // The checkout closing, which the page listens for to count again.
+    addListener: async (_event: string, callback: () => void) => {
+      browser.finished.push(callback);
+
+      return {
+        remove: async () => {
+          browser.finished = browser.finished.filter((each) => each !== callback);
+        },
+      };
     },
   },
 }));
@@ -72,8 +83,12 @@ describe('Event page', () => {
   let saves: { slug: string; on: boolean }[];
   let saveAnswer: () => Promise<{ saved: boolean }>;
   let signedIn: boolean;
+  let asked: ConfirmRequest[];
+  let yes: boolean;
 
   beforeEach(() => {
+    asked = [];
+    yes = true;
     joins = [];
     joinAnswer = async () => ({ message: "You're on the waitlist." });
     saves = [];
@@ -84,6 +99,17 @@ describe('Event page', () => {
       providers: [
         // A stub for the one route the page navigates to itself.
         provideRouter([{ path: 'sign-in', children: [] }]),
+        // Somebody reading the question and answering it.
+        {
+          provide: Dialogs,
+          useValue: {
+            confirm: async (request: ConfirmRequest) => {
+              asked.push(request);
+
+              return yes;
+            },
+          },
+        },
         {
           provide: Discover,
           useValue: {
@@ -180,6 +206,21 @@ describe('Event page', () => {
       ]);
       expect(page.joined()).toBe("You're on the waitlist.");
       expect(page.wrong()).toBeNull();
+    });
+
+    it('says the address back before joining, and joins nothing when the answer is no', async () => {
+      await soldOut();
+      page.email.set('ada@example.test');
+      page.quantity.set('2');
+      yes = false;
+
+      await page.join();
+
+      expect(asked[0].title).toBe('Join the waitlist for Afro Fest?');
+      expect(asked[0].body).toContain('We email ada@example.test if 2 places come up.');
+      expect(asked[0].confirmLabel).toBe('Join the waitlist');
+      expect(joins).toEqual([]);
+      expect(page.joined()).toBeNull();
     });
 
     it('keeps the form open with the reason when the server refuses', async () => {
@@ -295,6 +336,110 @@ describe('Event page', () => {
 
       const next = TestBed.inject(Router).parseUrl(TestBed.inject(Router).url).queryParams['next'];
       expect(next).toBe('/e/afro-fest?ref=dj-kay');
+    });
+  });
+
+  /**
+   * "Almost sold out", "Only 4 left", "Sold out" — the API's count, holds and
+   * all, so a badge never promises a place the checkout will refuse.
+   */
+  describe('how much is left', () => {
+    beforeEach(() => {
+      browser.opened = [];
+      browser.finished = [];
+    });
+
+    it('names a small count beside the ticket and says nothing about plenty', async () => {
+      const fixture = await open(
+        night({
+          ticket_types: [
+            tier({ id: 'ga', name: 'General', availability: { state: 'almost_sold_out', left: 4 } }),
+            tier({ id: 'vip', name: 'VIP', availability: { state: 'almost_sold_out', left: null } }),
+            tier({ id: 'late', name: 'Late entry', availability: { state: 'available', left: null } }),
+          ],
+        }),
+      );
+
+      const cards = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.tier')].map((card) => card.textContent ?? '');
+
+      expect(cards[0]).toContain('Only 4 left');
+      expect(cards[1]).toContain('Almost sold out');
+      expect(cards[2]).not.toMatch(/left|sold out/i);
+    });
+
+    it('takes a tier the API counts as gone out of what can be bought', async () => {
+      // Every place held by baskets in progress: the stored flag still says
+      // on sale, the count says otherwise, and the count is what checkout uses.
+      const fixture = await open(
+        night({
+          ticket_types: [
+            tier({ id: 'cheap', price: { amount: 1000, currency: 'CAD' }, availability: { state: 'sold_out', left: null } }),
+            tier({ id: 'ga', price: { amount: 3000, currency: 'CAD' } }),
+          ],
+        }),
+      );
+
+      expect(page.onSale().map((t) => t.id)).toEqual(['ga']);
+      expect(page.from(showing)).toBe(`From ${formatMoney({ amount: 3000, currency: 'CAD' })}`);
+
+      const gone = (fixture.nativeElement as HTMLElement).querySelector('.tier--gone');
+      expect(gone?.textContent).toContain('Sold out');
+    });
+
+    it('reads a small remaining count from an API that sends no availability', async () => {
+      await open(night({ ticket_types: [tier({ remaining: 3 })] }));
+
+      expect(page.shown(showing.ticket_types[0])).toEqual({ state: 'almost_sold_out', left: 3 });
+    });
+
+    it('says sales closed, not sold out, when a tier stopped selling with places left', async () => {
+      const fixture = await open(
+        night({
+          ticket_types: [
+            tier({ id: 'early', name: 'Early bird', sold_out: true, availability: { state: 'sold_out', left: null } }),
+            tier({ id: 'online', name: 'Online', availability: { state: 'closed', left: null } }),
+          ],
+          availability: { state: 'closed', left: null },
+          waitlist: false,
+        }),
+      );
+      const element = fixture.nativeElement as HTMLElement;
+
+      expect(page.onSale()).toEqual([]);
+      expect(page.salesClosed()).toBe(true);
+      expect(page.soldOut()).toBe(false);
+
+      const bar = element.querySelector('.buy')?.textContent ?? '';
+      expect(bar).toContain('Sales closed');
+      expect(bar).not.toContain('Sold out');
+      expect(bar).not.toContain('Waitlist');
+      expect(bar).not.toContain('Get tickets');
+
+      const online = [...element.querySelectorAll('.tier')].find((card) => card.textContent?.includes('Online'));
+      expect(online?.classList.contains('tier--gone')).toBe(true);
+      expect(online?.querySelector('[data-tone="sold"]')?.textContent?.trim()).toBe('Sales closed');
+    });
+
+    it('offers the waitlist only while it is taking names', async () => {
+      const fixture = await open(night({ ticket_types: [tier({ sold_out: true })], waitlist: false }));
+      expect((fixture.nativeElement as HTMLElement).querySelector('.buy')?.textContent).not.toContain('Waitlist');
+
+      const again = await open(night({ ticket_types: [tier({ sold_out: true })], waitlist: true }));
+      expect((again.nativeElement as HTMLElement).querySelector('.buy')?.textContent).toContain('Waitlist');
+    });
+
+    it('counts again when the checkout closes', async () => {
+      await open(night({ ticket_types: [tier({ id: 'ga', availability: { state: 'almost_sold_out', left: 2 } })] }));
+      await page.buy(showing);
+      expect(browser.finished).toHaveLength(1);
+
+      // Somebody bought the last two while this person was in the checkout.
+      showing = night({ ticket_types: [tier({ id: 'ga', sold_out: true, availability: { state: 'sold_out', left: null } })] });
+      browser.finished[0]();
+      await vi.waitFor(() => expect(page.soldOut()).toBe(true));
+
+      // Listened for once, and let go of once heard.
+      expect(browser.finished).toHaveLength(0);
     });
   });
 

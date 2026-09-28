@@ -86,7 +86,7 @@ for (const name of STAMPED) {
   }
 }
 
-for (const variable of ['API_BASE_URL', 'CONSOLE_URL', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE']) {
+for (const variable of ['API_BASE_URL', 'CONSOLE_URL', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'APP_STORE_URL', 'PLAY_STORE_URL']) {
   if (!server.includes(`process.env['${variable}']`)) {
     problems.push(`${variable}: the server never reads it, so a deploy cannot set it`);
   }

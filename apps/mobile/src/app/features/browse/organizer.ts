@@ -14,6 +14,7 @@ import {
   MfSkeleton,
   ToastStore,
 } from '../../ui';
+import { MfAvailability, offSale } from './availability';
 
 /**
  * An organizer, and everything of theirs.
@@ -32,7 +33,7 @@ import {
  */
 @Component({
   selector: 'mf-organizer',
-  imports: [MfScreen, MfCard, MfBadge, MfButton, MfPoster, MfEmpty, MfSkeleton],
+  imports: [MfScreen, MfCard, MfBadge, MfButton, MfPoster, MfEmpty, MfSkeleton, MfAvailability],
   template: `
     <mf-screen [title]="organizer()?.name ?? 'Organizer'" back backTo="/">
       @if (loading()) {
@@ -89,7 +90,13 @@ import {
                       <h3>{{ event.title }}</h3>
                       <p class="where subtle">{{ event.city }}</p>
                     </div>
-                    <span class="price figure">{{ price(event) }}</span>
+                    <!-- "Sold out" or "Sales closed" stands in for a price nobody can pay. -->
+                    <span class="end">
+                      @if (!offSale(event.availability)) {
+                        <span class="price figure">{{ price(event) }}</span>
+                      }
+                      <mf-availability [value]="event.availability" />
+                    </span>
                   </div>
                 </mf-card>
               </li>
@@ -240,6 +247,13 @@ import {
       color: var(--text);
     }
 
+    .end {
+      flex: none;
+      display: grid;
+      justify-items: end;
+      gap: var(--space-1);
+    }
+
     .mt {
       margin-top: var(--space-3);
     }
@@ -247,6 +261,8 @@ import {
 })
 export class Organizer {
   readonly slug = input.required<string>();
+
+  protected readonly offSale = offSale;
 
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);

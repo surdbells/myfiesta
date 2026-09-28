@@ -17,6 +17,7 @@ import {
   MfSkeleton,
   type MfOption,
 } from '../../ui';
+import { MfAvailability, offSale } from './availability';
 
 /**
  * What is on.
@@ -33,7 +34,7 @@ import {
  */
 @Component({
   selector: 'mf-home',
-  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfButton, MfEmpty, MfSkeleton, MfSelect],
+  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfButton, MfEmpty, MfSkeleton, MfSelect, MfAvailability],
   template: `
     <mf-screen title="What’s on" [subtitle]="greeting()" large>
       <button mfIconButton screenActions tone="tonal" [icon]="searchIcon" label="Search events" (click)="go('/browse')"></button>
@@ -72,7 +73,12 @@ import {
                     <p class="when">{{ when(event) }}</p>
                     <h2>{{ event.title }}</h2>
                     <p class="where subtle">{{ event.city }}</p>
-                    <p class="price figure">{{ price(event) }}</p>
+                    <p class="deal">
+                      @if (!offSale(event.availability)) {
+                        <span class="price figure">{{ price(event) }}</span>
+                      }
+                      <mf-availability [value]="event.availability" />
+                    </p>
                   </div>
                 </article>
               }
@@ -116,7 +122,15 @@ import {
                           <h3>{{ event.title }}</h3>
                           <p class="where subtle">{{ event.city }}</p>
                         </div>
-                        <span class="price figure">{{ price(event) }}</span>
+                        <!-- The price, and a badge once it is going or gone:
+                             "Sold out" or "Sales closed" stands in for a price
+                             nobody can pay. -->
+                        <span class="end">
+                          @if (!offSale(event.availability)) {
+                            <span class="price figure">{{ price(event) }}</span>
+                          }
+                          <mf-availability [value]="event.availability" />
+                        </span>
                       </div>
                     </mf-card>
                   </li>
@@ -167,6 +181,13 @@ import {
       gap: var(--space-6);
     }
 
+    /* A carousel's cards are sized as a share of its own width, so its
+       smallest width is the whole row of them; without this the column grew
+       to fit it and every shelf ran off the right of the screen. */
+    .content > * {
+      min-width: 0;
+    }
+
     .city {
       margin-bottom: calc(var(--space-6) * -1 + var(--space-1));
     }
@@ -200,6 +221,22 @@ import {
       font-size: var(--font-size-sm);
       font-weight: var(--font-weight-medium);
       white-space: nowrap;
+    }
+
+    /* The hero's price and badge on one line; the badge wraps under a long
+       price rather than squeezing it. */
+    .deal {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .end {
+      flex: none;
+      display: grid;
+      justify-items: end;
+      gap: var(--space-1);
     }
 
     .shelf {
@@ -285,6 +322,7 @@ import {
 })
 export class Home {
   protected readonly searchIcon = Search;
+  protected readonly offSale = offSale;
 
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);

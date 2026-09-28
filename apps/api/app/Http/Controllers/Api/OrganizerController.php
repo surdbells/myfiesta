@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\OrganizerResource;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Services\Discovery\Availability;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -82,7 +83,8 @@ class OrganizerController extends Controller
             ->where('organization_id', $organization->id)
             ->published()
             ->where('kind', 'ticketed')
-            ->with(['banner', 'ticketTypes'])
+            // Tiers with their counts, for the badge on each card (Availability).
+            ->with(['banner', 'ticketTypes' => app(Availability::class)->tiers()])
             // The summary renders the organizer's own name on each card; it is
             // the same organization on every one of them, so it is handed over
             // rather than loaded per row.

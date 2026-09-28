@@ -100,4 +100,8 @@
   --color-border-subtle: var(--border-subtle);
   --color-surface-hover: var(--surface-hover);
   --color-danger-text: var(--danger-text);
+  --color-scarce: var(--scarce);
+  --color-on-scarce: var(--on-scarce);
+  --color-sold: var(--sold);
+  --color-on-sold: var(--on-sold);
 }

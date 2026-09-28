@@ -11,7 +11,9 @@ use App\Http\Requests\QuoteRequest;
 use App\Models\Event;
 use App\Services\Checkout\CheckoutService;
 use App\Services\Checkout\Fulfiller;
+use App\Services\Checkout\Pricer;
 use App\Services\Checkout\Quote;
+use App\Services\Discovery\Availability;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -48,10 +50,55 @@ class CheckoutController extends Controller
                 $request->addOnQuantities(),
             );
         } catch (CheckoutException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->status);
+            // A refusal says the same about each tier: one closed while
+            // somebody chose is taken out of their basket rather than
+            // refused again on every change.
+            return response()->json([
+                'message' => $e->getMessage(),
+                'availability' => app(Availability::class)->forQuote(
+                    $event,
+                    array_keys($request->quantities()),
+                    $this->unlockedBy($event, $request),
+                ),
+            ], $e->status);
         }
 
-        return response()->json($this->present($quote));
+        return response()->json([
+            ...$this->present($quote),
+            // How each tier is selling now, so the ticket page can say a tier
+            // sold out while somebody was choosing, before checkout refuses
+            // it. A state, and a count only once it is small (Availability).
+            'availability' => app(Availability::class)->forQuote(
+                $event,
+                array_keys($request->quantities()),
+                $this->unlockedBy($event, $request, $quote),
+            ),
+        ]);
+    }
+
+    /**
+     * The hidden tiers this request may hear about: the ones its code opens.
+     *
+     * The code the quote used when there is one, which may be the discount
+     * code doubling as a presale code. On a refusal, the access code typed,
+     * if it is one; one that is not opens nothing, and says nothing about a
+     * tier that its id alone cannot buy.
+     *
+     * @return list<string>
+     */
+    private function unlockedBy(Event $event, QuoteRequest $request, ?Quote $quote = null): array
+    {
+        $code = $quote?->accessCode;
+
+        if ($code === null) {
+            try {
+                $code = app(Pricer::class)->resolveAccess($event, $request->input('access_code'));
+            } catch (CheckoutException) {
+                $code = null;
+            }
+        }
+
+        return $code?->unlocks()->pluck('ticket_types.id')->all() ?? [];
     }
 
     public function store(CreateOrderRequest $request, string $slug): JsonResponse

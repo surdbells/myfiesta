@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Http\Resources\EventSummaryResource;
 use App\Models\Event;
+use App\Services\Discovery\Availability;
 use App\Services\Discovery\EventFilters;
 use App\Services\Discovery\EventSearch;
 use App\Services\Events\CalendarFile;
@@ -17,23 +18,25 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class EventController extends Controller
 {
+    /**
+     * Search and filters: text, city, category, when (today, weekend, month,
+     * past, or days from and to), availability and price. Each card carries
+     * its badge, counted in the query that loads its tiers (EventSearch).
+     */
     public function index(Request $request, EventSearch $search)
     {
-        $page = $search->query(EventFilters::fromRequest($request));
-
-        $page->getCollection()->loadMissing('ticketTypes');
-
-        return EventSummaryResource::collection($page);
+        return EventSummaryResource::collection($search->query(EventFilters::fromRequest($request)));
     }
 
-    public function show(string $slug)
+    public function show(string $slug, Availability $availability)
     {
+        // Never cached: this is the page the ticket steppers are on, and its
+        // badges have to agree with what checkout is about to allow.
         $event = Event::query()
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->with(['organization', 'venue', 'banner', 'gallery', 'questions', 'addOns', 'ticketTypes' => fn ($q) => $q
-                ->whereIn('status', ['on_sale', 'sold_out'])
-                ->orderBy('sort_order')])
+            ->with(['organization', 'venue', 'banner', 'gallery', 'questions', 'addOns', 'ticketTypes' => fn ($q) => $availability
+                ->tiers()($q->whereIn('status', Availability::PUBLIC_STATUSES)->orderBy('sort_order'))])
             ->first();
 
         // Invitation events are reachable by their invited guests through a

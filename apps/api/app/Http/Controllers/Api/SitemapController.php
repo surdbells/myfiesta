@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Services\Discovery\Places;
 use Illuminate\Http\Response;
 
 /**
@@ -53,6 +54,20 @@ class SitemapController extends Controller
 
         foreach ($this->organizers() as $organizer) {
             $urls[] = $this->url($base.'/o/'.$organizer->slug, $organizer->updated_at?->toAtomString());
+        }
+
+        // Each category and city with something coming up has a page of its
+        // own, with its own title — the page somebody searching "comedy in
+        // Lagos" should land on. Only those with something on: a sitemap
+        // entry for an empty page is a crawler told to index nothing.
+        $places = app(Places::class);
+
+        foreach ($places->categories(50) as $category) {
+            $urls[] = $this->url($base.'/events/category/'.$category['slug']);
+        }
+
+        foreach (collect($places->cities(200))->pluck('slug')->unique() as $city) {
+            $urls[] = $this->url($base.'/events/city/'.$city);
         }
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n"

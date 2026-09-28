@@ -224,3 +224,61 @@ describe('Seo, while rendering on the server', () => {
     expect(response.status).toBe(200);
   });
 });
+
+/**
+ * The front page and the pages of events — the listing, a category's, a
+ * city's. Each says what it is to a search engine, and the nights on it as
+ * Events, so a result can show them rather than a link to a page that does.
+ */
+describe('Seo, for pages of events', () => {
+  let seo: Seo;
+  let document: Document;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    seo = TestBed.inject(Seo);
+    document = TestBed.inject(DOCUMENT);
+  });
+
+  const structured = (): Record<string, any> =>
+    JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '{}');
+
+  const summary = (overrides: Record<string, unknown> = {}) =>
+    ({ ...event(), country: 'CA', is_sold_out: false, availability: { state: 'available', left: null }, ...overrides }) as never;
+
+  it('gives the front page a search box and the nights coming up', () => {
+    seo.forHome('https://myfiesta.ca/', 'Tickets for the night out.', [summary({ poster_url: 'https://cdn.test/p.jpg' })]);
+
+    const graph = structured()['@graph'];
+    expect(graph[0]).toMatchObject({ '@type': 'WebSite', potentialAction: { '@type': 'SearchAction' } });
+    expect(graph[0].potentialAction.target.urlTemplate).toBe('https://myfiesta.ca/events?q={search_term_string}');
+    expect(graph[1]['@type']).toBe('ItemList');
+    expect(TestBed.inject(Meta).getTag('property="og:image"')?.content).toBe('https://cdn.test/p.jpg');
+  });
+
+  it('says in schema.org words how much is left', () => {
+    seo.forCollection('Events in Toronto', 'What is on.', 'https://myfiesta.ca/events/city/toronto', [
+      summary({ slug: 'a' }),
+      summary({ slug: 'b', availability: { state: 'almost_sold_out', left: null } }),
+      summary({ slug: 'c', is_sold_out: true, availability: { state: 'sold_out', left: null } }),
+      // Sales closed with places left: not a sell-out.
+      summary({ slug: 'd', availability: { state: 'closed', left: null } }),
+    ]);
+
+    const offers = structured()['itemListElement'].map((entry: any) => entry.item.offers.availability);
+    expect(offers).toEqual([
+      'https://schema.org/InStock',
+      'https://schema.org/LimitedAvailability',
+      'https://schema.org/SoldOut',
+      'https://schema.org/OutOfStock',
+    ]);
+    expect(structured()['itemListElement'][1].item.url).toBe('https://myfiesta.ca/b');
+  });
+
+  it('carries no structured data for a page with nothing on it', () => {
+    seo.forCollection('Events in Toronto', 'Nothing on.', 'https://myfiesta.ca/events/city/toronto', []);
+
+    expect(document.querySelector('script[type="application/ld+json"]')).toBeNull();
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://myfiesta.ca/events/city/toronto');
+  });
+});

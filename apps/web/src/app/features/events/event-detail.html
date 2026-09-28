@@ -20,8 +20,10 @@
         lower edge — the shape a shared link is expected to open into. The
         gradient is what keeps white type readable over whatever an organizer
         uploaded. Decorative alt: the overlay says everything the image would.
+        Not the kit's .hero, which is a padded, bordered panel: inside one the
+        poster sat framed in a band of gradient instead of filling the top.
       -->
-      <div class="hero relative mb-8 overflow-hidden rounded-xl min-[900px]:col-span-full">
+      <div class="event-poster relative mb-8 overflow-hidden rounded-xl shadow-(--shadow-raised) min-[900px]:col-span-full">
         <img
           class="aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-[4/5]"
           [src]="ev.poster_url"
@@ -69,9 +71,12 @@
           <span>{{ ev.venue?.name ?? ev.city }}</span>
         </p>
 
-        @if (ev.from_price) {
-          <p class="mt-1 text-sm text-text-muted">
-            From <span class="figure text-lg text-text">{{ startingFrom() }}</span>
+        @if (ev.from_price || ev.availability) {
+          <p class="mt-1 flex flex-wrap items-center gap-3 text-sm text-text-muted">
+            @if (ev.from_price && anythingOnSale()) {
+              <span>From <span class="figure text-lg text-text">{{ startingFrom() }}</span></span>
+            }
+            <app-availability [value]="ev.availability" [exact]="true" size="md" />
           </p>
         }
       </header>
@@ -180,6 +185,9 @@
         @if (anythingOnSale()) {
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Starting from</p>
           <p class="mt-1 text-3xl font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
+          @if (ev.availability?.state === 'almost_sold_out' || ev.availability?.left) {
+            <p class="mt-3"><app-availability [value]="ev.availability" [exact]="true" size="md" /></p>
+          }
 
           <a
             class="mt-5 flex h-13 w-full items-center justify-center gap-2 rounded-md bg-primary text-base font-semibold text-on-primary no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-primary-hover"
@@ -190,6 +198,22 @@
         } @else if (ev.is_sold_out) {
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
           <p class="mt-1 text-2xl font-bold text-text-muted">Sold out</p>
+          @if (ev.waitlist) {
+            <!-- The ticket page holds the waitlist form, above the tiers that went. -->
+            <p class="mt-2 text-sm text-text-muted">If tickets come back — a refund, a new release — the waitlist hears first.</p>
+            <a
+              class="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-md border border-field-border bg-surface-raised text-base font-semibold text-text no-underline hover:bg-surface-hover"
+              [routerLink]="['/', ev.slug, 'tickets']"
+            >
+              Join the waitlist
+            </a>
+          }
+        } @else if (ev.availability?.state === 'closed' && ev.ticket_types.length > 0) {
+          <!-- Stopped selling with places left: no waitlist, since nothing is
+               coming back. -->
+          <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
+          <p class="mt-1 text-2xl font-bold text-text-muted">Sales closed</p>
+          <p class="mt-2 text-sm text-text-muted">Tickets for this one are no longer sold online.</p>
         } @else {
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets</p>
           <p class="mt-1 text-text-muted">Nothing is on sale right now.</p>

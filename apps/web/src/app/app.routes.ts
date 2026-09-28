@@ -24,6 +24,20 @@ export const routes: Routes = [
     loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
   },
   {
+    // A category's and a city's own page: the listing, fixed to one of them,
+    // under its own title — the address somebody searching "comedy in Lagos"
+    // should land on. Under /events so they can never be taken by an event
+    // slug. The slug is the API's; an unknown one answers 404.
+    path: 'events/category/:category',
+    data: { collection: 'category' },
+    loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
+  },
+  {
+    path: 'events/city/:city',
+    data: { collection: 'city' },
+    loadComponent: () => import('./features/events/event-list').then((m) => m.EventList),
+  },
+  {
     // Above the wildcard, or these read as event slugs. Each carries its own
     // page name in route data rather than being four near-identical
     // components.

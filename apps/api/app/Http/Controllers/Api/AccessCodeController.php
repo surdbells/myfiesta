@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\CheckoutException;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\TicketTypeResource;
+use App\Http\Resources\PublicTicketTypeResource;
 use App\Models\Event;
 use App\Services\Checkout\Pricer;
 use Illuminate\Http\JsonResponse;
@@ -60,7 +60,8 @@ class AccessCodeController extends Controller
 
         return response()->json([
             'code' => $code->code,
-            'ticket_types' => TicketTypeResource::collection($tiers),
+            // The buyer's view: a state, never the capacity or the sales.
+            'ticket_types' => PublicTicketTypeResource::collection($tiers),
         ]);
     }
 }

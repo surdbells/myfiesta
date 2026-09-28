@@ -19,6 +19,11 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class EventSearch
 {
+    public function __construct(
+        private readonly Availability $availability,
+        private readonly Places $places,
+    ) {}
+
     public function query(EventFilters $filters): CursorPaginator
     {
         $query = Event::query()
@@ -34,7 +39,10 @@ class EventSearch
             // never draws a tick: without them a partial select makes every
             // organization read as unverified, silently, wherever one is
             // asked later.
-            ->with(['organization:id,name,slug,logo_path,verified_at,verified_name', 'venue:id,name,city', 'banner']);
+            ->with(['organization:id,name,slug,logo_path,verified_at,verified_name', 'venue:id,name,city', 'banner'])
+            // Every tier with what is sold and held of it already counted, in
+            // the one query that loads them, for the badge on each card.
+            ->with(['ticketTypes' => $this->availability->tiers()]);
 
         $this->applyText($query, $filters->text);
         $this->applyPlace($query, $filters);
@@ -43,6 +51,13 @@ class EventSearch
 
         if ($filters->category !== null) {
             $query->where('category', $filters->category);
+        }
+
+        // Counted in the query rather than over what came back, so a page of
+        // "almost sold out" is a full page and the cursor still means
+        // something.
+        if ($filters->availability !== []) {
+            $this->availability->whereState($query, $filters->availability);
         }
 
         $this->applyOrdering($query, $filters);
@@ -72,19 +87,35 @@ class EventSearch
         }
 
         if ($filters->city !== null) {
-            $query->whereRaw('lower(city) = ?', [mb_strtolower($filters->city)]);
+            // By the city's slug, as its page counts it: a page that says
+            // five nights in Montreal lists the three spelled "Montréal" too.
+            $this->places->whereCity($query, $filters->city);
         }
     }
 
     private function applyDates(Builder $query, EventFilters $filters): void
     {
-        // Past events are excluded unless asked for. Someone browsing wants
-        // something to go to.
-        $query->where('starts_at', '>=', $filters->from ?? now());
+        if ($filters->when !== null && $filters->when !== 'upcoming') {
+            // Today, this weekend, this month or what has happened — each in
+            // the event's own zone (EventWindows).
+            EventWindows::apply($query, $filters->when, now());
+        } elseif ($filters->from === null && $filters->dateFrom === null) {
+            // Past events are excluded unless asked for. Someone browsing wants
+            // something to go to.
+            $query->where('starts_at', '>=', now());
+        }
+
+        if ($filters->from !== null) {
+            $query->where('starts_at', '>=', $filters->from);
+        }
 
         if ($filters->to !== null) {
             $query->where('starts_at', '<=', $filters->to);
         }
+
+        // Days as the event's calendar has them: "the 12th" is the 12th in
+        // Lagos for a night in Lagos.
+        EventWindows::days($query, $filters->dateFrom, $filters->dateTo);
     }
 
     /**

@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Api } from './api';
 import { SessionStore } from './session';
 import type { Money } from './money';
+import type { Availability } from '@myfiesta/shared/availability';
 
 /** An event as a list card shows it. */
 export interface EventCard {
@@ -17,10 +18,16 @@ export interface EventCard {
   poster_url: string | null;
   organizer: { name: string | null; slug: string | null };
   from_price: Money | null;
-  /** The summary's own name for it — nothing on sale, whether it sold out or
-      the organizer closed sales. Absent on an event page, which says it per
-      tier instead. */
+  /** The summary's own name for it — every ticket gone. A night whose sales
+      closed with places left is not sold out; its availability says closed.
+      Absent on an event page, which says it per tier instead. */
   is_sold_out?: boolean;
+  /** "Almost sold out", "Sold out" or "Sales closed", counted the way
+      checkout counts. A number only once it is small
+      (packages/shared/availability). */
+  availability?: Availability;
+  /** Sold out and not started, so the waitlist is taking names. */
+  waitlist?: boolean;
 }
 
 export interface TicketTypeCard {
@@ -28,8 +35,11 @@ export interface TicketTypeCard {
   name: string;
   description: string | null;
   price: Money;
+  /** The same as availability.left: a number only once it is small. */
   remaining: number | null;
   sold_out: boolean;
+  /** The badge beside the tier: "Almost sold out", "Only 4 left", "Sold out". */
+  availability?: Availability;
   waiting: boolean;
   opens_after: { id: string; name: string } | null;
   max_per_order: number | null;

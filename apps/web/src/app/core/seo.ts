@@ -1,6 +1,6 @@
 import { DOCUMENT, Injectable, RESPONSE_INIT, inject } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
-import { EventDetail, OrganizerPage } from './api.types';
+import { EventDetail, EventSummary, OrganizerPage } from './api.types';
 import { formatMoney } from './money';
 
 /**
@@ -200,6 +200,135 @@ export class Seo {
     this.canonical(url);
   }
 
+  /**
+   * A page of events: the listing, a category's page, a city's.
+   *
+   * Its own title and description, a picture when there is one, and the
+   * events on it as an ItemList of schema.org Events — what lets a search for
+   * "comedy in Lagos" show the nights themselves rather than a blue link to a
+   * page that has them.
+   */
+  forCollection(heading: string, description: string, url: string, events: EventSummary[], image?: string | null): void {
+    this.forListing(heading, description, url);
+
+    this.set([
+      { property: 'og:type', content: 'website' },
+      { property: 'og:site_name', content: 'myFiesta' },
+      ...(image ? [{ property: 'og:image', content: image }] : []),
+      { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' },
+    ]);
+
+    this.jsonLd(events.length > 0 ? this.itemList(events, url, heading) : null);
+  }
+
+  /**
+   * The front page: the site itself, how to search it, and what is on.
+   *
+   * The search action is what can put a search box for the site straight into
+   * a search result; the list is the nights coming up, as the page shows them.
+   */
+  forHome(url: string, description: string, events: EventSummary[]): void {
+    this.indexable();
+    this.title.setTitle('myFiesta — tickets for concerts, club nights, comedy and festivals');
+
+    const image = events.find((event) => event.poster_url)?.poster_url ?? null;
+
+    this.set([
+      { name: 'description', content: description },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:site_name', content: 'myFiesta' },
+      { property: 'og:title', content: 'myFiesta — tickets for the night out' },
+      { property: 'og:description', content: description },
+      { property: 'og:url', content: url },
+      ...(image ? [{ property: 'og:image', content: image }] : []),
+      { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' },
+    ]);
+    this.canonical(url);
+
+    const origin = this.origin(url);
+
+    this.jsonLd({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebSite',
+          name: 'myFiesta',
+          url: origin,
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: { '@type': 'EntryPoint', urlTemplate: `${origin}/events?q={search_term_string}` },
+            'query-input': 'required name=search_term_string',
+          },
+        },
+        ...(events.length > 0 ? [this.itemList(events, url, 'Coming up on myFiesta')] : []),
+      ],
+    });
+  }
+
+  /** Nights as a schema.org ItemList, each a full Event with its own address. */
+  private itemList(events: EventSummary[], url: string, name: string): Record<string, unknown> {
+    const origin = this.origin(url);
+
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name,
+      itemListElement: events.slice(0, 20).map((event, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        item: this.eventItem(event, `${origin}/${event.slug}`),
+      })),
+    };
+  }
+
+  /**
+   * One night as schema.org reads it. The detail page adds its venue and
+   * words; a list has only what a card has, which is enough for a result.
+   */
+  private eventItem(event: EventSummary, url: string): Record<string, unknown> {
+    return {
+      '@type': 'Event',
+      name: event.title,
+      startDate: event.starts_at,
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      url,
+      image: event.poster_url ?? undefined,
+      location: {
+        '@type': 'Place',
+        name: event.city,
+        address: { '@type': 'PostalAddress', addressLocality: event.city, addressCountry: event.country },
+      },
+      organizer: event.organizer?.name ? { '@type': 'Organization', name: event.organizer.name } : undefined,
+      offers: event.from_price ? this.offer(event, url) : undefined,
+    };
+  }
+
+  /**
+   * What a ticket costs and whether there are any, in schema.org's words:
+   * sold out, out of stock once sales closed with places left (not sold out,
+   * which is a claim about every place), limited once the API says almost
+   * sold out, in stock otherwise.
+   */
+  private offer(event: EventSummary, url: string): Record<string, unknown> {
+    const state = event.is_sold_out ? 'sold_out' : event.availability?.state;
+
+    return {
+      '@type': 'Offer',
+      price: ((event.from_price?.amount ?? 0) / 100).toFixed(2),
+      priceCurrency: event.from_price?.currency ?? event.currency,
+      availability:
+        state === 'sold_out'
+          ? 'https://schema.org/SoldOut'
+          : state === 'closed'
+            ? 'https://schema.org/OutOfStock'
+            : state === 'almost_sold_out'
+              ? 'https://schema.org/LimitedAvailability'
+              : 'https://schema.org/InStock',
+      url,
+    };
+  }
+
   private set(tags: Array<{ name?: string; property?: string; content: string }>): void {
     for (const tag of tags) {
       const selector = tag.property ? `property="${tag.property}"` : `name="${tag.name}"`;
@@ -273,17 +402,7 @@ export class Seo {
         // Their mark, where they have uploaded one.
         logo: event.organizer.logo_url ?? undefined,
       },
-      offers: event.from_price
-        ? {
-            '@type': 'Offer',
-            price: (event.from_price.amount / 100).toFixed(2),
-            priceCurrency: event.from_price.currency,
-            availability: event.is_sold_out
-              ? 'https://schema.org/SoldOut'
-              : 'https://schema.org/InStock',
-            url,
-          }
-        : undefined,
+      offers: event.from_price ? this.offer(event, url) : undefined,
     });
   }
 

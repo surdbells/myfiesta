@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventSummaryResource;
 use App\Models\Event;
+use App\Services\Discovery\Availability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,8 @@ class SavedEventController extends Controller
             ->where('saved_events.user_id', $request->user()->id)
             ->where('events.status', 'published')
             ->where('events.starts_at', '>', now())
-            ->with(['organization', 'ticketTypes', 'banner'])
+            // Tiers with their counts, for the badge on each card (Availability).
+            ->with(['organization', 'ticketTypes' => app(Availability::class)->tiers(), 'banner'])
             ->orderBy('events.starts_at')
             ->select('events.*')
             ->paginate(20);

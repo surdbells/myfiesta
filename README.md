@@ -59,6 +59,11 @@ cd apps/api && composer install && cp .env.example .env && php artisan key:gener
 php artisan migrate && php artisan storage:link
 php artisan serve
 
+# A believable week of events to look at the site with: five cities, every
+# shelf and every badge. Development only — it invents organizers and sales,
+# and refuses to run in production. Run again to move the dates to today.
+php artisan db:seed --class=DemoEventsSeeder
+
 # …and two more processes beside it. Neither says anything when it is missing:
 # with no worker nearly every email queues and is never sent, and with no
 # scheduler abandoned baskets keep holding tickets an event could have sold.

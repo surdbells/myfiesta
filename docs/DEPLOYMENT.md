@@ -66,7 +66,7 @@ and `npm run check` holds the pieces to the same shape.
 | App | How it is told | Must be set |
 | --- | -------------- | ----------- |
 | API | `.env` | `APP_URL`, `PUBLIC_URL`, `CONSOLE_URL`, `CORS_ALLOWED_ORIGINS` |
-| Site | environment, stamped into the page as it renders | `ALLOWED_HOSTS`, `API_BASE_URL`, `CONSOLE_URL`, `PUBLIC_URL` |
+| Site | environment, stamped into the page as it renders | `ALLOWED_HOSTS`, `API_BASE_URL`, `CONSOLE_URL`, `PUBLIC_URL` (and, once the app is listed, `APP_STORE_URL`, `PLAY_STORE_URL`) |
 | Console | environment, stamped into `index.html` at start-up | `API_BASE_URL`, `PUBLIC_URL` |
 | Phone app | stamped into the build before packaging | `API_BASE_URL`, `PUBLIC_URL` |
 

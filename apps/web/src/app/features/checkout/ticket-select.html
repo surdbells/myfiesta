@@ -84,7 +84,7 @@
           }
         </div>
 
-        @if (nothingToBuy()) {
+        @if (waitlistOpen()) {
           <!--
             The waitlist, above the tiers that are gone: the thing a buyer here can
             still do.
@@ -126,6 +126,13 @@
           </section>
         }
 
+        <!-- What the last quote changed in the basket, said where it is heard. -->
+        <div role="status">
+          @if (notice(); as message) {
+            <p class="mt-6 rounded-md border border-scarce bg-[color-mix(in_srgb,var(--scarce)_10%,var(--surface-raised))] px-4 py-3 text-sm text-text">{{ message }}</p>
+          }
+        </div>
+
         @if (tiers().length === 0) {
           <p class="muted mt-6">Nothing is on sale for this event right now.</p>
         } @else {
@@ -152,16 +159,23 @@
                     <h2 class="flex flex-wrap items-center gap-3 text-xl font-semibold">
                       {{ type.name }}
                       @if (soldOut(type)) {
-                        <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sold out</span>
-                      } @else if (type.status === 'closed' || salesEnded(type)) {
+                        <!-- Not selectable, and said the way every card says it. -->
+                        <app-availability [value]="soldOutBadge" />
+                      } @else if (closed(type)) {
                         <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium uppercase tracking-[0.04em] text-text-muted">Sales closed</span>
                       } @else if (opensLater(type) && type.waiting && type.opens_after) {
                         <!-- A price ladder: said as what the buyer is waiting for. -->
                         <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium tracking-[0.02em] text-text-muted">Opens when {{ type.opens_after.name }} sells out</span>
                       } @else if (opensLater(type)) {
                         <span class="rounded-full bg-surface-inset px-3 py-1 text-xs font-medium tracking-[0.02em] text-text-muted">On sale {{ opensAt(type) }}</span>
-                      } @else if (isUnlocked(type)) {
-                        <span class="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.04em] text-primary-soft-text">Presale</span>
+                      } @else {
+                        @if (isUnlocked(type)) {
+                          <span class="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.04em] text-primary-soft-text">Presale</span>
+                        }
+                        <!-- "Almost sold out", or "Only 4 left" once the API names a
+                             number: beside the ticket is where the count is the
+                             reason somebody decides now. -->
+                        <app-availability [value]="availabilityOf(type)" [exact]="true" />
                       }
                     </h2>
 
@@ -201,7 +215,7 @@
                         class="h-9 w-9 cursor-pointer rounded-sm border border-border bg-surface-raised text-lg leading-none text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                         type="button"
                         (click)="adjust(type, 1)"
-                        [disabled]="!buyable(type)"
+                        [disabled]="!buyable(type) || atCeiling(type)"
                         [attr.aria-label]="stepLabel(type, 'more')"
                       >
                         +

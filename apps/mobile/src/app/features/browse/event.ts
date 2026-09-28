@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
@@ -9,6 +9,7 @@ import { Discover, EventPage, TicketTypeCard } from '../../core/discovery';
 import { longEventTime } from '../../core/event-time';
 import { formatMoney } from '../../core/money';
 import {
+  Dialogs,
   MfBadge,
   MfButton,
   MfCard,
@@ -24,6 +25,7 @@ import {
   ToastStore,
 } from '../../ui';
 import { SessionStore } from '../../core/session';
+import { type Availability, MfAvailability } from './availability';
 
 /**
  * One event: the poster, the night, what it costs, and the way in.
@@ -53,6 +55,7 @@ import { SessionStore } from '../../core/session';
     MfSheet,
     MfField,
     MfSelect,
+    MfAvailability,
   ],
   template: `
     <mf-screen [title]="event()?.title ?? 'Event'" back flush backTo="/">
@@ -100,6 +103,11 @@ import { SessionStore } from '../../core/session';
           </p>
 
           <div class="tags">
+            <!-- Going fast, said once for the whole night, where the eye lands
+                 before the tickets; the bar below already says "Sold out". -->
+            @if (night.availability?.state === 'almost_sold_out') {
+              <mf-availability [value]="night.availability" />
+            }
             @if (night.category) {
               <mf-badge>{{ night.category }}</mf-badge>
             }
@@ -132,7 +140,7 @@ import { SessionStore } from '../../core/session';
               <h2 class="section">Tickets</h2>
 
               @for (tier of night.ticket_types; track tier.id) {
-                <mf-card class="tier" quiet>
+                <mf-card class="tier" quiet [class.tier--gone]="gone(tier) || closed(tier)">
                   <div class="tier__row">
                     <div class="tier__text">
                       <h3>{{ tier.name }}</h3>
@@ -141,17 +149,21 @@ import { SessionStore } from '../../core/session';
                       }
                       @if (tier.waiting && tier.opens_after) {
                         <p class="subtle">Opens when {{ tier.opens_after.name }} sells out</p>
-                      } @else if (tier.remaining !== null && tier.remaining > 0 && tier.remaining <= 10) {
-                        <p class="few">Only {{ tier.remaining }} left</p>
                       }
                     </div>
 
                     <div class="tier__price">
                       <span class="amount figure">{{ tier.price.amount === 0 ? 'Free' : money(tier.price) }}</span>
-                      @if (tier.sold_out) {
-                        <mf-badge>Sold out</mf-badge>
+                      @if (gone(tier)) {
+                        <mf-availability [value]="soldOutBadge" />
                       } @else if (tier.waiting) {
                         <mf-badge tone="warning">Not yet</mf-badge>
+                      } @else {
+                        <!-- "Almost sold out", or "Only 4 left" once the API
+                             names a number: beside the ticket is where the
+                             count is the reason somebody decides now. "Sales
+                             closed" once its sales ended with places left. -->
+                        <mf-availability [value]="shown(tier)" [exact]="true" />
                       }
                     </div>
                   </div>
@@ -237,12 +249,26 @@ import { SessionStore } from '../../core/session';
                 <span class="amount">Not on sale yet</span>
                 <span class="subtle">The organizer has not opened tickets for this one</span>
               </div>
-            } @else if (soldOut()) {
+            } @else if (salesClosed()) {
+              <!-- Stopped selling with places left: not sold out, and no
+                   waitlist, since nothing is coming back. -->
               <div class="buy__text">
-                <span class="amount">Sold out</span>
-                <span class="subtle">Join the waitlist and we will tell you if more open</span>
+                <span class="amount">Sales closed</span>
+                <span class="subtle">Tickets for this one are no longer sold here</span>
               </div>
-              <button mfButton size="lg" variant="secondary" (click)="waitlist.set(true)">Waitlist</button>
+            } @else if (soldOut()) {
+              @if (night.waitlist !== false) {
+                <div class="buy__text">
+                  <span class="amount">Sold out</span>
+                  <span class="subtle">Join the waitlist and we will tell you if more open</span>
+                </div>
+                <button mfButton size="lg" variant="secondary" (click)="waitlist.set(true)">Waitlist</button>
+              } @else {
+                <div class="buy__text">
+                  <span class="amount">Sold out</span>
+                  <span class="subtle">Every ticket for this one has gone</span>
+                </div>
+              }
             } @else {
               <div class="buy__text">
                 <span class="amount figure">{{ from(night) }}</span>
@@ -405,9 +431,12 @@ import { SessionStore } from '../../core/session';
       white-space: nowrap;
     }
 
-    .few {
-      font-size: var(--font-size-sm);
-      color: var(--warning);
+    /* A tier that has gone keeps its price on show, struck through and
+       quieter: what it cost is still worth knowing, and nobody mistakes it
+       for one they can buy. */
+    .tier--gone .amount {
+      color: var(--text-subtle);
+      text-decoration: line-through;
     }
 
     .subtle {
@@ -537,6 +566,7 @@ export class Event {
   private readonly router = inject(Router);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly toasts = inject(ToastStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly session = inject(SessionStore);
 
   /** From the route. */
@@ -593,13 +623,28 @@ export class Event {
 
   /** Something a person could buy right now. */
   readonly onSale = computed(() =>
-    (this.event()?.ticket_types ?? []).filter((tier) => !tier.sold_out && !tier.waiting),
+    (this.event()?.ticket_types ?? []).filter((tier) => !this.gone(tier) && !this.closed(tier) && !tier.waiting),
   );
+
+  /**
+   * Nothing to buy, and not because it all went: a tier stopped selling with
+   * places left. The API calls that night closed rather than sold out, and
+   * takes no names for tickets that are not coming back.
+   */
+  readonly salesClosed = computed(
+    () =>
+      this.anyTickets() &&
+      this.onSale().length === 0 &&
+      (this.event()?.ticket_types ?? []).some((tier) => this.closed(tier) && !this.gone(tier)),
+  );
+
+  /** A tier whose every place is gone, said the way the API says it. */
+  readonly soldOutBadge: Availability = { state: 'sold_out', left: null };
 
   /** Anything at all on the event, sold out or not: no tiers is not a sell-out. */
   readonly anyTickets = computed(() => (this.event()?.ticket_types ?? []).length > 0);
 
-  readonly soldOut = computed(() => this.anyTickets() && this.onSale().length === 0);
+  readonly soldOut = computed(() => this.anyTickets() && this.onSale().length === 0 && !this.salesClosed());
 
   readonly description = computed<SafeHtml>(() =>
     this.sanitizer.bypassSecurityTrustHtml(this.event()?.description ?? ''),
@@ -607,6 +652,7 @@ export class Event {
 
   constructor() {
     queueMicrotask(() => void this.load());
+    inject(DestroyRef).onDestroy(() => void this.stopListening());
 
     // Somebody signed in should not retype what the app already knows, and a
     // sheet reopened after a mistake should not still be showing the error.
@@ -643,6 +689,72 @@ export class Event {
 
   when(night: EventPage): string {
     return longEventTime(night.starts_at, night.timezone);
+  }
+
+  // --- how much is left ------------------------------------------------------
+
+  /**
+   * Every place gone, as the API counts it: tickets that still admit
+   * somebody, plus baskets in progress. Not selectable, and not the cheapest
+   * way in any more.
+   */
+  gone(tier: TicketTypeCard): boolean {
+    return tier.sold_out || tier.availability?.state === 'sold_out';
+  }
+
+  /** Its sales ended, or the organizer closed it, with places still in it. Not selectable either. */
+  closed(tier: TicketTypeCard): boolean {
+    return tier.availability?.state === 'closed';
+  }
+
+  /**
+   * The badge beside a tier. From `remaining` when an API from before
+   * availability sends none — it only ever named small counts.
+   */
+  shown(tier: TicketTypeCard): Availability | null {
+    if (tier.availability) return tier.availability;
+
+    return tier.remaining !== null && tier.remaining > 0 && tier.remaining <= 10
+      ? { state: 'almost_sold_out', left: tier.remaining }
+      : null;
+  }
+
+  /**
+   * Count again, without the skeleton, once the checkout closes.
+   *
+   * The badges here are from when the screen opened; somebody coming back
+   * from the checkout may have just bought the last of a tier, or watched it
+   * go while they typed their card. Their saved and following state is left
+   * as it is — only the night is read again.
+   */
+  async refresh(): Promise<void> {
+    try {
+      this.event.set(await this.discover.event(this.slug()));
+    } catch {
+      // What was on screen is still the best there is; the next visit counts again.
+    }
+  }
+
+  private listening: { remove: () => Promise<void> } | null = null;
+
+  private async refreshWhenBack(): Promise<void> {
+    if (this.listening) return;
+
+    try {
+      this.listening = await Browser.addListener('browserFinished', () => {
+        void this.stopListening();
+        void this.refresh();
+      });
+    } catch {
+      // No such event where the checkout opened in a tab of its own.
+    }
+  }
+
+  private async stopListening(): Promise<void> {
+    const listening = this.listening;
+    this.listening = null;
+
+    await listening?.remove().catch(() => undefined);
   }
 
   money = formatMoney;
@@ -732,6 +844,7 @@ export class Event {
 
     try {
       await Browser.open({ url: this.siteUrl(`/${night.slug}/tickets${this.refQuery()}`), presentationStyle: 'popover' });
+      await this.refreshWhenBack();
     } catch {
       this.toasts.show('Could not open checkout. Try the website.', 'danger');
     } finally {
@@ -757,6 +870,19 @@ export class Event {
 
       return;
     }
+
+    // The address is said back: it is the only way we can reach somebody
+    // who is not signed in, and a typo means never hearing.
+    const quantity = Number(this.quantity());
+    const sure = await this.dialogs.confirm({
+      title: `Join the waitlist for ${night.title}?`,
+      body: `We email ${email} if ${quantity === 1 ? 'a place comes' : `${quantity} places come`} up. Nothing is held or charged.`,
+      consequences: ['Places go to whoever buys first once people are told.'],
+      confirmLabel: 'Join the waitlist',
+      tone: 'default',
+    });
+
+    if (!sure || this.joining()) return;
 
     this.joining.set(true);
     this.wrong.set(null);

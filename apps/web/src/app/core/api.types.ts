@@ -8,6 +8,10 @@
  * rather than a page.
  */
 
+import type { Availability } from '@myfiesta/shared/availability';
+
+export type { Availability };
+
 /**
  * An integer amount in minor units, with its currency.
  *
@@ -55,6 +59,8 @@ export interface EventSummary {
   slug: string;
   title: string;
   starts_at: string;
+  /** When the organizer said it ends. Optional only for pages cached before cards carried it. */
+  ends_at?: string | null;
   timezone: string;
   city: string;
   country: string;
@@ -62,8 +68,17 @@ export interface EventSummary {
   category: string | null;
   poster_url: string | null;
   organizer: OrganizerRef;
+  /** The cheapest tier still selling; once none is, the cheapest there was. */
   from_price: Money | null;
   is_sold_out: boolean;
+  /**
+   * "Almost sold out", "Sold out" — counted the way checkout counts, and
+   * never an exact number above the admin's setting. Optional only because
+   * pages cached before it existed may still be in somebody's browser.
+   */
+  availability?: Availability;
+  /** Sold out and not started, so the waitlist is taking names. */
+  waitlist?: boolean;
 }
 
 export interface Venue {
@@ -85,6 +100,8 @@ export interface TicketType {
   sales_end_at: string | null;
   /** Every place taken, counting baskets in progress. */
   sold_out: boolean;
+  /** The badge beside the tier: "Almost sold out", "Only 4 left", "Sold out". */
+  availability?: Availability;
   /** A price ladder: this tier waits for that one to sell out. */
   opens_after: { id: string; name: string } | null;
   waiting: boolean;
@@ -233,6 +250,11 @@ export interface Quote {
   /** The ticket types the code discounts; null when it covers every ticket. */
   code_applies_to: string[] | null;
   requires_payment: boolean;
+  /**
+   * How each tier is selling as of this quote — so a tier that sold out
+   * while somebody chose says so here, before checkout refuses it.
+   */
+  availability?: (Availability & { ticket_type_id: string })[];
 }
 
 export interface OrderCreated {
@@ -374,13 +396,53 @@ export interface Receipt {
   refunded: Money;
 }
 
+/** A category with something on, and the poster that stands for it. */
+export interface CategoryPlace {
+  category: string;
+  /** Its page: /events/category/{slug}. Sent by the API, never made here. */
+  slug: string;
+  events: number;
+  /** The next night's poster, a featured one first; null draws the site's own. */
+  cover_url: string | null;
+}
+
+export interface CityPlace {
+  city: string;
+  country: string;
+  /** Its page: /events/city/{slug}. */
+  slug: string;
+  events: number;
+  cover_url: string | null;
+}
+
 /** Everything the front page needs, in one response. */
 export interface Discovery {
   featured: EventSummary[];
   upcoming: EventSummary[];
+  /** Still on or still to come today, in each event's own zone. */
+  today?: EventSummary[];
+  /** Friday to Sunday, the one underway or the next. */
+  weekend?: EventSummary[];
+  /** Still to come after today and outside this weekend, soonest first. */
+  later?: EventSummary[];
+  almost_sold_out?: EventSummary[];
+  /** Still to come first — each taking waitlist names — then recently sold out. */
+  sold_out?: EventSummary[];
+  /** Ended in the last 90 days, most recent first. */
+  past?: EventSummary[];
   /** Only places with something on — a filter leading nowhere is worse than none. */
-  cities: { city: string; country: string; events: number }[];
-  categories: { category: string; events: number }[];
+  cities: (Pick<CityPlace, 'city' | 'country' | 'events'> & Partial<CityPlace>)[];
+  categories: (Pick<CategoryPlace, 'category' | 'events'> & Partial<CategoryPlace>)[];
+  /** Counted by the database, never claimed. */
+  totals?: { upcoming: number; cities: number };
+  /** The buyer's service charge per currency, as a person writes it: "8", "8.5". */
+  fees?: { service_charge: Partial<Record<Money['currency'], string>> };
+}
+
+/** The listing's filters and the search's city picker. */
+export interface Facets {
+  categories: CategoryPlace[];
+  cities: CityPlace[];
 }
 
 /**

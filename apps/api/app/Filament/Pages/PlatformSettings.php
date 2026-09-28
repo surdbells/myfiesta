@@ -187,6 +187,42 @@ class PlatformSettings extends Page
                             ->maxLength(500),
                     ])
                     ->columns(2),
+
+                Section::make('Almost sold out')
+                    ->description(
+                        'When a ticket shows "Almost sold out" on the site, the app and the ticket page: once something '
+                        .'has sold and what is left is at or under the larger of the two numbers below. "Only 4 left" '
+                        .'names the exact count only at or under the last number, so an organizer\'s sales are never '
+                        .'readable off the page. Lists take up to a minute to show a change; checkout always counts again.'
+                    )
+                    ->schema([
+                        TextInput::make('almost_sold_out_percent')
+                            ->label('Share of capacity left')
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->suffix('%'),
+
+                        TextInput::make('almost_sold_out_floor')
+                            ->label('Or fewer places than')
+                            ->helperText('Keeps a small room from reading as nearly full after one sale.')
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(10000)
+                            ->suffix('places'),
+
+                        TextInput::make('only_left_under')
+                            ->label('Name the exact count at')
+                            ->helperText('0 never names a number.')
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(1000)
+                            ->suffix('or fewer'),
+                    ])
+                    ->columns(3),
             ]);
     }
 
@@ -195,17 +231,47 @@ class PlatformSettings extends Page
         return $schema->components([
             Form::make([EmbeddedSchema::make('form')])
                 ->id('form')
-                ->livewireSubmitHandler('save')
+                // To the question, not to save(): see confirmSave().
+                ->livewireSubmitHandler('confirmSave')
                 ->footer([
                     Actions::make([
                         Action::make('save')
                             ->label('Save settings')
-                            ->submit('save')
+                            ->submit('confirmSave')
                             ->visible($this->mayChange())
                             ->keyBindings(['mod+s']),
                     ])->key('form-actions'),
                 ]),
         ]);
+    }
+
+    /**
+     * Asked before anything is saved.
+     *
+     * These settings decide what every buyer on every organizer's events is
+     * charged and what their receipt says, from the next order on. The button
+     * — and Enter in any box — opens the question; the form is checked first,
+     * so a mistake is shown on its field rather than behind a modal.
+     */
+    public function confirmSave(): void
+    {
+        if (! $this->mayChange()) {
+            abort(403);
+        }
+
+        $this->getSchema('form')?->validate();
+
+        $this->mountAction('confirmSave');
+    }
+
+    public function confirmSaveAction(): Action
+    {
+        return Action::make('confirmSave')
+            ->requiresConfirmation()
+            ->modalHeading('Save the platform settings?')
+            ->modalDescription('Service charges, tax on them, the seller of record, what receipts say and the sold-out badges change for every organizer’s events. Orders placed from now on use them; orders already placed keep what they were charged. Recorded in the audit trail under your name.')
+            ->modalSubmitActionLabel('Save settings')
+            ->action(fn () => $this->save());
     }
 
     public function save(): void
@@ -273,6 +339,9 @@ class PlatformSettings extends Page
             'legal_name' => $settings['legal_name'],
             'address_ca' => $settings['address_ca'],
             'address_ng' => $settings['address_ng'],
+            'almost_sold_out_percent' => (int) $settings['almost_sold_out_percent'],
+            'almost_sold_out_floor' => (int) $settings['almost_sold_out_floor'],
+            'only_left_under' => (int) $settings['only_left_under'],
         ];
     }
 
@@ -297,6 +366,9 @@ class PlatformSettings extends Page
             'legal_name' => $form['legal_name'] ?? null,
             'address_ca' => $form['address_ca'] ?? null,
             'address_ng' => $form['address_ng'] ?? null,
+            'almost_sold_out_percent' => (int) $form['almost_sold_out_percent'],
+            'almost_sold_out_floor' => (int) $form['almost_sold_out_floor'],
+            'only_left_under' => (int) $form['only_left_under'],
         ];
     }
 }

@@ -160,6 +160,32 @@ describe('Organizer page', () => {
     expect(page.organizer()).toBeNull();
   });
 
+  it('badges a night going fast, and says sold out instead of a price nobody can pay', async () => {
+    const fixture = await open(
+      organizer({
+        upcoming: [
+          card({ slug: 'going', availability: { state: 'almost_sold_out', left: 3 } }),
+          card({ slug: 'gone', is_sold_out: true, availability: { state: 'sold_out', left: null } }),
+          card({ slug: 'plenty', availability: { state: 'available', left: null } }),
+          card({ slug: 'closed', availability: { state: 'closed', left: null } }),
+        ],
+      }),
+    );
+
+    const rows = [...(fixture.nativeElement as HTMLElement).querySelectorAll('mf-card[tappable]')].map((row) => row.textContent ?? '');
+
+    // A card never names the count; that belongs beside the ticket.
+    expect(rows[0]).toContain('Almost sold out');
+    expect(rows[0]).not.toContain('3 left');
+    expect(rows[1]).toContain('Sold out');
+    expect(rows[1]).not.toMatch(/\$\s?30/);
+    expect(rows[2]).not.toMatch(/sold out/i);
+    // Stopped selling with places left: said as it is, and no price either.
+    expect(rows[3]).toContain('Sales closed');
+    expect(rows[3]).not.toMatch(/sold out/i);
+    expect(rows[3]).not.toMatch(/\$\s?30/);
+  });
+
   it('dates a night that has gone without its clock', async () => {
     await open(organizer());
 

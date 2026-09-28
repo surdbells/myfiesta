@@ -1,220 +1,314 @@
 <!--
-  The hero: the pitch on the left, the proof on the right. The words sell the
-  platform to a stranger; the collage beside them is real events on sale right
-  now, not stock photography — the fastest honest answer to "is anything
-  actually happening here".
+  The hero: what is on, made of the posters of what is actually on. Never
+  stock photography — the fastest honest answer to "is anything happening
+  here" is the nights themselves.
+
+  Dark whatever the theme, like a venue with the lights down: the posters are
+  the light in it. The lead poster, blurred, is the room's glow; drawn once,
+  the same picture as the card, so it costs no second download.
+
+  Named home-hero rather than hero: the shared kit's .hero is a bordered,
+  padded card, and it would inset this band from the edges of the screen.
 -->
-<section
-  class="hero bg-surface bg-[radial-gradient(60%_80%_at_90%_0%,color-mix(in_srgb,var(--primary)_8%,transparent),transparent_60%)]"
->
+<section class="home-hero relative isolate overflow-hidden bg-neutral-950 text-neutral-0" aria-labelledby="hero-title">
+  @if (lead()?.poster_url; as glow) {
+    <img
+      class="hero__glow pointer-events-none absolute inset-0 -z-20 h-full w-full scale-125 object-cover opacity-50 blur-[72px] saturate-[1.4]"
+      [src]="glow"
+      alt=""
+      aria-hidden="true"
+      decoding="async"
+    />
+  }
+  <span
+    class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_60%_at_12%_8%,color-mix(in_srgb,var(--color-brand-500)_38%,transparent),transparent_62%),linear-gradient(to_bottom,color-mix(in_srgb,var(--color-neutral-950)_35%,transparent)_0%,color-mix(in_srgb,var(--color-neutral-950)_78%,transparent)_70%,var(--color-neutral-950)_100%)]"
+    aria-hidden="true"
+  ></span>
+
   <div
-    class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[1.05fr_1fr] items-center gap-16 px-6 pb-10 pt-14 max-[900px]:grid-cols-1 max-[900px]:gap-10 max-[900px]:pt-10"
+    class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] items-center gap-12 px-6 pb-20 pt-16 max-[1024px]:grid-cols-1 max-[1024px]:gap-9 max-[1024px]:pb-12 max-sm:pt-9"
   >
-    <div class="hero__lead min-w-0">
+    <div class="hero__copy min-w-0">
       @if (loading()) {
-        <p class="hero__eyebrow"><span class="shimmer h-[0.9rem] w-32"></span></p>
-        <h1><span class="shimmer h-12 w-[min(30rem,80%)]"></span></h1>
+        <span class="shimmer shimmer--dark h-8 w-64 rounded-full"></span>
+        <span class="shimmer shimmer--dark mt-6 h-[4.5rem] w-[min(34rem,90%)]"></span>
+        <span class="shimmer shimmer--dark mt-3 h-[4.5rem] w-[min(26rem,70%)]"></span>
       } @else {
         <p
-          class="hero__eyebrow w-fit rounded-full bg-primary-soft px-4 py-1.5 text-sm font-semibold text-primary-soft-text"
+          class="hero__eyebrow inline-flex max-w-full items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--color-neutral-0)_16%,transparent)] bg-[color-mix(in_srgb,var(--color-neutral-0)_8%,transparent)] px-3.5 py-1.5 text-sm font-medium text-neutral-100 backdrop-blur-[6px]"
         >
-          Tickets for the night out
+          <span class="live-dot relative inline-block h-2 w-2 shrink-0 rounded-full bg-gold-300" aria-hidden="true"></span>
+          <span class="truncate">{{ liveLine() }}</span>
         </p>
         <h1
-          class="hero__title mt-4 text-balance text-[clamp(2.25rem,4.6vw,3.5rem)] font-bold leading-[1.1] tracking-[-0.02em]"
+          id="hero-title"
+          class="hero__title mt-5 text-[clamp(2.6rem,6.2vw,4.9rem)] font-bold leading-[0.98] tracking-[-0.035em] text-neutral-0"
         >
-          Your next night out<span class="block text-primary-text">starts here.</span>
+          Find the night <span class="block text-gold-300">you’ll still be talking about.</span>
         </h1>
-        <p class="hero__meta mt-4 max-w-[46ch] text-pretty text-lg text-text-muted max-sm:text-base">
-          Concerts, club nights and festivals from organizers across Canada and
-          Nigeria. Find it, tap twice, you're in.
-        </p>
-
-        <p class="hero__actions mt-8 flex flex-wrap items-center gap-4">
-          <a
-            class="hero__cta inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3 text-base font-semibold text-on-primary no-underline transition-[background-color,transform] duration-(--motion-fast) ease-(--motion-ease) hover:-translate-y-px hover:bg-primary-hover motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-            routerLink="/events"
-          >
-            Explore events
-            <ui-icon [icon]="arrowIcon" size="sm" />
-          </a>
-          <a
-            class="inline-flex items-center gap-2 rounded-full border border-field-border bg-surface-raised px-8 py-3 text-base font-semibold text-text no-underline hover:bg-surface-hover"
-            [href]="consoleUrl + '/register'"
-          >
-            Sell tickets
-          </a>
-        </p>
-
-        <!-- True claims only: verification exists, and cards never touch our
-             servers — checkout happens at Stripe or Paystack. -->
-        <p class="mt-8 flex flex-wrap items-center gap-6 text-sm text-text-muted">
-          <span class="inline-flex items-center gap-2">
-            <ui-icon class="text-primary" [icon]="verifiedIcon" size="sm" />
-            Verified organizers
-          </span>
-          <span class="inline-flex items-center gap-2">
-            <ui-icon class="text-primary" [icon]="secureIcon" size="sm" />
-            Secure checkout
-          </span>
+        <p class="hero__promise mt-5 max-w-[46ch] text-pretty text-lg leading-[1.55] text-neutral-200 max-sm:text-base">
+          Concerts, club nights, comedy and festivals {{ placesLine() }}. Pick a ticket, check out as a guest, and show your
+          phone at the door.
         </p>
       }
+
+      <!--
+        What, where and when — each with a real label, visible, because a
+        placeholder vanishes the moment somebody starts typing and a label
+        does not. The city picker lists only cities with something on.
+      -->
+      <form
+        class="finder mt-8 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] items-stretch gap-1 rounded-xl bg-surface-raised p-1.5 text-text shadow-(--shadow-floating) max-md:grid-cols-2 max-sm:grid-cols-1"
+        role="search"
+        aria-label="Find events"
+        (ngSubmit)="search()"
+      >
+        <label class="finder__field group grid cursor-text gap-0.5 rounded-lg px-3.5 py-2.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) focus-within:bg-surface-hover hover:bg-surface-hover max-md:col-span-2 max-sm:col-span-1">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">What</span>
+          <span class="flex items-center gap-2">
+            <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
+            <input
+              class="finder__input m-0 h-7 min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-[15px] text-text placeholder:text-text-subtle focus:shadow-none"
+              name="q"
+              type="search"
+              placeholder="Artist, event, venue"
+              autocomplete="off"
+              [ngModel]="query()"
+              (ngModelChange)="query.set($event)"
+            />
+          </span>
+        </label>
+
+        <label class="finder__field grid cursor-pointer gap-0.5 rounded-lg px-3.5 py-2.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) focus-within:bg-surface-hover hover:bg-surface-hover">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">Where</span>
+          <span class="flex items-center gap-2">
+            <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
+            <select
+              class="finder__select m-0 h-7 min-w-0 flex-1 cursor-pointer rounded-none border-0 bg-transparent py-0 pl-0 text-[15px] focus:shadow-none [background-position:calc(100%-10px)_12px,calc(100%-5px)_12px]"
+              name="city"
+              [ngModel]="city()"
+              (ngModelChange)="city.set($event)"
+            >
+              <option value="">Anywhere</option>
+              @for (name of cityNames(); track name) {
+                <option [value]="name">{{ name }}</option>
+              }
+            </select>
+          </span>
+        </label>
+
+        <label class="finder__field grid cursor-pointer gap-0.5 rounded-lg px-3.5 py-2.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) focus-within:bg-surface-hover hover:bg-surface-hover">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">When</span>
+          <span class="flex items-center gap-2">
+            <ui-icon class="shrink-0 text-text-subtle" [icon]="whenIcon" size="sm" />
+            <select
+              class="finder__select m-0 h-7 min-w-0 flex-1 cursor-pointer rounded-none border-0 bg-transparent py-0 pl-0 text-[15px] focus:shadow-none [background-position:calc(100%-10px)_12px,calc(100%-5px)_12px]"
+              name="when"
+              [ngModel]="when()"
+              (ngModelChange)="when.set($event)"
+            >
+              @for (option of whenOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </span>
+        </label>
+
+        <button
+          class="finder__go inline-flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border-0 bg-primary px-6 text-[15px] font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:bg-primary-hover max-md:col-span-2 max-sm:col-span-1"
+          type="submit"
+        >
+          <ui-icon [icon]="searchIcon" size="sm" />
+          Search
+        </button>
+      </form>
+
+      <nav class="mt-5 flex flex-wrap items-center gap-2" aria-label="Quick picks">
+        @for (pick of quickPicks; track pick.label) {
+          <a
+            class="rounded-full border border-[color-mix(in_srgb,var(--color-neutral-0)_20%,transparent)] px-3.5 py-1.5 text-sm font-medium text-neutral-100 no-underline transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:border-[color-mix(in_srgb,var(--color-neutral-0)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-neutral-0)_10%,transparent)]"
+            routerLink="/events"
+            [queryParams]="pick.params"
+            >{{ pick.label }}</a
+          >
+        }
+      </nav>
     </div>
 
-    @if (lead(); as event) {
-      <div class="hero__collage grid grid-cols-[1.35fr_1fr] gap-4 max-[900px]:hidden">
-        <a
-          class="group relative row-span-2 block overflow-hidden rounded-xl no-underline"
-          [routerLink]="['/', event.slug]"
-        >
-          @if (event.poster_url) {
-            <img
-              class="aspect-[3/4] h-full w-full bg-surface-inset object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-              [src]="event.poster_url"
-              alt=""
-              fetchpriority="high"
-              decoding="async"
-            />
-          } @else {
-            <div
-              class="aspect-[3/4] h-full w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_55%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-900),var(--color-neutral-950))]"
-              aria-hidden="true"
-            ></div>
-          }
-          <span
-            class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.85)_0%,rgba(5,10,7,0.2)_45%,transparent_65%)]"
-            aria-hidden="true"
-          ></span>
-          <span class="absolute left-4 top-4 rounded-full bg-[rgba(8,12,9,0.72)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-0 backdrop-blur-[4px]">
-            Next up
-          </span>
-          <span class="absolute inset-x-0 bottom-0 grid gap-1 p-5 text-neutral-0">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-gold-300">{{ chipWhen(event) }}</span>
-            <span class="text-xl font-bold leading-[1.2]">{{ event.title }}</span>
-            <span class="text-sm text-neutral-200">{{ event.city }}</span>
-          </span>
-        </a>
-
-        @for (side of sideEvents(); track side.slug) {
+    <!--
+      The posters. On a wide screen, the lead beside two more; on a phone, a
+      strip to swipe. The lead is the page's largest picture and the one it
+      is judged by, so it alone loads first and at high priority.
+    -->
+    @if (loading()) {
+      <div class="mosaic grid grid-cols-2 gap-4 max-[1024px]:hidden" aria-hidden="true">
+        <span class="shimmer shimmer--dark row-span-2 h-full min-h-[26rem] rounded-xl"></span>
+        <span class="shimmer shimmer--dark aspect-[4/3] rounded-xl"></span>
+        <span class="shimmer shimmer--dark aspect-[4/3] rounded-xl"></span>
+      </div>
+    } @else if (lead(); as event) {
+      <ul
+        class="mosaic m-0 grid list-none grid-cols-2 gap-4 p-0 max-[1024px]:-mx-6 max-[1024px]:flex max-[1024px]:snap-x max-[1024px]:snap-mandatory max-[1024px]:overflow-x-auto max-[1024px]:px-6 max-[1024px]:scroll-px-6 max-[1024px]:pb-2 max-[1024px]:[scrollbar-width:none]"
+        aria-label="On sale now"
+      >
+        <li class="mosaic__lead relative row-span-2 min-w-0 max-[1024px]:w-[min(78vw,20rem)] max-[1024px]:shrink-0 max-[1024px]:snap-start">
           <a
-            class="group relative block overflow-hidden rounded-xl no-underline"
-            [routerLink]="['/', side.slug]"
+            class="group relative block h-full min-h-[26rem] overflow-hidden rounded-xl no-underline shadow-(--shadow-floating) ring-1 ring-[color-mix(in_srgb,var(--color-neutral-0)_12%,transparent)] max-[1024px]:aspect-[4/5] max-[1024px]:min-h-0"
+            [routerLink]="['/', event.slug]"
           >
-            @if (side.poster_url) {
+            @if (event.poster_url) {
               <img
-                class="aspect-[5/4] w-full bg-surface-inset object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                [src]="side.poster_url"
+                class="absolute inset-0 h-full w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                [src]="event.poster_url"
                 alt=""
-                loading="lazy"
+                width="800"
+                height="1000"
+                fetchpriority="high"
+                loading="eager"
                 decoding="async"
               />
             } @else {
-              <div
-                class="aspect-[5/4] w-full bg-[radial-gradient(120%_90%_at_20%_0%,color-mix(in_srgb,var(--color-brand-500)_45%,transparent),transparent_60%),linear-gradient(155deg,var(--color-brand-800),var(--color-neutral-950))]"
-                aria-hidden="true"
-              ></div>
+              <span class="absolute inset-0"><app-poster-art [title]="event.title" [category]="event.category" [glyph]="260" /></span>
             }
             <span
-              class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.85)_0%,transparent_60%)]"
+              class="absolute inset-0 bg-[linear-gradient(to_top,color-mix(in_srgb,var(--color-neutral-950)_92%,transparent)_0%,color-mix(in_srgb,var(--color-neutral-950)_30%,transparent)_45%,transparent_70%)]"
               aria-hidden="true"
             ></span>
-            <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-4 text-neutral-0">
-              <span class="text-sm font-semibold leading-snug">{{ side.title }}</span>
-              <span class="text-xs text-neutral-200">{{ chipWhen(side) }}</span>
+            <span class="absolute left-4 top-4 flex flex-wrap gap-2">
+              <span
+                class="rounded-full bg-[color-mix(in_srgb,var(--color-neutral-950)_62%,transparent)] px-3 py-1.5 text-xs font-semibold uppercase leading-none tracking-[0.08em] text-neutral-0 backdrop-blur-[6px]"
+                >Next up</span
+              >
+              <app-availability [value]="event.availability" />
+            </span>
+            <span class="absolute inset-x-0 bottom-0 grid gap-1.5 p-6 text-neutral-0 max-sm:p-5">
+              <span class="text-xs font-semibold uppercase tracking-[0.1em] text-gold-300">{{ chipWhen(event) }}</span>
+              <span class="text-balance text-[clamp(1.35rem,2.2vw,1.85rem)] font-bold leading-[1.1] tracking-[-0.02em]">{{ event.title }}</span>
+              <span class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-neutral-200">
+                <span class="inline-flex items-center gap-1.5"><ui-icon [icon]="whereIcon" size="sm" /> {{ event.city }}</span>
+                <span class="font-semibold text-neutral-0">{{ price(event) }}</span>
+              </span>
             </span>
           </a>
+        </li>
+
+        @for (side of mosaic(); track side.slug; let i = $index) {
+          <li
+            class="mosaic__side min-w-0 max-[1024px]:w-[min(64vw,16rem)] max-[1024px]:shrink-0 max-[1024px]:snap-start"
+            [class]="i > 1 ? 'min-[1025px]:hidden' : ''"
+          >
+            <a
+              class="group relative block aspect-[4/3] overflow-hidden rounded-xl no-underline shadow-(--shadow-floating) ring-1 ring-[color-mix(in_srgb,var(--color-neutral-0)_12%,transparent)] max-[1024px]:aspect-[4/5]"
+              [routerLink]="['/', side.slug]"
+            >
+              @if (side.poster_url) {
+                <img
+                  class="absolute inset-0 h-full w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                  [src]="side.poster_url"
+                  alt=""
+                  width="480"
+                  height="360"
+                  loading="lazy"
+                  decoding="async"
+                />
+              } @else {
+                <span class="absolute inset-0"><app-poster-art [title]="side.title" [category]="side.category" /></span>
+              }
+              <span
+                class="absolute inset-0 bg-[linear-gradient(to_top,color-mix(in_srgb,var(--color-neutral-950)_88%,transparent)_0%,transparent_65%)]"
+                aria-hidden="true"
+              ></span>
+              <span class="absolute left-3 top-3"><app-availability [value]="side.availability" /></span>
+              <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-4 text-neutral-0">
+                <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-gold-300">{{ chipWhen(side) }}</span>
+                <span class="line-clamp-2 text-[15px] font-semibold leading-snug">{{ side.title }}</span>
+              </span>
+            </a>
+          </li>
         }
+      </ul>
+    } @else {
+      <!-- Nothing on sale yet: the categories' own art, so the room is not dark. -->
+      <div class="mosaic grid grid-cols-2 gap-4 max-[1024px]:hidden" aria-hidden="true">
+        <span class="row-span-2 min-h-[24rem] overflow-hidden rounded-xl"><app-poster-art category="Nightlife" [letter]="false" [glyph]="280" /></span>
+        <span class="aspect-[4/3] overflow-hidden rounded-xl"><app-poster-art category="Concert" [letter]="false" /></span>
+        <span class="aspect-[4/3] overflow-hidden rounded-xl"><app-poster-art category="Festival" [letter]="false" /></span>
       </div>
     }
   </div>
-
-  <!--
-    Three fields on one 48px row. The placeholders carry the labels — the
-    stacked caption-over-input pattern doubled the bar's height for words a
-    placeholder already says — and each field keeps a name for readers via
-    aria-label.
-  -->
-  <div class="px-6 pb-10">
-  <form
-    class="finder mx-auto flex w-full max-w-[52rem] items-center overflow-hidden rounded-lg border border-border bg-surface-raised shadow-(--shadow-card) max-sm:flex-wrap"
-    (ngSubmit)="search()"
-    role="search"
-  >
-    <div class="flex h-12 min-w-0 flex-1 items-center gap-2 pl-4 max-sm:basis-full max-sm:border-b max-sm:border-border max-sm:pr-4">
-      <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
-      <input
-        id="q"
-        class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
-        name="q"
-        type="search"
-        placeholder="Artist, night, or venue"
-        aria-label="What"
-        [ngModel]="query()"
-        (ngModelChange)="query.set($event)"
-      />
-    </div>
-
-    <div class="mx-2 h-6 w-px shrink-0 bg-border max-sm:hidden" aria-hidden="true"></div>
-
-    <div class="flex h-12 min-w-0 flex-1 items-center gap-2 max-sm:pl-4">
-      <ui-icon class="shrink-0 text-text-subtle" [icon]="whereIcon" size="sm" />
-      <input
-        id="where"
-        class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-text placeholder:text-text-subtle focus:shadow-none"
-        name="where"
-        list="cities"
-        placeholder="Any city"
-        aria-label="Where"
-        [ngModel]="city()"
-        (ngModelChange)="city.set($event)"
-      />
-      <datalist id="cities">
-        @for (name of cityNames(); track name) {
-          <option [value]="name"></option>
-        }
-      </datalist>
-    </div>
-
-    <div class="mx-2 h-6 w-px shrink-0 bg-border max-[860px]:hidden" aria-hidden="true"></div>
-
-    <div class="flex h-12 w-44 shrink-0 items-center gap-2 max-[860px]:hidden">
-      <ui-icon class="shrink-0 text-text-subtle" [icon]="whenIcon" size="sm" />
-      <input
-        id="on"
-        class="m-0 h-full min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm placeholder:text-text-subtle focus:shadow-none"
-        [class]="on() ? 'text-text' : 'text-text-subtle'"
-        name="on"
-        type="date"
-        aria-label="When"
-        [ngModel]="on()"
-        (ngModelChange)="on.set($event)"
-      />
-    </div>
-
-    <button
-      class="finder__go h-12 shrink-0 cursor-pointer border-0 bg-primary px-6 text-sm font-semibold text-on-primary [font-family:inherit] hover:bg-primary-hover"
-      type="submit"
-    >
-      Search
-    </button>
-  </form>
-  </div>
 </section>
+
+<!-- A shelf: a heading that says why these are together, and a way to all of them. -->
+<ng-template #shelfTemplate let-shelf>
+  <section class="shelf mt-16 max-sm:mt-12" [attr.aria-labelledby]="shelf.key + '-title'">
+    <header class="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div class="grid gap-1">
+        <h2 [id]="shelf.key + '-title'" class="flex items-center gap-2.5 text-[clamp(1.4rem,2.4vw,1.75rem)] font-bold tracking-[-0.02em]">
+          <ui-icon class="text-primary-text" [icon]="shelf.icon" size="md" />
+          {{ shelf.title }}
+        </h2>
+        <p class="text-sm text-text-muted">{{ shelf.hint }}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-primary-text no-underline hover:bg-primary-soft"
+          routerLink="/events"
+          [queryParams]="shelf.all"
+          >See all <span class="sr-only">{{ shelf.title | lowercase }}</span><ui-icon [icon]="arrowIcon" size="sm"
+        /></a>
+        @if (scrolls(shelf)) {
+          <button
+            class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover max-sm:hidden"
+            type="button"
+            [attr.aria-label]="'Scroll ' + shelf.title + ' back'"
+            (click)="nudge(track, -1)"
+          >
+            <ui-icon [icon]="backIcon" size="sm" />
+          </button>
+          <button
+            class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover max-sm:hidden"
+            type="button"
+            [attr.aria-label]="'Scroll ' + shelf.title + ' forward'"
+            (click)="nudge(track, 1)"
+          >
+            <ui-icon [icon]="arrowIcon" size="sm" />
+          </button>
+        }
+      </div>
+    </header>
+
+    <ul
+      #track
+      class="rail m-0 grid list-none p-0"
+      [class]="
+        scrolls(shelf)
+          ? 'grid-flow-col auto-cols-[17.5rem] gap-5 overflow-x-auto snap-x snap-mandatory pb-3 -mx-6 px-6 scroll-px-6 [scrollbar-width:thin] max-sm:auto-cols-[min(72vw,15.5rem)] max-sm:gap-4'
+          : 'grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-5 max-sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] max-sm:gap-3'
+      "
+    >
+      @for (event of shelf.events; track event.slug) {
+        <li class="min-w-0 snap-start">
+          <app-event-card [event]="event" [past]="!!shelf.past || over(event)" />
+        </li>
+      }
+    </ul>
+  </section>
+</ng-template>
 
 <div class="wrap mx-auto max-w-[1240px] px-6">
   @if (loading()) {
-    <section class="rail-block mt-16">
-      <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]"><span class="shimmer h-[1.4rem] w-48"></span></h2>
-      <ul class="rail m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
-        @for (n of [0, 1, 2, 3, 4]; track n) {
-          <li class="rail__item min-w-0"><span class="shimmer aspect-[3/4]"></span></li>
+    <section class="mt-16" aria-busy="true" aria-label="Loading what is on">
+      <span class="shimmer mb-5 h-8 w-56"></span>
+      <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-5 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]">
+        @for (n of [0, 1, 2, 3]; track n) {
+          <li class="min-w-0"><span class="shimmer aspect-[4/5]"></span></li>
         }
       </ul>
     </section>
   } @else if (failed()) {
-    <section class="rail-block mt-16">
-      <div class="notice rounded-lg border border-border bg-surface-raised p-8" role="alert">
-        <h2 class="mb-1 text-lg">We could not load what's on</h2>
+    <section class="mt-16">
+      <div class="notice rounded-xl border border-border bg-surface-raised p-8" role="alert">
+        <h2 class="mb-1 text-lg">We could not load what’s on</h2>
         <p class="mb-4 text-text-muted">It is usually temporary.</p>
         <button
           type="button"
@@ -226,122 +320,163 @@
       </div>
     </section>
   } @else {
-    @for (rail of rails(); track rail.title) {
-      <section class="rail-block mt-16">
-        <header class="rail-block__head mb-4 flex flex-wrap items-center gap-4">
-          <h2 class="rail-block__title text-xl font-semibold tracking-[-0.02em]">{{ rail.title }}</h2>
-          @if (rail.hint) {
-            <p class="rail-block__hint text-sm text-text-muted">{{ rail.hint }}</p>
-          }
-          @if (rail.scrolls) {
-            <span class="ml-auto flex gap-2">
-              <button
-                class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover"
-                type="button"
-                aria-label="Scroll back"
-                (click)="nudge(railEl, -1)"
-              >
-                <ui-icon [icon]="backIcon" size="sm" />
-              </button>
-              <button
-                class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover"
-                type="button"
-                aria-label="Scroll forward"
-                (click)="nudge(railEl, 1)"
-              >
-                <ui-icon [icon]="arrowIcon" size="sm" />
-              </button>
-            </span>
-          }
-        </header>
+    @if (shelves().today; as shelf) {
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
+    }
+    @if (shelves().weekend; as shelf) {
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
+    }
+  }
+</div>
 
-        <ul
-          #railEl
-          class="rail m-0 grid list-none p-0"
-          [class]="rail.scrolls ? 'grid-flow-col auto-cols-[minmax(0,15rem)] gap-6 overflow-x-auto pb-3 snap-x snap-mandatory [scrollbar-width:thin] -mx-6 px-6 max-sm:auto-cols-[minmax(0,11rem)] max-sm:gap-4' : rail.wide ? 'grid-cols-[1fr] gap-3' : 'grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4'"
-        >
-          @for (event of rail.events; track event.slug) {
-            <li class="rail__item min-w-0 snap-start">
-              <app-event-card [event]="event" [eager]="$first" [wide]="rail.wide" />
+@if (!loading() && !failed() && shelves().almost; as shelf) {
+  <!--
+    Going fast, on a warm band of its own: the one shelf that is about acting
+    now, set apart so it reads as that rather than as more of the same.
+  -->
+  <div class="almost-band mt-16 bg-[color-mix(in_srgb,var(--scarce)_8%,var(--surface-sunken))] pb-14 pt-1 max-sm:mt-12">
+    <div class="mx-auto max-w-[1240px] px-6">
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
+    </div>
+  </div>
+}
+
+<div class="wrap mx-auto max-w-[1240px] px-6">
+  @if (!loading() && !failed()) {
+    <!--
+      Categories: a real poster from each wherever there is one, the
+      category's own painted ground where there is not. Only those with
+      something on — a card that leads to an empty page is worse than none.
+    -->
+    @if (categories().length > 0) {
+      <section class="mt-20 max-sm:mt-14" aria-labelledby="categories-title">
+        <header class="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <div class="grid gap-1">
+            <h2 id="categories-title" class="text-[clamp(1.4rem,2.4vw,1.75rem)] font-bold tracking-[-0.02em]">Browse by category</h2>
+            <p class="text-sm text-text-muted">Whatever kind of night you are after.</p>
+          </div>
+          <a class="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-text no-underline hover:underline" routerLink="/events"
+            >All events <ui-icon [icon]="arrowIcon" size="sm"
+          /></a>
+        </header>
+        <ul class="m-0 grid list-none grid-cols-4 gap-4 p-0 max-[1024px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-3">
+          @for (kind of categories(); track kind.category) {
+            <li class="min-w-0">
+              <a
+                class="category group relative block aspect-[4/5] overflow-hidden rounded-xl no-underline shadow-(--shadow-card) transition-[transform,box-shadow] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-1 hover:shadow-(--shadow-overlay) motion-reduce:transition-none motion-reduce:hover:translate-y-0 max-sm:aspect-square"
+                [routerLink]="kind.slug ? ['/events/category', kind.slug] : ['/events']"
+                [queryParams]="kind.slug ? null : { category: kind.category }"
+              >
+                @if (kind.cover_url) {
+                  <img
+                    class="absolute inset-0 h-full w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    [src]="kind.cover_url"
+                    alt=""
+                    width="400"
+                    height="500"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                } @else {
+                  <span class="absolute inset-0"><app-poster-art [category]="kind.category" [letter]="false" [glyph]="190" /></span>
+                }
+                <span
+                  class="absolute inset-0 bg-[linear-gradient(to_top,color-mix(in_srgb,var(--color-neutral-950)_85%,transparent)_0%,color-mix(in_srgb,var(--color-neutral-950)_15%,transparent)_55%,transparent_75%)]"
+                  aria-hidden="true"
+                ></span>
+                <span
+                  class="absolute left-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-[color-mix(in_srgb,var(--color-neutral-950)_45%,transparent)] text-neutral-0 backdrop-blur-[6px] max-sm:left-3 max-sm:top-3 max-sm:h-9 max-sm:w-9"
+                  aria-hidden="true"
+                >
+                  <lucide-icon [img]="iconFor(kind.category)" [size]="18" [strokeWidth]="2" />
+                </span>
+                <span class="absolute inset-x-0 bottom-0 grid gap-0.5 p-5 text-neutral-0 max-sm:p-3.5">
+                  <span class="text-balance text-[clamp(1.1rem,1.9vw,1.4rem)] font-bold leading-[1.15] tracking-[-0.02em] [font-family:var(--font-family-display)]">{{ kind.category }}</span>
+                  <span class="flex items-center gap-1.5 text-sm text-neutral-200 tabular-nums max-sm:text-xs">
+                    {{ kind.events }} {{ kind.events === 1 ? 'event' : 'events' }}
+                    <ui-icon
+                      class="opacity-0 transition-[opacity,transform] duration-(--motion-fast) ease-(--motion-ease) group-hover:translate-x-0.5 group-hover:opacity-100 motion-reduce:transition-none"
+                      [icon]="arrowIcon"
+                      size="sm"
+                    />
+                  </span>
+                </span>
+              </a>
             </li>
           }
         </ul>
       </section>
     }
 
-    <!--
-      Only cities and categories that have something on. Offering a filter that
-      leads to an empty page is worse than not offering it, and the count is
-      what tells somebody whether it is worth the tap.
-    -->
-    @if (categories().length > 0) {
-      <section class="rail-block mt-16">
-        <header class="mb-4 flex flex-wrap items-baseline justify-between gap-4">
-          <h2 class="rail-block__title text-xl font-semibold tracking-[-0.02em]">Explore by category</h2>
-          <a class="text-sm font-medium text-primary-text no-underline hover:underline" routerLink="/events">View all</a>
-        </header>
-        <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-5 p-0">
-          @for (kind of categories(); track kind.category) {
-            <li>
-              <!-- There are no category photographs, so the tile ground is
-                   the brand gradients, cycled in order — a designed set
-                   rather than a random one. The words sit under the picture,
-                   where the reference puts them. -->
-              <button
-                class="group grid w-full cursor-pointer justify-items-start gap-3 border-0 bg-transparent p-0 text-left [font-family:inherit]"
-                type="button"
-                (click)="browseCategory(kind.category)"
-              >
-                <span
-                  class="block h-28 w-full overflow-hidden rounded-xl transition-transform duration-(--motion-fast) ease-(--motion-ease) group-hover:-translate-y-0.5"
-                  [style.background]="tileBg($index)"
-                  aria-hidden="true"
-                ></span>
-                <span class="grid gap-0.5">
-                  <span class="font-semibold text-text">{{ kind.category }}</span>
-                  <span class="text-sm text-text-muted tabular-nums">
-                    {{ kind.events }} {{ kind.events === 1 ? 'event' : 'events' }}
-                  </span>
-                </span>
-              </button>
-            </li>
-          }
-        </ul>
-      </section>
+    @if (shelves().upcoming; as shelf) {
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
     }
 
     @if (cities().length > 0) {
-      <section class="rail-block mt-16">
-        <h2 class="rail-block__title mb-4 text-xl font-semibold tracking-[-0.02em]">Browse by city</h2>
-        <ul class="chips m-0 flex list-none flex-wrap gap-3 p-0">
-          @for (place of cities(); track place.city + place.country) {
-            <li>
-              <button
-                class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:border-border-strong hover:bg-surface-hover"
-                type="button"
-                (click)="browseCity(place.city)"
+      <section class="mt-20 max-sm:mt-14" aria-labelledby="cities-title">
+        <header class="mb-6 grid gap-1">
+          <h2 id="cities-title" class="text-[clamp(1.4rem,2.4vw,1.75rem)] font-bold tracking-[-0.02em]">Events by city</h2>
+          <p class="text-sm text-text-muted">Where the nights are, and how many are on.</p>
+        </header>
+        <ul class="m-0 grid list-none grid-cols-3 gap-4 p-0 max-[1024px]:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-3">
+          @for (place of cities().slice(0, 6); track place.city + place.country) {
+            <li class="min-w-0">
+              <a
+                class="city group relative block aspect-[16/9] overflow-hidden rounded-xl no-underline shadow-(--shadow-card) transition-[transform,box-shadow] duration-(--motion-base) ease-(--motion-ease) hover:-translate-y-1 hover:shadow-(--shadow-overlay) motion-reduce:transition-none motion-reduce:hover:translate-y-0 max-sm:aspect-[5/2]"
+                [routerLink]="place.slug ? ['/events/city', place.slug] : ['/events']"
+                [queryParams]="place.slug ? null : { city: place.city }"
               >
-                {{ place.label }}
-                <span class="chips__count text-xs text-text-subtle tabular-nums">{{ place.events }}</span>
-              </button>
+                @if (place.cover_url) {
+                  <img
+                    class="absolute inset-0 h-full w-full object-cover transition-transform duration-(--motion-slow) ease-(--motion-ease) group-hover:scale-[1.05] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    [src]="place.cover_url"
+                    alt=""
+                    width="640"
+                    height="360"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                } @else {
+                  <span class="absolute inset-0"><app-poster-art [title]="place.city" [letter]="false" [glyph]="150" /></span>
+                }
+                <span
+                  class="absolute inset-0 bg-[linear-gradient(100deg,color-mix(in_srgb,var(--color-neutral-950)_82%,transparent)_0%,color-mix(in_srgb,var(--color-neutral-950)_25%,transparent)_60%,transparent_100%)]"
+                  aria-hidden="true"
+                ></span>
+                <span class="absolute inset-y-0 left-0 grid content-end gap-0.5 p-5 text-neutral-0 max-sm:content-center">
+                  <span class="text-xs font-semibold uppercase tracking-[0.1em] text-gold-300">{{ place.countryName }}</span>
+                  <span class="text-[clamp(1.4rem,2.4vw,1.9rem)] font-bold leading-none tracking-[-0.02em] [font-family:var(--font-family-display)]">{{ place.label }}</span>
+                  <span class="mt-1 inline-flex items-center gap-1.5 text-sm text-neutral-200 tabular-nums">
+                    {{ place.events }} {{ place.events === 1 ? 'event' : 'events' }} coming up
+                    <ui-icon class="transition-transform duration-(--motion-fast) ease-(--motion-ease) group-hover:translate-x-1 motion-reduce:transition-none" [icon]="arrowIcon" size="sm" />
+                  </span>
+                </span>
+              </a>
             </li>
           }
         </ul>
       </section>
     }
 
-    @if (rails().length === 0) {
+    @if (shelves().soldOut; as shelf) {
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
+    }
+
+    @if (shelves().past; as shelf) {
+      <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
+    }
+
+    @if (nothingOn()) {
       <!--
-        Nothing upcoming. Before this the page went from the search straight to
-        a lone "see everything" link across an empty band, which reads as a
-        page that failed to load — and at launch, with few events, it would be
-        the front page most people saw.
+        Nothing upcoming. At launch, with few events, this would be the front
+        page most people saw — so it says what to do next rather than leaving
+        an empty band that reads as a page that failed to load.
       -->
       <section class="mt-16 rounded-xl border border-dashed border-border-strong bg-surface-raised px-6 py-12 text-center max-sm:py-10">
         <h2 class="text-balance text-xl font-semibold">Nothing on sale this week — yet</h2>
         <p class="mx-auto mt-2 max-w-[46ch] text-pretty text-text-muted">
-          New nights are added all the time. Search above, see everything coming up,
-          or put your own event on here in a few minutes.
+          New nights are added all the time. Search above, see everything coming up, or put your own event on here in a few
+          minutes.
         </p>
         <div class="mt-6 flex flex-wrap justify-center gap-3">
           <a
@@ -357,17 +492,9 @@
         </div>
       </section>
     }
-
-    <p class="all mt-16">
-      <a
-        class="inline-flex items-center gap-2 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]"
-        routerLink="/events"
-      >
-        See everything on sale
-        <ui-icon [icon]="arrowIcon" size="sm" />
-      </a>
-    </p>
   }
 </div>
 
-<app-organizer-pitch />
+<app-organizer-pitch [fees]="discovery()?.fees?.service_charge" />
+
+<app-app-promo [sample]="lead()" />

@@ -378,11 +378,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/Api/DataRequestController.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$events\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Api/DiscoverController.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>city" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -390,11 +385,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/Api/DoorPassController.php
 
-		-
-			message: '#^Call to an undefined method Illuminate\\Contracts\\Pagination\\CursorPaginator\:\:getCollection\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/Api/EventController.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'

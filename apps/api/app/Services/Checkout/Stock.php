@@ -6,6 +6,8 @@ use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Order;
 use App\Models\TicketType;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +35,12 @@ use Illuminate\Support\Facades\DB;
  */
 class Stock
 {
+    /**
+     * Tickets that hold a place: issued and still admitting somebody. A ticket
+     * handed back for resale is not among them, so its place is back on sale.
+     */
+    public const LIVE_TICKETS = ['valid', 'checked_in'];
+
     /**
      * Places left of a ticket type, or null when it has no limit.
      *
@@ -65,9 +73,69 @@ class Stock
         $issued = DB::table('tickets')
             ->selectRaw('count(*)')
             ->where('ticket_type_id', $locked->id)
-            ->whereIn('status', ['valid', 'checked_in']);
+            ->whereIn('status', self::LIVE_TICKETS);
 
         return $locked->quantity_available - $this->taken($issued, 'ticket_type_id', $locked->id, $besides);
+    }
+
+    /**
+     * Places of a ticket type that are sold or held right now, for showing.
+     *
+     * The same count ticketsLeft() takes — live tickets plus live holds, read
+     * in one statement — without the lock, because a badge on a page decides
+     * nothing: checkout counts again, under the lock, before it takes a hold.
+     * Read from the row when it was loaded through withTaken(), so a list of
+     * forty events asks once rather than forty times.
+     */
+    public function ticketsTaken(TicketType $type): int
+    {
+        if (array_key_exists('stock_taken', $type->getAttributes())) {
+            return (int) $type->getAttribute('stock_taken');
+        }
+
+        $issued = DB::table('tickets')
+            ->selectRaw('count(*)')
+            ->where('ticket_type_id', $type->id)
+            ->whereIn('status', self::LIVE_TICKETS);
+
+        return $this->taken($issued, 'ticket_type_id', $type->id, null);
+    }
+
+    /**
+     * Load ticket types with what is taken of each already counted.
+     *
+     * For an eager load — `with(['ticketTypes' => $stock->withTaken(...)])` —
+     * so every tier on a page of events carries its count in the query that
+     * loads it. One expression, sold plus held, which is one snapshot for the
+     * reason taken() gives.
+     */
+    public function withTaken(EloquentBuilder|Relation $query): EloquentBuilder|Relation
+    {
+        $builder = $query instanceof Relation ? $query->getQuery() : $query;
+
+        if ($builder->getQuery()->columns === null) {
+            $builder->select('ticket_types.*');
+        }
+
+        $builder->selectRaw('('.self::takenSql('ticket_types.id').') as stock_taken', [now()]);
+
+        return $query;
+    }
+
+    /**
+     * Sold plus held for the ticket type whose id column is named, as SQL.
+     *
+     * The one place the rule is written as a statement, for queries that
+     * have to count a whole page of tiers inside themselves (withTaken, and
+     * Availability's filter). One binding: the moment a hold is live until.
+     */
+    public static function takenSql(string $idColumn): string
+    {
+        $live = "'".implode("', '", self::LIVE_TICKETS)."'";
+
+        return "(select count(*) from tickets where tickets.ticket_type_id = {$idColumn} and tickets.status in ({$live}))"
+            .' + (select coalesce(sum(inventory_holds.quantity), 0) from inventory_holds'
+            ." where inventory_holds.ticket_type_id = {$idColumn} and inventory_holds.expires_at > ?)";
     }
 
     /**

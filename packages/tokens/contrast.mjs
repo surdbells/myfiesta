@@ -40,6 +40,9 @@ const PAIRS = [
   ['danger', 'surface', 4.5, 'an error message'],
   ['info', 'surface', 4.5, 'an informational message'],
   ['text-inverse', 'danger', 4.5, 'a destructive button label'],
+  ['on-scarce', 'scarce', 4.5, 'an "Almost sold out" badge'],
+  ['on-sold', 'sold', 4.5, 'a "Sold out" badge'],
+  ['scarce', 'surface-raised', 4.5, '"Only 4 left" written on a card'],
   // Boundaries, not text.
   ['field-border', 'surface', 3, 'an input outline'],
   ['field-border', 'surface-raised', 3, 'an input outline on a card'],

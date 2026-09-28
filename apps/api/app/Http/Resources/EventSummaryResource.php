@@ -3,9 +3,9 @@
 namespace App\Http\Resources;
 
 use App\Models\Event;
+use App\Services\Discovery\Availability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Collection;
 
 /**
  * An event in a list.
@@ -19,17 +19,25 @@ class EventSummaryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $onSale = $this->whenLoaded('ticketTypes',
-            fn () => $this->ticketTypes->where('status', 'on_sale'));
+        // Counted the way checkout counts (Availability). Every list loads its
+        // tiers with the counts already on them, so this reads rather than
+        // asks; an event handed over without them is loaded here, once.
+        $availability = app(Availability::class);
+        $selling = $availability->event($this->resource);
 
-        $cheapest = $onSale instanceof Collection
-            ? $onSale->min('price_amount')
-            : null;
+        // The cheapest tier still selling — the one the badge is about. Once
+        // nothing is, the cheapest the organizer put on sale, so a sold-out
+        // card still says what it cost.
+        $cheapest = $selling->cheapest->price_amount
+            ?? $this->ticketTypes->where('status', 'on_sale')->min('price_amount');
 
         return [
             'slug' => $this->slug,
             'title' => $this->title,
             'starts_at' => $this->starts_at,
+            // So a card can tell a night that is over from one still to come
+            // without asking again: the front page's sold-out shelf holds both.
+            'ends_at' => $this->ends_at,
             'timezone' => $this->timezone,
             'city' => $this->city,
             'country' => $this->country,
@@ -48,13 +56,20 @@ class EventSummaryResource extends JsonResource
                 'slug' => $this->whenLoaded('organization', fn () => $this->organization->slug),
             ],
             'from_price' => $cheapest !== null
-                ? ['amount' => $cheapest, 'currency' => $this->currency]
+                ? ['amount' => (int) $cheapest, 'currency' => $this->currency]
                 : null,
-            // Nothing on sale means nothing left to buy, whether the tickets
-            // sold out or the organizer closed them.
-            'is_sold_out' => $onSale instanceof Collection
-                ? $onSale->isEmpty()
-                : false,
+            // Every ticket a stranger can see has gone. A night whose sales
+            // closed with places left is not sold out: its availability says
+            // `closed`, and it offers no waitlist for tickets not coming back.
+            'is_sold_out' => $selling->soldOut(),
+            // "Almost sold out", "Sold out", "Sales closed", and an exact
+            // count only when it is small enough for the admin's setting —
+            // never an organizer's sales in a number anybody can read off a
+            // card.
+            'availability' => $selling->toArray($availability->scarcity()),
+            // Whether a sold-out night still takes names for returned tickets:
+            // the waitlist takes them until the night starts.
+            'waitlist' => $selling->soldOut() && $this->starts_at?->isFuture() === true,
         ];
     }
 }

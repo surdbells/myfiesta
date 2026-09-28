@@ -15,6 +15,7 @@ import {
   MfSkeleton,
   type MfOption,
 } from '../../ui';
+import { MfAvailability, offSale } from './availability';
 
 /**
  * Searching for something to go to.
@@ -29,7 +30,7 @@ import {
  */
 @Component({
   selector: 'mf-browse',
-  imports: [FormsModule, MfScreen, MfCard, MfField, MfSelect, MfPoster, MfEmpty, MfSkeleton, MfButton],
+  imports: [FormsModule, MfScreen, MfCard, MfField, MfSelect, MfPoster, MfEmpty, MfSkeleton, MfButton, MfAvailability],
   template: `
     <mf-screen title="Find something on" back backTo="/">
       <div class="filters">
@@ -106,7 +107,13 @@ import {
                     <h3>{{ event.title }}</h3>
                     <p class="subtle">{{ event.city }}</p>
                   </div>
-                  <span class="price figure">{{ price(event) }}</span>
+                  <!-- "Sold out" or "Sales closed" stands in for a price nobody can pay. -->
+                  <span class="end">
+                    @if (!offSale(event.availability)) {
+                      <span class="price figure">{{ price(event) }}</span>
+                    }
+                    <mf-availability [value]="event.availability" />
+                  </span>
                 </div>
               </mf-card>
             </li>
@@ -201,12 +208,21 @@ import {
       white-space: nowrap;
     }
 
+    .end {
+      flex: none;
+      display: grid;
+      justify-items: end;
+      gap: var(--space-1);
+    }
+
     .more {
       margin-top: var(--space-4);
     }
   `,
 })
 export class Browse {
+  protected readonly offSale = offSale;
+
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);
 

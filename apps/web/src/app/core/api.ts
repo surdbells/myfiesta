@@ -6,10 +6,13 @@ import {
   AccessUnlock,
   AnswerValue,
   Attendee,
+  CategoryPlace,
+  CityPlace,
   ContactDetails,
   Discovery,
   EventDetail,
   EventSummary,
+  Facets,
   OrderCreated,
   OrderStatus,
   OrganizerPage,
@@ -51,6 +54,9 @@ export interface NewOrder extends Basket {
   accept_terms: boolean;
 }
 
+/** The windows the listing understands, each in the event's own zone. */
+export type When = 'upcoming' | 'today' | 'weekend' | 'month' | 'past';
+
 export interface EventQuery {
   q?: string;
   city?: string;
@@ -59,6 +65,13 @@ export interface EventQuery {
   max_price?: number;
   free?: boolean;
   cursor?: string;
+  when?: When;
+  /** Calendar days, YYYY-MM-DD, compared with each event's own date. */
+  date_from?: string;
+  date_to?: string;
+  /** Comma-separated states; `on_sale` is everything but sold out. */
+  availability?: string;
+  sort?: 'soonest' | 'recent';
 }
 
 /**
@@ -138,6 +151,21 @@ export class Api {
     const params = city ? new HttpParams().set('city', city) : undefined;
 
     return this.http.get<Discovery>(`${this.base}/api/discover`, { params });
+  }
+
+  /** The categories and cities alone: the listing's filters and the city picker. */
+  facets(): Observable<Facets> {
+    return this.http.get<Facets>(`${this.base}/api/discover/facets`);
+  }
+
+  /** A category's own page, by the slug the API gave it. 404 when there is no such category. */
+  category(slug: string): Observable<{ data: CategoryPlace }> {
+    return this.http.get<{ data: CategoryPlace }>(`${this.base}/api/discover/categories/${encodeURIComponent(slug)}`);
+  }
+
+  /** A city's own page. 404 when nothing has been on there lately. */
+  city(slug: string): Observable<{ data: CityPlace }> {
+    return this.http.get<{ data: CityPlace }>(`${this.base}/api/discover/cities/${encodeURIComponent(slug)}`);
   }
 
   /**

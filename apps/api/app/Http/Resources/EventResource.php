@@ -156,7 +156,14 @@ class EventResource extends EventSummaryResource
                 ])
                 ->values(),
 
-            'ticket_types' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
+            // The buyer's view of each tier: a state and, only once it is small,
+            // a count — never the capacity or the sales (PublicTicketTypeResource).
+            // Each is handed this event rather than loading it again for its
+            // currency.
+            'ticket_types' => PublicTicketTypeResource::collection($this->whenLoaded(
+                'ticketTypes',
+                fn () => $this->ticketTypes->each(fn ($type) => $type->setRelation('event', $this->resource)),
+            )),
         ]);
     }
 }

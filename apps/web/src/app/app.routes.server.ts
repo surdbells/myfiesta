@@ -22,6 +22,16 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Server,
   },
   {
+    // A category's and a city's page: indexed, shared, and answering 404
+    // for a slug that is not one — all of which only a server render can do.
+    path: 'events/category/:category',
+    renderMode: RenderMode.Server,
+  },
+  {
+    path: 'events/city/:city',
+    renderMode: RenderMode.Server,
+  },
+  {
     // An organizer page, for the same reason as an event page: it is a link
     // meant to be pasted into a bio, and it has to unfurl.
     path: 'o/:slug',

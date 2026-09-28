@@ -4,6 +4,7 @@ import { Discover, EventCard } from '../../core/discovery';
 import { shortEventTime } from '../../core/event-time';
 import { formatMoney } from '../../core/money';
 import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
+import { MfAvailability, offSale } from './availability';
 
 /**
  * Nights somebody meant to come back to.
@@ -18,7 +19,7 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
  */
 @Component({
   selector: 'mf-saved',
-  imports: [MfScreen, MfCard, MfPoster, MfEmpty, MfSkeleton],
+  imports: [MfScreen, MfCard, MfPoster, MfEmpty, MfSkeleton, MfAvailability],
   template: `
     <mf-screen title="Saved" back backTo="/">
       @if (loading()) {
@@ -44,7 +45,13 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
                     <h3>{{ event.title }}</h3>
                     <p class="where subtle">{{ event.city }}</p>
                   </div>
-                  <span class="price figure">{{ price(event) }}</span>
+                  <!-- "Sold out" or "Sales closed" stands in for a price nobody can pay. -->
+                  <span class="end">
+                    @if (!offSale(event.availability)) {
+                      <span class="price figure">{{ price(event) }}</span>
+                    }
+                    <mf-availability [value]="event.availability" />
+                  </span>
                 </div>
               </mf-card>
             </li>
@@ -118,12 +125,21 @@ import { MfCard, MfEmpty, MfPoster, MfScreen, MfSkeleton } from '../../ui';
       color: var(--text);
     }
 
+    .end {
+      flex: none;
+      display: grid;
+      justify-items: end;
+      gap: var(--space-1);
+    }
+
     .mt {
       margin-top: var(--space-3);
     }
   `,
 })
 export class Saved {
+  protected readonly offSale = offSale;
+
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);
 

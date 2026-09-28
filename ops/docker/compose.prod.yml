@@ -179,6 +179,9 @@ services:
       API_BASE_URL: ${API_BASE_URL:?set the public API address}
       CONSOLE_URL: ${CONSOLE_URL:?set the console address}
       PUBLIC_URL: ${PUBLIC_URL:?set this site's own address}
+      # The phone app's store listings. Empty hides the store buttons.
+      APP_STORE_URL: ${APP_STORE_URL:-}
+      PLAY_STORE_URL: ${PLAY_STORE_URL:-}
       # Where browser errors are reported. Empty reports nothing.
       SENTRY_DSN: ${SITE_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}

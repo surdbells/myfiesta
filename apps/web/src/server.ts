@@ -158,6 +158,20 @@ const sentryRelease = (process.env['SENTRY_RELEASE'] ?? '').trim();
 /** The same, as an origin the policy lets the browser send reports to. */
 const errorReportingOrigin = errorReportingOriginOf(sentryDsn) ?? undefined;
 
+/**
+ * The phone app's store listings, stamped for the same reason again
+ * (core/store-links.ts). Empty hides the store buttons; only an https address
+ * is passed on, so a typo in a deploy hides a button instead of showing a
+ * broken one.
+ */
+const storeLink = (value: string | undefined) => {
+  const trimmed = (value ?? '').trim();
+
+  return /^https:\/\/[^\s"<>]+$/.test(trimmed) ? trimmed : '';
+};
+const appStoreUrl = storeLink(process.env['APP_STORE_URL']);
+const playStoreUrl = storeLink(process.env['PLAY_STORE_URL']);
+
 /** A value going into an attribute: nothing that could close it. */
 function attribute(value: string): string {
   return value.replace(/[&"<>]/g, '');
@@ -269,6 +283,8 @@ app.use((req, res, next) => {
       const html = (await response.text())
         .replace(/<meta name="api-base"[^>]*>/, `<meta name="api-base" content="${apiBaseUrl}">`)
         .replace(/<meta name="console-url"[^>]*>/, `<meta name="console-url" content="${consoleUrl}">`)
+        .replace(/<meta name="app-store-url"[^>]*>/, `<meta name="app-store-url" content="${attribute(appStoreUrl)}">`)
+        .replace(/<meta name="play-store-url"[^>]*>/, `<meta name="play-store-url" content="${attribute(playStoreUrl)}">`)
         .replace(/<meta name="sentry-dsn"[^>]*>/, `<meta name="sentry-dsn" content="${attribute(sentryDsn)}">`)
         .replace(/<meta name="sentry-environment"[^>]*>/, `<meta name="sentry-environment" content="${attribute(sentryEnvironment)}">`)
         .replace(/<meta name="sentry-release"[^>]*>/, `<meta name="sentry-release" content="${attribute(sentryRelease)}">`);

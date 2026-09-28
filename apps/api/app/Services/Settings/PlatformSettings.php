@@ -58,6 +58,10 @@ class PlatformSettings
             'legal_name' => self::text(config('myfiesta.contact.company_name')),
             'address_ca' => self::text(config('myfiesta.contact.addresses.CA')),
             'address_ng' => self::text(config('myfiesta.contact.addresses.NG')),
+            // When a ticket reads as nearly gone (config/discovery.php).
+            'almost_sold_out_percent' => (int) config('discovery.availability.almost_percent', 10),
+            'almost_sold_out_floor' => (int) config('discovery.availability.almost_floor', 5),
+            'only_left_under' => (int) config('discovery.availability.exact_under', 10),
         ];
     }
 
@@ -162,6 +166,25 @@ class PlatformSettings
     public function legalName(): ?string
     {
         return $this->get('legal_name');
+    }
+
+    // --- what the badges ask -------------------------------------------------
+
+    /**
+     * When a ticket reads as almost sold out, and when its exact count is
+     * named (Availability).
+     *
+     * @return array{percent: int, floor: int, exact_under: int}
+     */
+    public function scarcity(): array
+    {
+        $values = $this->all();
+
+        return [
+            'percent' => (int) $values['almost_sold_out_percent'],
+            'floor' => (int) $values['almost_sold_out_floor'],
+            'exact_under' => (int) $values['only_left_under'],
+        ];
     }
 
     /** Where post reaches the platform in this market. */
@@ -286,6 +309,9 @@ class PlatformSettings
         return match ($key) {
             'service_charge_bps_cad', 'service_charge_bps_ngn' => $this->whole($value, 0, 10000, 'A service charge is between 0% and 100%.'),
             'qst_rate_ppm' => $this->whole($value, 0, 1_000_000, 'A tax rate is between 0% and 100%.'),
+            'almost_sold_out_percent' => $this->whole($value, 0, 100, 'A share of capacity is between 0% and 100%.'),
+            'almost_sold_out_floor' => $this->whole($value, 0, 10000, 'The fewest places is a whole number from 0 to 10,000.'),
+            'only_left_under' => $this->whole($value, 0, 1000, 'The most places named exactly is a whole number from 0 to 1,000.'),
             'seller_of_record' => SellerOfRecord::tryFrom((string) $value)?->value
                 ?? throw StaffActionRefused::because('The seller is either the organizer or the platform.'),
             'tax_on_service_charge', 'qst_enabled' => (bool) $value,

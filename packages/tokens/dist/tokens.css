@@ -122,6 +122,10 @@
   --surface-hover: #f6f8f6;
   --danger-text: #c0392b;
   --shadow-floating: 0 28px 68px -20px rgba(9, 30, 14, 0.28), 0 10px 24px -12px rgba(9, 30, 14, 0.14);
+  --scarce: #b45309;
+  --on-scarce: #ffffff;
+  --sold: #232823;
+  --on-sold: #ffffff;
 }
 
 /* No data-theme attribute is set for the default "system" setting, so this
@@ -162,6 +166,10 @@
     --surface-hover: #232823;
     --danger-text: #ec7263;
     --shadow-floating: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 32px 72px -24px rgba(0, 0, 0, 0.8);
+    --scarce: #e8a33d;
+    --on-scarce: #0b0f0c;
+    --sold: #dce1dc;
+    --on-sold: #131713;
   }
 }
 
@@ -200,4 +208,8 @@
   --surface-hover: #232823;
   --danger-text: #ec7263;
   --shadow-floating: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 32px 72px -24px rgba(0, 0, 0, 0.8);
+  --scarce: #e8a33d;
+  --on-scarce: #0b0f0c;
+  --sold: #dce1dc;
+  --on-sold: #131713;
 }
