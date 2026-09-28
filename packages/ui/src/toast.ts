@@ -91,7 +91,7 @@ export class ToastStore {
       font-size: var(--font-size-sm);
       background-color: var(--surface-raised);
       border: 1px solid;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-overlay);
       box-shadow: var(--shadow-overlay);
       pointer-events: auto;
       animation: rise var(--motion-base) var(--motion-ease);

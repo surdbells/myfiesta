@@ -64,7 +64,7 @@ export interface Sort {
       /* The header sticks to the top of this box, so it needs to be the thing
          that scrolls vertically too when the caller constrains the height. */
       max-height: inherit;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
     }
     .table { width: 100%; border-collapse: collapse; }
     .table__loading td { padding: var(--space-3) var(--space-4); }

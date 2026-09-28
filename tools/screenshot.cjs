@@ -17,13 +17,29 @@
  *   node tools/screenshot.cjs <outDir> <width> <label:path> [label:path ...]
  *
  * Needs the console, the API, and an organizer account the seed creates.
+ *
+ * Three settings from the environment, so the same script covers every
+ * screen in both themes on any machine:
+ *
+ *   SHOT_APP=site     the public site (port 4320) instead of the console;
+ *                     signed out, so what a visitor sees
+ *   SHOT_THEME=dark   render with a dark OS setting
+ *   CHROME=<path>     the browser; the default is the one on this platform
  */
 const puppeteer = require('puppeteer-core');
 const path = require('path');
 
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME =
+  process.env.CHROME ||
+  (process.platform === 'win32'
+    ? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+    : process.platform === 'darwin'
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      : '/opt/pw-browsers/chromium');
 const API = 'http://127.0.0.1:8000';
-const CONSOLE = 'http://localhost:4310';
+const SITE = process.env.SHOT_APP === 'site';
+const CONSOLE = SITE ? 'http://localhost:4320' : 'http://localhost:4310';
+const THEME = process.env.SHOT_THEME === 'dark' ? 'dark' : 'light';
 
 (async () => {
   const [outDir, widthArg, ...targets] = process.argv.slice(2);
@@ -37,33 +53,36 @@ const CONSOLE = 'http://localhost:4310';
   });
 
   const page = await browser.newPage();
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: THEME }]);
 
-  // Land on the origin first: localStorage is per-origin, so it cannot be
-  // written before the browser has been there.
-  await page.goto(`${CONSOLE}/sign-in`, { waitUntil: 'domcontentloaded' });
+  if (!SITE) {
+    // Land on the origin first: localStorage is per-origin, so it cannot be
+    // written before the browser has been there.
+    await page.goto(`${CONSOLE}/sign-in`, { waitUntil: 'domcontentloaded' });
 
-  const session = await page.evaluate(async (api) => {
-    const response = await fetch(`${api}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email: 'ada@lagosnights.test', password: 'password123' }),
-    });
+    const session = await page.evaluate(async (api) => {
+      const response = await fetch(`${api}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ email: 'ada@lagosnights.test', password: 'password123' }),
+      });
 
-    if (!response.ok) return { error: response.status };
+      if (!response.ok) return { error: response.status };
 
-    const body = await response.json();
-    localStorage.setItem('myfiesta.organizer.session', JSON.stringify(body));
+      const body = await response.json();
+      localStorage.setItem('myfiesta.organizer.session', JSON.stringify(body));
 
-    return { ok: true, org: body.organizations?.[0]?.name };
-  }, API);
+      return { ok: true, org: body.organizations?.[0]?.name };
+    }, API);
 
-  if (session.error) {
-    console.error('sign-in failed:', session.error);
-    await browser.close();
-    process.exit(1);
+    if (session.error) {
+      console.error('sign-in failed:', session.error);
+      await browser.close();
+      process.exit(1);
+    }
+
+    console.log('signed in as', session.org);
   }
-
-  console.log('signed in as', session.org);
 
   for (const target of targets) {
     const at = target.indexOf(':');

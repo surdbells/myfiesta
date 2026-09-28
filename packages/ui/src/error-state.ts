@@ -47,7 +47,7 @@ import { UiButton } from './button';
       padding: var(--space-5);
       background-color: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
     }
     .err__mark {
       display: grid;

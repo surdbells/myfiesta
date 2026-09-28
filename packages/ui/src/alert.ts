@@ -37,7 +37,7 @@ export type AlertTone = 'success' | 'danger' | 'warning' | 'info';
       padding: var(--space-3) var(--space-4);
       font-size: var(--font-size-sm);
       border: 1px solid;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
     }
     .alert__mark {
       /* Nudged down to sit on the first line of the text rather than above it:

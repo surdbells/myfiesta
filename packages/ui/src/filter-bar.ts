@@ -103,7 +103,7 @@ export interface FilterChip {
       padding: var(--space-4);
       background-color: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
       box-shadow: var(--shadow-card);
     }
 
@@ -132,7 +132,7 @@ export interface FilterChip {
       padding: 0 var(--space-3);
       background-color: var(--surface);
       border: 1px solid var(--field-border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
       transition:
         border-color var(--motion-fast) var(--motion-ease),
         box-shadow var(--motion-fast) var(--motion-ease);

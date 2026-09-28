@@ -11,9 +11,32 @@
  * the grey.
  */
 .nav__link.is-current {
+  position: relative;
   color: var(--primary-text);
   background-color: var(--primary-soft);
   font-weight: var(--font-weight-semibold);
+}
+
+/* A bar of the brand along the current item's leading edge: the one place in
+   the sidebar the eye should land first. */
+.nav__link.is-current::before {
+  content: '';
+  position: absolute;
+  inset: 8px auto 8px -12px;
+  width: 3px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background-color: var(--primary);
+}
+
+/*
+ * Each screen rises into place when the router puts it there. The outlet's
+ * next sibling is the screen the router just inserted, so this runs on every
+ * navigation and on nothing else — a screen updating its own data does not
+ * replay it.
+ */
+.page > router-outlet + * {
+  display: block;
+  animation: ui-rise var(--motion-slow) var(--motion-ease) both;
 }
 
 /* The glyph is dimmed by a utility; the hovered and current states bring it

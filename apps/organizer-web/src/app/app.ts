@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ConfirmDialog, UiIcon, UiSelect, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiIcon, UiSelect, UiThemeToggle, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
 import { CalendarDays, LayoutDashboard, LogOut, Mail, Menu, Plug, PanelLeftClose, PanelLeftOpen, ReceiptText, Store, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
@@ -22,7 +22,7 @@ const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, StaffBanner, SuspensionBanner, VerifyEmail, TermsPrompt],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiToasts, UiIcon, UiSelect, UiThemeToggle, StaffBanner, SuspensionBanner, VerifyEmail, TermsPrompt],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

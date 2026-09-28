@@ -148,7 +148,7 @@ let sequence = 0;
       background-size: 5px 5px, 5px 5px;
       background-repeat: no-repeat;
       border: 1px solid var(--field-border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
       cursor: pointer;
       transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
     }
@@ -182,7 +182,7 @@ let sequence = 0;
       color: var(--text);
       background: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-overlay);
       box-shadow: var(--shadow-overlay);
       z-index: 1000;
     }

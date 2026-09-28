@@ -10,7 +10,7 @@
     router-applied class.
   -->
   <div
-    class="shell grid min-h-dvh grid-cols-[15rem_1fr] bg-surface-sunken transition-[grid-template-columns] duration-(--motion-base) ease-(--motion-ease) motion-reduce:transition-none max-[900px]:grid-cols-1 min-[901px]:data-[collapsed=true]:grid-cols-[4.5rem_1fr]"
+    class="shell ambient grid min-h-dvh grid-cols-[15rem_1fr] transition-[grid-template-columns] duration-(--motion-base) ease-(--motion-ease) motion-reduce:transition-none max-[900px]:grid-cols-1 min-[901px]:data-[collapsed=true]:grid-cols-[4.5rem_1fr]"
     [attr.data-collapsed]="collapsed()"
     [class.has-staff-banner]="session.impersonation() !== null"
   >
@@ -25,7 +25,7 @@
       instead, whatever the fold was set to.
     -->
     <aside
-      class="side group/side sticky top-0 flex h-dvh flex-col overflow-hidden border-r border-border bg-surface max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-40 max-[900px]:w-[min(17rem,82vw)] max-[900px]:-translate-x-full max-[900px]:data-[open=true]:shadow-(--shadow-overlay) max-[900px]:transition-transform max-[900px]:duration-(--motion-base) max-[900px]:ease-(--motion-ease) max-[900px]:data-[open=true]:translate-x-0 motion-reduce:transition-none"
+      class="side glass group/side sticky top-0 flex h-dvh flex-col overflow-hidden border-r border-border-subtle max-[900px]:fixed max-[900px]:inset-y-0 max-[900px]:left-0 max-[900px]:z-40 max-[900px]:w-[min(17rem,82vw)] max-[900px]:-translate-x-full max-[900px]:data-[open=true]:shadow-(--shadow-overlay) max-[900px]:transition-transform max-[900px]:duration-(--motion-base) max-[900px]:ease-(--motion-ease) max-[900px]:data-[open=true]:translate-x-0 motion-reduce:transition-none"
       [attr.data-open]="navOpen()"
       [attr.data-collapsed]="collapsed()"
     >
@@ -137,6 +137,11 @@
             </span>
           </a>
         }
+        <!-- Light, dark or the device's. Folded away with the labels. -->
+        <div class="side__theme flex items-center justify-between gap-2 min-[901px]:group-data-[collapsed=true]/side:hidden">
+          <span class="text-xs text-text-subtle">Theme</span>
+          <ui-theme-toggle />
+        </div>
         <button
           type="button"
           class="side__out flex cursor-pointer items-center justify-center gap-2 rounded-md border border-field-border bg-surface-raised px-3 py-2 text-sm text-text-muted [font-family:inherit] hover:bg-surface-hover hover:text-text min-[901px]:group-data-[collapsed=true]/side:h-9 min-[901px]:group-data-[collapsed=true]/side:w-9 min-[901px]:group-data-[collapsed=true]/side:border-0 min-[901px]:group-data-[collapsed=true]/side:bg-transparent min-[901px]:group-data-[collapsed=true]/side:p-0"
@@ -162,7 +167,7 @@
     <div class="body grid min-w-0 grid-rows-[auto_1fr]">
       <!-- Only ever visible on a small screen: on a wide one the sidebar is the nav. -->
       <header
-        class="topbar sticky top-0 z-20 hidden items-center gap-3 border-b border-border bg-surface px-4 py-2 max-[900px]:flex"
+        class="topbar glass sticky top-0 z-20 hidden items-center gap-3 border-b border-border-subtle px-4 py-2 max-[900px]:flex"
       >
         <button
           type="button"

@@ -117,7 +117,7 @@ export function rangeZone(): string {
       color: var(--text);
       background-color: var(--surface);
       border: 1px solid var(--field-border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
       cursor: pointer;
       white-space: nowrap;
     }
@@ -140,7 +140,7 @@ export function rangeZone(): string {
       padding: var(--space-3);
       background-color: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-overlay);
       /* Above the table it covers, and clearly above it. */
       box-shadow: var(--shadow-floating);
     }

@@ -33,7 +33,7 @@ import { Component, input } from '@angular/core';
       display: block;
       background-color: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
       box-shadow: var(--shadow-card);
     }
     .card__head {

@@ -113,7 +113,7 @@ function visible(element: HTMLElement): boolean {
       color: var(--text);
       background-color: var(--surface-raised);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-overlay);
       box-shadow: var(--shadow-overlay);
     }
     .modal::backdrop {
@@ -165,7 +165,7 @@ function visible(element: HTMLElement): boolean {
       color: var(--text-muted);
       background: none;
       border: 0;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
       cursor: pointer;
       flex-shrink: 0;
     }

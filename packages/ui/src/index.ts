@@ -50,6 +50,9 @@ export { UiPagination } from './pagination';
 export { UiField } from './field';
 export { UiSelect, type SelectOption } from './select';
 
+// Appearance: light, dark, or the device's
+export { ThemeStore, UiThemeToggle, THEME_STORAGE_KEY, type ThemeMode } from './theme';
+
 // Status and feedback
 export { UiAlert, type AlertTone } from './alert';
 export { UiBadge } from './badge';

@@ -108,7 +108,7 @@ import { UiIcon } from './icon';
       color: var(--text-muted);
       background: none;
       border: 0;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
       cursor: pointer;
       flex-shrink: 0;
     }

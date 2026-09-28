@@ -27,7 +27,7 @@ import { Component, input } from '@angular/core';
       text-align: center;
       background-color: var(--surface-raised);
       border: 1px dashed var(--border-strong);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
     }
     .empty__title {
       font-weight: var(--font-weight-semibold);

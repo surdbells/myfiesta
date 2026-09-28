@@ -1,7 +1,7 @@
 import { Component, DestroyRef, PLATFORM_ID, afterNextRender, inject, signal } from '@angular/core';
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { UiIcon } from '@myfiesta/ui';
+import { UiIcon, UiThemeToggle } from '@myfiesta/ui';
 import { Menu, X } from 'lucide-angular';
 import { CONSOLE_URL } from './core/console-url';
 import { EmbedMode } from './core/embed';
@@ -9,7 +9,7 @@ import { EmbedMode } from './core/embed';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiIcon],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, UiIcon, UiThemeToggle],
   templateUrl: './app.html',
 })
 export class App {

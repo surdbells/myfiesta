@@ -65,9 +65,15 @@ const COLOUR_PROPERTIES =
  *
  * The generated tokens, and the phone app's own sheet — a safe-area inset and
  * a minimum tap target are facts about a phone rather than colours or spacing
- * the web shares, so they live there and are no less defined for it.
+ * the web shares, so they live there and are no less defined for it. The web's
+ * base layer likewise declares the hooks its classes take from the element
+ * they style (the poster behind a .backdrop), with the value they fall back to.
  */
-const DEFINITIONS = ['packages/tokens/dist/tokens.css', 'apps/mobile/src/styles.css'];
+const DEFINITIONS = [
+  'packages/tokens/dist/tokens.css',
+  'apps/mobile/src/styles.css',
+  'packages/ui/styles/base.css',
+];
 
 /** Every custom property those sheets actually declare. */
 function defined() {

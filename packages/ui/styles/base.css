@@ -261,7 +261,7 @@ hr {
   white-space: nowrap;
   text-decoration: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   cursor: pointer;
   transition:
     background var(--motion-fast) var(--motion-ease),
@@ -412,7 +412,7 @@ textarea {
   color: var(--text);
   background-color: var(--surface-raised);
   border: 1px solid var(--field-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   transition:
     border-color var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) var(--motion-ease);
@@ -510,11 +510,13 @@ fieldset {
 .card {
   padding: var(--space-5);
   background-color: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  /* Raised rather than the flattest step. A card with a 1px contact shadow on
-     a sunken page is a rectangle with a line under it; this is a card. */
-  box-shadow: var(--shadow-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  /* Lifted off the page: a contact shadow and a wider ambient one. A card
+     with a 1px contact shadow on a sunken page is a rectangle with a line
+     under it; this is a card. Every card surface in the product — this
+     class, ui-card, the filter bar, a table's frame — uses the same one. */
+  box-shadow: var(--shadow-card);
 }
 
 .card--flush {
@@ -531,8 +533,12 @@ fieldset {
 }
 .card--lift:hover {
   transform: translateY(-2px);
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-overlay);
+  border-color: var(--border);
+  box-shadow: var(--shadow-lift);
+}
+.card--lift:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-card);
 }
 
 /*
@@ -547,13 +553,13 @@ fieldset {
   position: relative;
   overflow: hidden;
   padding: var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-overlay);
   background:
     radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--primary) 12%, transparent) 0%, transparent 60%),
     radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 55%),
     var(--surface-raised);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-card);
 }
 
 .stack {
@@ -586,8 +592,8 @@ fieldset {
    sideways on a phone. */
 .table-scroll {
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   background-color: var(--surface-raised);
   box-shadow: var(--shadow-card);
 }
@@ -674,6 +680,114 @@ th.numeric {
 .back:hover {
   color: var(--primary);
 }
+
+/* --- immersion ----------------------------------------------------------- */
+
+/*
+ * The ground an application sits on.
+ *
+ * A wash of the brand in one corner and the accent in the other, fixed to
+ * the window so it stays put while the content scrolls over it. Built from
+ * the semantic tokens and mixed down to a few percent, so it reads as light
+ * falling on the page rather than as a gradient somebody painted — and it
+ * follows the theme into dark mode instead of glowing across a black page.
+ */
+.ambient {
+  background-color: var(--surface-sunken);
+  background-image:
+    radial-gradient(60rem 36rem at 100% -10%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 70%),
+    radial-gradient(48rem 30rem at -10% 110%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+  background-attachment: fixed;
+}
+
+/*
+ * Frosted: what sits above scrolling content and should let a hint of it
+ * through — a top bar, a sidebar over the ambient ground, a sticky toolbar.
+ * Falls back to the solid surface where the browser cannot blur.
+ */
+.glass {
+  background-color: var(--surface);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .glass {
+    background-color: color-mix(in srgb, var(--surface) 78%, transparent);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    backdrop-filter: saturate(1.6) blur(14px);
+  }
+}
+
+/*
+ * A poster behind the content, blurred into colour.
+ *
+ * The page for one event takes its light from that event: the element sets
+ * --backdrop to the poster's url(), and this draws it enlarged, blurred and
+ * faded into the page ground at the bottom so the text over it stays on a
+ * surface it can be read against. With no poster it is the ambient wash.
+ */
+.backdrop {
+  /* Set by the element, as style="--backdrop: url(…)". */
+  --backdrop: none;
+  position: relative;
+  isolation: isolate;
+}
+.backdrop::before,
+.backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.backdrop::before {
+  background-image: var(--backdrop);
+  background-size: cover;
+  background-position: center;
+  filter: blur(48px) saturate(1.4);
+  opacity: 0.55;
+  transform: scale(1.2);
+}
+.backdrop::after {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--surface-sunken) 30%, transparent) 0%,
+    var(--surface-sunken) 100%
+  );
+}
+
+/*
+ * Entrance. A screen rises into place rather than appearing: 8px and a fade,
+ * fast enough never to be waited on. A list staggers its first dozen items so
+ * the eye is drawn down it; past that the delay would be felt, so the rest
+ * arrive with the twelfth. Removed entirely for anybody who asks the system
+ * for less motion (the block below).
+ */
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: ui-rise var(--motion-slow) var(--motion-ease) both;
+}
+.stagger > * {
+  animation: ui-rise var(--motion-slow) var(--motion-ease) both;
+}
+.stagger > :nth-child(2) { animation-delay: 30ms; }
+.stagger > :nth-child(3) { animation-delay: 60ms; }
+.stagger > :nth-child(4) { animation-delay: 90ms; }
+.stagger > :nth-child(5) { animation-delay: 120ms; }
+.stagger > :nth-child(6) { animation-delay: 150ms; }
+.stagger > :nth-child(7) { animation-delay: 180ms; }
+.stagger > :nth-child(8) { animation-delay: 210ms; }
+.stagger > :nth-child(9) { animation-delay: 240ms; }
+.stagger > :nth-child(10) { animation-delay: 270ms; }
+.stagger > :nth-child(11) { animation-delay: 300ms; }
+.stagger > :nth-child(n + 12) { animation-delay: 330ms; }
 
 /* --- motion -------------------------------------------------------------- */
 

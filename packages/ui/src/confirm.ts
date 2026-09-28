@@ -235,7 +235,7 @@ let sequence = 0;
       color: var(--danger-text);
       background-color: color-mix(in srgb, var(--danger) 9%, transparent);
       border-left: 3px solid var(--danger);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-control);
     }
     /* A label that names the action can be long — "Refund $1,250.00 to 12
        buyers" — and at phone width it wraps rather than running off the
