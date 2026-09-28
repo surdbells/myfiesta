@@ -6,7 +6,7 @@
 @if (loading() && !page()) {
   <div class="grid gap-2">
     @for (n of [0, 1]; track n) {
-      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="3rem" /></div>
+      <div class="card p-4"><ui-skeleton height="3rem" /></div>
     }
   </div>
 } @else if (refused()) {
@@ -15,7 +15,7 @@
   <ui-error-state title="Could not load your campaigns" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
 } @else if (page(); as all) {
   <div class="grid max-w-[52rem] gap-10">
-    <form class="grid gap-5 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-raised)" (ngSubmit)="submit()">
+    <form class="card grid gap-5 p-6" (ngSubmit)="submit()">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="text-base font-semibold">{{ editing() ? 'Change this campaign' : 'New campaign' }}</h2>
         @if (editing()) {
@@ -127,53 +127,66 @@
           searchPlaceholder="Search by subject"
           searchLabel="Search campaigns"
           [search]="search()"
-          (searchChange)="searchFor($event)"
+          (searchChange)="search.set($event)"
           [chips]="chips()"
           [summary]="summary()"
           (removed)="remove($event)"
-          (clearedAll)="clearFilters()"
+          (clearedAll)="list.clearAll()"
         >
           <ui-select
             class="flex-[0_1_11rem] max-sm:flex-[1_1_100%]"
-            name="campaignStatus"
+            multiple
+            noun="statuses"
             ariaLabel="Status"
+            placeholder="Any status"
             [options]="statusOptions()"
-            [ngModel]="status()"
-            (ngModelChange)="status.set($event); refine()"
+            [values]="$any(list.get('status'))"
+            (valuesChange)="list.set('status', $event)"
           />
 
           <ui-select
             class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
-            name="campaignAudience"
+            multiple
+            noun="lists"
             ariaLabel="Who it went to"
+            placeholder="Any list"
             [options]="audienceFilterOptions()"
-            [ngModel]="audienceFilter()"
-            (ngModelChange)="audienceFilter.set($event); refine()"
+            [values]="$any(list.get('audience'))"
+            (valuesChange)="list.set('audience', $event)"
           />
 
-          @if (aboutOptions().length > 1) {
+          @if (aboutOptions().length > 0) {
             <ui-select
               class="flex-[0_1_14rem] max-sm:flex-[1_1_100%]"
-              name="campaignAbout"
+              multiple
+              noun="events"
               ariaLabel="Which event it was about"
+              placeholder="Any event"
               [options]="aboutOptions()"
-              [ngModel]="aboutEvent()"
-              (ngModelChange)="aboutEvent.set($event); refine()"
+              [values]="$any(list.get('event_id'))"
+              (valuesChange)="list.set('event_id', $event)"
             />
           }
+
+          <span bar-actions class="flex items-center gap-2">
+            <ui-select compact ariaLabel="Order" [options]="sortOptions" [value]="sortValue()" (valueChange)="sortBy($event)" />
+            <app-saved-views list="campaigns" [state]="list" />
+          </span>
         </ui-filter-bar>
       }
 
       @if (all.data.length === 0) {
         @if (anyFilter()) {
-          <p class="text-sm text-text-muted">Nothing matches that. Clear a term to widen it.</p>
+          <ui-empty title="Nothing matches that" hint="Clear a filter to widen it.">
+            <button uiButton variant="secondary" type="button" (click)="list.clearAll()">Clear the filters</button>
+          </ui-empty>
         } @else {
-          <p class="text-sm text-text-muted">Nothing yet. What each one sells shows up here.</p>
+          <ui-empty title="Nothing sent yet" hint="What each campaign sells shows up here." />
         }
       } @else {
-        <ul class="m-0 grid list-none gap-2 p-0">
+        <ul class="stagger m-0 grid list-none gap-3 p-0" [class.opacity-60]="loading()">
           @for (campaign of all.data; track campaign.id) {
-            <li class="grid gap-3 rounded-lg border border-border bg-surface-raised px-5 py-4">
+            <li class="card card--lift grid gap-3 px-5 py-4">
               <div class="flex flex-wrap items-start gap-x-6 gap-y-2">
                 <div class="min-w-0 flex-1">
                   <p class="flex flex-wrap items-center gap-2">
@@ -237,7 +250,7 @@
           }
         </ul>
 
-        <ui-pagination [page]="all.meta.current_page" [perPage]="all.meta.per_page" [total]="all.meta.total" noun="campaigns" (changed)="goTo($event)" />
+        <ui-pagination [page]="all.meta.current_page" [perPage]="all.meta.per_page" [total]="all.meta.total" noun="campaigns" (changed)="list.goTo($event)" />
       }
     </section>
   </div>

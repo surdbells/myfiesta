@@ -18,7 +18,6 @@ import {
   Campaign,
   CampaignAudience,
   CampaignDraft,
-  CampaignFilters,
   CampaignPage,
   ApiKeySummary,
   Integrations,
@@ -785,15 +784,9 @@ export class Api {
 
   // --- campaigns ---------------------------------------------------------
 
-  campaigns(page = 1, filters: CampaignFilters = {}): Observable<CampaignPage> {
-    let params = new HttpParams().set('page', page);
-
-    if (filters.status) params = params.set('status', filters.status);
-    if (filters.audience) params = params.set('audience', filters.audience);
-    if (filters.event_id) params = params.set('event_id', filters.event_id);
-    if (filters.q) params = params.set('q', filters.q);
-
-    return this.http.get<CampaignPage>(`${this.base}/api/organizer/campaigns`, { params });
+  /** The campaigns written: status, list, event, subject and sort as ListState asks. */
+  campaigns(query: ListQuery = {}): Observable<CampaignPage> {
+    return this.http.get<CampaignPage>(`${this.base}/api/organizer/campaigns`, { params: listParams(query) });
   }
 
   /** How many are on a list, and how many would be written to now. */
