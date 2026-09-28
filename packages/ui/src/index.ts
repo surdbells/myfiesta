@@ -60,6 +60,7 @@ export { UiAmountRange, parseAmount, type AmountRange } from './amount-range';
 export { UiFilterBar, type FilterChip } from './filter-bar';
 export { UiDateRange, rangeZone, type DateRange } from './date-range';
 export { UiStat } from './stat';
+export { UiSparkline } from './sparkline';
 export { UiPagination } from './pagination';
 
 // Forms

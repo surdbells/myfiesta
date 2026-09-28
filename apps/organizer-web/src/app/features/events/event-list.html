@@ -1,278 +1,434 @@
 <ui-page-header title="Events" [subtitle]="session.current()?.name ?? null">
   @if (session.canEditEvents()) {
-    <a uiButton routerLink="/events/new">New event</a>
+    <a uiButton routerLink="/events/new">
+      <ui-icon [icon]="plusIcon" size="sm" />
+      New event
+    </a>
   }
 </ui-page-header>
 
+<!-- Which nights: every one (upcoming first), ahead, or behind. -->
+<nav class="mb-5 flex flex-wrap items-center justify-between gap-3" aria-label="Which events">
+  <div class="inline-flex gap-1 rounded-(--radius-control) bg-surface-inset p-1" role="tablist">
+    @for (tab of whenTabs; track tab.value) {
+      <button
+        type="button"
+        role="tab"
+        class="h-9 cursor-pointer rounded-sm border-0 px-4 text-sm font-medium [font-family:inherit]"
+        [class]="list.get('when') === tab.value ? 'bg-surface-raised text-text shadow-(--shadow-card)' : 'bg-transparent text-text-muted hover:text-text'"
+        [attr.aria-selected]="list.get('when') === tab.value"
+        (click)="setWhen(tab.value)"
+      >
+        {{ tab.label }}
+      </button>
+    }
+  </div>
+
+  <!-- Compare in a table, or scan by poster: remembered by this browser. -->
+  <div class="inline-flex gap-1 rounded-(--radius-control) bg-surface-inset p-1" role="radiogroup" aria-label="Layout">
+    <button
+      type="button"
+      role="radio"
+      class="grid h-9 w-10 cursor-pointer place-items-center rounded-sm border-0"
+      [class]="layout() === 'table' ? 'bg-surface-raised text-text shadow-(--shadow-card)' : 'bg-transparent text-text-muted hover:text-text'"
+      [attr.aria-checked]="layout() === 'table'"
+      aria-label="Table"
+      title="Table"
+      (click)="setLayout('table')"
+    >
+      <ui-icon [icon]="tableIcon" size="sm" />
+    </button>
+    <button
+      type="button"
+      role="radio"
+      class="grid h-9 w-10 cursor-pointer place-items-center rounded-sm border-0"
+      [class]="layout() === 'cards' ? 'bg-surface-raised text-text shadow-(--shadow-card)' : 'bg-transparent text-text-muted hover:text-text'"
+      [attr.aria-checked]="layout() === 'cards'"
+      aria-label="Cards"
+      title="Cards"
+      (click)="setLayout('cards')"
+    >
+      <ui-icon [icon]="cardsIcon" size="sm" />
+    </button>
+  </div>
+</nav>
+
+<!--
+  The whole filtered set in five figures. The last two are the nights to open
+  first: gone quiet with time still to sell, and nearly out of room.
+-->
+@if (portfolio(); as p) {
+  <section class="stagger mb-6 grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-sm:grid-cols-2" aria-label="These events at a glance">
+    <div class="card px-5 py-4">
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Events</p>
+      <p class="figure mt-1 text-2xl">{{ p.events }}</p>
+      <p class="mt-1 text-xs text-text-muted">{{ p.upcoming }} still to come</p>
+    </div>
+    <div class="card px-5 py-4">
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets out</p>
+      <p class="figure mt-1 text-2xl">{{ p.tickets_issued.toLocaleString() }}</p>
+      <p class="mt-1 text-xs text-text-muted">
+        @if (p.sell_through !== null) {
+          {{ percent(p.sell_through) }} of the room
+        } @else {
+          {{ p.orders.toLocaleString() }} orders
+        }
+      </p>
+    </div>
+    @if (p.revenue !== null) {
+      <div class="card px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Earned</p>
+        <p class="figure mt-1 text-2xl text-primary-text">{{ moneyList() }}</p>
+        <p class="mt-1 text-xs text-text-muted">After your discounts, before tax</p>
+      </div>
+    } @else {
+      <div class="card px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Arrived</p>
+        <p class="figure mt-1 text-2xl">{{ p.checked_in.toLocaleString() }}</p>
+        <p class="mt-1 text-xs text-text-muted">Through the door so far</p>
+      </div>
+    }
+    <div class="card px-5 py-4" [class.ring-1]="p.stalled > 0" [class.ring-warning]="p.stalled > 0">
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Gone quiet</p>
+      <p class="figure mt-1 text-2xl" [class.text-warning]="p.stalled > 0">{{ p.stalled }}</p>
+      <p class="mt-1 text-xs text-text-muted">Nothing sold in a week</p>
+    </div>
+    <div class="card px-5 py-4">
+      <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Nearly full</p>
+      <p class="figure mt-1 text-2xl" [class.text-primary-text]="p.nearly_sold_out > 0">{{ p.nearly_sold_out }}</p>
+      <p class="mt-1 text-xs text-text-muted">Nine in ten places gone</p>
+    </div>
+  </section>
+}
+
+<ui-filter-bar
+  class="mb-4 block"
+  searchPlaceholder="Event or city"
+  searchLabel="Search events"
+  [search]="search()"
+  (searchChange)="search.set($event)"
+  [chips]="chips()"
+  [summary]="summary()"
+  (removed)="remove($event)"
+  (clearedAll)="clearFilters()"
+>
+  <ui-select
+    class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+    multiple
+    noun="statuses"
+    ariaLabel="Status"
+    placeholder="Any status"
+    [options]="statusOptions"
+    [values]="$any(list.get('status'))"
+    (valuesChange)="list.set('status', $event)"
+  />
+
+  @if (cityOptions().length > 1) {
+    <ui-select
+      class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+      multiple
+      noun="cities"
+      ariaLabel="City"
+      placeholder="Any city"
+      [options]="cityOptions()"
+      [values]="$any(list.get('city'))"
+      (valuesChange)="list.set('city', $event)"
+    />
+  }
+
+  <ui-date-range noun="Any date" ariaLabel="Filter by the date of the event" [value]="range()" (valueChange)="setRange($event)" />
+
+  <span bar-actions class="flex items-center gap-2">
+    @if (layout() === 'cards') {
+      <ui-select compact ariaLabel="Order" [options]="sortOptions" [value]="sortValue()" (valueChange)="sortBy($event)" />
+    }
+    <app-saved-views list="events" [state]="list" />
+    @if (layout() === 'table') {
+      <ui-column-menu [state]="list" />
+    }
+  </span>
+</ui-filter-bar>
+
 @if (loading()) {
-  <!-- Rows of the shape that is coming, not the word "Loading". The list
-       arrives in place instead of the page jumping when it lands. -->
-  <ul class="list m-0 grid list-none gap-2 p-0" aria-busy="true">
+  <!-- Rows of the shape that is coming, not the word "Loading". -->
+  <div class="grid gap-2" aria-busy="true">
     @for (row of [0, 1, 2, 3]; track row) {
-      <li class="row grid gap-2 rounded-lg border border-border bg-surface-raised p-4">
-        <ui-skeleton width="14rem" />
-        <ui-skeleton width="22rem" height="0.85rem" />
-        <ui-skeleton width="9rem" height="0.85rem" />
+      <div class="card flex items-center gap-4 p-4">
+        <ui-skeleton width="3.5rem" height="3.5rem" />
+        <div class="grid flex-1 gap-2">
+          <ui-skeleton width="14rem" />
+          <ui-skeleton width="22rem" height="0.85rem" />
+        </div>
+      </div>
+    }
+  </div>
+} @else if (failed()) {
+  <ui-error-state title="Could not load your events" detail="Check your connection and try again." (retried)="load()" />
+} @else if (events().length === 0) {
+  @if (filtered()) {
+    <ui-empty title="No event matches that" hint="Try another name or city, or clear the filters.">
+      <button uiButton variant="secondary" type="button" (click)="clearFilters()">Clear the filters</button>
+    </ui-empty>
+  } @else {
+    <ui-empty
+      [title]="list.get('when') === 'past' ? 'Nothing has happened yet' : 'Nothing here yet'"
+      hint="Create an event, add a ticket type, and share the link. You can keep it a draft until you are ready."
+    >
+      @if (session.canEditEvents()) {
+        <a uiButton routerLink="/events/new">New event</a>
+      }
+    </ui-empty>
+  }
+} @else if (layout() === 'table') {
+  <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[64rem] text-sm" [class.density-compact]="list.density() === 'compact'">
+        <caption class="sr-only">Events, with what each has sold</caption>
+        <thead>
+          <tr>
+            <th uiSort="starts_at" label="Event" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            @if (list.isVisible('sold')) {
+              <th uiSort="sold" label="Sold" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('sell_through')) {
+              <th uiSort="sell_through" label="Sell-through" class="numeric" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('revenue') && showsMoney()) {
+              <th uiSort="revenue" label="Earned" class="numeric" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('trend')) {
+              <th scope="col">Last 14 days</th>
+            }
+            @if (list.isVisible('conversion')) {
+              <th uiSort="views" label="Looked" class="numeric" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('last_sale')) {
+              <th uiSort="last_sale" label="Last sale" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('arrived')) {
+              <th scope="col" class="numeric">Arrived</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of events(); track event.id) {
+            @let portion = sold(event);
+            @let trend = trendOf(event);
+            <tr class="group" [class.opacity-70]="isPast(event)">
+              <td>
+                <!-- The row's link: the title, stretched over the whole row. -->
+                <a class="flex min-w-0 items-center gap-3 text-inherit no-underline" [routerLink]="['/events', event.id]">
+                  @if (event.poster_url; as poster) {
+                    <img class="h-12 w-12 shrink-0 rounded-(--radius-control) object-cover shadow-(--shadow-card)" [src]="poster" alt="" width="48" height="48" loading="lazy" />
+                  } @else {
+                    <span class="grid h-12 w-12 shrink-0 place-items-center rounded-(--radius-control) bg-surface-inset text-sm font-semibold text-text-subtle" aria-hidden="true">
+                      {{ event.title.charAt(0).toUpperCase() }}
+                    </span>
+                  }
+                  <span class="grid min-w-0 gap-0.5">
+                    <span class="flex flex-wrap items-center gap-2 font-semibold group-hover:text-primary-text">
+                      <span class="truncate">{{ event.title }}</span>
+                      @if (event.status !== 'published') {
+                        <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
+                      }
+                      @if (event.kind === 'invitation') {
+                        <ui-badge tone="brand">Invitation</ui-badge>
+                      }
+                    </span>
+                    <span class="text-xs text-text-muted">
+                      {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
+                      @if (countdown(event); as left) {
+                        · <span class="font-medium text-text">{{ left }}</span>
+                      }
+                    </span>
+                  </span>
+                </a>
+              </td>
+
+              @if (list.isVisible('sold')) {
+                <td class="whitespace-nowrap">
+                  <span class="font-semibold tabular-nums">{{ event.tickets_issued.toLocaleString() }}</span>
+                  @if (event.capacity) {
+                    <span class="text-xs text-text-subtle tabular-nums"> / {{ event.capacity.toLocaleString() }}</span>
+                  }
+                  @if (portion !== null) {
+                    <span class="mt-1 block h-1 w-24 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+                      <span class="block h-full rounded-full" [class]="portion >= 0.9 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
+                    </span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('sell_through')) {
+                <td class="numeric">
+                  @if (portion !== null) {
+                    <span class="font-semibold" [class.text-primary-text]="portion >= 0.9">{{ percent(portion) }}</span>
+                  } @else {
+                    <span class="text-xs text-text-subtle" title="A tier has no limit, so there is no share of the room">No limit</span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('revenue') && showsMoney()) {
+                <td class="numeric">
+                  @if (event.revenue) {
+                    <span class="font-semibold">{{ cash(event.revenue) }}</span>
+                    <span class="block text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('trend')) {
+                <td class="whitespace-nowrap">
+                  @if (trend) {
+                    <span class="flex items-center gap-3">
+                      <ui-sparkline [values]="trend.days" [label]="trendLabel(trend)" />
+                      @if (momentum(trend); as m) {
+                        <span
+                          class="inline-flex items-center gap-1 text-xs font-semibold tabular-nums"
+                          [class]="m.up ? 'text-primary-text' : 'text-warning'"
+                          [title]="trend.this_week + ' this week, ' + trend.last_week + ' the week before'"
+                        >
+                          <ui-icon [icon]="m.up ? upIcon : downIcon" size="sm" />
+                          {{ m.text }}
+                        </span>
+                      } @else if (trend.this_week > 0) {
+                        <span class="text-xs text-text-muted tabular-nums">{{ trend.this_week }} this week</span>
+                      }
+                    </span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('conversion')) {
+                <td class="numeric">
+                  <span class="tabular-nums">{{ event.views ? event.views.toLocaleString() : '—' }}</span>
+                  @if (conversion(event); as rate) {
+                    <span class="block text-xs text-text-muted">{{ percent(rate) }} bought</span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('last_sale')) {
+                <td class="whitespace-nowrap">
+                  @if (lastSale(event); as line) {
+                    <span class="text-sm" [class]="stalled(event) ? 'font-semibold text-warning' : 'text-text-muted'">{{ line }}</span>
+                  } @else if (isPast(event)) {
+                    <span class="text-xs text-text-subtle">Over</span>
+                  } @else {
+                    <span class="text-xs text-text-subtle">Nothing yet</span>
+                  }
+                </td>
+              }
+
+              @if (list.isVisible('arrived')) {
+                <td class="numeric">
+                  <span class="tabular-nums">{{ event.checked_in.toLocaleString() }}</span>
+                  @if (arrivalRate(event); as rate) {
+                    <span class="block text-xs text-text-muted">{{ rate }}%</span>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (meta(); as page) {
+      @if (page.last_page > 1) {
+        <ui-pagination [page]="page.current_page" [perPage]="page.per_page" [total]="page.total" noun="events" (changed)="list.goTo($event)" />
+      }
+    }
+  </div>
+} @else {
+  <!-- Cards: the poster large, the figures under it. -->
+  <ul class="stagger m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4 p-0" [class.opacity-60]="refreshing()">
+    @for (event of events(); track event.id) {
+      @let portion = sold(event);
+      @let trend = trendOf(event);
+      <li>
+        <!--
+          The card is the link, all of it. On a phone the title is a short line
+          in a tall card, and the rest looks tappable because it is a card.
+        -->
+        <a class="card card--lift card--flush grid h-full text-inherit no-underline" [routerLink]="['/events', event.id]">
+          <span class="backdrop block overflow-hidden px-4 pb-4 pt-4" [style.--backdrop]="event.poster_url ? 'url(' + event.poster_url + ')' : null">
+            <span class="flex items-start gap-3">
+              @if (event.poster_url; as poster) {
+                <img class="h-16 w-16 shrink-0 rounded-(--radius-control) object-cover shadow-(--shadow-lift)" [src]="poster" alt="" width="64" height="64" loading="lazy" />
+              } @else {
+                <span class="grid h-16 w-16 shrink-0 place-items-center rounded-(--radius-control) bg-surface-inset text-lg font-semibold text-text-subtle" aria-hidden="true">
+                  {{ event.title.charAt(0).toUpperCase() }}
+                </span>
+              }
+              <span class="grid min-w-0 flex-1 gap-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  @if (event.status !== 'published') {
+                    <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
+                  }
+                  @if (countdown(event); as left) {
+                    <span class="rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium shadow-(--shadow-card)">{{ left }}</span>
+                  } @else if (arrivalRate(event); as rate) {
+                    <span class="rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium shadow-(--shadow-card)">{{ rate }}% turned up</span>
+                  }
+                </span>
+                <span class="line-clamp-2 text-base font-semibold leading-snug">{{ event.title }}</span>
+                <span class="text-xs text-text-muted">
+                  {{ isPast(event) ? onDate(event.starts_at, event.timezone) : when(event.starts_at, event.timezone) }} · {{ event.city }}
+                </span>
+              </span>
+            </span>
+          </span>
+
+          <span class="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border-subtle px-4 py-4">
+            <span class="grid gap-1">
+              <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Sold</span>
+              <span class="figure text-lg">
+                {{ event.tickets_issued.toLocaleString() }}@if (event.capacity) {<span class="text-sm font-normal text-text-subtle"> / {{ event.capacity.toLocaleString() }}</span>}
+              </span>
+              @if (portion !== null) {
+                <span class="block h-1 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+                  <span class="block h-full rounded-full" [class]="portion >= 0.9 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
+                </span>
+              }
+            </span>
+
+            <span class="grid gap-1">
+              @if (event.revenue) {
+                <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
+                <span class="figure text-lg">{{ cash(event.revenue) }}</span>
+              } @else {
+                <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Orders</span>
+                <span class="figure text-lg">{{ event.orders }}</span>
+              }
+            </span>
+
+            @if (trend) {
+              <span class="col-span-2 flex items-end justify-between gap-3">
+                <span class="grid gap-1">
+                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Last 14 days</span>
+                  <ui-sparkline [values]="trend.days" [label]="trendLabel(trend)" [width]="140" [height]="28" />
+                </span>
+                @if (momentum(trend); as m) {
+                  <span class="inline-flex items-center gap-1 text-sm font-semibold tabular-nums" [class]="m.up ? 'text-primary-text' : 'text-warning'">
+                    <ui-icon [icon]="m.up ? upIcon : downIcon" size="sm" />
+                    {{ m.text }}
+                  </span>
+                } @else if (lastSale(event); as line) {
+                  <span class="text-xs" [class]="stalled(event) ? 'font-semibold text-warning' : 'text-text-muted'">Last sale {{ line.toLowerCase() }}</span>
+                }
+              </span>
+            }
+          </span>
+        </a>
       </li>
     }
   </ul>
-} @else if (error(); as message) {
-  <ui-error-state
-    title="Could not load your events"
-    [detail]="message"
-    (retried)="load()"
-  />
-} @else if (upcoming().length === 0 && past().length === 0) {
-  <ui-empty
-    title="Nothing here yet"
-    hint="Create an event, add a ticket type, and share the link. You can keep it a draft until you are ready."
-  >
-    @if (session.canEditEvents()) {
-      <a uiButton routerLink="/events/new">New event</a>
+
+  @if (meta(); as page) {
+    @if (page.last_page > 1) {
+      <ui-pagination class="mt-4 block" [page]="page.current_page" [perPage]="page.per_page" [total]="page.total" noun="events" (changed)="list.goTo($event)" />
     }
-  </ui-empty>
-} @else {
-  @if (upcoming().length > 0) {
-    <section class="section">
-      <h2 class="section__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Upcoming</h2>
-      <ul class="list m-0 grid list-none gap-2 p-0">
-        @for (event of upcoming(); track event.id) {
-          <li>
-            <!--
-              The row is a link, and the whole card is the target. Not the
-              title alone: on a phone the title is a short line in a tall card
-              and the rest of the card looks tappable because it is a card.
-              Making only the text work is the kind of thing that reads as
-              broken rather than as designed.
-            -->
-            <a
-              class="row card card--lift grid gap-3 p-4 text-inherit no-underline"
-              [routerLink]="['/events', event.id]"
-            >
-              <span class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                <span class="flex min-w-0 items-start gap-3">
-                  <!--
-                    The poster they chose, small. An organizer finds the right
-                    night in a list of pictures faster than in a list of
-                    titles, and a night without one still lines up because the
-                    placeholder holds the same space.
-                  -->
-                  @if (event.poster_url; as poster) {
-                    <img class="h-14 w-14 shrink-0 rounded-md object-cover" [src]="poster" alt="" width="56" height="56" loading="lazy" />
-                  } @else {
-                    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-surface-inset text-sm font-semibold text-text-subtle" aria-hidden="true">
-                      {{ event.title.charAt(0).toUpperCase() }}
-                    </span>
-                  }
-
-                <span class="grid min-w-0 gap-1">
-                  <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
-                    {{ event.title }}
-                    @if (event.status !== 'published') {
-                      <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
-                    }
-                    @if (event.kind === 'invitation') {
-                      <ui-badge tone="brand">Invitation</ui-badge>
-                    }
-                  </span>
-
-                  <span class="row__meta text-sm text-text-muted">
-                    <!-- In the event's own zone. A Lagos event at 10pm should
-                         say 10pm to somebody reading in Toronto. -->
-                    {{ when(event.starts_at, event.timezone) }} · {{ event.city }}
-                  </span>
-                  </span>
-                </span>
-
-                <!-- How long there is left to do something about it. -->
-                @if (countdown(event); as left) {
-                  <span class="shrink-0 rounded-full bg-surface-inset px-3 py-1 text-xs font-medium text-text-muted">{{ left }}</span>
-                }
-              </span>
-
-              <!--
-                The numbers, in the order the question is asked: how much of
-                the room has gone, what it earned, and — for a night still
-                selling — whether anybody is still buying.
-              -->
-              <span class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-3 border-t border-border-subtle pt-3">
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Sold</span>
-                  <span class="figure text-lg">
-                    {{ event.tickets_issued }}@if (event.capacity) {<span class="text-sm font-normal text-text-subtle"> / {{ event.capacity }}</span>}
-                  </span>
-                  @if (sold(event); as portion) {
-                    <span class="mt-0.5 block h-1 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
-                      <span class="block h-full rounded-full" [class]="portion >= 1 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
-                    </span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <!-- Earnings only for somebody who may see money; the API sends
-                       null otherwise, and a column of dashes reads as a broken night. -->
-                  @if (event.revenue) {
-                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
-                    <span class="figure text-lg">{{ cash(event.revenue) }}</span>
-                    <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
-                  } @else {
-                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Orders</span>
-                    <span class="figure text-lg">{{ event.orders }}</span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Looked</span>
-                  <span class="figure text-lg">{{ event.views ? event.views.toLocaleString() : '—' }}</span>
-                  @if (conversion(event); as rate) {
-                    <span class="text-xs text-text-muted">{{ percent(rate) }} bought</span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Pace</span>
-                  @if (lastSale(event); as line) {
-                    <span class="text-sm font-medium" [class]="stalled(event) ? 'text-warning' : 'text-text'">{{ line }}</span>
-                  } @else {
-                    <span class="text-sm text-text-subtle">Nothing sold yet</span>
-                  }
-                </span>
-              </span>
-            </a>
-          </li>
-        }
-      </ul>
-      @if (upcomingMeta(); as page) {
-        @if (page.last_page > 1) {
-          <ui-pagination
-            class="mt-2 block"
-            [page]="page.current_page"
-            [perPage]="page.per_page"
-            [total]="page.total"
-            noun="upcoming events"
-            (changed)="goToPage('upcoming', $event)"
-          />
-        }
-      }
-    </section>
-  }
-
-  @if (past().length > 0) {
-    <!-- Past events are records, not work. Transparent ground until pointed
-         at, so the eye lands on the section above without the two needing a
-         divider. -->
-    <section class="section" [class.mt-12]="upcoming().length > 0">
-      <h2 class="section__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Past</h2>
-      <ul class="list m-0 grid list-none gap-2 p-0">
-        @for (event of past(); track event.id) {
-          <li>
-            <a
-              class="row card card--lift grid gap-3 p-4 text-inherit no-underline"
-              [routerLink]="['/events', event.id]"
-            >
-              <span class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                <span class="flex min-w-0 items-start gap-3">
-                  <!--
-                    The poster they chose, small. An organizer finds the right
-                    night in a list of pictures faster than in a list of
-                    titles, and a night without one still lines up because the
-                    placeholder holds the same space.
-                  -->
-                  @if (event.poster_url; as poster) {
-                    <img class="h-14 w-14 shrink-0 rounded-md object-cover" [src]="poster" alt="" width="56" height="56" loading="lazy" />
-                  } @else {
-                    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-surface-inset text-sm font-semibold text-text-subtle" aria-hidden="true">
-                      {{ event.title.charAt(0).toUpperCase() }}
-                    </span>
-                  }
-
-                <span class="grid min-w-0 gap-1">
-                  <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
-                    {{ event.title }}
-                    @if (event.status !== 'published') {
-                      <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
-                    }
-                    @if (event.kind === 'invitation') {
-                      <ui-badge tone="brand">Invitation</ui-badge>
-                    }
-                  </span>
-
-                  <span class="row__meta text-sm text-text-muted">
-                    <!-- In the event's own zone. A Lagos event at 10pm should
-                         say 10pm to somebody reading in Toronto. -->
-                    {{ onDate(event.starts_at, event.timezone) }} · {{ event.city }}
-                  </span>
-                  </span>
-                </span>
-
-                @if (arrivalRate(event); as rate) {
-                  <span class="shrink-0 rounded-full bg-surface-inset px-3 py-1 text-xs font-medium text-text-muted">{{ rate }}% turned up</span>
-                }
-              </span>
-
-              <!--
-                The numbers, in the order the question is asked: how much of
-                the room has gone, what it earned, and — for a night still
-                selling — whether anybody is still buying.
-              -->
-              <span class="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-3 border-t border-border-subtle pt-3">
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Sold</span>
-                  <span class="figure text-lg">
-                    {{ event.tickets_issued }}@if (event.capacity) {<span class="text-sm font-normal text-text-subtle"> / {{ event.capacity }}</span>}
-                  </span>
-                  @if (sold(event); as portion) {
-                    <span class="mt-0.5 block h-1 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
-                      <span class="block h-full rounded-full" [class]="portion >= 1 ? 'bg-accent' : 'bg-primary'" [style.width.%]="portion * 100"></span>
-                    </span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <!-- Earnings only for somebody who may see money; the API sends
-                       null otherwise, and a column of dashes reads as a broken night. -->
-                  @if (event.revenue) {
-                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Earned</span>
-                    <span class="figure text-lg">{{ cash(event.revenue) }}</span>
-                    <span class="text-xs text-text-muted">{{ event.orders }} {{ event.orders === 1 ? 'order' : 'orders' }}</span>
-                  } @else {
-                    <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Orders</span>
-                    <span class="figure text-lg">{{ event.orders }}</span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Came</span>
-                  <span class="figure text-lg">{{ event.checked_in }}</span>
-                  @if (arrivalRate(event); as rate) {
-                    <span class="text-xs text-text-muted">{{ rate }}% of those holding one</span>
-                  }
-                </span>
-
-                <span class="grid gap-1">
-                  <span class="text-xs font-medium uppercase tracking-[0.06em] text-text-subtle">Looked</span>
-                  <span class="figure text-lg">{{ event.views ? event.views.toLocaleString() : '—' }}</span>
-                  @if (conversion(event); as rate) {
-                    <span class="text-xs text-text-muted">{{ percent(rate) }} bought</span>
-                  }
-                </span>
-              </span>
-            </a>
-          </li>
-        }
-      </ul>
-      @if (pastMeta(); as page) {
-        @if (page.last_page > 1) {
-          <ui-pagination
-            class="mt-2 block"
-            [page]="page.current_page"
-            [perPage]="page.per_page"
-            [total]="page.total"
-            noun="past events"
-            (changed)="goToPage('past', $event)"
-          />
-        }
-      }
-    </section>
   }
 }

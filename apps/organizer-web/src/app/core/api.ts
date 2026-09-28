@@ -72,6 +72,7 @@ import {
   TermsStanding,
   SavedView,
   SavedViewList,
+  OrganizerEventPage,
   SavedViewValue,
 } from './api.types';
 import { EmailVerification } from './email-verification';
@@ -460,10 +461,12 @@ export class Api {
   }
 
   /** A page of upcoming (soonest first) or past (most recent first) events. */
-  events(when: 'upcoming' | 'past', page = 1): Observable<Page<OrganizerEvent>> {
-    const params = new HttpParams().set('when', when).set('page', page);
-
-    return this.http.get<Page<OrganizerEvent>>(`${this.base}/api/organizer/events`, { params });
+  /**
+   * The organization's events with what each sold, earned and did this
+   * fortnight, plus the whole filtered set's summary and its cities.
+   */
+  events(query: ListQuery = {}): Observable<OrganizerEventPage> {
+    return this.http.get<OrganizerEventPage>(`${this.base}/api/organizer/events`, { params: listParams(query) });
   }
 
   /** Every event's id and title, for a filter. */

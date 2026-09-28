@@ -441,48 +441,6 @@ parameters:
 			path: app/Http/Controllers/Api/Organizer/DoorPassController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$capacity\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$checked_in\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$last_sale_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$revenue_amount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$tickets_issued\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$unlimited_tiers\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$views\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/EventController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Order\:\:\$refunded_amount\.$#'
 			identifier: property.notFound
 			count: 3
@@ -493,12 +451,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Controllers/Api/Organizer/OrderController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Event\:\:\$tickets_issued\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/Organizer/OverviewController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Order\:\:\$day\.$#'

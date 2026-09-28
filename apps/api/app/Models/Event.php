@@ -13,6 +13,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * The figures the organizer's lists read alongside an event, present only on
+ * a query that asked for them (Organizer\EventController::withInsights).
+ *
+ * @property-read int|null $tickets_issued Tickets out: valid or checked in.
+ * @property-read int|null $checked_in
+ * @property-read int|null $orders_count Paid and part-refunded orders.
+ * @property-read int|null $unlimited_tiers Tiers with no limit; any makes the room unlimited.
+ * @property-read int|string|null $capacity The sum of the tiers' limits.
+ * @property-read int|string|null $revenue_amount What the organizer earned, in minor units.
+ * @property-read string|null $last_sale_at When the last paid order was paid.
+ * @property-read int|string|null $views Page views, embeds included.
+ */
 class Event extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;

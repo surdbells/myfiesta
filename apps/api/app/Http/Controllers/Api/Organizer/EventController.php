@@ -16,7 +16,9 @@ use App\Services\Events\EventReviews;
 use App\Services\Events\ReviewRefused;
 use App\Services\Events\SalesReport;
 use App\Services\Organizations\Suspension;
+use App\Support\Listing;
 use App\Support\Paging;
+use App\Support\Search;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +52,15 @@ class EventController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $request->validate(['when' => ['sometimes', 'in:upcoming,past']]);
+        $filters = $request->validate([
+            'when' => ['sometimes', 'in:upcoming,past'],
+            'q' => ['nullable', 'string', 'max:120'],
+            // Whole days in the reader's zone, both ends inclusive, as the
+            // orders list reads them.
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', Rule::when($request->filled('from'), ['after_or_equal:from'])],
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
+        ]);
 
         /*
          * Enough to judge a night by, without opening it.
@@ -61,26 +71,33 @@ class EventController extends Controller
          * them today — the one that is half sold with a week to go, the one
          * that has not sold since Tuesday, the one whose room is full. So the
          * row carries what sold, what it earned, how much of the room is
-         * gone, how many looked, and when the last ticket went.
+         * gone, how many looked, when the last ticket went, and how the last
+         * fortnight went day by day.
          *
-         * All of it as aggregates on the one query. A per-row lookup would be
-         * six more queries for an organizer with thirty events, on the screen
-         * they open first.
+         * All of it as aggregates on the one query, and the fortnight in one
+         * more for the page. A per-row lookup would be six more queries for an
+         * organizer with thirty events, on the screen they open first.
          */
-        $query = $this->withInsights(
-            Event::query()->whereIn('organization_id', $this->organizationIds($request)),
-        );
+        $filtered = $this->filteredEvents($request, $filters);
 
-        match ($request->query('when')) {
-            'upcoming' => $query->where('starts_at', '>=', now())->orderBy('starts_at'),
-            // Most recent first. The old combined order ran past events
-            // oldest-first, so with enough history last week's night was the
-            // one that fell off the end of the page.
-            'past' => $query->where('starts_at', '<', now())->orderByDesc('starts_at'),
-            default => $query->orderByRaw('starts_at < now()')->orderBy('starts_at'),
-        };
+        $query = $this->withInsights(clone $filtered);
+
+        if ($request->filled('sort')) {
+            Listing::sort($query, $request, self::SORTS, ['starts_at', 'asc']);
+        } else {
+            match ($filters['when'] ?? null) {
+                'upcoming' => $query->orderBy('starts_at'),
+                // Most recent first. The old combined order ran past events
+                // oldest-first, so with enough history last week's night was
+                // the one that fell off the end of the page.
+                'past' => $query->orderByDesc('starts_at'),
+                default => $query->orderByRaw('starts_at < now()')->orderBy('starts_at'),
+            };
+        }
 
         $events = $query->orderBy('id')->paginate(Paging::perPage($request, 30));
+
+        $trends = $this->trends($events->getCollection()->pluck('id')->all());
 
         return response()->json([
             'data' => $events->getCollection()->map(fn (Event $e) => [
@@ -98,10 +115,193 @@ class EventController extends Controller
                 'city' => $e->city,
                 'currency' => $e->currency,
                 ...$this->insights($request, $e),
+                'trend' => $trends[$e->id] ?? $this->emptyTrend(),
                 'poster_url' => $e->banner?->renditionUrl('thumb'),
             ])->values(),
             'meta' => Paging::meta($events),
+            // The whole filtered set in a few figures, for the strip above the
+            // list: what the page alone adds up to is a number about nothing.
+            'summary' => $this->portfolio($request, $filtered),
+            // Every city there is a night in, for the filter: a list of
+            // what exists rather than a box to guess spellings into.
+            'cities' => Event::query()
+                ->whereIn('organization_id', $this->organizationIds($request))
+                ->whereNotNull('city')
+                ->distinct()
+                ->orderBy('city')
+                ->pluck('city')
+                ->values(),
         ]);
+    }
+
+    /**
+     * What a list of events can be sorted by, and what each is in SQL.
+     *
+     * Written out rather than read from the insight columns' aliases, which
+     * Postgres will not let an expression refer to — and sell-through is an
+     * expression: tickets out over the room, null where any tier has no
+     * limit, so an unlimited night is neither full nor empty.
+     */
+    private const SORTS = [
+        'starts_at' => 'events.starts_at',
+        'title' => 'lower(events.title)',
+        'sold' => "(select count(*) from tickets t where t.event_id = events.id and t.status in ('valid', 'checked_in'))",
+        'revenue' => "(select coalesce(sum(o.net_revenue_amount), 0) from orders o where o.event_id = events.id and o.status in ('paid', 'partially_refunded'))",
+        'sell_through' => "(case when exists (select 1 from ticket_types tt where tt.event_id = events.id and tt.deleted_at is null and tt.quantity_available is null) then null else (select count(*) from tickets t where t.event_id = events.id and t.status in ('valid', 'checked_in'))::float / nullif((select sum(tt.quantity_available) from ticket_types tt where tt.event_id = events.id and tt.deleted_at is null), 0) end)",
+        'last_sale' => "(select max(o.paid_at) from orders o where o.event_id = events.id and o.status in ('paid', 'partially_refunded'))",
+        'views' => '(select coalesce(sum(v.views + v.embed_views), 0) from event_views v where v.event_id = events.id)',
+    ];
+
+    /**
+     * The events a list's filters describe, before insights, order or paging.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<Event>
+     */
+    private function filteredEvents(Request $request, array $filters): Builder
+    {
+        $statuses = Listing::many($request, 'status', array_map(fn (EventStatus $s) => $s->value, EventStatus::cases()));
+        $cities = Listing::many($request, 'city', null, 50);
+        $zone = $filters['timezone'] ?? 'UTC';
+
+        return Event::query()
+            ->whereIn('organization_id', $this->organizationIds($request))
+            ->when(($filters['when'] ?? null) === 'upcoming', fn ($q) => $q->where('starts_at', '>=', now()))
+            ->when(($filters['when'] ?? null) === 'past', fn ($q) => $q->where('starts_at', '<', now()))
+            ->when($statuses, fn ($q, $values) => $q->whereIn('status', $values))
+            ->when($cities, fn ($q, $values) => $q->whereIn('city', $values))
+            ->when($filters['from'] ?? null, fn ($q, $from) => $q->where('starts_at', '>=', Carbon::parse($from, $zone)->startOfDay()->utc()))
+            ->when($filters['to'] ?? null, fn ($q, $to) => $q->where('starts_at', '<=', Carbon::parse($to, $zone)->endOfDay()->utc()))
+            ->when(filled($filters['q'] ?? null), function ($q) use ($filters) {
+                $like = Search::contains($filters['q']);
+                $q->where(fn ($inner) => $inner->where('title', 'ilike', $like)->orWhere('city', 'ilike', $like));
+            });
+    }
+
+    /** Days in a trend: two weeks, so this week can be read against the last. */
+    private const TREND_DAYS = 14;
+
+    /**
+     * Tickets out per day over the last fortnight, for each event on the page.
+     *
+     * Counted from tickets rather than orders, so a comp handed out counts as
+     * a place going, which is what a sell-through is about. One query for the
+     * page. `momentum` is this week against the one before, as a share:
+     * +0.4 is forty per cent more; null when nothing went out the week
+     * before, because "up from nothing" is not a percentage.
+     *
+     * @param  list<string>  $ids
+     * @return array<string, array{days: list<int>, this_week: int, last_week: int, momentum: float|null}>
+     */
+    private function trends(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $since = now()->startOfDay()->subDays(self::TREND_DAYS - 1);
+
+        $rows = DB::table('tickets')
+            ->whereIn('event_id', $ids)
+            ->whereIn('status', ['valid', 'checked_in'])
+            ->where('created_at', '>=', $since)
+            ->selectRaw('event_id, (created_at::date) as day, count(*) as n')
+            ->groupBy('event_id', 'day')
+            ->get();
+
+        $out = [];
+
+        foreach ($ids as $id) {
+            $out[$id] = array_fill(0, self::TREND_DAYS, 0);
+        }
+
+        foreach ($rows as $row) {
+            $offset = (int) $since->copy()->diffInDays(Carbon::parse($row->day)->startOfDay());
+
+            if ($offset >= 0 && $offset < self::TREND_DAYS) {
+                $out[$row->event_id][$offset] = (int) $row->n;
+            }
+        }
+
+        return array_map(fn (array $days) => $this->trend($days), $out);
+    }
+
+    /**
+     * @param  list<int>  $days
+     * @return array{days: list<int>, this_week: int, last_week: int, momentum: float|null}
+     */
+    private function trend(array $days): array
+    {
+        $before = array_sum(array_slice($days, 0, 7));
+        $recent = array_sum(array_slice($days, 7, 7));
+
+        return [
+            'days' => $days,
+            'this_week' => $recent,
+            'last_week' => $before,
+            'momentum' => $before > 0 ? round(($recent - $before) / $before, 2) : null,
+        ];
+    }
+
+    /** @return array{days: list<int>, this_week: int, last_week: int, momentum: float|null} */
+    private function emptyTrend(): array
+    {
+        return $this->trend(array_fill(0, self::TREND_DAYS, 0));
+    }
+
+    /**
+     * The filtered set in a few figures.
+     *
+     * Money is per currency and withheld from somebody who may not see it;
+     * summed across two currencies it would be a number that is true of
+     * nothing. "Stalled" is a night still to come that has sold before and
+     * nothing in the last seven days; "nearly gone" is one with nine in ten
+     * places taken. Both are the nights somebody should look at today.
+     *
+     * @param  Builder<Event>  $filtered
+     * @return array<string, mixed>
+     */
+    private function portfolio(Request $request, Builder $filtered): array
+    {
+        $rows = $this->withInsights(clone $filtered)
+            ->reorder()
+            ->get();
+
+        $maySeeMoney = collect($this->organizationIds($request))
+            ->every(fn (string $id) => $request->user()->hasPermissionIn($id, Permission::MoneyView));
+
+        $upcoming = $rows->filter(fn (Event $e) => $e->starts_at !== null && $e->starts_at->isFuture());
+        $weekAgo = now()->subDays(7);
+
+        $limited = $rows->filter(fn (Event $e) => (int) $e->unlimited_tiers === 0 && (int) $e->capacity > 0);
+
+        return [
+            'events' => $rows->count(),
+            'upcoming' => $upcoming->count(),
+            'tickets_issued' => (int) $rows->sum('tickets_issued'),
+            'checked_in' => (int) $rows->sum('checked_in'),
+            'orders' => (int) $rows->sum('orders_count'),
+            // Places taken across the nights that have a limit, as a share of
+            // those places: nights with no limit are left out of both sides.
+            'sell_through' => $limited->sum('capacity') > 0
+                ? round($limited->sum('tickets_issued') / $limited->sum('capacity'), 3)
+                : null,
+            'revenue' => $maySeeMoney
+                ? $rows->groupBy('currency')
+                    ->map(fn ($events, $currency) => ['amount' => (int) $events->sum('revenue_amount'), 'currency' => $currency])
+                    ->values()
+                : null,
+            'stalled' => $upcoming
+                ->filter(fn (Event $e) => (int) $e->tickets_issued > 0
+                    && $e->last_sale_at !== null
+                    && Carbon::parse($e->last_sale_at)->lessThan($weekAgo))
+                ->count(),
+            'nearly_sold_out' => $upcoming
+                ->filter(fn (Event $e) => (int) $e->unlimited_tiers === 0
+                    && (int) $e->capacity > 0
+                    && (int) $e->tickets_issued / (int) $e->capacity >= 0.9)
+                ->count(),
+        ];
     }
 
     /**

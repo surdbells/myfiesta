@@ -421,6 +421,43 @@ export interface OrganizerEvent {
   last_sale_at: string | null;
   /** The poster at thumbnail size, if one was uploaded. */
   poster_url: string | null;
+  /**
+   * The last fortnight, day by day: tickets out (comps included), oldest
+   * first, today last. Optional for a client reading an older API.
+   */
+  trend?: EventTrend;
+}
+
+export interface EventTrend {
+  /** Fourteen days of tickets out, oldest first, today last. */
+  days: number[];
+  this_week: number;
+  last_week: number;
+  /** This week against the last as a share (+0.4 is 40% more); null when the last week sold nothing. */
+  momentum: number | null;
+}
+
+/** The whole filtered list of events in a few figures, for the strip above it. */
+export interface EventPortfolio {
+  events: number;
+  upcoming: number;
+  tickets_issued: number;
+  checked_in: number;
+  orders: number;
+  /** Places taken across the nights with a limit; null when none has one. */
+  sell_through: number | null;
+  /** One figure per currency, never added across two. Null for somebody who may not see money. */
+  revenue: Money[] | null;
+  /** Still to come, sold before, nothing in the last seven days. */
+  stalled: number;
+  /** Still to come, nine in ten places gone. */
+  nearly_sold_out: number;
+}
+
+/** A page of the organizer's events, with the whole list's summary and its cities. */
+export interface OrganizerEventPage extends Page<OrganizerEvent> {
+  summary: EventPortfolio;
+  cities: string[];
 }
 
 /**
