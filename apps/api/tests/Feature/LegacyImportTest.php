@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Models\Event;
+use App\Models\EventReview;
 use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\OrderLine;
@@ -12,6 +13,7 @@ use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Models\Venue;
+use App\Services\Events\EventSnapshot;
 use App\Services\Legacy\LegacyImporter;
 use App\Services\Legacy\LegacyMap;
 use App\Services\Refunds\RefundService;
@@ -157,6 +159,24 @@ class LegacyImportTest extends TestCase
         $this->import();
 
         $this->assertSame('draft', Event::where('title', 'Unknown State')->firstOrFail()->status);
+    }
+
+    public function test_an_event_on_sale_arrives_approved_as_it_stands(): void
+    {
+        $this->import();
+
+        // It was on sale on the old platform. Taking it off to be looked at
+        // again would punish the organizer for a rule that did not exist.
+        $event = Event::where('title', 'Standard Night')->sole();
+        $this->assertSame('published', $event->status);
+        $this->assertNotNull($event->approved_at);
+        $this->assertSame(EventSnapshot::fingerprint(EventSnapshot::of($event)), $event->approved_fingerprint);
+        $this->assertSame(['imported'], EventReview::where('event_id', $event->id)->pluck('via')->all());
+
+        // A draft arrives unapproved, and a second run approves nothing twice.
+        $this->assertNull(Event::where('title', 'Unknown State')->sole()->approved_at);
+        $this->import();
+        $this->assertSame(1, EventReview::where('event_id', $event->id)->count());
     }
 
     public function test_the_two_money_units_are_kept_apart(): void

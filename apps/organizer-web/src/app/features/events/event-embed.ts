@@ -27,7 +27,7 @@ type Style = 'button' | 'inline';
         Paste this into your website and people buy without leaving it. Payment opens in its own tab; everything else
         happens on your page.
         @if (!published()) {
-          It starts working once the event is published.
+          It starts working once the event is on sale.
         }
       </p>
 

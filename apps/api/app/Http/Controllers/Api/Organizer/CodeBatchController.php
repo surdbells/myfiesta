@@ -8,6 +8,7 @@ use App\Models\CodeBatch;
 use App\Models\Event;
 use App\Services\Audit\Auditor;
 use App\Services\Codes\CodeBatchGenerator;
+use App\Services\Events\EventReviews;
 use App\Support\Csv;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,7 @@ class CodeBatchController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageCodes', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -155,6 +157,7 @@ class CodeBatchController extends Controller
     public function deactivate(Request $request, Event $event, CodeBatch $batch): JsonResponse
     {
         $this->authorize('manageCodes', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($batch->event_id === $event->id, 404);
 

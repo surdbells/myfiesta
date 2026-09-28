@@ -7,6 +7,7 @@ use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
 use App\Models\TicketType;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +67,7 @@ class TicketTypeController extends Controller
     public function reorder(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
@@ -110,6 +112,7 @@ class TicketTypeController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $this->validated($request);
 
@@ -121,12 +124,15 @@ class TicketTypeController extends Controller
 
         $type = $event->ticketTypes()->create($data + ['status' => 'on_sale']);
 
+        $this->recordOnSale($request, $event, 'ticket.added', $type);
+
         return response()->json(new TicketTypeResource($type->load('event')), 201);
     }
 
     public function update(Request $request, Event $event, TicketType $ticketType): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($ticketType->event_id === $event->id, 404);
 
@@ -188,6 +194,7 @@ class TicketTypeController extends Controller
     public function destroy(Request $request, Event $event, TicketType $ticketType): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($ticketType->event_id === $event->id, 404);
 
@@ -196,15 +203,41 @@ class TicketTypeController extends Controller
         if ($sold) {
             $ticketType->update(['status' => 'closed']);
 
+            $this->recordOnSale($request, $event, 'ticket.closed', $ticketType);
+
             return response()->json([
                 'message' => 'Sales closed. Tickets already issued keep working.',
                 'status' => 'closed',
             ]);
         }
 
+        $this->recordOnSale($request, $event, 'ticket.removed', $ticketType);
+
         $ticketType->delete();
 
         return response()->json(['message' => 'Removed.']);
+    }
+
+    /**
+     * A ticket added to, or taken off, an event that is on sale.
+     *
+     * Allowed without another review, like any edit while on sale, and kept
+     * on the record beside the price changes: what a buyer can choose from
+     * changed, and "who added the free tier?" should have an answer. Before
+     * it goes on sale the review looks at the whole list instead.
+     */
+    private function recordOnSale(Request $request, Event $event, string $action, TicketType $type): void
+    {
+        if ($event->status !== 'published') {
+            return;
+        }
+
+        $this->auditor->record($action, $event, $request->user(), metadata: [
+            'ticket_type_id' => $type->id,
+            'ticket_type' => $type->name,
+            'price_amount' => (int) $type->price_amount,
+            'currency' => $event->currency,
+        ]);
     }
 
     /**

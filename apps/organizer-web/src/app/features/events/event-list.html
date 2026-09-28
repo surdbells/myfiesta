@@ -69,7 +69,7 @@
                   <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
                     {{ event.title }}
                     @if (event.status !== 'published') {
-                      <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
+                      <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
                     }
                     @if (event.kind === 'invitation') {
                       <ui-badge tone="brand">Invitation</ui-badge>
@@ -190,7 +190,7 @@
                   <span class="row__title flex flex-wrap items-center gap-2 text-base font-semibold">
                     {{ event.title }}
                     @if (event.status !== 'published') {
-                      <ui-badge [tone]="statusTone(event.status)">{{ event.status }}</ui-badge>
+                      <ui-badge [tone]="statusTone(event.status)">{{ statusLabel(event.status) }}</ui-badge>
                     }
                     @if (event.kind === 'invitation') {
                       <ui-badge tone="brand">Invitation</ui-badge>

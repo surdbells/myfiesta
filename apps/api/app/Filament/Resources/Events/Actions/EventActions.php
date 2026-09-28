@@ -36,7 +36,9 @@ final class EventActions
             ->label('Open public page')
             ->icon(Heroicon::OutlinedEye)
             ->color('gray')
-            ->visible(fn (Event $record) => $record->status !== 'draft' && $record->deleted_at === null)
+            // Not for one waiting for review either: its page is not public
+            // until it is approved, and the link would open a "not found".
+            ->visible(fn (Event $record) => ! in_array($record->status, ['draft', 'in_review'], true) && $record->deleted_at === null)
             ->url(fn (Event $record) => rtrim((string) config('app.public_url'), '/').'/'.$record->slug, shouldOpenInNewTab: true);
     }
 
@@ -52,7 +54,9 @@ final class EventActions
                 && $record->taken_down_at === null
                 && $record->deleted_at === null)
             ->requiresConfirmation()
-            ->modalDescription('It joins the featured row on the public front page for its city until you unfeature it.')
+            ->modalHeading(fn (Event $record) => 'Feature '.$record->title.' on the front page?')
+            ->modalDescription(fn (Event $record) => 'It joins the featured row on the public front page for '.$record->city.' until you unfeature it. Recorded in the audit trail under your name.')
+            ->modalSubmitActionLabel('Feature it')
             ->action(fn (Event $record, Action $action) => Outcome::run(
                 $action,
                 'Featured',
@@ -69,6 +73,9 @@ final class EventActions
             ->authorize(fn () => StaffAction::current(StaffAction::Feature))
             ->visible(fn (Event $record) => (bool) $record->is_featured)
             ->requiresConfirmation()
+            ->modalHeading(fn (Event $record) => 'Stop featuring '.$record->title.'?')
+            ->modalDescription('It leaves the featured row on the public front page. The event itself stays exactly as it is. Recorded in the audit trail under your name.')
+            ->modalSubmitActionLabel('Stop featuring')
             ->action(fn (Event $record, Action $action) => Outcome::run(
                 $action,
                 'No longer featured',
@@ -120,7 +127,7 @@ final class EventActions
             ->color('success')
             ->authorize(fn () => StaffAction::current(StaffAction::TakeDown))
             ->visible(fn (Event $record) => $record->taken_down_at !== null && $record->deleted_at === null)
-            ->modalHeading('Lift the takedown?')
+            ->modalHeading(fn (Event $record) => 'Lift the takedown on '.$record->title.'?')
             ->modalDescription('It goes back on sale if it was on sale before and still can be. Otherwise it stays a draft the organizer can publish. They are emailed either way.')
             ->modalSubmitActionLabel('Restore')
             ->schema([

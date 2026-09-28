@@ -29,9 +29,11 @@ use Illuminate\Support\Str;
  *   the guest list, the gallery. A copy that inherited last week's sales would
  *   be a lie about a night that has not happened.
  *
- *   Not copied: the slug, the published state, or the currency's freedom to
- *   change. A copy starts as a draft with its own URL, because publishing
- *   something an organizer has not looked at is not a favour.
+ *   Not copied: the slug, the published state, the approval, or the
+ *   currency's freedom to change. A copy starts as a draft with its own URL,
+ *   because publishing something an organizer has not looked at is not a
+ *   favour — and it goes through review like any new event, except the next
+ *   date of an approved series that is that night unchanged (EventReviews).
  *
  * This is also how a recurring event will materialise each occurrence: an
  * occurrence is a copy at a different moment, and building the copy properly
@@ -179,6 +181,10 @@ class EventDuplicator
             'event_id' => $copy->id,
             'kind' => 'banner',
             'path' => $path,
+            // The same picture in new files. Named after the one it was first
+            // uploaded as, so the next date of an approved series shows the
+            // approved poster rather than an unknown one (EventSnapshot).
+            'original_path' => $banner->original_path ?? $banner->path,
             'renditions' => $renditions,
             'width' => $banner->width,
             'height' => $banner->height,

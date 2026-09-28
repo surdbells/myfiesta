@@ -108,6 +108,33 @@ role-restricted, and access is logged. Stripe Connect and Paystack split
 payments remain available later — that is why the gateway sits behind an
 interface.
 
+**An overdraft is an advance, and it is on the record.** Paying a payout
+request for more than the organization is owed is allowed in one place — staff
+paying the request — for administrators and finance only, after a second
+question that shows what is owed, what was asked, what is being paid and the
+difference, with a written reason. The request keeps `overdraft_amount`,
+`overdraft_reason`, `approved_by` and `approved_at`, and the decision gets its
+own audit entry. The ledger records the payout exactly as any other, so the
+balance in that currency goes below zero by the advance and nothing else; no
+recovery entries are written, because the next sales are credits to a balance
+that is below zero and pay it back on their own. Where it stands — advanced on
+a day, recovered from sales since, repaid, added by refunds, outstanding — is
+worked out from the advance and the balance every time it is read, so it cannot
+disagree with the ledger. Nothing more can be asked for until the balance is
+above zero. The balance is read once when paying, and that one figure decides
+both the advance on the request and the settlement's type, because sales and
+refunds do not wait for the organization's lock. The advance's reason is not
+the reason for paying to unverified details; that still needs its own note.
+An advance paid before requests kept these figures is told from its
+settlement, never as refunds. Money sent back outside the platform is a
+`repayment`: its own append-only record with the bank reference and a reason,
+one ledger credit of its own type, never more than is outstanding, and one
+reference per organization and currency, so one transfer is not credited
+twice. An organization that owes money
+cannot be closed, and its only owner cannot be erased. Currencies never mix: a
+naira advance leaves dollars payable as usual. Dashboards count what is owed to
+organizers and what is overdrawn side by side, never netted.
+
 ## Access
 
 **Organizations own resources, not users.** People hold roles within an
@@ -175,14 +202,78 @@ the event is held is cancelled, as for any event off sale, and is the
 organizer's to schedule again. Lifting it puts back exactly what it took: the
 marked events go back on sale unless they have started or were cancelled,
 deleted or taken down meanwhile — not re-checked for a ticket type on sale,
-since they were on sale as they stood — and the rest stay drafts; the owners'
-email names both lists. An event the organizer takes off sale themselves
+since they were on sale as they stood — or changed since they came off (the
+mark keeps a fingerprint of what buyers saw; an edit made during the
+suspension goes through review, since lifting it is a decision about the
+organization, not a look at its listings, and approves nothing) — and the
+rest stay drafts; the owners' email names both lists. An event the organizer takes off sale themselves
 during the suspension loses its mark and stays a draft. One taken down during
 it counts as on sale before the takedown, so lifting both, in either order,
 puts it back. Held requests go back to waiting in their place. Suspending
 twice changes nothing the first did. Each step is one transaction, written to the audit trail on the organization, on each event
 and on each request, and the owners are emailed both ways. The console shows
 a banner on every screen for as long as it lasts.
+
+**Every event is looked at before it goes on sale.** An event is a draft
+until the organizer sends it for review (the permission and proved address
+publishing needed, and an event that is ready — a description, a date to
+come, somewhere it is, a ticket on sale — with every missing thing said at
+once). While it waits it is `in_review` and frozen: the API refuses (423,
+"This event is being reviewed. Withdraw it to make changes.") every write
+that changes what a buyer sees or pays — the event's fields, ticket types,
+add-ons, pictures, questions, the series and its dates, and discount codes
+and code batches — so what staff approve is what goes on sale. Left open,
+because they do not change the listing: reminders, door passes, the team,
+guest-list tickets, messages to people already holding tickets, refunds,
+copying the event, and everything read-only. Administrators and support
+approve it (on sale, and its followers hear about it — the first time it is
+on sale, never when it is sent) or reject it with a reason of at least
+twenty characters, sent to the organizer word for word and shown on the
+event in the console until they send it again; the organizer can also take
+it back to change something. Finance sees the queue and the review page and
+decides nothing. Each step is one transaction on the locked event, kept in
+the event's review history and the audit trail, emailed (queued, replies to
+support) to everybody at the organization who can publish — and, for a new
+submission, to the staff who review, or to `EVENT_REVIEW_NOTIFY` when set —
+and pressing it twice does nothing the second time. A decision is made on
+what the reviewer saw: the review page carries the fingerprint of the event
+as it opened, and approving or rejecting an event that changed since (taken
+back, edited and sent again while the page was open) is refused until they
+reload it. Whoever sent an event for review does not approve it — staff
+acting as an organization can prepare and send an event that tells no
+followers, and somebody else at myFiesta decides it. An approval keeps a
+fingerprint of what a buyer saw (EventSnapshot; a poster's caption, which
+buyers are not shown, is not part of it). Nothing reaches on sale
+without one, except: an event taken off sale by its organizer and put back
+unchanged since its approval; the next date of an approved series when it is
+the approved night on another date (a date missing the gallery, add-ons or
+questions the copy does not carry is compared without them — it offers less,
+not something else); and staff lifting a takedown, which counts as approving
+the event as it stands. Neither shortcut outlasts a rejection: once staff
+send an event back, only another approval puts it on sale, even restored to
+what was approved before (which may never have been looked at by a person,
+for an event on sale before reviews began). Going straight back is held only
+to its dates, not to the checks the listing passed when it was approved — an
+event on sale with no description is not told it can go back and then
+refused. Events on sale when this shipped,
+and events imported on sale, were marked approved as they stood. The lock on
+codes is the event's own: a code made for one event is changed only through
+that event (404 through any other), and a code for all of the organization's
+events belongs to no one event, so one event's review does not freeze it.
+**Edits to
+an event already on sale need no review**: organizers fix typos and move
+prices on live nights, and a queue for that would stop the night selling.
+They are recorded in the audit trail (the event's fields, its pictures, a
+ticket added, closed or removed, an add-on closed or removed and a question
+reworded, beside the price changes and new add-ons and questions that
+already were), and they do count as changes since the
+approval, so taking the event off sale and putting it back sends it through
+review. An event waiting when its organization is suspended stays waiting;
+approved meanwhile, it goes on sale when the suspension is lifted, as it was
+approved, and its followers hear about it then (never one that had been on
+sale before the suspension). Sending
+for review is refused while suspended, and to staff acting as the
+organization when the approval would tell its followers.
 
 **Signing up and buying record that the terms were accepted, and which
 ones.** The terms, the privacy policy and the refund policy are agreed to
@@ -232,6 +323,42 @@ that browser rather than a synced list. A button asking somebody to sign in to
 something that does not exist would be worse than its absence, so following
 lives in the app, where there is an account to hang it on. If buyer accounts
 ever reach the site, this is the first thing that changes.
+
+**"Almost sold out" is checkout's count, said as a state.** One service
+(`App\Services\Discovery\Availability`) decides it for every client, from the
+count checkout takes before it reserves (`Stock`): tickets that still admit
+somebody plus baskets that have not run out. Counted any other way, a badge
+says "Only 2 left" to somebody checkout then turns away. A tier is almost sold
+out once something has sold and what is left is at or under the larger of a
+floor and a share of its capacity (5 places and 10% unless staff change them);
+a night is sold out when every tier a stranger can see has gone, and almost
+sold out when its cheapest tier still selling is — the one its "From" price
+names — or when little is left across all of them. A night nothing can be
+bought for that did not sell out — online sales stopped at the door, or the
+organizer closed them — is `closed`, said "Sales closed", with no waitlist and
+no place on the front page's sold-out shelf: calling it sold out put nights
+that sold two tickets on that shelf. A night whose early bird ended with places
+left and whose general tier then sold out reads "Sales closed" too; that is
+true, and "Sold out" would be a claim about places that never sold. A tier
+whose sales ended is `closed` on the event page and in the quote alike. The
+quote says nothing of a hidden tier unless the buyer's code opens it, as
+checkout answers one without its code exactly as it answers an id that does
+not exist. Public payloads carry the
+state and an exact number only at or under a second setting (10): "Only 4
+left" helps somebody decide, and "312 left" is an organizer's sales, readable
+by a rival refreshing the page. The organizer's own screens keep their full
+counts. The rule is written twice, in PHP for the badges on what a page has
+already loaded and in SQL for the filters and the front page's shelves, and
+the tests run both over the same nights. Lists are kept for a minute; the
+event page, the ticket page and the quote are never kept, and the quote
+reports each tier again so a ticket page takes one that sold out while
+somebody chose out of their basket before checkout refuses it.
+
+**Today, this weekend and this month are the event's own.** A 10pm Friday
+party in Lagos is a Friday night to the people going, whoever is reading and
+whatever the server's clock says. Every window is worked out in the event's
+own timezone, and a night counts as on until it ends, so a festival that
+opened at noon is still "today" at six.
 
 **A door sale is an ordinary order with three extra columns.** Same stock, same
 tickets, same reports, same services — it reserves and fulfils through the
@@ -808,6 +935,75 @@ goes reads as an image that failed to load, and on a grid where half the events
 have posters the other half look like bugs. The stand-in is a lit brand panel
 with the night's initial in it, and it is the same panel everywhere one is
 needed.
+
+**The front page is made of what is on.** Its hero is the posters of real
+nights on sale, the lead one loaded first as the page's largest picture, and a
+category or a city is shown by the next poster filed under it. Never stock
+photographs: a crowd that was at none of these nights is a promise the page
+cannot keep, and somebody else's picture. Where no poster exists the site
+draws its own from the tokens. Every figure on the page is one the database
+counted, and the organizer pitch states the service charge from the setting
+that charges it — no invented statistics and no testimonials from people who
+do not exist. The store buttons are the site's own until the operator supplies
+Apple's and Google's official badges (LAUNCH.md).
+
+## Asking first
+
+**Every action asks before it happens, and the question names what it does.**
+Anything that writes on the server or sends something — create, save, send for
+review, delete, cancel, refund, resend, transfer, give back for resale,
+invite, remove, change a role, ask for a payout, change payout details, send a
+campaign or a message, issue guest tickets, sign out — opens one dialog first:
+`ConfirmDialog` from `packages/ui` on the site and in the console, `Dialogs`
+in the phone app, drawn as a bottom sheet, the same request in both. Never
+`window.confirm`, and never a modal of a screen's own. The question says what
+will happen and to whom, with the figure in it — "Refund 2 tickets on
+MF-7Q2K?", "$80.00 goes back to ada@example.com" — because "Are you sure?"
+is answered yes without being read. The figure has to be the one that will
+happen: a sale at the door is not asked about while its basket is being
+priced, a repeat counts the night that already exists as the server does, a
+copy names only what the server copies, and a code says when it works from
+its own From and Until. A question that is read and wrong is worse than none.
+What destroys or takes back is red, with
+focus on Cancel. In the admin it is Filament's own modal: every action either
+requires confirmation or opens a form, with a heading and a description of its
+own, never Filament's default sentence; forms that save a page (platform
+settings, a tax rate, a dispute's draft) submit to that question — the button
+and Enter alike — and are checked before it is asked, so a mistake shows on
+its field rather than behind a modal. `EveryActionAsksFirstTest` walks what
+each admin screen offers and fails on an action that does anything on one
+click, so a new one cannot quietly skip it.
+
+**Some things deliberately do not ask**, and should not be given a dialog
+later:
+
+- *Scanning at the door, and the admission chooser.* The chooser is itself the
+  question — how many of this table are going in — and a second one at a door
+  with a queue is a crowd, which is a safety matter. Ending a door shift does
+  ask, and so does a sale at the door: that is money on the record and tickets
+  that did not exist.
+- *Choosing quantities, and the pay button in checkout.* The payment
+  processor's page is the confirmation; a dialog before it is a third step
+  between somebody and a ticket. A presale code on the ticket page only shows
+  what it opens and spends nothing.
+- *Signing in, signing up, and changing or resetting a password.* The form is
+  the deliberate act, and a password typed twice has been checked already.
+- *Search, filters, sorting and moving between screens*, exports and
+  downloads: none of them change anything.
+- *Instantly reversible personal toggles*: saving an event, following an
+  organizer, turning the phone's own reminders on or off, the theme, which
+  organization the app is showing. One more tap undoes each.
+- *Arranging a list* — moving a ticket type, an extra, a question or a picture
+  up or down. It is put back by moving it again, and a dialog at every step
+  would make ordering five things ten questions.
+- *Drafts saved as they are typed*: a picture's caption in the console is kept
+  on leaving the box. (A draft saved with a button asks, like everything else.)
+- *Pages that are themselves the question, with one button*: accepting an
+  invitation to a team, confirming a new email address from its link, opening
+  a door pass on a phone, arriving as staff from the admin (asked, with a
+  reason, before the link was made), and accepting the terms, where the
+  unticked box is the question. Deleting an account has its own dialog, which
+  asks for the password and names what goes.
 
 ## Still open
 

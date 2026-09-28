@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\ReviewsEvents;
 use Tests\TestCase;
 
 /**
@@ -29,7 +30,7 @@ use Tests\TestCase;
  */
 class AuditTrailTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, ReviewsEvents;
 
     private Organization $org;
 
@@ -48,6 +49,7 @@ class AuditTrailTest extends TestCase
             'organization_id' => $this->org->id,
             'slug' => 'afro-fest',
             'title' => 'Afro Fest',
+            'description' => 'Afrobeats until late.',
             'currency' => 'CAD',
             'starts_at' => now()->addMonth(),
             'timezone' => 'America/Toronto',
@@ -114,15 +116,21 @@ class AuditTrailTest extends TestCase
     {
         $user = $this->signedInAs();
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
-            ->assertOk();
+        $this->publishThroughReview($this->event)->assertOk();
 
-        $entry = $this->entries('event.published')->firstOrFail();
+        // Two people put it on sale: the organizer who sent it, and the
+        // member of staff who approved it. Both are on the record.
+        $sent = $this->entries('event.submitted')->firstOrFail();
 
-        $this->assertSame($user->id, $entry->actor_id);
-        $this->assertSame($this->org->id, $entry->organization_id);
-        $this->assertSame($this->event->id, $entry->subject_id);
-        $this->assertSame(Event::class, $entry->subject_type);
+        $this->assertSame($user->id, $sent->actor_id);
+        $this->assertSame($this->org->id, $sent->organization_id);
+        $this->assertSame($this->event->id, $sent->subject_id);
+        $this->assertSame(Event::class, $sent->subject_type);
+
+        $approved = $this->entries('event.approved')->firstOrFail();
+
+        $this->assertSame($this->eventReviewer()->id, $approved->actor_id);
+        $this->assertSame($this->org->id, $approved->organization_id);
     }
 
     public function test_taking_an_event_off_sale_is_recorded_too(): void
@@ -215,12 +223,12 @@ class AuditTrailTest extends TestCase
     {
         $user = $this->signedInAs();
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
+        $this->postJson("/api/organizer/events/{$this->event->id}/submit")
             ->assertOk();
 
         $user->delete();
 
-        $entry = $this->entries('event.published')->firstOrFail()->fresh();
+        $entry = $this->entries('event.submitted')->firstOrFail()->fresh();
 
         // Without the denormalised label, erasing one member blanks the actor
         // on every refund they ever processed — the opposite of what an audit
@@ -253,12 +261,12 @@ class AuditTrailTest extends TestCase
     {
         $this->signedInAs();
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
+        $this->postJson("/api/organizer/events/{$this->event->id}/submit")
             ->assertOk();
 
         // The one field that separates a member acting normally from a session
         // somebody else is holding.
-        $this->assertNotNull($this->entries('event.published')->firstOrFail()->ip_address);
+        $this->assertNotNull($this->entries('event.submitted')->firstOrFail()->ip_address);
     }
 
     public function test_an_entry_written_outside_a_request_still_works(): void

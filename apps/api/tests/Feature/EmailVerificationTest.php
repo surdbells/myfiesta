@@ -130,6 +130,10 @@ class EmailVerificationTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('code', 'email_unverified');
 
+        $this->postJson("/api/organizer/events/{$this->event->id}/submit")
+            ->assertForbidden()
+            ->assertJsonPath('code', 'email_unverified');
+
         $this->assertSame('draft', $this->event->fresh()->status);
 
         // The refusal sends the link, so the next step is in the inbox rather
@@ -174,7 +178,7 @@ class EmailVerificationTest extends TestCase
         Mail::assertNotSent(VerifyEmailAddress::class);
     }
 
-    public function test_only_those_three_wait_and_buying_is_not_one_of_them(): void
+    public function test_only_those_wait_and_buying_is_not_one_of_them(): void
     {
         $waiting = collect(Route::getRoutes()->getRoutes())
             ->filter(fn ($route) => collect($route->gatherMiddleware())
@@ -186,8 +190,11 @@ class EmailVerificationTest extends TestCase
 
         // Everything else works unproved; buying a ticket as a guest needs no
         // account at all, let alone a proved one.
+        // Sending a night for review is the start of putting it on sale, so
+        // it waits like publishing does; taking it back from review does not.
         $this->assertSame([
             'POST api/organizer/events/{event}/publish',
+            'POST api/organizer/events/{event}/submit',
             'POST api/organizer/payouts/requests',
             'PUT api/organizer/payout-details',
         ], $waiting);

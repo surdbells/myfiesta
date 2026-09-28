@@ -58,6 +58,9 @@ class Event extends Model
             // The slot the rule scheduled, distinct from starts_at so an
             // occurrence an organizer moved is still recognised as filled.
             'series_occurs_at' => UtcDateTime::class,
+            // The review now waiting, and the last approval (EventReviews).
+            'submitted_at' => UtcDateTime::class,
+            'approved_at' => UtcDateTime::class,
             'id_required' => 'boolean',
             'is_featured' => 'boolean',
         ];
@@ -148,6 +151,16 @@ class Event extends Model
     public function questions(): HasMany
     {
         return $this->hasMany(EventQuestion::class)->orderBy('sort_order')->orderBy('created_at');
+    }
+
+    /**
+     * Each time it was sent for review, and what became of it, oldest first.
+     *
+     * @return HasMany<EventReview, $this>
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(EventReview::class)->orderBy('seq');
     }
 
     /** @return HasMany<Order, $this> */

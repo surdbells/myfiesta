@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\ReviewsEvents;
 use Tests\TestCase;
 
 /**
@@ -27,7 +28,7 @@ use Tests\TestCase;
  */
 class EventAnnouncementTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, ReviewsEvents;
 
     private Organization $org;
 
@@ -72,11 +73,12 @@ class EventAnnouncementTest extends TestCase
         return $user;
     }
 
+    /** Sent for review by the owner and approved: the moment followers hear. */
     private function publish()
     {
         Sanctum::actingAs($this->owner->fresh()->load('organizations'), [TokenAbility::Organizer->value]);
 
-        return $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published']);
+        return $this->publishThroughReview($this->event);
     }
 
     public function test_publishing_tells_the_people_who_follow_the_organizer(): void
@@ -97,9 +99,9 @@ class EventAnnouncementTest extends TestCase
         // Unpublishing to fix a typo and publishing again is a normal
         // afternoon. It is not a second announcement.
         $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft'])->assertOk();
-        $this->publish()->assertOk();
+        $this->publish()->assertOk()->assertJsonPath('status', 'published');
 
-        Mail::assertQueuedCount(1);
+        Mail::assertQueued(EventAnnouncedMail::class, 1);
     }
 
     public function test_somebody_who_follows_nobody_hears_nothing(): void
@@ -108,7 +110,7 @@ class EventAnnouncementTest extends TestCase
 
         $this->publish()->assertOk();
 
-        Mail::assertNothingQueued();
+        Mail::assertNotQueued(EventAnnouncedMail::class);
     }
 
     public function test_a_blanket_no_to_this_kind_of_mail_is_honoured(): void
@@ -118,7 +120,7 @@ class EventAnnouncementTest extends TestCase
 
         $this->publish()->assertOk();
 
-        Mail::assertNothingQueued();
+        Mail::assertNotQueued(EventAnnouncedMail::class);
     }
 
     public function test_the_unsubscribe_button_in_an_announcement_stops_announcements(): void
@@ -171,7 +173,7 @@ class EventAnnouncementTest extends TestCase
 
         // Announcing a wedding to a following is the platform handing out an
         // invitation nobody offered.
-        Mail::assertNothingQueued();
+        Mail::assertNotQueued(EventAnnouncedMail::class);
     }
 
     public function test_the_email_carries_a_way_out_that_needs_no_account(): void
@@ -209,6 +211,7 @@ class EventAnnouncementTest extends TestCase
         $this->assertStringNotContainsString('ada@example.com', json_encode($body));
         $this->assertStringNotContainsString('bola@example.com', json_encode($body));
 
-        $this->assertDatabaseHas('audit_logs', ['action' => 'event.published']);
+        // Told when it is approved, and counted on the approval's entry.
+        $this->assertDatabaseHas('audit_logs', ['action' => 'event.approved']);
     }
 }

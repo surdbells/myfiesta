@@ -85,7 +85,9 @@ class OrganizerMetrics extends Metrics
             ->where('events.organization_id', $organizationId)
             ->where('events.currency', $currency)
             ->whereNull('events.deleted_at')
-            ->where('events.status', '!=', 'draft')
+            // Nights that have been on sale. One waiting for review has not
+            // yet, any more than a draft has.
+            ->whereNotIn('events.status', ['draft', 'in_review'])
             ->where('events.kind', 'ticketed')
             ->whereRaw('events.starts_at >= ?::timestamptz', [$period->fromSql()])
             ->whereRaw('events.starts_at < ?::timestamptz', [$period->untilSql()])
@@ -299,7 +301,7 @@ class OrganizerMetrics extends Metrics
                 ->whereColumn('events.organization_id', 'organizations.id')
                 ->where('events.currency', $currency)
                 ->whereNull('events.deleted_at')
-                ->where('events.status', '!=', 'draft')
+                ->whereNotIn('events.status', ['draft', 'in_review'])
                 ->whereRaw('events.starts_at >= ?::timestamptz', [$period->fromSql()])
                 ->whereRaw('events.starts_at < ?::timestamptz', [$period->untilSql()])
                 ->selectRaw('count(*)'), 'events_in_period')

@@ -378,9 +378,11 @@ class EventCancellationTest extends TestCase
     public function test_the_states_the_schema_allows_are_the_states_the_app_can_reach(): void
     {
         // review and scheduled were in the constraint and unreachable by any
-        // code path. The fiction is what this whole change removes.
+        // code path. The fiction is what this whole change removes. in_review
+        // is the review they stood for, now real: sent by the organizer and
+        // decided by staff (EventReviewCycleTest).
         $this->assertSame(
-            ['draft', 'published', 'cancelled'],
+            ['draft', 'in_review', 'published', 'cancelled'],
             array_map(fn (EventStatus $s) => $s->value, EventStatus::cases()),
         );
 

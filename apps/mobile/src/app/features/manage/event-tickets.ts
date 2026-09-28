@@ -26,6 +26,7 @@ import {
   type MfOption,
 } from '../../ui';
 import { EventContext } from './event-context';
+import { MfReviewLock, lockedForReview } from './event-review';
 
 interface Draft {
   name: string;
@@ -81,15 +82,20 @@ const BLANK: Draft = {
     MfStepper,
     MfChoices,
     MfSelect,
+    MfReviewLock,
   ],
   template: `
     <mf-screen title="Tickets" [subtitle]="event()?.title ?? null" back [backTo]="'/manage/events/' + id()" refreshable [busy]="loading()" (refresh)="load()">
-      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" label="Add a ticket type" (click)="startNew()"></button>
+      <button mfIconButton screenActions tone="tonal" [icon]="plusIcon" label="Add a ticket type" [disabled]="locked()" (click)="startNew()"></button>
+
+      @if (locked()) {
+        <mf-review-lock [eventId]="id()" />
+      }
 
       @if (types(); as all) {
         @if (all.length === 0) {
           <mf-empty title="No tickets yet" hint="Add a ticket type and the night can go on sale.">
-            <button mfButton (click)="startNew()">Add a ticket type</button>
+            <button mfButton [disabled]="locked()" (click)="startNew()">Add a ticket type</button>
           </mf-empty>
         } @else {
           <mf-card class="summary">
@@ -106,20 +112,22 @@ const BLANK: Draft = {
           <ul class="tiers">
             @for (type of all; track type.id; let first = $first; let last = $last) {
               <li>
-                <mf-card tappable (click)="edit(type)">
+                <mf-card [tappable]="!locked()" (click)="edit(type)">
                   <div class="tier-top">
                     <div class="tier-name">
                       <h3>{{ type.name }}</h3>
                       <p class="price">{{ cash(type.price) }}@if (type.admits > 1) { <span class="admits"> · admits {{ type.admits }}</span> }</p>
                     </div>
                     <mf-badge [tone]="tone(type)">{{ statusLabel(type) }}</mf-badge>
-                    <button
-                      mfIconButton
-                      size="sm"
-                      [icon]="moreIcon"
-                      [label]="'More for ' + type.name"
-                      (click)="$event.stopPropagation(); menu(type, first, last)"
-                    ></button>
+                    @if (!locked()) {
+                      <button
+                        mfIconButton
+                        size="sm"
+                        [icon]="moreIcon"
+                        [label]="'More for ' + type.name"
+                        (click)="$event.stopPropagation(); menu(type, first, last)"
+                      ></button>
+                    }
                   </div>
 
                   <div class="tier-sold">
@@ -354,6 +362,9 @@ export class EventTickets implements OnInit {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /** Waiting for myFiesta's review: the tiers are shown, and nothing about them can change. */
+  protected readonly locked = computed(() => lockedForReview(this.event()));
+
   protected readonly formOpen = signal(false);
   protected readonly editing = signal<TicketType | null>(null);
   protected readonly draft = signal<Draft>({ ...BLANK });
@@ -465,6 +476,8 @@ export class EventTickets implements OnInit {
   }
 
   protected startNew(): void {
+    if (this.locked()) return;
+
     this.editing.set(null);
     this.draft.set({ ...BLANK });
     this.formError.set(null);
@@ -473,6 +486,8 @@ export class EventTickets implements OnInit {
   }
 
   protected edit(type: TicketType): void {
+    if (this.locked()) return;
+
     const zone = this.event()?.timezone ?? 'UTC';
     const local = (iso: string | null) => (iso ? (isoToZonedWallClock(iso, zone) ?? '') : '');
 
@@ -519,13 +534,39 @@ export class EventTickets implements OnInit {
       status: d.status,
     };
 
+    // The tier, its price and who can buy it, said back before it is saved:
+    // on a night that is on sale it is what buyers see and pay the moment it
+    // lands, and a slipped digit sells at that price until somebody notices.
+    const editing = this.editing();
+    const price = formatMoney({ amount: body.price_amount, currency: this.event()?.currency ?? editing?.price.currency ?? 'CAD' });
+    const onSale = this.event()?.status === 'published';
+    const count = body.quantity_available !== null ? `, ${body.quantity_available} in all` : ', with no limit';
+    const consequences: string[] = [];
+
+    if (editing && editing.price.amount !== body.price_amount && editing.sold > 0) {
+      consequences.push(`The ${editing.sold} already sold keep what was paid for them.`);
+    }
+
+    if (onSale && d.status === 'on_sale') consequences.push('The event is on sale: buyers see it straight away.');
+    else if (onSale && d.status === 'hidden') consequences.push('Only buyers with a code that unlocks it can see and buy it.');
+    else if (onSale && d.status === 'closed') consequences.push('It shows as unavailable. Tickets already sold still work.');
+    else consequences.push('Nobody sees it until the event is approved and on sale.');
+
+    const sure = await this.dialogs.confirm({
+      title: editing ? `Save the changes to ${body.name}?` : `Add ${body.name} at ${price}?`,
+      body: editing ? `${body.name} is sold at ${price}${count}.` : `A new ticket type, sold at ${price}${count}.`,
+      consequences,
+      confirmLabel: editing ? 'Save changes' : 'Add the ticket type',
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
     this.formError.set(null);
     this.errors.set({});
 
     try {
-      const editing = this.editing();
-
       if (editing) await this.organizer.updateTicketType(this.id(), editing.id, body);
       else await this.organizer.createTicketType(this.id(), body);
 
@@ -544,6 +585,8 @@ export class EventTickets implements OnInit {
   // --- a tier's menu -----------------------------------------------------------------
 
   protected async menu(type: TicketType, first: boolean, last: boolean): Promise<void> {
+    if (this.locked()) return;
+
     const closed = type.status === 'closed';
     const chosen = await this.dialogs.menu({
       title: type.name,
@@ -575,14 +618,40 @@ export class EventTickets implements OnInit {
         await this.move(type, chosen === 'up' ? -1 : 1);
         break;
       case 'open':
-      case 'close':
-        await this.act(() => this.organizer.updateTicketType(this.id(), type.id, { status: chosen === 'open' ? 'on_sale' : 'closed' }), chosen === 'open' ? 'Back on sale.' : 'No longer on sale.');
-        break;
-      case 'delete':
-        if (await this.dialogs.confirm({ title: `Delete ${type.name}?`, message: 'Nobody has bought it, so nothing else changes.', confirm: 'Delete', danger: true })) {
-          await this.act(() => this.organizer.deleteTicketType(this.id(), type.id), 'Deleted.');
+      case 'close': {
+        const sure = await this.dialogs.confirm(
+          chosen === 'open'
+            ? {
+                title: `Put ${type.name} back on sale?`,
+                body: `Anybody can buy it again at ${formatMoney(type.price)}, straight away.`,
+                confirmLabel: 'Put it back on sale',
+                tone: 'default',
+              }
+            : {
+                title: `Stop selling ${type.name}?`,
+                body: 'Nobody can buy it from now on. It shows as unavailable.',
+                consequences: type.sold > 0 ? [`The ${type.sold} already sold still work at the door.`] : [],
+                confirmLabel: 'Stop selling it',
+                tone: 'danger',
+              },
+        );
+
+        if (sure) {
+          await this.act(() => this.organizer.updateTicketType(this.id(), type.id, { status: chosen === 'open' ? 'on_sale' : 'closed' }), chosen === 'open' ? 'Back on sale.' : 'No longer on sale.');
         }
         break;
+      }
+      case 'delete': {
+        const sure = await this.dialogs.confirm({
+          title: `Delete ${type.name}?`,
+          body: 'It is gone from the event page and this list. Nobody has bought it, so nothing else changes.',
+          confirmLabel: 'Delete the ticket type',
+          tone: 'danger',
+        });
+
+        if (sure) await this.act(() => this.organizer.deleteTicketType(this.id(), type.id), 'Deleted.');
+        break;
+      }
     }
   }
 

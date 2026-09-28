@@ -38,6 +38,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\ReviewsEvents;
 use Tests\Feature\Admin\SupportFixtures;
 use Tests\TestCase;
 
@@ -53,7 +54,7 @@ use Tests\TestCase;
  */
 class OrganizationSuspensionTest extends TestCase
 {
-    use RefreshDatabase, SupportFixtures;
+    use RefreshDatabase, ReviewsEvents, SupportFixtures;
 
     private Organization $org;
 
@@ -422,6 +423,11 @@ class OrganizationSuspensionTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('title', 'Organization suspended')
             ->assertJsonPath('message', WhileSuspended::withContact(WhileSuspended::PUBLISH));
+        // Nor into the review queue, which is the way on sale now.
+        $this->postJson("/api/organizer/events/{$event->id}/submit")
+            ->assertForbidden()
+            ->assertJsonPath('title', 'Organization suspended')
+            ->assertJsonPath('message', WhileSuspended::withContact(WhileSuspended::PUBLISH));
         $this->assertSame('draft', $event->fresh()->status);
 
         // Keeping it off sale is still the organizer's to say.
@@ -453,7 +459,7 @@ class OrganizationSuspensionTest extends TestCase
 
         $this->actAsMember($both);
 
-        $this->postJson("/api/organizer/events/{$event->id}/publish", ['status' => 'published'])->assertOk();
+        $this->publishThroughReview($event)->assertOk();
         $this->assertSame('published', $event->fresh()->status);
 
         // And a stranger poking at the suspended organization's events is

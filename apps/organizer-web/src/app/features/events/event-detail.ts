@@ -1,25 +1,29 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { tap } from 'rxjs';
 import { eventIdFrom } from '../../core/event-id';
 import { Api } from '../../core/api';
 import {
   EventSummary,
-  OrganizerEvent,
+  EventReviewResult,
+  OrganizerEventDetail,
   CancellationPreview,
   Reminder,
   Series,
   SeriesOccurrence,
   TicketType,
 } from '../../core/api.types';
-import { isEmailUnverified, messageFor } from '../../core/errors';
+import { messageFor } from '../../core/errors';
 import { longEventTime } from '../../core/event-time';
 import { zonedWallClockToIso } from '../../core/zoned-time';
 import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
 import { EventEmbed } from './event-embed';
 import { EventSales } from './event-sales';
+import { eventStatusLabel, reviewStepLabel } from './event-status';
+import { EventWorkspace } from './event-workspace';
 
 @Component({
   selector: 'app-event-detail',
@@ -29,12 +33,14 @@ import { EventSales } from './event-sales';
 export class EventDetail {
   private readonly api = inject(Api);
   private readonly route = inject(ActivatedRoute);
+  private readonly confirmDialog = inject(ConfirmDialog);
+  /** The frame around this tab, whose header and locks follow the event's status. */
+  private readonly workspace = inject(EventWorkspace, { optional: true });
   readonly session = inject(SessionStore);
 
   readonly eventId = eventIdFrom(this.route);
 
-  readonly event = signal<OrganizerEvent | null>(null);
-  readonly ticketTypes = signal<TicketType[]>([]);
+  readonly event = signal<OrganizerEventDetail | null>(null);
   readonly summary = signal<EventSummary | null>(null);
 
   readonly loading = signal(true);
@@ -42,19 +48,22 @@ export class EventDetail {
   readonly notice = signal<string | null>(null);
   readonly publishing = signal(false);
 
-  /** A new ticket type being written. Prices are entered in major units. */
-  /**
-   * A new ticket type being written. Prices are entered in major units.
-   *
-   * Ticket types are read here only to gate publishing — managing them moved
-   * to the Tickets tab, which does inventory and sale windows properly. The
-   * cruder editor this screen carried was a second place for the same
-   * decision, and the lesser one always won by being seen first.
-   */
   readonly money = formatMoney;
   readonly when = longEventTime;
 
-  readonly canPublish = computed(() => this.ticketTypes().some((t) => t.status === 'on_sale'));
+  /*
+   * Where the event stands with myFiesta's review.
+   *
+   * Nothing goes on sale without somebody at myFiesta looking at it first. The
+   * server says what sending it now would do — into the queue, or straight
+   * back on sale because nothing has changed since it was approved — and what
+   * stops it being sent, so the button can say which before it is pressed.
+   */
+  readonly review = computed(() => this.event()?.review ?? null);
+  readonly notReady = computed(() => this.review()?.not_ready ?? []);
+  readonly history = computed(() => this.review()?.history ?? []);
+  readonly statusLabel = eventStatusLabel;
+  readonly stepLabel = reviewStepLabel;
 
   /*
    * Reminders live on this page rather than behind another click.
@@ -140,11 +149,9 @@ export class EventDetail {
       },
     });
 
-    this.api.ticketTypes(this.eventId).subscribe({
-      next: ({ data }) => this.ticketTypes.set(data),
-      error: () => this.error.set('Could not load tickets for this event.'),
-    });
-
+    // Ticket types are managed on the Tickets tab, and whether there is one on
+    // sale — what used to gate the button here — comes with the event now, in
+    // `review.not_ready`, alongside everything else that stops it being sent.
     this.loadReminders();
     this.loadSeries();
 
@@ -165,55 +172,103 @@ export class EventDetail {
     });
   }
 
-  makeRepeating(): void {
-    if (this.repeating()) return;
+  async makeRepeating(): Promise<void> {
+    const event = this.event();
+    if (!event || this.repeating()) return;
 
-    this.repeating.set(true);
     this.error.set(null);
     this.notice.set(null);
 
     const count = Number(this.repeatCount());
 
-    this.api.repeatEvent(this.eventId, this.frequency(), count || undefined).subscribe({
-      next: ({ created }) => {
-        this.repeating.set(false);
-        this.copying.set(false);
-        this.notice.set(
-          `${created} more ${created === 1 ? 'date' : 'dates'} added. They are drafts until you publish them.`,
-        );
-        this.loadSeries();
-      },
-      error: (response) => {
-        this.repeating.set(false);
-        this.error.set(messageFor(response, 'That event could not be set to repeat.'));
-      },
+    // "For 8 dates" is every date in the series, this one included — the
+    // count the server takes (2 to 104) — so 8 is seven new events. Refused
+    // here rather than after the question, so nobody confirms a number the
+    // server then turns down.
+    if (count && (!Number.isInteger(count) || count < 2 || count > 104)) {
+      this.error.set('Repeat it for 2 to 104 dates, counting this one.');
+
+      return;
+    }
+
+    const more = count - 1;
+    const last = new Date(event.starts_at).getTime() + more * { weekly: 7, fortnightly: 14, monthly: 31 }[this.frequency()] * 86_400_000;
+    const how = this.frequencyOptions.find((option) => option.value === this.frequency())?.label.toLowerCase() ?? this.frequency();
+    let created = 0;
+
+    this.repeating.set(true);
+
+    const done = await this.confirmDialog.confirm({
+      title: `Repeat ${event.title} ${how}?`,
+      body: count
+        ? `${count} dates in all, counting this one: ${more} more ${more === 1 ? 'is' : 'are'} added, ${how}, each its own event with its own tickets and door.`
+        : `New dates are added ${how}, six months ahead at a time, until you stop repeating it. Each is its own event with its own tickets and door.`,
+      consequences: [
+        // SeriesGenerator makes six months ahead at a time; the rest follow on schedule.
+        ...(count && last - Date.now() > 180 * 86_400_000 ? ['Dates more than six months away are added as they come closer.'] : []),
+        'Each new date is a draft until you submit it. A date that is this approved night, unchanged, goes straight on sale.',
+      ],
+      confirmLabel: count ? `Add ${more} more ${more === 1 ? 'date' : 'dates'}` : 'Repeat it',
+      busyLabel: 'Setting up…',
+      tone: 'default',
+      run: () => this.api.repeatEvent(this.eventId, this.frequency(), count || undefined).pipe(tap((result) => (created = result.created))),
+      failure: (response) => messageFor(response, 'That event could not be set to repeat.'),
     });
+
+    this.repeating.set(false);
+
+    if (!done) return;
+
+    this.copying.set(false);
+    this.notice.set(
+      `${created} more ${created === 1 ? 'date' : 'dates'} added. Each is a draft until you submit it — a date that is this approved night, unchanged, goes straight on sale.`,
+    );
+    this.loadSeries();
   }
 
-  skip(occurrence: SeriesOccurrence): void {
+  async skip(occurrence: SeriesOccurrence): Promise<void> {
     this.error.set(null);
 
-    this.api.skipOccurrence(this.eventId, occurrence.id).subscribe({
-      next: (result) => {
-        this.notice.set(result.message);
-        this.loadSeries();
-      },
-      error: (response) =>
-        this.error.set(messageFor(response, 'That date could not be taken out.')),
+    let said = '';
+
+    const done = await this.confirmDialog.confirm({
+      title: `Skip ${this.occurrenceDate(occurrence.starts_at)}?`,
+      body: 'That date is taken out of the series and its page is deleted. It will not come back.',
+      consequences: ['A date somebody already holds a ticket for cannot be skipped: refund them first.'],
+      confirmLabel: 'Skip this date',
+      busyLabel: 'Skipping…',
+      tone: 'danger',
+      run: () => this.api.skipOccurrence(this.eventId, occurrence.id).pipe(tap((result) => (said = result.message))),
+      failure: (response) => messageFor(response, 'That date could not be taken out.'),
     });
+
+    if (!done) return;
+
+    this.notice.set(said);
+    this.loadSeries();
   }
 
-  stopRepeating(): void {
+  async stopRepeating(): Promise<void> {
     this.error.set(null);
 
-    this.api.stopRepeating(this.eventId).subscribe({
-      next: (result) => {
-        this.notice.set(result.message);
-        this.loadSeries();
-      },
-      error: (response) =>
-        this.error.set(messageFor(response, 'That series could not be stopped.')),
+    const title = this.event()?.title ?? 'this event';
+    let said = '';
+
+    const done = await this.confirmDialog.confirm({
+      title: `Stop repeating ${title}?`,
+      body: 'No more dates are added, and future dates nobody has bought a ticket for are deleted.',
+      consequences: ['Dates people have already bought tickets for are kept, exactly as they are.'],
+      confirmLabel: 'Stop repeating',
+      busyLabel: 'Stopping…',
+      tone: 'danger',
+      run: () => this.api.stopRepeating(this.eventId).pipe(tap((result) => (said = result.message))),
+      failure: (response) => messageFor(response, 'That series could not be stopped.'),
     });
+
+    if (!done) return;
+
+    this.notice.set(said);
+    this.loadSeries();
   }
 
   /** A date in the event's own zone, which is the venue's. */
@@ -237,33 +292,46 @@ export class EventDetail {
     });
   }
 
-  addReminder(): void {
+  async addReminder(): Promise<void> {
     if (this.savingReminder()) return;
 
-    this.savingReminder.set(true);
     this.error.set(null);
     this.notice.set(null);
 
-    this.api.addReminder(this.eventId, Number(this.newReminder())).subscribe({
-      next: () => {
-        this.savingReminder.set(false);
-        this.loadReminders();
-      },
-      error: (response) => {
-        this.savingReminder.set(false);
-        this.error.set(messageFor(response, 'That reminder could not be added.'));
-      },
+    const when = this.reminderChoices.find((choice) => choice.minutes === this.newReminder())?.label ?? 'Before the event';
+
+    this.savingReminder.set(true);
+
+    const done = await this.confirmDialog.confirm({
+      title: `Add a reminder ${when.toLowerCase()}?`,
+      body: `Everyone holding a ticket for ${this.event()?.title ?? 'this event'} gets an email ${when.toLowerCase()} it starts.`,
+      consequences: ['Anyone who has unsubscribed does not.'],
+      confirmLabel: 'Add the reminder',
+      busyLabel: 'Adding…',
+      tone: 'default',
+      run: () => this.api.addReminder(this.eventId, Number(this.newReminder())),
+      failure: (response) => messageFor(response, 'That reminder could not be added.'),
     });
+
+    this.savingReminder.set(false);
+
+    if (done) this.loadReminders();
   }
 
-  cancelReminder(reminder: Reminder): void {
+  async cancelReminder(reminder: Reminder): Promise<void> {
     this.error.set(null);
 
-    this.api.cancelReminder(this.eventId, reminder.id).subscribe({
-      next: () => this.loadReminders(),
-      error: (response) =>
-        this.error.set(messageFor(response, 'That reminder could not be turned off.')),
+    const done = await this.confirmDialog.confirm({
+      title: `Turn off the ${reminder.label.toLowerCase()} reminder?`,
+      body: `The email due ${this.sendTime(reminder.send_at)} is not sent to anyone.`,
+      confirmLabel: 'Turn off the reminder',
+      busyLabel: 'Turning off…',
+      tone: 'danger',
+      run: () => this.api.cancelReminder(this.eventId, reminder.id),
+      failure: (response) => messageFor(response, 'That reminder could not be turned off.'),
     });
+
+    if (done) this.loadReminders();
   }
 
   /**
@@ -288,34 +356,131 @@ export class EventDetail {
     }).format(new Date(iso));
   }
 
-  togglePublished(): void {
+  /**
+   * Send it to myFiesta, or straight back on sale.
+   *
+   * Which one is known before the dialog opens (`review.on_submit`), and the
+   * dialog says it: an organizer who expects a review and finds the event on
+   * sale, or the other way round, has been told something untrue.
+   */
+  async submit(): Promise<void> {
     const event = this.event();
     if (!event || this.publishing()) return;
 
-    const next = event.status === 'published' ? 'draft' : 'published';
+    const straightBack = event.review.on_submit === 'publish';
+    let result: EventReviewResult | null = null;
 
-    this.publishing.set(true);
     this.error.set(null);
+    this.notice.set(null);
+    this.publishing.set(true);
 
-    this.api.publish(this.eventId, next).subscribe({
-      next: ({ status, followers_told: told }) => {
-        this.publishing.set(false);
-        this.event.set({ ...event, status: status as OrganizerEvent['status'] });
-        this.notice.set(
-          status === 'published'
-            ? told
-              ? `Live, and ${told} ${told === 1 ? 'follower has' : 'followers have'} been told. The link is ready to share.`
-              : 'Live. The link is ready to share.'
-            : 'Taken down. Existing tickets still work.',
-        );
+    const done = await this.confirmDialog.confirm(
+      straightBack
+        ? {
+            title: `Put ${event.title} back on sale?`,
+            body: 'Nothing a buyer sees has changed since myFiesta approved it, so it goes back on sale straight away, without another review.',
+            consequences: ['Its page is visible again and tickets can be bought.'],
+            confirmLabel: 'Put back on sale',
+            busyLabel: 'Putting it back…',
+            tone: 'default',
+            run: () => this.api.submitForReview(this.eventId).pipe(tap((answer) => (result = answer))),
+            failure: (response) => messageFor(response, 'It could not be put back on sale.'),
+          }
+        : {
+            title: `Send ${event.title} for review?`,
+            body: 'Somebody at myFiesta looks at every event before it goes on sale, usually within a working day. We email you when it is approved or if something needs changing.',
+            consequences: [
+              'While it is being reviewed you cannot change it: its details, tickets, extras, questions, pictures and codes are locked.',
+              'Once it is approved it goes on sale straight away, and the people who follow you are told.',
+              'You can withdraw it from review at any time to make a change.',
+            ],
+            confirmLabel: 'Submit for review',
+            busyLabel: 'Sending…',
+            tone: 'default',
+            run: () => this.api.submitForReview(this.eventId).pipe(tap((answer) => (result = answer))),
+            failure: (response) => messageFor(response, 'It could not be sent for review.'),
+          },
+    );
+
+    this.publishing.set(false);
+
+    if (done && result) this.afterReviewStep(result);
+  }
+
+  /** Take it back from review, to change something. */
+  async withdraw(): Promise<void> {
+    const event = this.event();
+    if (!event || this.publishing()) return;
+
+    let result: EventReviewResult | null = null;
+
+    this.error.set(null);
+    this.notice.set(null);
+    this.publishing.set(true);
+
+    const done = await this.confirmDialog.confirm({
+      title: `Withdraw ${event.title} from review?`,
+      body: 'It goes back to a draft so you can change it. myFiesta stops looking at it until you send it again.',
+      consequences: ['When you send it again, it waits for review from the start.'],
+      confirmLabel: 'Withdraw from review',
+      busyLabel: 'Withdrawing…',
+      tone: 'default',
+      run: () => this.api.withdrawFromReview(this.eventId).pipe(tap((answer) => (result = answer))),
+      failure: (response) => messageFor(response, 'It could not be taken back from review.'),
+    });
+
+    this.publishing.set(false);
+
+    if (done && result) this.afterReviewStep(result);
+  }
+
+  /**
+   * Take it off sale, saying first what putting it back would take.
+   *
+   * Edits made while it is on sale need no review, but they do mean it is no
+   * longer what was approved — so the dialog says whether it could go
+   * straight back, rather than leaving that to be found out later.
+   */
+  async takeOffSale(): Promise<void> {
+    const event = this.event();
+    if (!event || this.publishing()) return;
+
+    let result: EventReviewResult | null = null;
+
+    this.error.set(null);
+    this.notice.set(null);
+    this.publishing.set(true);
+
+    const done = await this.confirmDialog.confirm({
+      title: `Take ${event.title} off sale?`,
+      body: 'Its page is hidden and nobody can buy a ticket until it is back on sale. Tickets already sold still work.',
+      consequences: [
+        event.review.unchanged_since_approval
+          ? 'Nothing a buyer sees has changed since myFiesta approved it, so you can put it straight back on sale — as long as that stays true.'
+          : 'It has changed since myFiesta approved it, so putting it back on sale will need another review.',
+      ],
+      confirmLabel: 'Take off sale',
+      busyLabel: 'Taking it off sale…',
+      tone: 'danger',
+      run: () => this.api.publish(this.eventId, 'draft').pipe(tap((answer) => (result = answer))),
+      failure: (response) => messageFor(response, 'It could not be taken off sale.'),
+    });
+
+    this.publishing.set(false);
+
+    if (done && result) this.afterReviewStep(result);
+  }
+
+  /** Say what happened, and read the event again so the page and the header agree. */
+  private afterReviewStep(result: EventReviewResult): void {
+    this.notice.set(result.message);
+
+    this.api.event(this.eventId).subscribe({
+      next: (fresh) => {
+        this.event.set(fresh);
+        this.workspace?.setEvent(fresh);
       },
-      error: (response) => {
-        this.publishing.set(false);
-        // An unproved address gets the shell's prompt instead, with the
-        // button that sends the link again.
-        if (isEmailUnverified(response)) return;
-        this.error.set(messageFor(response, 'That could not be changed.'));
-      },
+      error: () => this.workspace?.refresh(),
     });
   }
 
@@ -342,30 +507,59 @@ export class EventDetail {
     });
   }
 
-  confirmCancel(): void {
-    if (!this.cancelReady() || this.cancelBusy()) return;
+  /**
+   * The last word before calling it off: the panel gathered the reason and
+   * the choice to refund, and this says back what they add up to — who is
+   * told, how much goes back — above the button that does it.
+   */
+  async confirmCancel(): Promise<void> {
+    const event = this.event();
+    if (!event || !this.cancelReady() || this.cancelBusy()) return;
 
-    this.cancelBusy.set(true);
     this.error.set(null);
     this.notice.set(null);
 
-    this.api.cancelEvent(this.eventId, this.cancelReason().trim(), this.cancelRefund()).subscribe({
-      next: (result) => {
-        this.cancelBusy.set(false);
-        this.cancelling.set(false);
-        this.notice.set(result.message);
+    const preview = this.cancelPreview();
+    const refund = this.cancelRefund();
+    const reason = this.cancelReason().trim();
+    let said = '';
 
-        const event = this.event();
-        if (event) this.event.set({ ...event, status: 'cancelled' });
-      },
-      error: (response) => {
-        this.cancelBusy.set(false);
-        this.error.set(messageFor(response, 'That event could not be cancelled.'));
-      },
+    const told = preview
+      ? `${preview.ticket_holders} ${preview.ticket_holders === 1 ? 'person holding a ticket is' : 'people holding tickets are'} told it is off, with your reason word for word.`
+      : 'Everybody holding a ticket is told it is off, with your reason word for word.';
+
+    const returned = !refund
+      ? 'Nobody is refunded now: you refund each order yourself from Orders and refunds.'
+      : preview && preview.orders_to_refund > 0
+        ? `${this.money(preview.refund_total)} goes back across ${preview.orders_to_refund} ${preview.orders_to_refund === 1 ? 'order' : 'orders'}, to the cards they paid with.`
+        : 'Every paid order is refunded to the card it was paid with.';
+
+    this.cancelBusy.set(true);
+
+    const done = await this.confirmDialog.confirm({
+      title: `Cancel ${event.title}?`,
+      body: told,
+      consequences: [returned, 'Sales stop and the reminders still to come are not sent.', 'It cannot be undone.'],
+      confirmLabel: 'Cancel the event',
+      cancelLabel: 'Keep it running',
+      busyLabel: 'Cancelling…',
+      tone: 'danger',
+      run: () => this.api.cancelEvent(this.eventId, reason, refund).pipe(tap((result) => (said = result.message))),
+      failure: (response) => messageFor(response, 'That event could not be cancelled.'),
     });
+
+    this.cancelBusy.set(false);
+
+    if (!done) return;
+
+    this.cancelling.set(false);
+    this.notice.set(said);
+
+    const current = this.event();
+    if (current) this.event.set({ ...current, status: 'cancelled' });
   }
 
-  duplicate(): void {
+  async duplicate(): Promise<void> {
     const event = this.event();
 
     if (!event || this.duplicating()) return;
@@ -378,23 +572,29 @@ export class EventDetail {
       return;
     }
 
-    this.duplicating.set(true);
     this.error.set(null);
     this.notice.set(null);
+    this.duplicating.set(true);
 
-    this.api.duplicateEvent(this.eventId, startsAt).subscribe({
-      next: () => {
-        this.duplicating.set(false);
-        this.copying.set(false);
-        // Left on this page rather than jumped to the copy: the organizer is
-        // mid-thought about this event, and being moved somewhere else is
-        // disorienting when the new thing is a draft they may not want yet.
-        this.notice.set('Copied. It is in your events list as a draft.');
-      },
-      error: (response) => {
-        this.duplicating.set(false);
-        this.error.set(messageFor(response, 'That event could not be copied.'));
-      },
+    const done = await this.confirmDialog.confirm({
+      title: `Copy ${event.title} to ${this.occurrenceDate(startsAt)}?`,
+      body: 'A new draft is made with the same tickets, prices, capacity and banner.',
+      consequences: ['Sales and the gallery stay with this one.', 'The copy goes on sale only after you submit it for review.'],
+      confirmLabel: 'Make a copy',
+      busyLabel: 'Copying…',
+      tone: 'default',
+      run: () => this.api.duplicateEvent(this.eventId, startsAt),
+      failure: (response) => messageFor(response, 'That event could not be copied.'),
     });
+
+    this.duplicating.set(false);
+
+    if (!done) return;
+
+    this.copying.set(false);
+    // Left on this page rather than jumped to the copy: the organizer is
+    // mid-thought about this event, and being moved somewhere else is
+    // disorienting when the new thing is a draft they may not want yet.
+    this.notice.set('Copied. It is in your events list as a draft.');
   }
 }

@@ -3,10 +3,12 @@
 namespace App\Filament\Resources\Events\Tables;
 
 use App\Filament\Resources\Events\Actions\EventActions;
+use App\Filament\Resources\Events\Actions\ReviewActions;
 use App\Filament\Resources\Events\EventResource;
 use App\Filament\Support\Listing;
 use App\Models\Event;
 use App\Models\TicketType;
+use Carbon\CarbonInterface;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -81,12 +83,10 @@ class EventsTable
                 TextColumn::make('status')
                     ->badge()
                     ->state(fn (Event $record) => self::statusOf($record))
-                    ->color(fn (string $state) => match ($state) {
-                        'On sale' => 'success',
-                        'Draft' => 'gray',
-                        'Cancelled' => 'warning',
-                        default => 'danger',
-                    })
+                    ->color(fn (string $state) => self::statusColor($state))
+                    ->description(fn (Event $record) => $record->status === 'in_review' && $record->submitted_at !== null
+                        ? 'Waiting '.$record->submitted_at->diffForHumans(syntax: CarbonInterface::DIFF_ABSOLUTE)
+                        : null)
                     ->sortable(['status']),
 
                 IconColumn::make('is_featured')
@@ -127,6 +127,7 @@ class EventsTable
                     ->multiple()
                     ->options([
                         'draft' => 'Draft',
+                        'in_review' => 'In review',
                         'published' => 'On sale',
                         'cancelled' => 'Cancelled',
                     ]),
@@ -185,6 +186,7 @@ class EventsTable
             ->recordUrl(fn (Event $record) => EventResource::getUrl('view', ['record' => $record]))
             ->recordActions([
                 ViewAction::make(),
+                ReviewActions::review(),
                 ActionGroup::make([EventActions::publicPage(), ...EventActions::all()]),
             ])
             ->toolbarActions([]);
@@ -196,8 +198,21 @@ class EventsTable
             $event->deleted_at !== null => 'Deleted',
             $event->taken_down_at !== null => 'Taken down',
             $event->status === 'published' => 'On sale',
+            $event->status === 'in_review' => 'In review',
             $event->status === 'cancelled' => 'Cancelled',
             default => 'Draft',
+        };
+    }
+
+    /** The badge colour for a label statusOf() gives. */
+    public static function statusColor(string $label): string
+    {
+        return match ($label) {
+            'On sale' => 'success',
+            'In review' => 'info',
+            'Draft' => 'gray',
+            'Cancelled' => 'warning',
+            default => 'danger',
         };
     }
 

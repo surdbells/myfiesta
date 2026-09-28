@@ -11,6 +11,7 @@ use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Models\Venue;
+use App\Services\Events\EventReviews;
 use App\Services\Payments\GatewayFee;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,7 @@ class LegacyImporter
         $this->importOrganizers();
         $this->importEvents();
         $this->importTicketTypes();
+        $this->approveImportedOnSale();
         $this->importOrders();
         $this->importTickets();
         $this->importSettlements();
@@ -494,6 +496,34 @@ class LegacyImporter
         ]);
 
         $this->map->record('events', $row->id, 'event', $event->id, $inferred);
+    }
+
+    /**
+     * Imported events that were on sale, approved as they came across.
+     *
+     * They were on sale on the previous platform, and taking every one of them
+     * off to be looked at again would punish organizers for a rule that did
+     * not exist when they published. Recorded after their ticket types, so
+     * the fingerprint is of the listing a buyer sees; a poster that arrives
+     * later (LegacyPosterImporter) is a change since, and only matters if the
+     * organizer takes the event off sale and puts it back.
+     *
+     * Only events the map says came from the old database, and only once:
+     * a re-run finds them approved and leaves them alone.
+     */
+    private function approveImportedOnSale(): void
+    {
+        $reviews = app(EventReviews::class);
+
+        Event::query()
+            ->where('status', 'published')
+            ->whereNull('approved_at')
+            ->whereIn('id', DB::table('legacy_map')->where('source_table', 'events')->select('target_id'))
+            ->chunkById(200, function ($events) use ($reviews) {
+                foreach ($events as $event) {
+                    $reviews->recordApproval($event, null, EventReviews::VIA_IMPORTED);
+                }
+            });
     }
 
     /**

@@ -76,6 +76,7 @@ trait SupportFixtures
             'organization_id' => $organization->id,
             'slug' => 'event-'.Str::lower(Str::random(8)),
             'title' => 'Afro Fest',
+            'description' => 'Afrobeats, highlife and amapiano until late.',
             'currency' => 'CAD',
             'starts_at' => now()->addMonth(),
             'timezone' => $lagos ? 'Africa/Lagos' : 'America/Toronto',

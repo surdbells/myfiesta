@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventImage;
+use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
 use App\Services\Images\ImageRejected;
 use App\Services\Images\ImageStore;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +33,10 @@ class EventImageController extends Controller
      */
     public const MAX_GALLERY = 30;
 
-    public function __construct(private readonly ImageStore $images) {}
+    public function __construct(
+        private readonly ImageStore $images,
+        private readonly Auditor $auditor,
+    ) {}
 
     public function index(Request $request, Event $event): JsonResponse
     {
@@ -46,6 +51,7 @@ class EventImageController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'kind' => ['required', 'in:banner,gallery'],
@@ -79,12 +85,15 @@ class EventImageController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $this->recordOnSale($request, $event, 'added', $image);
+
         return response()->json($this->present($image), 201);
     }
 
     public function update(Request $request, Event $event, EventImage $image): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($image->event_id === $event->id, 404);
 
@@ -120,6 +129,8 @@ class EventImageController extends Controller
 
                 $image->update(['kind' => $data['kind']]);
             });
+
+            $this->recordOnSale($request, $event, $data['kind'] === 'banner' ? 'made_poster' : 'moved_to_gallery', $image);
         }
 
         return response()->json($this->present($image->refresh()));
@@ -128,8 +139,11 @@ class EventImageController extends Controller
     public function destroy(Request $request, Event $event, EventImage $image): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($image->event_id === $event->id, 404);
+
+        $this->recordOnSale($request, $event, 'removed', $image);
 
         $this->images->delete($image);
 
@@ -146,6 +160,7 @@ class EventImageController extends Controller
     public function reorder(Request $request, Event $event): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
@@ -170,6 +185,26 @@ class EventImageController extends Controller
 
         return response()->json([
             'gallery' => $event->gallery()->get()->map(fn (EventImage $i) => $this->present($i))->values(),
+        ]);
+    }
+
+    /**
+     * A picture changed on an event that is on sale.
+     *
+     * Allowed without another review, like any edit while on sale, and kept
+     * on the record: the poster is the first thing a buyer sees, and "who
+     * changed it?" should have an answer.
+     */
+    private function recordOnSale(Request $request, Event $event, string $what, EventImage $image): void
+    {
+        if ($event->status !== 'published') {
+            return;
+        }
+
+        $this->auditor->record('event.picture_changed_on_sale', $event, $request->user(), metadata: [
+            'change' => $what,
+            'kind' => $image->kind,
+            'image_id' => $image->id,
         ]);
     }
 

@@ -305,9 +305,76 @@ export interface TermsStanding {
  * The states an event can actually be in.
  *
  * review and scheduled were in the schema and unreachable by any code path.
- * Mirrors App\Enums\EventStatus, which owns the transitions.
+ * in_review is the review they stood for, now real: sent by the organizer,
+ * frozen while it waits, and decided by myFiesta staff. Mirrors
+ * App\Enums\EventStatus, which owns the transitions.
  */
-export type EventStatus = 'draft' | 'published' | 'cancelled';
+export type EventStatus = 'draft' | 'in_review' | 'published' | 'cancelled';
+
+/** One step in an event's review, newest first in `EventReviewState.history`. */
+export interface EventReviewStep {
+  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn';
+  /**
+   * How an approval came about: `review` for a decision on the queue, or one
+   * of the staff actions and rules that count as one. Null for other steps.
+   */
+  via: 'review' | 'takedown_lifted' | 'suspension_lifted' | 'series' | 'existing' | 'imported' | null;
+  /** The reviewer's words, exactly as they were sent, on a rejection. */
+  reason: string | null;
+  /** ISO 8601. */
+  at: string;
+  /** Who: a member of the organization, or "myFiesta" for a decision. */
+  by: string | null;
+}
+
+/** Where an event stands with myFiesta's review. */
+export interface EventReviewState {
+  /** When the review now waiting began. Null unless in review. */
+  submitted_at: string | null;
+  /** The last approval that stands. */
+  approved_at: string | null;
+  /**
+   * What sending it now would do: `publish` puts it straight back on sale
+   * (nothing a buyer sees changed since it was approved, or it is the approved
+   * night of a series on a new date, and staff have not sent it back since);
+   * `review` sends it to the queue. Null when it is not a draft that can be
+   * sent.
+   */
+  on_submit: 'publish' | 'review' | null;
+  /**
+   * Whether what a buyer sees is still exactly what was last approved, and
+   * staff have not sent it back since. For an event on sale: taken off now,
+   * it could go straight back on sale.
+   */
+  unchanged_since_approval: boolean;
+  /**
+   * What stops it being sent, one plain sentence each. Empty when ready. Only
+   * its dates when `on_submit` is `publish`: the listing is what was approved.
+   */
+  not_ready: string[];
+  /** The rejection not yet answered by sending it again. */
+  rejection: { reason: string; at: string } | null;
+  history: EventReviewStep[];
+}
+
+/** What sending, withdrawing, or taking an event off sale did. */
+export interface EventReviewResult {
+  status: EventStatus;
+  /**
+   * `in_review` sent to the queue; `published` straight on sale with an
+   * approval that still stands; `withdrawn` taken back; `unpublished` taken
+   * off sale; `already` nothing to do.
+   */
+  outcome: 'in_review' | 'published' | 'withdrawn' | 'unpublished' | 'already';
+  message: string;
+}
+
+/** A refusal to send an event for review, with every reason at once. */
+export interface EventReviewRefusal {
+  message: string;
+  reasons?: string[];
+  code?: 'event_in_review' | 'organization_suspended' | 'email_unverified';
+}
 
 export interface OrganizerEvent {
   id: string;
@@ -360,6 +427,8 @@ export interface OrganizerEventDetail extends OrganizerEvent {
   /** How close to the doors returns stop being accepted. */
   resale_closes_hours: number;
   poster_url: string | null;
+  /** Where it stands with myFiesta's review. */
+  review: EventReviewState;
 }
 
 /**
@@ -1010,10 +1079,42 @@ export interface SettlementRow {
   settled_at: string | null;
 }
 
+/**
+ * Money owed back to myFiesta in the statement's currency, and how it is
+ * coming back.
+ *
+ * An advance (a payout of more than was owed) or refunds after a payout take
+ * the balance below zero; the next sales pay it back before anything more is
+ * paid out. The parts always add up:
+ * advanced − repaid − recovered + added = outstanding.
+ */
+export interface PayoutOverdraft {
+  /** What is owed to myFiesta now. Zero once it has been paid back. */
+  outstanding: Money;
+  /** How much myFiesta advanced. Null when refunds, not an advance, took the balance below zero. */
+  advanced: Money | null;
+  advanced_at: string | null;
+  /** Paid back by sales since. */
+  recovered: Money;
+  /** Paid back by a transfer to myFiesta since. */
+  repaid: Money;
+  /** Put on top by refunds and chargebacks since. */
+  added: Money;
+  /** When it started: the advance, or the last payout before refunds overtook sales. */
+  since: string | null;
+  /** The whole position in one sentence, the same one myFiesta staff read. */
+  summary: string;
+  /** What pays it back, while anything is outstanding. */
+  recovery: string | null;
+}
+
 export interface PayoutStatement {
   currency: Money['currency'];
+  /** Below zero while the organization owes myFiesta money; see `overdraft`. */
   balance: Money;
   settled: Money;
+  /** Null when nothing is owed back and no advance is being paid back. */
+  overdraft: PayoutOverdraft | null;
   events: PayoutEventRow[];
   settlements: SettlementRow[];
   destination: PayoutDestination | null;
@@ -1034,6 +1135,8 @@ export interface PayoutRequestRow {
   id: string;
   amount: Money;
   paid_amount: Money | null;
+  /** The part of the payment myFiesta advanced beyond what was owed, when it did. */
+  advance: Money | null;
   status: 'pending' | 'paid' | 'rejected' | 'cancelled';
   note: string | null;
   /** Written by platform staff for the organizer: why it was not paid, or a note on what was. */

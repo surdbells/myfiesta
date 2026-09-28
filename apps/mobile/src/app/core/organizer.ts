@@ -17,6 +17,7 @@ import type {
   EventImages,
   EventOption,
   EventQuestion,
+  EventReviewResult,
   EventSummary,
   GuestPage,
   Integrations,
@@ -246,8 +247,22 @@ export class Organizer {
     return this.post(`/events/${id}/duplicate`, { starts_at: startsAt, ...(title ? { title } : {}) });
   }
 
-  publish(id: string, status: 'draft' | 'published'): Promise<{ status: string; followers_told?: number }> {
+  /** Take off sale (`draft`), or — kept for older callers — send for review (`published`). */
+  publish(id: string, status: 'draft' | 'published'): Promise<EventReviewResult> {
     return this.post(`/events/${id}/publish`, { status });
+  }
+
+  /**
+   * Send a draft to myFiesta to be looked at, or straight back on sale when
+   * nothing has changed since it was approved. The answer says which.
+   */
+  submitForReview(id: string): Promise<EventReviewResult> {
+    return this.post(`/events/${id}/submit`);
+  }
+
+  /** Take an event back from review, to change something. */
+  withdrawFromReview(id: string): Promise<EventReviewResult> {
+    return this.post(`/events/${id}/withdraw`);
   }
 
   cancellationPreview(id: string): Promise<CancellationPreview> {

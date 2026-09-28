@@ -218,6 +218,10 @@ final class WhileImpersonating
         PayoutController::class.'@index',
         // When publishing would email the organization's followers.
         EventController::class.'@publish',
+        // The same, sent for review: approving it tells the followers in the
+        // organization's name. Sending one that tells nobody stays open, and
+        // whoever sent it never approves it (EventReviews::approve).
+        EventController::class.'@submit',
         // When the tickets would be emailed.
         IssuedTicketController::class.'@store',
     ];
@@ -282,6 +286,7 @@ final class WhileImpersonating
         return match ($action) {
             PayoutController::class.'@index' => self::seesPayouts($staffRole) ? null : self::PAYOUTS,
             EventController::class.'@publish' => self::wouldAnnounce($request) ? self::ANNOUNCES : null,
+            EventController::class.'@submit' => self::wouldAnnounce($request, submitting: true) ? self::ANNOUNCES : null,
             IssuedTicketController::class.'@store' => $request->boolean('send_email') ? self::SENDS : null,
             default => null,
         };
@@ -294,9 +299,9 @@ final class WhileImpersonating
      * nothing and stay open: support unpublishing to fix a typo must be able
      * to put it back.
      */
-    private static function wouldAnnounce(Request $request): bool
+    private static function wouldAnnounce(Request $request, bool $submitting = false): bool
     {
-        if ($request->input('status') !== 'published') {
+        if (! $submitting && $request->input('status') !== 'published') {
             return false;
         }
 

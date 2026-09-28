@@ -15,6 +15,7 @@ import { formatMoney } from '../../core/money';
 import { Api } from '../../core/api';
 import { OrganizerEvent, Page, PageMeta } from '../../core/api.types';
 import { SessionStore } from '../../core/session';
+import { eventStatusLabel } from './event-status';
 
 @Component({
   selector: 'app-event-list',
@@ -88,11 +89,14 @@ export class EventList {
    *
    * Published is the working state and gets no colour at all — a list where
    * every row is green says nothing. The two that are worth a glance are the
-   * ones that mean the event is not selling.
+   * ones that mean the event is not selling. Waiting for review is on its
+   * way, not stuck, so it is the brand colour rather than a warning.
    */
-  statusTone(status: OrganizerEvent['status']): 'neutral' | 'warning' | 'danger' {
-    return status === 'draft' ? 'warning' : status === 'cancelled' ? 'danger' : 'neutral';
+  statusTone(status: OrganizerEvent['status']): 'neutral' | 'brand' | 'warning' | 'danger' {
+    return status === 'draft' ? 'warning' : status === 'cancelled' ? 'danger' : status === 'in_review' ? 'brand' : 'neutral';
   }
+
+  readonly statusLabel = eventStatusLabel;
 
   /**
    * How far through the door an event is.

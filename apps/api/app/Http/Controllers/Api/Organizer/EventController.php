@@ -12,8 +12,9 @@ use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
+use App\Services\Events\EventReviews;
+use App\Services\Events\ReviewRefused;
 use App\Services\Events\SalesReport;
-use App\Services\Follows\Announcements;
 use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -226,7 +227,7 @@ class EventController extends Controller
      * noticed until a screen showed how a night was going from this endpoint
      * and read undefined for every figure.
      */
-    public function show(Request $request, Event $event): JsonResponse
+    public function show(Request $request, Event $event, EventReviews $reviews): JsonResponse
     {
         $this->authorize('viewInConsole', $event);
 
@@ -253,7 +254,38 @@ class EventController extends Controller
             'resale_enabled' => (bool) $event->resale_enabled,
             'resale_closes_hours' => (int) $event->resale_closes_hours,
             'poster_url' => $event->banner?->renditionUrl('display'),
+            'review' => $this->reviewOf($event, $reviews),
         ]);
+    }
+
+    /**
+     * Where the event stands with myFiesta's review, as the console shows it.
+     *
+     * `on_submit` answers the question the button has to answer before it is
+     * pressed: will this go straight back on sale, or into the queue? And the
+     * reason it was last sent back stays on the event until it is sent again,
+     * so the organizer is not left to find it in an email.
+     *
+     * @return array<string, mixed>
+     */
+    private function reviewOf(Event $event, EventReviews $reviews): array
+    {
+        $rejection = $reviews->standingRejection($event);
+
+        return [
+            'submitted_at' => $event->submitted_at?->toIso8601String(),
+            'approved_at' => $event->approved_at?->toIso8601String(),
+            'on_submit' => $reviews->whatSubmittingDoes($event),
+            // For an event on sale: whether taking it off and putting it back
+            // would go straight back on sale, said before it is taken off.
+            'unchanged_since_approval' => $reviews->unchangedSinceApproval($event),
+            'not_ready' => $event->status === EventStatus::Draft->value ? $reviews->notReadyBecause($event) : [],
+            'rejection' => $rejection === null ? null : [
+                'reason' => $rejection->reason,
+                'at' => $rejection->created_at?->toIso8601String(),
+            ],
+            'history' => $reviews->historyFor($event),
+        ];
     }
 
     public function store(Request $request): JsonResponse
@@ -408,6 +440,9 @@ class EventController extends Controller
     {
         $this->authorize('update', $event);
 
+        // What staff are looking at has to be what goes on sale.
+        EventReviews::refuseWhileInReview($event);
+
         // A cancelled event is a historical record. People bought tickets to
         // what it said and some were refunded on that basis; editing it
         // afterwards rewrites what they were told.
@@ -437,10 +472,32 @@ class EventController extends Controller
             'resale_closes_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
         ]);
 
+        $before = $event->only(array_keys($data));
+
         // Currency is absent on purpose. Changing it after a sale would leave
         // orders denominated in one currency under an event claiming another,
         // and the ledger has no way to express that.
         $event->update($data);
+
+        /*
+         * Changed while on sale: allowed without another review, and kept on
+         * the record. An approval is of what the event said then, and an edit
+         * afterwards is the organizer's word alone — this is where somebody
+         * asking "who moved the date?" finds out. It also means the event is
+         * no longer what was approved, so taking it off sale and putting it
+         * back sends it through review.
+         */
+        $changed = array_values(array_diff(array_keys($event->getChanges()), ['updated_at', 'search_vector']));
+
+        if ($changed !== [] && $event->status === EventStatus::Published->value) {
+            $shown = array_diff($changed, ['description']);
+
+            $this->auditor->record('event.edited_on_sale', $event, $request->user(), metadata: [
+                'changed' => $changed,
+                'before' => array_intersect_key($before, array_flip($shown)),
+                'after' => $event->only($shown),
+            ]);
+        }
 
         return response()->json(
             new EventResource($event->fresh()->load(['organization', 'ticketTypes'])),
@@ -448,12 +505,15 @@ class EventController extends Controller
     }
 
     /**
-     * Publish, or take back down.
+     * Send for review, or take off sale.
      *
-     * Publishing is refused without something to sell: a published event with
-     * no tickets is a shared link that disappoints everyone who follows it.
+     * Kept for the clients that already call it. `published` is the same as
+     * submit(): nothing goes on sale without an approval, so asking for it
+     * sends the event for review, or straight back on sale when an approval
+     * still stands for it as it is. `draft` takes it off sale — or, while it
+     * is waiting, takes it back from review.
      */
-    public function publish(Request $request, Event $event, Announcements $announcements): JsonResponse
+    public function publish(Request $request, Event $event, EventReviews $reviews): JsonResponse
     {
         $this->authorize('publish', $event);
 
@@ -461,98 +521,96 @@ class EventController extends Controller
             'status' => ['required', 'in:draft,published'],
         ]);
 
+        if ($data['status'] === EventStatus::Published->value) {
+            return $this->answer(fn () => $reviews->submit($event, $request->user()));
+        }
+
         $from = EventStatus::from($event->status);
-        $to = EventStatus::from($data['status']);
+
+        if ($from === EventStatus::InReview) {
+            return $this->answer(fn () => $reviews->withdraw($event, $request->user()));
+        }
 
         /*
          * The transition table decides, not this method.
          *
-         * Without it, a cancelled event could be republished by sending the
-         * same request that publishes a draft — and everybody holding a ticket
-         * has already been told it is off, with some of them refunded.
+         * Without it, a cancelled event could be put back to a draft and then
+         * on sale — and everybody holding a ticket has already been told it is
+         * off, with some of them refunded.
          */
-        if ($from !== $to && ! $from->canBecome($to)) {
+        if ($from !== EventStatus::Draft && ! $from->canBecome(EventStatus::Draft)) {
             return response()->json([
                 'message' => $from === EventStatus::Cancelled
                     ? 'A cancelled event cannot go back on sale. Copy it to a new date instead.'
-                    : "An event that is {$from->label()} cannot become {$to->label()}.",
+                    : "An event that is {$from->label()} cannot become a draft.",
             ], 422);
         }
 
-        // Taken off sale by the platform (EventModeration). Only staff lift
-        // that; otherwise a takedown is undone by the next click.
-        if ($to === EventStatus::Published && $event->taken_down_at !== null) {
-            return response()->json([
-                'message' => 'myFiesta has taken this event off sale: '.$event->taken_down_reason
-                    .' Reply to the email we sent to have it looked at again.',
-            ], 422);
+        $event->update(['status' => EventStatus::Draft->value]);
+
+        // Off sale already because the organization is suspended, and now
+        // because the organizer says so too. Theirs is the decision that
+        // outlasts the suspension: without the mark, lifting it leaves this
+        // one a draft instead of putting it back on sale (Suspension).
+        $keptOff = $event->unpublished_by_suspension_at !== null;
+
+        if ($keptOff) {
+            $event->forceFill(['unpublished_by_suspension_at' => null, 'unpublished_by_suspension_fingerprint' => null])->save();
         }
 
-        if ($to === EventStatus::Draft) {
-            $event->update(['status' => EventStatus::Draft->value]);
-
-            // Off sale already because the organization is suspended, and now
-            // because the organizer says so too. Theirs is the decision that
-            // outlasts the suspension: without the mark, lifting it leaves this
-            // one a draft instead of putting it back on sale (Suspension).
-            $keptOff = $event->unpublished_by_suspension_at !== null;
-
-            if ($keptOff) {
-                $event->forceFill(['unpublished_by_suspension_at' => null])->save();
-            }
-
-            // Taking an event off sale is not cancelling it, but it does stop
-            // people buying — worth a record of who decided that and when.
-            $this->auditor->record(
-                'event.unpublished',
-                $event,
-                $request->user(),
-                metadata: ['from' => $from->value] + ($keptOff ? ['kept_off_after_suspension' => true] : []),
-            );
-
-            return response()->json(['status' => EventStatus::Draft->value]);
-        }
-
-        $needsTickets = $event->kind === 'ticketed'
-            && ! $event->ticketTypes()->where('status', 'on_sale')->exists();
-
-        if ($needsTickets) {
-            return response()->json([
-                'message' => 'Add at least one ticket on sale before publishing.',
-            ], 422);
-        }
-
-        // Publishing something that has already happened puts an event on the
-        // front page that nobody can attend, and schedules reminders for a date
-        // in the past.
-        if ($event->starts_at->isPast()) {
-            return response()->json([
-                'message' => 'This event has already started. Change the date before publishing.',
-            ], 422);
-        }
-
-        $event->update([
-            'status' => 'published',
-            // Kept from the first publish, so unpublishing and republishing
-            // does not make an old event look newly announced.
-            'published_at' => $event->published_at ?? now(),
-        ]);
-
-        $this->scheduleDefaultReminders($event);
-
-        // Everybody following this organizer hears about it — once, however
-        // many times it is unpublished and published again while a typo gets
-        // fixed.
-        $told = $announcements->announce($event);
-
+        // Taking an event off sale is not cancelling it, but it does stop
+        // people buying — worth a record of who decided that and when.
         $this->auditor->record(
-            'event.published',
+            'event.unpublished',
             $event,
             $request->user(),
-            metadata: $told > 0 ? ['followers_told' => $told] : [],
+            metadata: ['from' => $from->value] + ($keptOff ? ['kept_off_after_suspension' => true] : []),
         );
 
-        return response()->json(['status' => 'published']);
+        return response()->json([
+            'status' => EventStatus::Draft->value,
+            'outcome' => 'unpublished',
+            // Said now, so putting it back holds no surprise later — and only
+            // when submit() would then do it.
+            'message' => $reviews->whatSubmittingDoes($event) === 'publish' && $reviews->notReadyBecause($event) === []
+                ? 'Taken off sale. Nothing has changed since it was approved, so you can put it back on sale without another review.'
+                : 'Taken off sale.',
+        ]);
+    }
+
+    /**
+     * Send a draft to myFiesta to be looked at.
+     *
+     * Needs what publishing needed: the permission, a proved address
+     * (verified.email on the route), and an event that is ready — something on
+     * sale, a date to come, a description and a place. Every reason it is not
+     * comes back at once. Where an approval still stands for the event as it
+     * is — taken off sale and unchanged, or the approved night of a series on
+     * a new date — it goes straight on sale instead, and the answer says so.
+     */
+    public function submit(Request $request, Event $event, EventReviews $reviews): JsonResponse
+    {
+        $this->authorize('publish', $event);
+
+        return $this->answer(fn () => $reviews->submit($event, $request->user()));
+    }
+
+    /** Take an event back from review, to change something. */
+    public function withdraw(Request $request, Event $event, EventReviews $reviews): JsonResponse
+    {
+        $this->authorize('publish', $event);
+
+        return $this->answer(fn () => $reviews->withdraw($event, $request->user()));
+    }
+
+    /** @param  \Closure(): array<string, mixed>  $step */
+    private function answer(\Closure $step): JsonResponse
+    {
+        try {
+            return response()->json($step());
+        } catch (ReviewRefused $refused) {
+            return response()->json($refused->body(), $refused->status);
+        }
     }
 
     /**
@@ -599,33 +657,6 @@ class EventController extends Controller
         $this->authorize('viewSales', $event);
 
         return response()->json($report->for($event));
-    }
-
-    /**
-     * Reminders an organizer did not have to think about.
-     *
-     * A week out to plan around, the day before to remember, and three hours
-     * out for anyone who has not left yet. Created on first publish only —
-     * firstOrCreate rather than create, so republishing does not resurrect a
-     * reminder the organizer deliberately turned off, and so an event that was
-     * taken down and put back does not send twice.
-     *
-     * Skipped entirely for anything starting sooner than the offset, since a
-     * reminder for a moment already past is not something to write to the
-     * database and then decline to send.
-     */
-    private function scheduleDefaultReminders(Event $event): void
-    {
-        foreach ([7 * 24 * 60, 24 * 60, 3 * 60] as $minutes) {
-            if ($event->starts_at->copy()->subMinutes($minutes)->isPast()) {
-                continue;
-            }
-
-            $event->reminders()->firstOrCreate(
-                ['offset_minutes' => $minutes],
-                ['status' => 'scheduled'],
-            );
-        }
     }
 
     /**

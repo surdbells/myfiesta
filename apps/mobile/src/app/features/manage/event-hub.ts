@@ -20,6 +20,8 @@ import {
   Pencil,
   Receipt,
   Repeat,
+  Send,
+  Undo2,
   ScanLine,
   Share2,
   ShoppingBag,
@@ -28,7 +30,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-angular';
-import type { EventSummary, OrganizerEventDetail, Series, SeriesOccurrence } from '@myfiesta/api-types';
+import type { EventReviewStep, EventSummary, OrganizerEventDetail, Series, SeriesOccurrence } from '@myfiesta/api-types';
 import { isoToZonedWallClock, zonedWallClockToIso } from '@myfiesta/shared/zoned-time';
 import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
@@ -38,6 +40,7 @@ import { isEmailUnverified, messageOf } from '../../core/errors';
 import { longEventTime, shortEventTime } from '../../core/event-time';
 import { until } from '../../core/when';
 import { EventContext } from './event-context';
+import { eventStatusLabel, reviewStepLabel } from './event-review';
 import {
   Dialogs,
   MfBadge,
@@ -109,6 +112,9 @@ import {
                 @case ('draft') {
                   <mf-badge tone="warning">Draft</mf-badge>
                 }
+                @case ('in_review') {
+                  <mf-badge>In review</mf-badge>
+                }
                 @case ('cancelled') {
                   <mf-badge tone="danger">Cancelled</mf-badge>
                 }
@@ -122,11 +128,52 @@ import {
         </header>
 
         <div class="content">
+          <!--
+            Nothing goes on sale until somebody at myFiesta has looked at it.
+            A draft is sent for review — or put straight back on sale when
+            nothing has changed since it was approved, which the server says
+            and the button repeats — and the reason it was last sent back
+            stays at the top until it is sent again.
+          -->
+          @if (ev.status === 'draft' ? ev.review.rejection : null; as rejection) {
+            <mf-card class="rejected" role="status">
+              <p class="draft-title">myFiesta sent this back</p>
+              <p class="reason">{{ rejection.reason }}</p>
+              <p class="muted">Change what it says, then submit it for review again.</p>
+            </mf-card>
+          }
+
           @if (ev.status === 'draft' && session.can('events.publish')) {
             <mf-card class="draft">
               <p class="draft-title">Not on sale yet</p>
-              <p class="muted">Nobody can see this night until it is published.</p>
-              <button mfButton block [loading]="working()" (click)="publish()">Put it on sale</button>
+              @if (ev.review.not_ready.length > 0) {
+                <p class="muted">Before it can be sent for review:</p>
+                <ul class="reasons">
+                  @for (reason of ev.review.not_ready; track reason) {
+                    <li>{{ reason }}</li>
+                  }
+                </ul>
+              } @else if (ev.review.on_submit === 'publish') {
+                <p class="muted">Nothing a buyer sees has changed since it was approved, so it goes straight back on sale.</p>
+              } @else {
+                <p class="muted">myFiesta looks at every event before it goes on sale, usually within a working day.</p>
+              }
+              <button mfButton block [loading]="working()" [disabled]="ev.review.not_ready.length > 0" (click)="submit()">
+                {{ ev.review.on_submit === 'publish' ? 'Put back on sale' : 'Submit for review' }}
+              </button>
+            </mf-card>
+          }
+
+          @if (ev.status === 'in_review') {
+            <mf-card class="review" role="status">
+              <p class="draft-title">Waiting for review</p>
+              <p class="muted">
+                myFiesta is looking at it, usually within a working day, and emails you either way.
+                It cannot be changed while it waits.
+              </p>
+              @if (session.can('events.publish')) {
+                <button mfButton variant="secondary" block [loading]="working()" (click)="withdraw()">Withdraw from review</button>
+              }
             </mf-card>
           }
 
@@ -209,7 +256,7 @@ import {
                     (pressed)="occurrence(date)"
                   >
                     @if (date.status !== 'published') {
-                      <mf-badge>{{ date.status === 'draft' ? 'Draft' : date.status }}</mf-badge>
+                      <mf-badge>{{ statusLabel(date.status) }}</mf-badge>
                     }
                   </mf-row>
                 } @empty {
@@ -220,6 +267,14 @@ import {
                 }
               </mf-list>
             }
+          }
+
+          @if (ev.review.history.length > 0) {
+            <mf-list class="block" heading="Review">
+              @for (step of ev.review.history; track $index) {
+                <mf-row [label]="stepLabel(step)" [sub]="stepSub(step)" [chevron]="false" />
+              }
+            </mf-list>
           }
         </div>
       } @else if (error(); as message) {
@@ -249,7 +304,7 @@ import {
       </ng-container>
     </mf-sheet>
 
-    <mf-sheet [open]="duplicating()" heading="Duplicate this night" subheading="Tickets, extras and questions come across. Sales do not." (closed)="duplicating.set(false)">
+    <mf-sheet [open]="duplicating()" heading="Duplicate this night" subheading="Tickets, prices and the banner come across. Extras, questions and sales do not." (closed)="duplicating.set(false)">
       <div class="form">
         <mf-field label="Name">
           <input [value]="copyTitle()" (input)="copyTitle.set($any($event.target).value)" />
@@ -361,6 +416,33 @@ import {
       background: color-mix(in srgb, var(--warning) 10%, var(--surface-raised));
     }
 
+    .rejected {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+      border-left: 3px solid var(--warning);
+      background: color-mix(in srgb, var(--warning) 12%, var(--surface-raised));
+    }
+
+    .rejected .reason {
+      white-space: pre-line;
+    }
+
+    .review {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+      border-left: 3px solid var(--primary);
+      background: color-mix(in srgb, var(--primary) 10%, var(--surface-raised));
+    }
+
+    .reasons {
+      margin: 0;
+      padding-left: var(--space-5);
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+    }
+
     .draft-title {
       font-family: var(--font-family-display);
       font-size: var(--font-size-lg);
@@ -465,6 +547,17 @@ export class EventHub implements OnInit {
 
   protected readonly cash = formatMoney;
 
+  protected readonly statusLabel = eventStatusLabel;
+  protected readonly stepLabel = reviewStepLabel;
+
+  /** When, in the event's zone, and the reviewer's words when there are some. */
+  protected stepSub(step: EventReviewStep): string {
+    const at = shortEventTime(step.at, this.event()?.timezone ?? 'UTC');
+    const by = step.by && step.action !== 'approved' && step.action !== 'rejected' ? ` · ${step.by}` : '';
+
+    return step.reason ? `${at}${by} — “${step.reason}”` : `${at}${by}`;
+  }
+
   protected readonly when = computed(() => {
     const ev = this.event();
     return ev ? longEventTime(ev.starts_at, ev.timezone) : '';
@@ -558,18 +651,19 @@ export class EventHub implements OnInit {
 
     if (chosen !== 'skip') return;
 
-    const reason = await this.dialogs.prompt({
-      title: 'Skip this date?',
-      message: 'Anybody holding a ticket for it is told. Give them a reason if there is one.',
-      label: 'Reason',
-      placeholder: 'The venue is closed that week',
-      confirm: 'Skip it',
+    const { confirmed, reason } = await this.dialogs.decide({
+      title: `Skip ${this.occurrenceDate(date.starts_at)}?`,
+      body: 'That date is taken out of the series and its page is deleted. It will not come back.',
+      consequences: ['A date somebody already holds a ticket for cannot be skipped: refund them first.'],
+      confirmLabel: 'Skip this date',
+      tone: 'danger',
+      reason: { label: 'Why, for the record', required: false, maxLength: 160, placeholder: 'The venue is closed that week' },
     });
 
-    if (reason === null) return;
+    if (!confirmed) return;
 
     try {
-      const { message } = await this.organizer.skipOccurrence(this.id(), date.id, reason.trim() || undefined);
+      const { message } = await this.organizer.skipOccurrence(this.id(), date.id, reason || undefined);
       this.toasts.show(message, 'success');
       await this.loadSeries();
     } catch (error) {
@@ -579,10 +673,11 @@ export class EventHub implements OnInit {
 
   protected async stopRepeating(): Promise<void> {
     const sure = await this.dialogs.confirm({
-      title: 'Stop repeating?',
-      message: 'No more dates are made. Dates people have already bought tickets for are kept.',
-      confirm: 'Stop repeating',
-      danger: true,
+      title: `Stop repeating ${this.event()?.title ?? 'this night'}?`,
+      body: 'No more dates are made, and future dates nobody has bought a ticket for are deleted.',
+      consequences: ['Dates people have already bought tickets for are kept, exactly as they are.'],
+      confirmLabel: 'Stop repeating',
+      tone: 'danger',
     });
 
     if (!sure) return;
@@ -626,16 +721,30 @@ export class EventHub implements OnInit {
     const items: MenuAction[] = [];
 
     if (this.session.can('events.edit') && !cancelled) items.push({ key: 'edit', label: 'Edit details', icon: Pencil });
-    if (this.session.can('events.publish') && ev.status === 'draft') items.push({ key: 'publish', label: 'Put it on sale', icon: Eye });
+    if (this.session.can('events.publish') && ev.status === 'draft' && ev.review.not_ready.length === 0) {
+      items.push(
+        ev.review.on_submit === 'publish'
+          ? { key: 'publish', label: 'Put back on sale', icon: Eye, hint: 'Unchanged since it was approved' }
+          : { key: 'publish', label: 'Submit for review', icon: Send, hint: 'myFiesta looks at it before it goes on sale' },
+      );
+    }
+    if (this.session.can('events.publish') && ev.status === 'in_review') {
+      items.push({ key: 'withdraw', label: 'Withdraw from review', icon: Undo2, hint: 'Back to a draft you can change' });
+    }
     if (this.session.can('events.publish') && ev.status === 'published') {
-      items.push({ key: 'unpublish', label: 'Take it off sale', icon: EyeOff, hint: 'Hidden until you publish it again' });
+      items.push({
+        key: 'unpublish',
+        label: 'Take it off sale',
+        icon: EyeOff,
+        hint: ev.review.unchanged_since_approval ? 'You can put it straight back' : 'Putting it back needs another review',
+      });
     }
     items.push({ key: 'share', label: 'Share the link', icon: Share2 });
     if (ev.status === 'published') items.push({ key: 'view', label: 'See the public page', icon: ExternalLink });
     if (this.session.can('events.create')) {
       items.push({ key: 'duplicate', label: 'Duplicate', icon: Copy, hint: 'A new night with the same tickets' });
       // Once it repeats, its dates are managed under Repeats rather than started again.
-      if (!cancelled && !this.series()) items.push({ key: 'repeat', label: 'Repeat', icon: Repeat, hint: 'Weekly, fortnightly or monthly' });
+      if (!cancelled && ev.status !== 'in_review' && !this.series()) items.push({ key: 'repeat', label: 'Repeat', icon: Repeat, hint: 'Weekly, fortnightly or monthly' });
     }
     if (this.session.can('door.scan') && !cancelled) items.push({ key: 'scan', label: 'Scan tickets', icon: ScanLine });
     if (this.session.can('events.cancel') && !cancelled) {
@@ -649,7 +758,10 @@ export class EventHub implements OnInit {
         void this.router.navigate(this.here('edit'));
         break;
       case 'publish':
-        await this.publish();
+        await this.submit();
+        break;
+      case 'withdraw':
+        await this.withdraw();
         break;
       case 'unpublish':
         await this.unpublish();
@@ -675,42 +787,103 @@ export class EventHub implements OnInit {
     }
   }
 
-  protected async publish(): Promise<void> {
+  /**
+   * Send it to myFiesta, or straight back on sale.
+   *
+   * Which one is known before the sheet opens (`review.on_submit`), and the
+   * sheet says it: an organizer who expects a review and finds the night on
+   * sale, or the other way round, has been told something untrue.
+   */
+  protected async submit(): Promise<void> {
     const ev = this.event();
     if (!ev) return;
 
-    const sure = await this.dialogs.confirm({
-      title: 'Put it on sale?',
-      message: 'Anybody with the link can see it and buy, and it appears in What’s on. Your followers hear about it.',
-      confirm: 'Publish',
-    });
+    const straightBack = ev.review.on_submit === 'publish';
+    let message = '';
 
-    if (!sure) return;
+    const done = await this.dialogs.confirm(
+      straightBack
+        ? {
+            title: `Put ${ev.title} back on sale?`,
+            body: 'Nothing a buyer sees has changed since myFiesta approved it, so it goes back on sale straight away, without another review.',
+            confirmLabel: 'Put back on sale',
+            busyLabel: 'Putting it back…',
+            tone: 'default',
+            run: async () => (message = (await this.organizer.submitForReview(ev.id)).message),
+          }
+        : {
+            title: `Send ${ev.title} for review?`,
+            body: 'Somebody at myFiesta looks at every event before it goes on sale, usually within a working day. We email you when it is approved or if something needs changing.',
+            consequences: [
+              'While it is being reviewed you cannot change it: its details, tickets, extras, questions, pictures and codes are locked.',
+              'Once it is approved it goes on sale straight away, and the people who follow you are told.',
+              'You can withdraw it from review at any time to make a change.',
+            ],
+            confirmLabel: 'Submit for review',
+            busyLabel: 'Sending…',
+            tone: 'default',
+            run: async () => (message = (await this.organizer.submitForReview(ev.id)).message),
+          },
+    );
 
-    await this.run(async () => {
-      const result = await this.organizer.publish(ev.id, 'published');
-      const told = result.followers_told ? ` ${result.followers_told} followers told.` : '';
-      this.toasts.show(`On sale.${told}`, 'success');
-    });
+    if (done) await this.afterReviewStep(message);
   }
 
+  /** Take it back from review, to change something. */
+  protected async withdraw(): Promise<void> {
+    const ev = this.event();
+    if (!ev) return;
+
+    let message = '';
+
+    const done = await this.dialogs.confirm({
+      title: `Withdraw ${ev.title} from review?`,
+      body: 'It goes back to a draft so you can change it. myFiesta stops looking at it until you send it again.',
+      consequences: ['When you send it again, it waits for review from the start.'],
+      confirmLabel: 'Withdraw from review',
+      busyLabel: 'Withdrawing…',
+      tone: 'default',
+      run: async () => (message = (await this.organizer.withdrawFromReview(ev.id)).message),
+    });
+
+    if (done) await this.afterReviewStep(message);
+  }
+
+  /**
+   * Take it off sale, saying first what putting it back would take.
+   *
+   * Edits made while it is on sale need no review, but they do mean it is no
+   * longer what was approved — so the sheet says whether it could go straight
+   * back, rather than leaving that to be found out later.
+   */
   private async unpublish(): Promise<void> {
     const ev = this.event();
     if (!ev) return;
 
-    const sure = await this.dialogs.confirm({
-      title: 'Take it off sale?',
-      message: 'The page stops showing and nobody new can buy. Tickets already sold still work at the door.',
-      confirm: 'Take it off sale',
-      danger: true,
+    let message = '';
+
+    const done = await this.dialogs.confirm({
+      title: `Take ${ev.title} off sale?`,
+      body: 'The page stops showing and nobody new can buy. Tickets already sold still work at the door.',
+      consequences: [
+        ev.review.unchanged_since_approval
+          ? 'Nothing a buyer sees has changed since myFiesta approved it, so you can put it straight back on sale — as long as that stays true.'
+          : 'It has changed since myFiesta approved it, so putting it back on sale will need another review.',
+      ],
+      confirmLabel: 'Take it off sale',
+      busyLabel: 'Taking it off sale…',
+      tone: 'danger',
+      run: async () => (message = (await this.organizer.publish(ev.id, 'draft')).message),
     });
 
-    if (!sure) return;
+    if (done) await this.afterReviewStep(message);
+  }
 
-    await this.run(async () => {
-      await this.organizer.publish(ev.id, 'draft');
-      this.toasts.show('Taken off sale.', 'success');
-    });
+  /** Say what happened, and show the event as it now is. */
+  private async afterReviewStep(message: string): Promise<void> {
+    if (message) this.toasts.show(message, 'success');
+    this.context.forget(this.id());
+    await this.load();
   }
 
   private startDuplicate(): void {
@@ -730,6 +903,23 @@ export class EventHub implements OnInit {
     const starts = zonedWallClockToIso(this.copyStarts(), ev?.timezone ?? 'UTC');
 
     if (!ev || !starts) return;
+
+    // Only what EventDuplicator copies. An organizer told the extras came
+    // across sends the copy for review without looking, and it goes on sale
+    // with no tables to buy and no question asked.
+    const title = this.copyTitle().trim() || ev.title;
+    const sure = await this.dialogs.confirm({
+      title: `Copy ${ev.title} to ${this.occurrenceDate(starts)}?`,
+      body: `A new draft, ${title}, is made with the same details, tickets, prices, capacity, banner and reminders. Nobody can buy it until it is approved and on sale.`,
+      consequences: [
+        'Extras, questions, codes and the gallery are not copied. Add the extras and questions again if the new night needs them.',
+        'Sales, orders and guests stay with this night.',
+      ],
+      confirmLabel: 'Make the copy',
+      tone: 'default',
+    });
+
+    if (!sure || this.working()) return;
 
     await this.run(async () => {
       const copy = (await this.organizer.duplicate(ev.id, starts, this.copyTitle().trim() || undefined)) as {
@@ -761,20 +951,50 @@ export class EventHub implements OnInit {
 
     if (!frequency) return;
 
+    // The count the server takes is every date in the series, this one
+    // included (SeriesController: 2 to 104). Asked and said back that way, so
+    // "6" is six nights on the calendar and five new events — not six new
+    // ones the toast then calls five.
     const how = await this.dialogs.prompt({
-      title: 'How many?',
-      message: 'Leave it as it is to keep making them a few months ahead.',
-      label: 'Nights to make',
+      title: 'How many dates?',
+      message: 'Counting this one. Leave it empty to keep adding dates six months ahead until you stop.',
+      label: 'Dates in all',
       value: '6',
       inputmode: 'numeric',
-      confirm: 'Make them',
+      confirm: 'Next',
     });
 
     if (how === null) return;
 
+    const count = how.trim() === '' ? null : Number(how.trim());
+
+    if (count !== null && (!Number.isInteger(count) || count < 2 || count > 104)) {
+      this.toasts.show('Repeat it for 2 to 104 dates, counting this one.', 'danger');
+      return;
+    }
+
+    const every = { weekly: 'every week', fortnightly: 'every two weeks', monthly: 'every month' }[frequency] ?? frequency;
+    const more = count === null ? 0 : count - 1;
+    const last = new Date(ev.starts_at).getTime() + more * ({ weekly: 7, fortnightly: 14, monthly: 31 }[frequency] ?? 7) * 86_400_000;
+    const sure = await this.dialogs.confirm({
+      title: `Repeat ${ev.title} ${every}?`,
+      body:
+        count === null
+          ? `New dates are added ${every}, six months ahead at a time, until you stop repeating it. Each is its own event with its own tickets and door.`
+          : `${count} dates in all, counting this one: ${more} more ${more === 1 ? 'is' : 'are'} added, ${every}, each its own event with its own tickets and door.`,
+      consequences: [
+        // SeriesGenerator makes six months ahead at a time; the rest follow on schedule.
+        ...(last - Date.now() > 180 * 86_400_000 ? ['Dates more than six months away are added as they come closer.'] : []),
+        'Each new date is a draft until you submit it. A date that is this approved night, unchanged, goes straight on sale.',
+      ],
+      confirmLabel: count === null ? 'Repeat it' : `Add ${more} more ${more === 1 ? 'date' : 'dates'}`,
+      tone: 'default',
+    });
+
+    if (!sure) return;
+
     await this.run(async () => {
-      const count = Number.parseInt(how, 10);
-      const result = await this.organizer.repeat(ev.id, frequency as 'weekly' | 'fortnightly' | 'monthly', Number.isFinite(count) && count > 0 ? count : undefined);
+      const result = await this.organizer.repeat(ev.id, frequency as 'weekly' | 'fortnightly' | 'monthly', count ?? undefined);
       this.toasts.show(`${result.created} ${result.created === 1 ? 'night' : 'nights'} made as drafts.`, 'success');
       await this.loadSeries();
     }, false);
@@ -797,36 +1017,43 @@ export class EventHub implements OnInit {
     }
 
     const refund = preview.orders_to_refund > 0;
-    const sure = await this.dialogs.confirm({
-      title: 'Cancel this event?',
-      message:
-        `${preview.ticket_holders} ${preview.ticket_holders === 1 ? 'person holds' : 'people hold'} a ticket and will be told.` +
-        (refund ? ` ${preview.orders_to_refund} ${preview.orders_to_refund === 1 ? 'order' : 'orders'} will be refunded, ${formatMoney(preview.refund_total)} in all.` : '') +
-        ' This cannot be undone.',
-      confirm: 'Cancel the event',
-      cancel: 'Keep it',
-      danger: true,
+    let result = null as Awaited<ReturnType<Organizer['cancel']>> | null;
+
+    // One question with everything in it: who is told, what is refunded, and
+    // the words they are told in — for something that cannot be undone.
+    //
+    // The reason is held to what the server takes (10 to 500 characters), and
+    // the cancel is sent from the sheet: a refusal is read in it with the
+    // reason still written, rather than in a toast after it has closed.
+    const { confirmed } = await this.dialogs.decide({
+      title: `Cancel ${ev.title}?`,
+      body: `${preview.ticket_holders} ${preview.ticket_holders === 1 ? 'person holds' : 'people hold'} a ticket and will be told.`,
+      consequences: [
+        ...(refund
+          ? [`${preview.orders_to_refund} ${preview.orders_to_refund === 1 ? 'order is' : 'orders are'} refunded, ${formatMoney(preview.refund_total)} in all.`]
+          : []),
+        'This cannot be undone.',
+      ],
+      confirmLabel: 'Cancel and tell them',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+      reason: {
+        label: 'Why is it cancelled?',
+        required: true,
+        minLength: 10,
+        maxLength: 500,
+        hint: 'Ticket holders read this in the email that tells them. At least 10 characters.',
+        placeholder: 'The venue has had to close',
+      },
+      busyLabel: 'Cancelling…',
+      run: async (reason) => (result = await this.organizer.cancel(ev.id, reason ?? '', refund)),
     });
 
-    if (!sure) return;
+    if (!confirmed || !result) return;
 
-    const reason = await this.dialogs.prompt({
-      title: 'Why is it cancelled?',
-      message: 'Ticket holders read this in the email that tells them.',
-      label: 'Reason',
-      placeholder: 'The venue has had to close',
-      confirm: 'Cancel and tell them',
-      multiline: true,
-      required: true,
-    });
-
-    if (!reason) return;
-
-    await this.run(async () => {
-      const result = await this.organizer.cancel(ev.id, reason, refund);
-      const failed = result.failed ? ` ${result.failed} refunds need a person — you will get an email.` : '';
-      this.toasts.show(`Cancelled. ${result.notified} told, ${result.refunded} refunded.${failed}`, result.failed ? 'danger' : 'success');
-    });
+    const failed = result.failed ? ` ${result.failed} refunds need a person — you will get an email.` : '';
+    this.toasts.show(`Cancelled. ${result.notified} told, ${result.refunded} refunded.${failed}`, result.failed ? 'danger' : 'success');
+    await this.load();
   }
 
   /** Do something to the event, then show it as it now is. */

@@ -90,12 +90,7 @@ class EventInfolist
                         ->label('Status')
                         ->badge()
                         ->state(fn (Event $record) => EventsTable::statusOf($record))
-                        ->color(fn (string $state) => match ($state) {
-                            'On sale' => 'success',
-                            'Draft' => 'gray',
-                            'Cancelled' => 'warning',
-                            default => 'danger',
-                        }),
+                        ->color(fn (string $state) => EventsTable::statusColor($state)),
                     TextEntry::make('organization.name')->label('Organizer'),
                     TextEntry::make('kind')->formatStateUsing(fn (?string $state) => $state === 'invitation' ? 'Invitation (RSVP)' : 'Ticketed'),
                     TextEntry::make('starts_at')
@@ -110,6 +105,7 @@ class EventInfolist
                         ->state(fn (Event $record) => collect([$record->venue?->name, $record->city, $record->subdivision, $record->country])->filter()->implode(', ')),
                     TextEntry::make('slug')->label('Public link')->prefix('/')->copyable(),
                     TextEntry::make('published_at')->label('First published')->dateTime('j M Y, H:i')->placeholder('Never'),
+                    TextEntry::make('approved_at')->label('Last approved')->dateTime('j M Y, H:i')->placeholder('Never'),
                     TextEntry::make('is_featured')->label('Featured')->formatStateUsing(fn ($state) => $state ? 'Yes' : 'No'),
                     TextEntry::make('cancelled_at')
                         ->label('Cancelled')

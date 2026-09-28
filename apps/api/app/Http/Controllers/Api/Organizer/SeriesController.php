@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Organizer;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventSeries;
+use App\Services\Events\EventReviews;
 use App\Services\Events\SeriesGenerator;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -48,6 +49,7 @@ class SeriesController extends Controller
     {
         $this->authorize('update', $event);
         $this->authorize('create', [Event::class, $event->organization_id]);
+        EventReviews::refuseWhileInReview($event);
 
         if ($event->series_id) {
             return response()->json([
@@ -115,6 +117,7 @@ class SeriesController extends Controller
     public function skip(Request $request, Event $event): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'occurrence_id' => ['required', 'uuid'],
@@ -162,6 +165,7 @@ class SeriesController extends Controller
     public function destroy(Request $request, Event $event): JsonResponse
     {
         $this->authorize('update', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $series = $event->series;
 

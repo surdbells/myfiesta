@@ -103,6 +103,14 @@ return [
             'reason' => 'What you did on an organizer\'s team or as myFiesta staff — a refund, a price change, a cancelled event — stays in that history under the name you had then, with the internet address it came from. Nobody can edit it afterwards, us included, which is what makes it worth keeping.',
         ],
 
+        // Sending an event for review, taking it back, and staff deciding it
+        // (EventReviews). The history an organizer is shown on the event.
+        'event_reviews' => [
+            'strategy' => 'retain',
+            'key' => 'actor_id',
+            'reason' => 'Sending an event to myFiesta for review, taking it back, and a reviewer\'s decision on it stay in that event\'s review history under the name you had then, so the organization and myFiesta can both see who did what. It records what happened to an event, not anything else about you.',
+        ],
+
         'sensitive_data_accesses' => [
             'strategy' => 'retain',
             'key' => 'user_id',

@@ -8,6 +8,7 @@ use App\Models\Code;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
 use App\Support\Paging;
 use App\Support\Search;
 use Carbon\Carbon;
@@ -117,6 +118,7 @@ class CodeController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageCodes', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'code' => [
@@ -238,8 +240,10 @@ class CodeController extends Controller
     public function update(Request $request, Event $event, Code $code): JsonResponse
     {
         $this->authorize('manageCodes', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($code->organization_id === $event->organization_id, 404);
+        abort_unless($this->belongsHere($code, $event), 404);
 
         $data = $request->validate([
             'label' => ['sometimes', 'nullable', 'string', 'max:120'],
@@ -364,14 +368,31 @@ class CodeController extends Controller
     public function destroy(Request $request, Event $event, Code $code): JsonResponse
     {
         $this->authorize('manageCodes', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($code->organization_id === $event->organization_id, 404);
+        abort_unless($this->belongsHere($code, $event), 404);
 
         $code->update(['is_active' => false]);
 
         return response()->json([
             'message' => 'Turned off. Orders already placed with it keep their discount.',
         ]);
+    }
+
+    /**
+     * Whether this code is one the event's screen lists: its own, or one for
+     * all the organization's events.
+     *
+     * A code made for one event is changed from that event, where the review
+     * lock applies to it. Reached through a sibling event's address, a code
+     * on an event waiting for review could be repriced or turned off while
+     * staff look at it. An organization-wide code belongs to no one event and
+     * no one event's review freezes it (DECISIONS.md).
+     */
+    private function belongsHere(Code $code, Event $event): bool
+    {
+        return $code->event_id === null || $code->event_id === $event->id;
     }
 
     /**

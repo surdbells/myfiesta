@@ -10,6 +10,8 @@ use App\Models\Organization;
 use App\Models\PayoutRequest;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventSnapshot;
+use App\Services\Follows\Announcements;
 use App\Services\StaffSupport\StaffAction;
 use App\Services\StaffSupport\StaffActionRefused;
 use Illuminate\Support\Collection;
@@ -33,7 +35,11 @@ use Illuminate\Support\Facades\Mail;
  *   — not a draft, and not an event the organizer had taken off sale
  *   themselves, which would otherwise reappear on the site without anybody
  *   asking for it. Taking one off sale while the suspension lasts clears its
- *   mark for the same reason (EventController::publish);
+ *   mark for the same reason (EventController::publish). The mark keeps a
+ *   fingerprint of what buyers saw (EventSnapshot), and only an event that
+ *   still says that goes back: the organization can edit while it is
+ *   suspended, and lifting the suspension is a decision about the
+ *   organization, not a review of what it changed meanwhile (EventReviews);
  * - payout requests waiting at the time are held, not rejected, and go back
  *   to waiting with their place in the queue.
  *
@@ -52,7 +58,10 @@ class Suspension
     /** Short enough to type, long enough to be a reason rather than a word. */
     public const MIN_REASON = 10;
 
-    public function __construct(private readonly Auditor $auditor) {}
+    public function __construct(
+        private readonly Auditor $auditor,
+        private readonly Announcements $announcements,
+    ) {}
 
     /**
      * Whether sales and payouts are stopped for this organization, read from
@@ -118,6 +127,7 @@ class Suspension
                 $event->forceFill([
                     'status' => 'draft',
                     'unpublished_by_suspension_at' => now(),
+                    'unpublished_by_suspension_fingerprint' => EventSnapshot::fingerprint(EventSnapshot::of($event)),
                 ])->save();
             }
 
@@ -176,12 +186,17 @@ class Suspension
     /**
      * Start selling and paying out again, putting back what the suspension took.
      *
-     * Back on sale: the events it took off sale that have not started and
-     * have not since been cancelled, deleted or taken down. The rest stay
-     * drafts — an event that has already happened stays off the site. An
-     * event the organizer took off sale themselves while it lasted carries
-     * no mark any more (their own unpublish clears it), so it is not here to
-     * put back.
+     * Back on sale: the events it took off sale that have not started, have
+     * not since been cancelled, deleted or taken down, and say what they said
+     * when they came off. The rest stay drafts — an event that has already
+     * happened stays off the site, and one changed meanwhile waits for the
+     * organizer to send it for review. An event the organizer took off sale
+     * themselves while it lasted carries no mark any more (their own
+     * unpublish clears it), so it is not here to put back.
+     *
+     * Nothing here counts as approving an event. What goes back is what was
+     * on sale, or what staff approved while the suspension lasted, so the
+     * event's own approval says what it always did.
      *
      * @return array{lifted: bool, republished: list<string>, left: array<string, string>, released: list<string>, told: int}
      *
@@ -211,6 +226,7 @@ class Suspension
             ])->save();
 
             $republished = [];
+            $firstTime = [];
             $left = [];
 
             $marked = Event::withTrashed()
@@ -221,16 +237,22 @@ class Suspension
 
             foreach ($marked as $event) {
                 $why = $this->whyItStaysOff($event);
+                $unmarked = ['unpublished_by_suspension_at' => null, 'unpublished_by_suspension_fingerprint' => null];
 
-                $event->forceFill($why === null
-                    ? ['status' => 'published', 'published_at' => $event->published_at ?? now(), 'unpublished_by_suspension_at' => null]
-                    : ['unpublished_by_suspension_at' => null])->save();
-
-                if ($why === null) {
-                    $republished[] = $event->id;
-                } else {
+                if ($why !== null) {
+                    $event->forceFill($unmarked)->save();
                     $left[$event->id] = $why;
+
+                    continue;
                 }
+
+                // Approved while the suspension lasted, never on sale before.
+                if ($event->published_at === null) {
+                    $firstTime[] = $event->id;
+                }
+
+                $event->forceFill(['status' => 'published', 'published_at' => $event->published_at ?? now()] + $unmarked)->save();
+                $republished[] = $event->id;
             }
 
             $released = PayoutRequest::query()
@@ -245,7 +267,7 @@ class Suspension
                 PayoutRequest::query()->whereKey($released)->update(['held_at' => null, 'updated_at' => now()]);
             }
 
-            return ['was' => $was, 'republished' => $republished, 'left' => $left, 'released' => $released];
+            return ['was' => $was, 'republished' => $republished, 'first_time' => $firstTime, 'left' => $left, 'released' => $released];
         });
 
         if ($done === null) {
@@ -267,6 +289,15 @@ class Suspension
         ], fn ($value) => $value !== null));
 
         $this->recordEach($done['republished'], $done['released'], $staff, $organization, suspended: false);
+
+        // Approved while the suspension lasted and never on sale until now:
+        // its followers hear about it the first time it is. Only those — one
+        // the suspension took off sale was announced when it first went on
+        // sale, or went on sale before announcements began and never will be
+        // announced as new.
+        foreach (Event::query()->whereKey($done['first_time'])->get() as $event) {
+            $this->announcements->announce($event);
+        }
 
         $titles = fn (array $ids) => Event::withTrashed()->whereKey($ids)->orderBy('starts_at')->pluck('title')->all();
 
@@ -302,8 +333,26 @@ class Suspension
             $event->status !== 'draft' => 'now '.$event->status,
             $event->taken_down_at !== null => 'taken down by myFiesta',
             $event->starts_at === null || ! $event->starts_at->isFuture() => 'already happened',
+            ! $this->saysWhatItSaidWhenItCameOff($event) => 'changed since it came off sale, so it needs a review',
             default => null,
         };
+    }
+
+    /**
+     * Whether buyers would see what they saw when the suspension took the
+     * event off sale — or, for one approved while it lasted, what staff
+     * approved (EventReviews::approve).
+     *
+     * A suspension stops the organization selling, not editing, so a held
+     * event can change while it waits. Put back changed, it would be on sale
+     * as nobody at myFiesta had seen it. A mark without a fingerprint is
+     * treated as changed: nothing says what it was.
+     */
+    private function saysWhatItSaidWhenItCameOff(Event $event): bool
+    {
+        $then = $event->unpublished_by_suspension_fingerprint;
+
+        return $then !== null && hash_equals($then, EventSnapshot::fingerprint(EventSnapshot::of($event)));
     }
 
     /**

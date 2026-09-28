@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Events\Pages;
 
 use App\Filament\Resources\Events\Actions\EventActions;
+use App\Filament\Resources\Events\Actions\ReviewActions;
 use App\Filament\Resources\Events\EventResource;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Tickets\TicketResource;
@@ -25,6 +26,8 @@ class ViewEvent extends ViewRecord
         $record = $this->getRecord();
 
         return [
+            ReviewActions::review(),
+
             Action::make('orders')
                 ->label('Orders')
                 ->icon(Heroicon::OutlinedShoppingBag)

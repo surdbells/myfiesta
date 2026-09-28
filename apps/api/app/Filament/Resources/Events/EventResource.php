@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Events;
 
 use App\Filament\Resources\Events\Pages\ListEvents;
+use App\Filament\Resources\Events\Pages\ReviewEvent;
 use App\Filament\Resources\Events\Pages\ViewEvent;
 use App\Filament\Resources\Events\Schemas\EventInfolist;
 use App\Filament\Resources\Events\Tables\EventsTable;
@@ -25,7 +26,8 @@ use Illuminate\Support\Str;
  * Organizers build and edit their events in the console; nothing about an
  * event's content is edited here. What the platform does is feature events on
  * the front page and, when one should not be on sale, take it down — with a
- * reason the organizer is sent, and without deleting anything.
+ * reason the organizer is sent, and without deleting anything — and looks at
+ * each one before it first goes on sale (the review queue and ReviewEvent).
  */
 class EventResource extends Resource
 {
@@ -98,6 +100,8 @@ class EventResource extends Resource
         return [
             'index' => ListEvents::route('/'),
             'view' => ViewEvent::route('/{record}'),
+            // Everything a buyer will see, laid out for a decision (EventReviews).
+            'review' => ReviewEvent::route('/{record}/review'),
         ];
     }
 }

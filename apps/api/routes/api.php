@@ -69,6 +69,10 @@ Route::get('/health/ready', ReadinessController::class)->middleware(ThrottleHeal
  * every change, while creating an order takes locks and reserves stock.
  */
 Route::get('/discover', DiscoverController::class);
+// The listing's filters, and the pages each category and city has of its own.
+Route::get('/discover/facets', [DiscoverController::class, 'facets']);
+Route::get('/discover/categories/{slug}', [DiscoverController::class, 'category']);
+Route::get('/discover/cities/{slug}', [DiscoverController::class, 'city']);
 
 // Proxied by the public site as its own /sitemap.xml.
 Route::get('/sitemap.xml', SitemapController::class)->middleware('throttle:30,1');
@@ -353,6 +357,10 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         // (verified.email). Taking it off sale, drafts, edits and everything
         // else do not.
         Route::post('/events/{event:id}/publish', [OrganizerEventController::class, 'publish'])->middleware('verified.email:published');
+        // Sending a night to myFiesta to be looked at before it goes on sale
+        // (EventReviews), and taking it back to change something.
+        Route::post('/events/{event:id}/submit', [OrganizerEventController::class, 'submit'])->middleware('verified.email');
+        Route::post('/events/{event:id}/withdraw', [OrganizerEventController::class, 'withdraw']);
         Route::get('/events/{event:id}/summary', [OrganizerEventController::class, 'summary']);
         Route::get('/events/{event:id}/sales', [OrganizerEventController::class, 'sales']);
 

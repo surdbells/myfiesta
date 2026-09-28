@@ -1,6 +1,8 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ActivatedRoute, RouterLink, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { UiBadge, UiBreadcrumb, UiIcon, UiTabs, type Crumb, type TabLink } from '@myfiesta/ui';
 import { CalendarDays, MapPin } from 'lucide-angular';
 import { Api } from '../../core/api';
@@ -8,6 +10,15 @@ import { OrganizerEventDetail } from '../../core/api.types';
 import { longEventTime } from '../../core/event-time';
 import { SessionStore } from '../../core/session';
 import { SITE_URL } from '../../core/site-url';
+import { eventStatusLabel, eventStatusTone } from './event-status';
+
+/**
+ * The tabs that change what a buyer sees or pays. While the event is being
+ * reviewed the API refuses every write they make (423), so their forms are
+ * switched off here with the reason above them, rather than filled in and
+ * refused on save.
+ */
+const LOCKED_IN_REVIEW = ['tickets', 'extras', 'questions', 'codes', 'pictures', 'edit'];
 
 /**
  * The frame every screen about one event sits inside.
@@ -37,6 +48,7 @@ export class EventWorkspace {
   private readonly route = inject(ActivatedRoute);
   readonly session = inject(SessionStore);
   private readonly siteUrl = inject(SITE_URL);
+  private readonly router = inject(Router);
 
   protected readonly whenIcon = CalendarDays;
   protected readonly whereIcon = MapPin;
@@ -197,11 +209,45 @@ export class EventWorkspace {
     return tabs;
   });
 
-  readonly statusTone = computed(() => {
-    const status = this.event()?.status;
+  readonly statusTone = computed(() => eventStatusTone(this.event()?.status ?? 'draft'));
 
-    return status === 'draft' ? 'warning' : status === 'cancelled' ? 'danger' : 'success';
-  });
+  readonly statusLabel = computed(() => eventStatusLabel(this.event()?.status ?? 'draft'));
+
+  /** Waiting for myFiesta: nothing a buyer sees can change until it is decided or taken back. */
+  readonly inReview = computed(() => this.event()?.status === 'in_review');
+
+  /** The tab on screen, by the last part of its address. */
+  private readonly section = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.sectionOf(this.router.url)),
+    ),
+    { initialValue: this.sectionOf(this.router.url) },
+  );
+
+  /** Whether the forms on this tab are switched off because the event is in review. */
+  readonly lockedHere = computed(() => this.inReview() && LOCKED_IN_REVIEW.includes(this.section()));
+
+  private sectionOf(url: string): string {
+    const path = url.split(/[?#]/)[0].split('/').filter(Boolean);
+    const at = path.indexOf(this.eventId);
+
+    return at >= 0 ? (path[at + 1] ?? '') : '';
+  }
+
+  /**
+   * The event as a tab has just changed it — sent for review, taken back, put
+   * on sale — so the header and the locks say so without another request.
+   */
+  setEvent(event: OrganizerEventDetail): void {
+    this.event.set(event);
+    this.writeCache(event);
+  }
+
+  /** Read the event again, after something the tab cannot see changed it. */
+  refresh(): void {
+    this.load();
+  }
 
   /** The page a buyer sees. Slug, not id — the id is not in a public URL. */
   publicUrl(event: OrganizerEventDetail): string {

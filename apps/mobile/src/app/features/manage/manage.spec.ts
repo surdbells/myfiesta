@@ -5,6 +5,7 @@ import { Chrome } from '../../core/chrome';
 import { refundEstimate } from './event-orders';
 import { unaccounted } from './event-sales';
 import { bodyOf, draftOf, isFormatted, plainText } from './event-form';
+import { eventStatusLabel, lockedForReview, reviewStepLabel } from './event-review';
 
 /**
  * The arithmetic and the conversions behind the organizer screens.
@@ -42,6 +43,15 @@ const event = (over: Partial<OrganizerEventDetail> = {}): OrganizerEventDetail =
   id_required: false,
   resale_enabled: false,
   resale_closes_hours: 24,
+  review: {
+    submitted_at: null,
+    approved_at: '2026-09-01T12:00:00Z',
+    on_submit: null,
+    unchanged_since_approval: true,
+    not_ready: [],
+    rejection: null,
+    history: [],
+  },
   ...over,
 });
 
@@ -148,6 +158,33 @@ describe('the sales ledger', () => {
     };
 
     expect(unaccounted(s)).toBe(0);
+  });
+});
+
+describe('an event waiting for review', () => {
+  it('is locked only while it waits', () => {
+    expect(lockedForReview(event({ status: 'in_review' }))).toBe(true);
+    expect(lockedForReview(event({ status: 'draft' }))).toBe(false);
+    expect(lockedForReview(event({ status: 'published' }))).toBe(false);
+    expect(lockedForReview(null)).toBe(false);
+  });
+
+  it('is called the same thing as on the console and in the admin', () => {
+    expect(eventStatusLabel('draft')).toBe('Draft');
+    expect(eventStatusLabel('in_review')).toBe('In review');
+    expect(eventStatusLabel('published')).toBe('On sale');
+    expect(eventStatusLabel('cancelled')).toBe('Cancelled');
+  });
+
+  it('reads its history in words, saying how an approval came about', () => {
+    const step = { reason: null, at: '2026-09-01T12:00:00Z', by: 'myFiesta' };
+
+    expect(reviewStepLabel({ ...step, action: 'submitted', via: null })).toBe('Sent for review');
+    expect(reviewStepLabel({ ...step, action: 'rejected', via: null, reason: 'Upload this year’s poster.' })).toBe(
+      'Sent back with changes to make',
+    );
+    expect(reviewStepLabel({ ...step, action: 'approved', via: 'review' })).toBe('Approved and put on sale');
+    expect(reviewStepLabel({ ...step, action: 'approved', via: 'series' })).toBe('On sale as the next date of an approved series');
   });
 });
 

@@ -15,6 +15,7 @@ use App\Models\Organization;
 use App\Models\PayoutRequest;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Resource as FilamentResource;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -334,7 +335,11 @@ class MoneyReadsOneWayTest extends TestCase
      */
     private function urlsFor(string $resource, string $name): array
     {
-        if (! in_array($name, ['view', 'edit'], true)) {
+        // A page about one record — view, edit, or one of a resource's own,
+        // like an event's review page — is opened for each record.
+        $page = $resource::getPages()[$name]->getPage();
+
+        if (! in_array(InteractsWithRecord::class, class_uses_recursive($page), true)) {
             return [$resource::getUrl($name)];
         }
 

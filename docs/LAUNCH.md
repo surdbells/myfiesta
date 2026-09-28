@@ -28,7 +28,28 @@ production refuses to start without its payment secrets
 - **Quebec QST.** Off by default, so Quebec events charge 5% GST only. Switch it
   on once registered with Revenu Québec.
 - **Closing an organization.** There is no button for it in the app or the
-  admin; owners are told to write in. Decide who handles that and how.
+  admin; owners are told to write in. Decide who handles that and how. One
+  that owes myFiesta money back cannot be closed until it is recovered or repaid.
+- **Advances.** Administrators and finance can pay a payout request beyond the
+  balance, with a written reason; it comes back from the organization's next
+  sales, and the admin's Money → Overdrafts lists who owes what and for how
+  long. Nothing caps an advance or asks a second person to approve a large one.
+  Decide whether either is wanted.
+- **Who reviews events, and how fast.** Nothing goes on sale until an
+  administrator or support approves it in the admin (Support → Review queue,
+  oldest first, with a count beside it). Somebody has to look at that queue
+  every working day: organizers are told a review usually takes
+  `EVENT_REVIEW_TYPICAL_WAIT` ("one working day" unless changed). New
+  submissions are emailed to every administrator and support member, or to
+  the addresses in `EVENT_REVIEW_NOTIFY` when a team inbox should get them
+  instead. Events already on sale when this shipped were approved as they
+  stood ([DECISIONS.md](DECISIONS.md)).
+- **"Almost sold out" and "Only 4 left".** Set in the admin under
+  Configuration → Platform settings → Almost sold out. A ticket reads almost
+  sold out once something has sold and at most the larger of 5 places and
+  10% of its capacity is left; an exact count is named at 10 or fewer, and
+  never above (0 names none). Decide whether those suit launch — the count is
+  public, and shows how an organizer's night is selling.
 - **Media and identity-document backups.** The database is backed up nightly;
   uploaded pictures and identity documents are not yet. Choose bucket
   versioning or volume snapshots ([OPERATIONS.md](OPERATIONS.md#backups)).
@@ -171,6 +192,17 @@ All in [STORE.md](STORE.md):
   iPhone-only), Play's 1024×500 feature graphic, and the support URL, email and
   phone for the listings. A designer's master icon if the current one — the
   brand mark on white — is not what the store should show.
+- The store links on the website: `APP_STORE_URL` and `PLAY_STORE_URL` for the
+  site container, each the app's https listing. Until one is set its button is
+  hidden, and with neither the whole "myFiesta app" section on the front page
+  is. The two buttons are drawn in the site's own style, because Apple's and
+  Google's badges are their artwork and may not be copied from the internet.
+  Once the app is listed, download the official badges from Apple's App Store
+  marketing guidelines and Google Play's badge page, put them in
+  `apps/web/public/badges/` (`app-store.svg`, `google-play.svg`), and swap
+  each into its button in `apps/web/src/app/shared/app-promo.ts` as an image
+  with the store's name as its alt text. Both companies require the badge
+  unaltered and at their minimum size.
 - Store review accounts with a confirmed address that are not the only owner of
   any organization, remade after each review, since reviewers may delete them.
 - Privacy label (App Store) and Data safety (Play) answers, which must match

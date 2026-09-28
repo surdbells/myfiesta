@@ -25,7 +25,8 @@ export interface EventRowData {
  *
  * The poster — the way an organizer recognises their own nights — then the
  * date and room, how long until, how much of the room is gone, and what it
- * has earned. A draft or a cancelled night says so before anything else.
+ * has earned. A draft, one waiting for myFiesta's review, or a cancelled
+ * night says so before anything else.
  */
 @Component({
   selector: 'mf-event-row',
@@ -43,6 +44,8 @@ export interface EventRowData {
           <span class="title">{{ event().title }}</span>
           @if (event().status === 'draft') {
             <mf-badge tone="warning">Draft</mf-badge>
+          } @else if (event().status === 'in_review') {
+            <mf-badge>In review</mf-badge>
           } @else if (event().status === 'cancelled') {
             <mf-badge tone="danger">Cancelled</mf-badge>
           }

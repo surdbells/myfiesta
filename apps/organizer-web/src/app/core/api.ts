@@ -29,6 +29,7 @@ import {
   CancellationResult,
   DoorList,
   EventSummary,
+  EventReviewResult,
   SalesReport,
   OfflineScan,
   SyncResult,
@@ -586,10 +587,24 @@ export class Api {
     );
   }
 
-  publish(id: string, status: 'draft' | 'published'): Observable<{ status: string; followers_told?: number }> {
-    return this.http.post<{ status: string; followers_told?: number }>(`${this.base}/api/organizer/events/${id}/publish`, {
+  /** Take off sale (`draft`), or — kept for older callers — send for review (`published`). */
+  publish(id: string, status: 'draft' | 'published'): Observable<EventReviewResult> {
+    return this.http.post<EventReviewResult>(`${this.base}/api/organizer/events/${id}/publish`, {
       status,
     });
+  }
+
+  /**
+   * Send a draft to myFiesta to be looked at, or straight back on sale when
+   * nothing has changed since it was approved. The answer says which.
+   */
+  submitForReview(id: string): Observable<EventReviewResult> {
+    return this.http.post<EventReviewResult>(`${this.base}/api/organizer/events/${id}/submit`, {});
+  }
+
+  /** Take an event back from review, to change something. */
+  withdrawFromReview(id: string): Observable<EventReviewResult> {
+    return this.http.post<EventReviewResult>(`${this.base}/api/organizer/events/${id}/withdraw`, {});
   }
 
   sales(id: string): Observable<SalesReport> {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventQuestion;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,7 @@ class QuestionController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $this->validated($request);
 
@@ -74,6 +76,7 @@ class QuestionController extends Controller
     public function update(Request $request, Event $event, EventQuestion $question): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($question->event_id === $event->id, 404);
 
@@ -102,7 +105,22 @@ class QuestionController extends Controller
             }
         }
 
+        $before = $question->only(array_keys($data));
+
         $question->update($data);
+
+        // Reworded on an event that is on sale: allowed without another
+        // review, like any edit while on sale, and kept on the record.
+        $changed = array_values(array_diff(array_keys($question->getChanges()), ['updated_at']));
+
+        if ($changed !== [] && $event->status === 'published') {
+            $this->auditor->record('question.updated', $event, $request->user(), metadata: [
+                'question_id' => $question->id,
+                'changed' => $changed,
+                'before' => array_intersect_key($before, array_flip($changed)),
+                'after' => $question->only($changed),
+            ]);
+        }
 
         return response()->json(['data' => $this->present($question->fresh())]);
     }
@@ -119,6 +137,7 @@ class QuestionController extends Controller
     public function destroy(Request $request, Event $event, EventQuestion $question): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($question->event_id === $event->id, 404);
 
@@ -147,6 +166,7 @@ class QuestionController extends Controller
     public function reorder(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],

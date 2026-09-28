@@ -7,6 +7,7 @@ use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,7 @@ class AddOnController extends Controller
     public function store(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $this->validated($request);
 
@@ -72,6 +74,7 @@ class AddOnController extends Controller
     public function update(Request $request, Event $event, AddOn $addOn): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($addOn->event_id === $event->id, 404);
 
@@ -117,10 +120,23 @@ class AddOnController extends Controller
     public function destroy(Request $request, Event $event, AddOn $addOn): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         abort_unless($addOn->event_id === $event->id, 404);
 
-        if ($this->sold($addOn) > 0) {
+        $closing = $this->sold($addOn) > 0;
+
+        // Taken off an event that is on sale: allowed without another review,
+        // like any edit while on sale, and kept on the record beside adding
+        // one and changing its price.
+        if ($event->status === 'published') {
+            $this->auditor->record($closing ? 'add_on.closed' : 'add_on.removed', $event, $request->user(), metadata: [
+                'add_on_id' => $addOn->id,
+                'add_on' => $addOn->name,
+            ]);
+        }
+
+        if ($closing) {
             $addOn->update(['status' => 'closed']);
 
             return response()->json([
@@ -138,6 +154,7 @@ class AddOnController extends Controller
     public function reorder(Request $request, Event $event): JsonResponse
     {
         $this->authorize('manageTickets', $event);
+        EventReviews::refuseWhileInReview($event);
 
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],

@@ -119,6 +119,104 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Contact' }
 
+  /api/discover:
+    get:
+      operationId: discover
+      summary: Everything the front page needs, in one request
+      description: |
+        Bounded shelves of events — featured, upcoming, happening today, this
+        weekend, almost sold out, sold out and recently past — with the
+        categories and cities that have something on, real counts, and the
+        service charge in each currency. "Today" and "this weekend" are read in
+        each event's own zone. Every card carries its availability. Kept for
+        up to a minute; the full list, paged and filtered, is /api/events.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - name: city
+          in: query
+          description: Narrows the event shelves to one city, by name, matched as its slug is ("Montreal" finds "Montréal").
+          schema: { type: string, maxLength: 80 }
+      responses:
+        '200':
+          description: The front page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Discovery' }
+
+  /api/discover/facets:
+    get:
+      operationId: discoverFacets
+      summary: The categories and cities that have something on
+      description: For the listing's filters and the search's city picker. Kept for up to a minute.
+      tags: [Discovery]
+      security: []
+      responses:
+        '200':
+          description: Categories and cities, most events first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [categories, cities]
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/CategoryPlace' }
+                  cities:
+                    type: array
+                    items: { $ref: '#/components/schemas/CityPlace' }
+
+  /api/discover/categories/{slug}:
+    get:
+      operationId: discoverCategory
+      summary: One category's own page
+      description: |
+        A category on the fixed list, or one events are still filed under,
+        found by the slug /api/discover and the facets send. Known with nothing
+        on is still 200, with `events` zero; unknown is 404.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The category.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CategoryPlace' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/discover/cities/{slug}:
+    get:
+      operationId: discoverCity
+      summary: One city's own page
+      description: |
+        A city with something on, or on in the last 90 days, found by its
+        slug. Where two spellings share a slug ("Montréal", "Montreal") the
+        one most of its events use is the name. Unknown is 404.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The city.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CityPlace' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/events:
     get:
       operationId: listEvents
@@ -132,7 +230,42 @@ paths:
           schema: { type: string }
         - name: city
           in: query
+          description: By name, matched as its slug is, so every spelling of one city is found ("Montreal" finds "Montréal").
           schema: { type: string }
+        - name: category
+          in: query
+          description: By name, exactly as /api/event-categories lists it.
+          schema: { type: string }
+        - name: when
+          in: query
+          description: |
+            A window, in each event's own zone. `today` is still on and
+            started today or earlier; `weekend` is Friday to Sunday, the one
+            underway or the next; `month` is the calendar month; `past` has
+            ended and defaults to the most recent first. Without one, what
+            has not started yet.
+          schema: { type: string, enum: [upcoming, today, weekend, month, past] }
+        - name: date_from
+          in: query
+          description: A calendar day, compared with each event's own date. Inclusive.
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: A calendar day, compared with each event's own date. Inclusive.
+          schema: { type: string, format: date }
+        - name: availability
+          in: query
+          description: |
+            Comma-separated states from Availability; `on_sale` means every
+            state but sold out and closed. Decided in the query, so pages stay
+            full.
+          schema: { type: string, example: 'almost_sold_out,sold_out' }
+        - name: free
+          in: query
+          schema: { type: boolean }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [soonest, newest, recent, relevance] }
         - name: country
           in: query
           schema: { type: string, minLength: 2, maxLength: 2 }
@@ -1359,6 +1492,219 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/organizer/events/{event}/submit:
+    post:
+      operationId: submitEventForReview
+      summary: Send a draft to myFiesta to be looked at before it goes on sale
+      description: |
+        Nothing goes on sale without an approval. This sends the event to the
+        review queue, where it waits in `in_review` and cannot be changed:
+        every write that would change what a buyer sees or pays for it answers
+        423 until it is decided or taken back. The people at the organization
+        who can publish are emailed that it arrived, and the staff who review
+        it that it is waiting.
+
+        Where an approval still stands for the event as it is — it was on
+        sale, was taken off, and nothing a buyer sees has changed since it was
+        approved; or it is the next date of an approved series and the same
+        night apart from its dates — it goes straight on sale instead, and
+        `outcome` says `published`. Only its dates are checked then, since the
+        listing is what was approved. Neither applies once staff have sent the
+        event back: after a rejection only another approval puts it on sale.
+
+        Needs what publishing needed: permission to publish, a proved address,
+        and an event that is ready. Every reason it is not comes back at once
+        in `reasons`. Refused while the organization is suspended.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Sent for review, back on sale, or already one of those.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not allowed to publish, an unproved address (`code` email_unverified), or the organization is suspended.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewRefusal' }
+        '422':
+          description: Not ready, cancelled, or taken off sale by myFiesta.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewRefusal' }
+
+  /api/organizer/events/{event}/withdraw:
+    post:
+      operationId: withdrawEventFromReview
+      summary: Take an event back from review, to change something
+      description: |
+        Back to a draft, which can be changed and sent again. The people at
+        the organization who can publish are emailed to confirm. Pressing it
+        again changes nothing.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: A draft again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Not waiting for review.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewRefusal' }
+
+  /api/organizer/events/{event}/publish:
+    post:
+      operationId: setEventOnSale
+      summary: Send for review, or take off sale
+      description: |
+        Kept for clients that already call it. `published` is the same as
+        submitting for review; `draft` takes an event off sale, or takes it
+        back from review while it waits. Taking an event off sale never waits
+        for a proved address.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [draft, published] }
+      responses:
+        '200':
+          description: What happened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Not ready, cancelled, or taken off sale by myFiesta.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventReviewRefusal' }
+
+  /api/organizer/payouts:
+    get:
+      operationId: getPayoutStatement
+      summary: What the organization is owed, what was sent, and anything owed back
+      description: |
+        The statement, in the organization's main currency. Settlements are
+        read-only: paying out is done by myFiesta staff against a real bank.
+
+        When staff pay a payout request for more than is owed, the difference
+        is an advance and the balance goes below zero by exactly that much.
+        `overdraft` then says how much was advanced and when, what sales have
+        paid back since, what was repaid by transfer, and what is outstanding,
+        with a sentence for all of it. The same block describes a balance that
+        refunds took below zero after a payout, with `advanced` null. The next
+        sales pay it back; nothing more can be asked for until the balance is
+        above zero.
+
+        Needs the money permission (owners, managers and finance).
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The statement.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutStatement' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/organizer/payouts/requests:
+    post:
+      operationId: requestPayout
+      summary: Ask to be paid what is owed
+      description: |
+        Up to the balance, to the payout details on file, one waiting request
+        per currency. Refused with a sentence while the balance is not above
+        zero — below zero it says what is owed back and what pays it back.
+        Owners and finance only; an address that is not yet proved is refused
+        with `email_unverified`.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+                  description: Minor units, in the statement's currency.
+                note: { type: [string, 'null'], maxLength: 500 }
+      responses:
+        '201':
+          description: Asked. Nothing moves until staff pay it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, message]
+                properties:
+                  data: { $ref: '#/components/schemas/PayoutRequestRow' }
+                  message: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Refused, with the reason in `message`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1464,9 +1810,109 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
-        is_sold_out: { type: boolean }
+        ends_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the night ends, if the organizer said. Lets a card tell a night that is over from one to come.
+        is_sold_out:
+          type: boolean
+          description: Every ticket a stranger can see has gone. A night whose sales closed with places left is not sold out; its availability says closed.
+        availability: { $ref: '#/components/schemas/Availability' }
+        waitlist:
+          type: boolean
+          description: Sold out and not started yet, so the waitlist takes names.
         category: { type: [string, 'null'] }
         organizer: { $ref: '#/components/schemas/OrganizerRef' }
+
+    Availability:
+      type: object
+      description: |
+        How much is left, as a buyer is told it. Counted the way checkout
+        counts: tickets that still admit somebody plus holds that have not run
+        out. A tier is almost sold out once something has sold and what is
+        left is at or under the admin's threshold (by default the larger of 5
+        places and 10% of capacity), and closed when the organizer closed it
+        or its sales ended with places left. An event is sold out when every
+        tier it shows is, closed when none can still sell but not all of them
+        sold out, almost sold out when its cheapest tier still selling is or
+        when what is left across its tiers is under the threshold of their
+        combined capacity, and unlimited when every tier still selling has no
+        capacity.
+      required: [state, left]
+      properties:
+        state:
+          type: string
+          enum: [available, almost_sold_out, sold_out, unlimited, closed]
+        left:
+          type: [integer, 'null']
+          description: |
+            The exact number left, only when it is at or under the admin's
+            setting (10 by default) — "Only 4 left". Null above it, when sold
+            out, and when unlimited: nothing larger ever leaves the API.
+
+    CategoryPlace:
+      type: object
+      required: [category, slug, events, cover_url]
+      properties:
+        category: { type: string }
+        slug: { type: string, description: 'Its address on the site: /events/category/{slug}.' }
+        events: { type: integer, description: Nights coming up in it. }
+        cover_url:
+          type: [string, 'null']
+          format: uri
+          description: The poster of its next night that has one, a featured night first. Null when none has.
+
+    CityPlace:
+      type: object
+      description: One for each slug; every spelling of the city is counted under the one most of its nights use.
+      required: [city, country, slug, events, cover_url]
+      properties:
+        city: { type: string }
+        country: { type: string, minLength: 2, maxLength: 2 }
+        slug: { type: string, description: 'Its address on the site: /events/city/{slug}.' }
+        events: { type: integer, description: Nights coming up in it. }
+        cover_url: { type: [string, 'null'], format: uri }
+
+    Discovery:
+      type: object
+      required: [featured, upcoming, today, weekend, later, almost_sold_out, sold_out, past, categories, cities, totals, fees]
+      properties:
+        featured:
+          type: array
+          description: Flagged by the platform; the next nights when nothing is.
+          items: { $ref: '#/components/schemas/EventSummary' }
+        upcoming: { type: array, items: { $ref: '#/components/schemas/EventSummary' } }
+        today: { type: array, items: { $ref: '#/components/schemas/EventSummary' } }
+        weekend: { type: array, items: { $ref: '#/components/schemas/EventSummary' } }
+        later:
+          type: array
+          description: Still to come after today and outside this weekend, soonest first — upcoming without what today and weekend show.
+          items: { $ref: '#/components/schemas/EventSummary' }
+        almost_sold_out: { type: array, items: { $ref: '#/components/schemas/EventSummary' } }
+        sold_out:
+          type: array
+          description: Every ticket gone. Still to come first (each takes waitlist names), then nights over in the last 30 days — ends_at tells them apart.
+          items: { $ref: '#/components/schemas/EventSummary' }
+        past:
+          type: array
+          description: Ended in the last 90 days, most recent first.
+          items: { $ref: '#/components/schemas/EventSummary' }
+        categories: { type: array, items: { $ref: '#/components/schemas/CategoryPlace' } }
+        cities: { type: array, items: { $ref: '#/components/schemas/CityPlace' } }
+        totals:
+          type: object
+          required: [upcoming, cities]
+          properties:
+            upcoming: { type: integer }
+            cities: { type: integer, description: 'Counted as the city cards are: once for each slug.' }
+        fees:
+          type: object
+          required: [service_charge]
+          properties:
+            service_charge:
+              type: object
+              description: The buyer's service charge in each currency, as a percentage written for a person ("8", "8.5").
+              additionalProperties: { type: string }
 
     Event:
       allOf:
@@ -1768,7 +2214,14 @@ components:
         max_per_order: { type: [integer, 'null'] }
         remaining:
           type: [integer, 'null']
-          description: Null when unlimited.
+          description: |
+            The same as availability.left: a number only at or under the
+            admin's setting, null otherwise — including when unlimited. The
+            public payload never carries the capacity or how many sold.
+        sold_out:
+          type: boolean
+          description: Every place taken, holds counted, or marked sold out.
+        availability: { $ref: '#/components/schemas/Availability' }
         status:
           type: string
           enum: [on_sale, sold_out, hidden, closed]
@@ -1874,6 +2327,20 @@ components:
           type: [array, 'null']
           items: { type: string }
           description: The ticket types the applied code discounts; null when it discounts every type.
+        availability:
+          type: array
+          description: |
+            How each tier on the event, and each in the basket, is selling now
+            — so a ticket page can say one sold out or closed while somebody
+            chose, before checkout refuses it. A hidden tier is reported only
+            when the request's code opens it. The quote still reserves nothing.
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Availability'
+              - type: object
+                required: [ticket_type_id]
+                properties:
+                  ticket_type_id: { type: string, format: uuid }
         lines:
           type: array
           items:
@@ -2301,6 +2768,89 @@ components:
           type: string
           description: Written for the person. `completed` has signed out every device, this one included.
 
+    EventStatus:
+      type: string
+      enum: [draft, in_review, published, cancelled]
+      description: |
+        Draft while it is built; in_review while myFiesta looks at it, when it
+        cannot be changed; published once approved, the only state that
+        sells; cancelled for good.
+
+    EventReviewResult:
+      type: object
+      required: [status, outcome, message]
+      properties:
+        status: { $ref: '#/components/schemas/EventStatus' }
+        outcome:
+          type: string
+          enum: [in_review, published, withdrawn, unpublished, already]
+          description: |
+            in_review sent to the queue; published straight on sale with an
+            approval that still stands; withdrawn taken back from review;
+            unpublished taken off sale; already nothing to do.
+        message:
+          type: string
+          description: One plain sentence for the person who pressed the button.
+
+    EventReviewRefusal:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        reasons:
+          type: array
+          items: { type: string }
+          description: Every reason the event is not ready, one sentence each.
+        code:
+          type: string
+          enum: [event_in_review, organization_suspended, email_unverified]
+
+    EventReviewStep:
+      type: object
+      required: [action, via, reason, at, by]
+      properties:
+        action: { type: string, enum: [submitted, approved, rejected, withdrawn] }
+        via:
+          type: [string, 'null']
+          enum: [review, takedown_lifted, suspension_lifted, series, existing, imported, null]
+          description: How an approval came about. Null for other steps.
+        reason:
+          type: [string, 'null']
+          description: The reviewer's words, exactly as sent, on a rejection.
+        at: { type: string, format: date-time }
+        by:
+          type: [string, 'null']
+          description: A member of the organization, or myFiesta for a decision.
+
+    EventReviewState:
+      type: object
+      description: Where an event stands with myFiesta's review, on the console's event.
+      required: [submitted_at, approved_at, on_submit, unchanged_since_approval, not_ready, rejection, history]
+      properties:
+        submitted_at: { type: [string, 'null'], format: date-time }
+        approved_at: { type: [string, 'null'], format: date-time }
+        on_submit:
+          type: [string, 'null']
+          enum: [publish, review, null]
+          description: What sending it now would do. Null when it is not a draft that can be sent.
+        unchanged_since_approval:
+          type: boolean
+          description: What a buyer sees is still what was last approved. For an event on sale, taken off now it could go straight back on.
+        not_ready:
+          type: array
+          items: { type: string }
+        rejection:
+          oneOf:
+            - type: object
+              required: [reason, at]
+              properties:
+                reason: { type: string }
+                at: { type: string, format: date-time }
+            - type: 'null'
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/EventReviewStep' }
+
     OrganizationStanding:
       type: object
       required: [organization, suspended, suspension]
@@ -2327,3 +2877,129 @@ components:
                   format: email
                   description: Null when the deployment has none.
             - type: 'null'
+
+    PayoutStatement:
+      type: object
+      required: [currency, balance, settled, overdraft, events, settlements, destination, requests, can_request, can_change_destination]
+      properties:
+        currency: { type: string, enum: [CAD, NGN] }
+        balance:
+          $ref: '#/components/schemas/Money'
+          description: Below zero while the organization owes myFiesta money; see `overdraft`.
+        settled: { $ref: '#/components/schemas/Money' }
+        overdraft:
+          description: Null when nothing is owed back and no advance is being paid back.
+          oneOf:
+            - { $ref: '#/components/schemas/PayoutOverdraft' }
+            - type: 'null'
+        events:
+          type: array
+          description: The balance by the night that earned it. Adds up to `balance`.
+          items:
+            type: object
+            required: [event_id, title, starts_at, balance, gross, settled]
+            properties:
+              event_id: { type: [string, 'null'], format: uuid }
+              title: { type: string }
+              starts_at: { type: [string, 'null'], format: date-time }
+              balance: { $ref: '#/components/schemas/Money' }
+              gross: { $ref: '#/components/schemas/Money' }
+              settled: { $ref: '#/components/schemas/Money' }
+        settlements:
+          type: array
+          description: What was sent, newest first. `overdraft` means part of it was advanced.
+          items:
+            type: object
+            required: [id, amount, rail, type, status, note, event, settled_at]
+            properties:
+              id: { type: string, format: uuid }
+              amount: { $ref: '#/components/schemas/Money' }
+              rail: { type: string, enum: [interac, bank_transfer, stripe, paystack] }
+              type: { type: string, enum: [full, partial, overdraft] }
+              status: { type: string }
+              note: { type: [string, 'null'] }
+              event:
+                oneOf:
+                  - type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      title: { type: string }
+                  - type: 'null'
+              settled_at: { type: [string, 'null'], format: date-time }
+        destination:
+          description: Where payouts go, masked. Never more of an account number than its last four digits.
+          oneOf:
+            - type: object
+              properties:
+                rail: { type: string, enum: [interac, bank_transfer] }
+                currency: { type: string }
+                interac_email: { type: [string, 'null'] }
+                bank_name: { type: [string, 'null'] }
+                account_name: { type: [string, 'null'] }
+                account_last_four: { type: [string, 'null'] }
+                verified_at: { type: [string, 'null'], format: date-time }
+            - type: 'null'
+        requests:
+          type: array
+          description: Payout requests, newest first.
+          items: { $ref: '#/components/schemas/PayoutRequestRow' }
+        can_request: { type: boolean }
+        can_change_destination: { type: boolean }
+
+    PayoutOverdraft:
+      type: object
+      description: |
+        Money owed back to myFiesta in the statement's currency, and how it is
+        coming back. The parts add up: advanced − repaid − recovered + added =
+        outstanding.
+      required: [outstanding, advanced, advanced_at, recovered, repaid, added, since, summary, recovery]
+      properties:
+        outstanding:
+          $ref: '#/components/schemas/Money'
+          description: Owed to myFiesta now. Zero once it has been paid back.
+        advanced:
+          description: How much myFiesta advanced. Null when refunds, not an advance, took the balance below zero.
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - type: 'null'
+        advanced_at: { type: [string, 'null'], format: date-time }
+        recovered:
+          $ref: '#/components/schemas/Money'
+          description: Paid back by sales since.
+        repaid:
+          $ref: '#/components/schemas/Money'
+          description: Paid back by a transfer to myFiesta since.
+        added:
+          $ref: '#/components/schemas/Money'
+          description: Put on top by refunds and chargebacks since.
+        since: { type: [string, 'null'], format: date-time }
+        summary:
+          type: string
+          description: The whole position in one sentence, the same one myFiesta staff read.
+        recovery:
+          type: [string, 'null']
+          description: What pays it back, while anything is outstanding.
+
+    PayoutRequestRow:
+      type: object
+      required: [id, amount, paid_amount, advance, status, note, decision_note, requested_by, requested_at, decided_at]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        paid_amount:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - type: 'null'
+        advance:
+          description: The part of the payment myFiesta advanced beyond what was owed, when it did.
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - type: 'null'
+        status: { type: string, enum: [pending, paid, rejected, cancelled] }
+        note: { type: [string, 'null'] }
+        decision_note:
+          type: [string, 'null']
+          description: Written by staff for the organizer.
+        requested_by: { type: [string, 'null'] }
+        requested_at: { type: string, format: date-time }
+        decided_at: { type: [string, 'null'], format: date-time }

@@ -2,36 +2,84 @@
   <p class="muted">Loading…</p>
 } @else if (event(); as event) {
   <!--
-    The one action that changes what the outside world can see, and it lives on
-    the overview rather than in the workspace header: publishing depends on
-    there being something on sale, and the ticket types are loaded here.
+    Getting it on sale, and off. Nothing reaches the public without somebody
+    at myFiesta looking at it first, so the main action on a draft is sending
+    it for review — or, when nothing has changed since it was approved,
+    putting it straight back. The server says which, and the button says it
+    too, before it is pressed.
 
-    A cancelled event is terminal. It cannot be published, taken down, edited or
-    copied back into life, so the control is absent rather than disabled — a
-    greyed-out Publish invites somebody to look for the reason it is grey.
+    A cancelled event is terminal. It cannot be sent, taken down, edited or
+    copied back into life, so the controls are absent rather than disabled — a
+    greyed-out button invites somebody to look for the reason it is grey.
   -->
+  @if (event.review.rejection; as rejection) {
+    @if (event.status === 'draft') {
+      <section class="rejection mb-6 grid gap-2 rounded-md border-l-[3px] border-l-warning bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] p-4 text-sm" role="status">
+        <h2 class="m-0 text-base font-semibold">myFiesta sent this back</h2>
+        <p class="m-0 whitespace-pre-line">{{ rejection.reason }}</p>
+        <p class="m-0 text-text-muted">
+          Change what it says, then submit it for review again. The reason stays here until you do.
+        </p>
+      </section>
+    }
+  }
+
+  @if (event.status === 'in_review') {
+    <section class="in-review mb-6 grid gap-2 rounded-md border-l-[3px] border-l-primary bg-[var(--primary-soft)] p-4 text-sm" role="status">
+      <h2 class="m-0 text-base font-semibold">Waiting for review</h2>
+      <p class="m-0">
+        Sent {{ event.review.submitted_at ? when(event.review.submitted_at, event.timezone) : '' }}. Somebody at myFiesta
+        looks at every event before it goes on sale, usually within a working day, and we email you either way.
+        It cannot be changed while it waits.
+      </p>
+    </section>
+  }
+
   @if (event.status !== 'cancelled' && session.canPublish()) {
     <div class="actions mb-6 flex flex-wrap items-center gap-4">
-      <button
-        uiButton
-        [variant]="event.status === 'published' ? 'secondary' : 'primary'"
-        type="button"
-        [loading]="publishing()"
-        [disabled]="publishing() || (event.status !== 'published' && !canPublish())"
-        (click)="togglePublished()"
-      >
-        @if (event.status === 'published') {
-          Take down
-        } @else {
-          Publish
-        }
-      </button>
+      @if (event.status === 'published') {
+        <button uiButton variant="secondary" type="button" [loading]="publishing()" [disabled]="publishing()" (click)="takeOffSale()">
+          Take off sale
+        </button>
+      } @else if (event.status === 'in_review') {
+        <button uiButton variant="secondary" type="button" [loading]="publishing()" [disabled]="publishing()" (click)="withdraw()">
+          Withdraw from review
+        </button>
+      } @else {
+        <button
+          uiButton
+          variant="primary"
+          type="button"
+          [loading]="publishing()"
+          [disabled]="publishing() || notReady().length > 0"
+          [attr.aria-describedby]="notReady().length > 0 ? 'not-ready' : 'on-submit'"
+          (click)="submit()"
+        >
+          @if (event.review.on_submit === 'publish') {
+            Put back on sale
+          } @else {
+            Submit for review
+          }
+        </button>
 
-      @if (event.status !== 'published' && !canPublish()) {
-        <p class="actions__blocked max-w-[46ch] text-pretty text-sm text-text-muted">
-          Add a ticket type first. A published event with nothing on sale is a
-          link that disappoints everyone who follows it.
-        </p>
+        @if (notReady().length > 0) {
+          <div id="not-ready" class="actions__blocked max-w-[52ch] text-sm text-text-muted">
+            <p class="m-0">Before it can be sent:</p>
+            <ul class="m-0 mt-1 list-disc pl-5">
+              @for (reason of notReady(); track reason) {
+                <li>{{ reason }}</li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <p id="on-submit" class="actions__blocked m-0 max-w-[52ch] text-pretty text-sm text-text-muted">
+            @if (event.review.on_submit === 'publish') {
+              Nothing a buyer sees has changed since it was approved, so it goes straight back on sale.
+            } @else {
+              myFiesta looks at it before it goes on sale. It cannot be changed while it waits.
+            }
+          </p>
+        }
       }
     </div>
   }
@@ -108,7 +156,7 @@
               <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">Moved</span>
             }
             @if (date.status !== 'published') {
-              <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">{{ date.status }}</span>
+              <span class="badge rounded-full bg-surface-inset px-2 py-[2px] text-xs uppercase tracking-[0.04em] text-text-muted">{{ statusLabel(date.status) }}</span>
             }
 
             @if (session.canEditEvents() && date.id !== eventId) {
@@ -157,13 +205,16 @@
               (ngModelChange)="repeatCount.set($event)"
             />
             <span class="muted">dates</span>
-            <button uiButton variant="secondary" size="sm" type="button" [loading]="repeating()" [disabled]="repeating()" (click)="makeRepeating()">
+            <button uiButton variant="secondary" size="sm" type="button" [loading]="repeating()" [disabled]="repeating() || event.status === 'in_review'" (click)="makeRepeating()">
               @if (repeating()) { Setting up… } @else { Repeat }
             </button>
           </div>
           <p class="help mt-2 text-xs text-text-muted">
             Each date is its own event with its own tickets and door, so you can
             change one without touching the rest.
+            @if (event.status === 'in_review') {
+              Repeating waits until the review is done.
+            }
           </p>
         }
       }
@@ -187,7 +238,7 @@
         </div>
         <p class="help mt-2 text-xs text-text-muted">
           Tickets, prices, capacity and the banner come across. Sales and the
-          gallery do not, and the copy starts as a draft.
+          gallery do not, and the copy starts as a draft to submit for review.
         </p>
       }
     </section>
@@ -289,8 +340,8 @@
 
   @if (liveReminders().length === 0) {
     <p class="muted">
-      No reminders. Publishing an event schedules a week out, the day before and
-      three hours before.
+      No reminders. When the event goes on sale, a week out, the day before and
+      three hours before are scheduled.
     </p>
   } @else {
     <ul class="reminders m-0 grid list-none gap-2 p-0">
@@ -319,6 +370,27 @@
     <p class="help mt-2 text-xs text-text-muted">
       Everyone holding a ticket gets an email. Anyone who has unsubscribed does not.
     </p>
+  }
+
+  @if (history().length > 0) {
+    <h2 class="section mt-8 mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-muted">Review history</h2>
+
+    <ol class="review-history m-0 grid list-none gap-3 p-0">
+      @for (step of history(); track $index) {
+        <li class="grid gap-1 text-sm">
+          <span class="flex flex-wrap items-baseline gap-x-3">
+            <span class="font-medium">{{ stepLabel(step) }}</span>
+            <span class="text-text-muted tabular-nums">{{ when(step.at, event.timezone) }}</span>
+            @if (step.by && step.action !== 'approved' && step.action !== 'rejected') {
+              <span class="text-text-muted">by {{ step.by }}</span>
+            }
+          </span>
+          @if (step.reason) {
+            <span class="whitespace-pre-line text-text-muted">“{{ step.reason }}”</span>
+          }
+        </li>
+      }
+    </ol>
   }
 
   <!-- Ticket types live on the Tickets tab, which manages inventory and

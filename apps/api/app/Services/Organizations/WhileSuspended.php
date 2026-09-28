@@ -58,6 +58,10 @@ final class WhileSuspended
         // Cancelling a campaign not yet sent stays open.
         CampaignController::class.'@store' => self::CAMPAIGNS,
         CampaignController::class.'@update' => self::CAMPAIGNS,
+
+        // Sending an event for review is the start of putting it on sale
+        // (EventReviews checks again). Taking one back from review stays open.
+        EventController::class.'@submit' => self::PUBLISH,
     ];
 
     /**

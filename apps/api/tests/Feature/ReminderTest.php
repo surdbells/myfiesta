@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\ReviewsEvents;
 use Tests\TestCase;
 
 /**
@@ -29,7 +30,7 @@ use Tests\TestCase;
  */
 class ReminderTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, ReviewsEvents;
 
     private Organization $org;
 
@@ -48,6 +49,7 @@ class ReminderTest extends TestCase
             'organization_id' => $this->org->id,
             'slug' => 'afro-fest',
             'title' => 'Afro Fest',
+            'description' => 'Afrobeats until late.',
             'currency' => 'CAD',
             'starts_at' => now()->addDays(10),
             'timezone' => 'America/Toronto',
@@ -361,6 +363,7 @@ class ReminderTest extends TestCase
             'organization_id' => $this->org->id,
             'slug' => 'later',
             'title' => 'Later',
+            'description' => 'A later night.',
             'currency' => 'CAD',
             'starts_at' => now()->addDays(30),
             'timezone' => 'America/Toronto',
@@ -378,8 +381,7 @@ class ReminderTest extends TestCase
 
         $this->asOrganizer();
 
-        $this->postJson("/api/organizer/events/{$event->id}/publish", ['status' => 'published'])
-            ->assertOk();
+        $this->publishThroughReview($event)->assertOk();
 
         // A week out, the day before, and three hours out. Most organizers
         // should never have to open the reminders screen at all.
@@ -394,14 +396,18 @@ class ReminderTest extends TestCase
         $this->asOrganizer();
 
         TicketType::first()->update(['status' => 'on_sale']);
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published']);
+        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft'])->assertOk();
+        $this->publishThroughReview($this->event)->assertOk();
 
         $reminder = $this->event->reminders()->where('offset_minutes', 1440)->first();
         $this->deleteJson("/api/organizer/events/{$this->event->id}/reminders/{$reminder->id}")
             ->assertOk();
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft']);
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published']);
+        // Off sale and back on, unchanged since it was approved.
+        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft'])->assertOk();
+        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
+            ->assertOk()
+            ->assertJsonPath('status', 'published');
 
         // Turning one off has to stick, or the button does nothing.
         $this->assertSame('cancelled', $reminder->fresh()->status);

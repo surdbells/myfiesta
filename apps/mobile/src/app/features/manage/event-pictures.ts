@@ -1,10 +1,11 @@
-import { Component, ElementRef, OnInit, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, input, signal, viewChild } from '@angular/core';
 import { ArrowLeft, ArrowRight, ImagePlus, MessageSquareText, RectangleHorizontal, Trash2 } from 'lucide-angular';
 import type { EventImage, EventImages, OrganizerEventDetail } from '@myfiesta/api-types';
 import { Organizer } from '../../core/organizer';
 import { messageOf } from '../../core/errors';
 import { Dialogs, MfButton, MfCard, MfEmpty, MfIcon, MfImagePick, MfScreen, MfSkeleton, ToastStore } from '../../ui';
 import { EventContext } from './event-context';
+import { MfReviewLock, lockedForReview } from './event-review';
 
 const LIMIT = 10 * 1024 * 1024;
 
@@ -24,7 +25,7 @@ interface Upload {
  */
 @Component({
   selector: 'mf-event-pictures',
-  imports: [MfScreen, MfCard, MfButton, MfEmpty, MfSkeleton, MfImagePick, MfIcon],
+  imports: [MfScreen, MfCard, MfButton, MfEmpty, MfSkeleton, MfImagePick, MfIcon, MfReviewLock],
   template: `
     <mf-screen title="Poster and gallery" [subtitle]="event()?.title ?? null" back [backTo]="'/manage/events/' + id()" refreshable [busy]="loading()" (refresh)="load()">
       @if (error(); as message) {
@@ -32,6 +33,12 @@ interface Upload {
           <button mfButton variant="secondary" (click)="load()">Try again</button>
         </mf-empty>
       } @else if (images(); as all) {
+        @if (locked()) {
+          <mf-review-lock [eventId]="id()" />
+        }
+
+        <!-- Shown as they are while myFiesta reviews them; every control inside is switched off. -->
+        <fieldset class="frozen" [disabled]="locked()">
         <section class="block">
           <h2 class="heading">Poster</h2>
           <p class="note">Wide, at the top of the event page and on every link shared. 1600 × 840 looks sharp.</p>
@@ -51,9 +58,13 @@ interface Upload {
         <section class="block">
           <div class="heading-row">
             <h2 class="heading">Gallery</h2>
-            <button mfButton size="sm" variant="secondary" (click)="pick()"><mf-icon [icon]="addIcon" size="sm" /> Add</button>
+            @if (!locked()) {
+              <button mfButton size="sm" variant="secondary" (click)="pick()"><mf-icon [icon]="addIcon" size="sm" /> Add</button>
+            }
           </div>
-          <p class="note">Tap a picture to caption it, move it, or make it the poster.</p>
+          @if (!locked()) {
+            <p class="note">Tap a picture to caption it, move it, or make it the poster.</p>
+          }
 
           <ul class="grid">
             @for (image of all.gallery; track image.id; let i = $index; let last = $last) {
@@ -73,14 +84,17 @@ interface Upload {
                 </div>
               </li>
             }
-            <li>
-              <button type="button" class="shot add" (click)="pick()">
-                <mf-icon [icon]="addIcon" size="lg" />
-                <span>Add pictures</span>
-              </button>
-            </li>
+            @if (!locked()) {
+              <li>
+                <button type="button" class="shot add" (click)="pick()">
+                  <mf-icon [icon]="addIcon" size="lg" />
+                  <span>Add pictures</span>
+                </button>
+              </li>
+            }
           </ul>
         </section>
+        </fieldset>
       } @else {
         <mf-card><mf-skeleton height="10rem" /></mf-card>
       }
@@ -89,6 +103,13 @@ interface Upload {
     </mf-screen>
   `,
   styles: `
+    .frozen {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
     .block {
       display: grid;
       gap: var(--space-3);
@@ -203,6 +224,9 @@ export class EventPictures implements OnInit {
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
+  /** Waiting for myFiesta's review: the pictures are what is being looked at, so they stay as they are. */
+  protected readonly locked = computed(() => lockedForReview(this.event()));
+
   protected readonly posterBusy = signal(false);
   protected readonly posterProgress = signal<number | null>(null);
   protected readonly uploads = signal<Upload[]>([]);
@@ -232,6 +256,8 @@ export class EventPictures implements OnInit {
   }
 
   protected pick(): void {
+    if (this.locked()) return;
+
     this.files().nativeElement.click();
   }
 
@@ -243,7 +269,22 @@ export class EventPictures implements OnInit {
   }
 
   protected async uploadPoster(file: File): Promise<void> {
-    if (this.tooBig(file)) return;
+    if (this.locked() || this.tooBig(file)) return;
+
+    // A new poster deletes the one it replaces — the one picture shown
+    // wherever the link is shared.
+    const replacing = !!this.images()?.banner;
+    const sure = await this.dialogs.confirm({
+      title: replacing ? `Replace the poster with ${file.name}?` : `Use ${file.name} as the poster?`,
+      body: replacing
+        ? 'The poster there now is deleted, and this one takes its place on the event page and wherever the link is shared.'
+        : 'It is the picture on the event page and wherever the link is shared.',
+      consequences: this.event()?.status === 'published' ? ['The event is on sale: buyers see it straight away.'] : [],
+      confirmLabel: replacing ? 'Replace the poster' : 'Use this picture',
+      tone: replacing ? 'danger' : 'default',
+    });
+
+    if (!sure || this.posterBusy()) return;
 
     this.posterBusy.set(true);
     this.posterProgress.set(0);
@@ -262,7 +303,15 @@ export class EventPictures implements OnInit {
   }
 
   protected async removePoster(image: EventImage): Promise<void> {
-    const sure = await this.dialogs.confirm({ title: 'Remove the poster?', message: 'The event page shows its plain header until another is added.', confirm: 'Remove', danger: true });
+    if (this.locked()) return;
+
+    const sure = await this.dialogs.confirm({
+      title: 'Remove the poster?',
+      body: 'The event page shows its plain header until another is added.',
+      consequences: ['Links shared from now on show no picture.'],
+      confirmLabel: 'Remove the poster',
+      tone: 'danger',
+    });
     if (!sure) return;
 
     try {
@@ -276,12 +325,23 @@ export class EventPictures implements OnInit {
 
   protected async picked(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    const chosen = Array.from(input.files ?? []);
+    const chosen = Array.from(input.files ?? []).filter((file) => !this.tooBig(file));
     input.value = '';
+
+    if (chosen.length === 0) return;
+
+    const sure = await this.dialogs.confirm({
+      title: chosen.length === 1 ? `Add ${chosen[0].name} to the gallery?` : `Add ${chosen.length} pictures to the gallery?`,
+      body: `${chosen.length === 1 ? 'It goes' : 'They go'} at the end of the gallery on the event page.`,
+      consequences: this.event()?.status === 'published' ? ['The event is on sale: buyers see the gallery straight away.'] : [],
+      confirmLabel: chosen.length === 1 ? 'Add the picture' : `Add ${chosen.length} pictures`,
+      tone: 'default',
+    });
+
+    if (!sure) return;
 
     // One after another: a weak signal then loses one picture, not the lot.
     for (const file of chosen) {
-      if (this.tooBig(file)) continue;
 
       const upload: Upload = { id: ++this.uploadCount, name: file.name, percent: 0 };
       this.uploads.update((all) => [...all, upload]);
@@ -300,6 +360,8 @@ export class EventPictures implements OnInit {
   }
 
   protected async imageMenu(image: EventImage, first: boolean, last: boolean): Promise<void> {
+    if (this.locked()) return;
+
     const chosen = await this.dialogs.menu({
       title: image.caption ?? 'Picture',
       actions: [
@@ -326,12 +388,23 @@ export class EventPictures implements OnInit {
           this.replace(saved);
           return;
         }
-        case 'poster':
+        case 'poster': {
+          const sure = await this.dialogs.confirm({
+            title: 'Make this picture the poster?',
+            body: 'It becomes the picture on the event page and wherever the link is shared.',
+            consequences: this.images()?.banner ? ['The poster there now moves into the gallery. Nothing is deleted.'] : [],
+            confirmLabel: 'Make it the poster',
+            tone: 'default',
+          });
+
+          if (!sure) return;
+
           await this.organizer.setBanner(this.id(), image.id);
           this.context.forget(this.id());
           this.toasts.show('That is the poster now.', 'success');
           await this.load();
           return;
+        }
         case 'earlier':
         case 'later': {
           const ids = (this.images()?.gallery ?? []).map((i) => i.id);
@@ -343,7 +416,16 @@ export class EventPictures implements OnInit {
           return;
         }
         case 'delete':
-          if (!(await this.dialogs.confirm({ title: 'Delete this picture?', confirm: 'Delete', danger: true }))) return;
+          if (
+            !(await this.dialogs.confirm({
+              title: 'Delete this picture?',
+              body: 'It is taken out of the gallery on the event page, and deleted.',
+              confirmLabel: 'Delete the picture',
+              tone: 'danger',
+            }))
+          ) {
+            return;
+          }
           await this.organizer.deleteImage(this.id(), image.id);
           this.images.update((all) => (all ? { ...all, gallery: all.gallery.filter((i) => i.id !== image.id) } : all));
           return;

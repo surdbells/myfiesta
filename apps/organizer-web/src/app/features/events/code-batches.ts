@@ -1,13 +1,14 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ToastStore, UiButton, UiConfirm, UiIcon, UiSelect, type SelectOption } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiButton, UiConfirm, UiIcon, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { CodeBatch, TicketType } from '../../core/api.types';
+import { CodeBatch, Money, TicketType } from '../../core/api.types';
 import { saveFile } from '../../core/download';
 import { messageFor } from '../../core/errors';
-import { amountProblem, toMinorUnits } from '../../core/money';
+import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
 import { describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-time';
+import { whenCodeWorks } from '@myfiesta/shared/code-window';
 
 /**
  * Single-use codes, made in bulk and handed out as a spreadsheet.
@@ -25,6 +26,7 @@ import { describeZone, localZone, zonedWallClockToIso } from '../../core/zoned-t
 export class CodeBatches implements OnInit {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
 
   readonly eventId = input.required<string>();
   readonly eventSlug = input<string | null>(null);
@@ -103,10 +105,42 @@ export class CodeBatches implements OnInit {
     this.form.set({ ...this.form(), unlock_ticket_type_ids: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] });
   }
 
-  create(): void {
+  async create(): Promise<void> {
     if (!this.canCreate() || this.saving()) return;
 
     const f = this.form();
+    const quantity = Number(f.quantity);
+    const unlocks = this.ticketTypes()
+      .filter((type) => f.unlock_ticket_type_ids.includes(type.id))
+      .map((type) => type.name)
+      .join(', ');
+    const each =
+      f.purpose === 'access'
+        ? `Each one unlocks ${unlocks} for whoever types it.`
+        : f.discount_type === 'percentage'
+          ? `Each one takes ${Number(f.discount_value)}% off an order.`
+          : `Each one takes ${formatMoney({ amount: toMinorUnits(f.discount_value) ?? 0, currency: this.currency() as Money['currency'] })} off an order.`;
+
+    const sure = await this.confirmDialog.confirm({
+      title: `Make ${quantity.toLocaleString()} ${quantity === 1 ? 'code' : 'codes'} for ${f.name.trim()}?`,
+      body: `${each} Each works once.`,
+      consequences: [
+        // From the batch's own From and Until: a batch for a Friday giveaway
+        // described as working now is handed out now, and refused until Friday.
+        whenCodeWorks({
+          startsAt: f.starts_at ? zonedWallClockToIso(f.starts_at, this.zone()) : null,
+          endsAt: f.ends_at ? zonedWallClockToIso(f.ends_at, this.zone()) : null,
+          format: (iso) => this.moment(iso),
+          plural: true,
+        }),
+        'You can turn off the unused ones later.',
+      ],
+      confirmLabel: `Make ${quantity.toLocaleString()} ${quantity === 1 ? 'code' : 'codes'}`,
+      tone: 'default',
+    });
+
+    if (!sure || this.saving()) return;
+
     this.saving.set(true);
     this.error.set(null);
 
@@ -114,7 +148,7 @@ export class CodeBatches implements OnInit {
       .createCodeBatch(this.eventId(), {
         name: f.name.trim(),
         prefix: f.prefix.trim() || null,
-        quantity: Number(f.quantity),
+        quantity,
         discount_type: f.purpose === 'discount' ? f.discount_type : null,
         discount_value:
           f.purpose === 'discount'
@@ -180,6 +214,18 @@ export class CodeBatches implements OnInit {
 
   private zone(): string {
     return this.timezone() ?? localZone();
+  }
+
+  /** A moment in the batch's window, on the event's wall clock — as the codes above write it. */
+  private moment(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: this.zone(),
+    }).format(new Date(iso));
   }
 
   unused(batch: CodeBatch): number {

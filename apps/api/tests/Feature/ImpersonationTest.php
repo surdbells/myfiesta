@@ -7,16 +7,19 @@ use App\Enums\PlatformRole;
 use App\Enums\Role;
 use App\Models\AuditLog;
 use App\Models\Event;
+use App\Models\EventReview;
 use App\Models\ImpersonationSession;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Events\EventReviews;
 use App\Services\Impersonation\Impersonation;
 use App\Services\Impersonation\ImpersonationRefused;
 use App\Services\Impersonation\WhileImpersonating;
 use App\Services\StaffSupport\AccountActions;
+use App\Services\StaffSupport\StaffActionRefused;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
@@ -80,6 +83,7 @@ class ImpersonationTest extends TestCase
             'organization_id' => $org->id,
             'slug' => $slug,
             'title' => 'Afro Fest',
+            'description' => 'Afrobeats until late.',
             'currency' => 'CAD',
             'starts_at' => now()->addWeek(),
             'ends_at' => now()->addWeek()->addHours(6),
@@ -374,18 +378,58 @@ class ImpersonationTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('message', WhileImpersonating::ANNOUNCES);
 
+        // Nor sent for review: approving it would tell the followers all the
+        // same.
+        $this->as($token)->postJson("/api/organizer/events/{$draft->id}/submit")
+            ->assertForbidden()
+            ->assertJsonPath('message', WhileImpersonating::ANNOUNCES);
+
         $this->assertSame('draft', $draft->fresh()->status);
         $this->assertNull($draft->fresh()->announced_at);
 
-        // Taking one down, and putting back up one already announced, send
-        // nothing: support fixing a typo can finish what it started.
+        // Taking one down, and putting back up one already announced and
+        // approved as it stands, send nothing: support fixing a typo can
+        // finish what it started.
         $this->event->forceFill(['announced_at' => now()->subDay()])->save();
+        app(EventReviews::class)->recordApproval($this->event->fresh(), null, EventReviews::VIA_EXISTING);
 
         $this->as($token)->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft'])->assertOk();
         $this->as($token)->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])->assertOk();
 
         $this->assertSame('published', $this->event->fresh()->status);
         Mail::assertNothingOutgoing();
+    }
+
+    public function test_staff_who_send_an_event_for_review_as_the_organization_do_not_approve_it(): void
+    {
+        Mail::fake();
+
+        // Announced already, so sending it again tells nobody and stays open.
+        TicketType::create(['event_id' => $this->event->id, 'name' => 'General', 'price_amount' => 3000, 'status' => 'on_sale']);
+        $this->event->forceFill(['announced_at' => now()->subDay()])->save();
+        app(EventReviews::class)->recordApproval($this->event->fresh(), null, EventReviews::VIA_EXISTING);
+
+        $token = $this->tokenFor();
+        $id = $this->event->id;
+
+        $this->as($token)->postJson("/api/organizer/events/{$id}/publish", ['status' => 'draft'])->assertOk();
+        $this->as($token)->patchJson("/api/organizer/events/{$id}", ['title' => 'Afro Fest, as support rewrote it'])->assertOk();
+        $this->as($token)->postJson("/api/organizer/events/{$id}/submit")->assertOk()->assertJsonPath('status', 'in_review');
+
+        // The history says who sent it.
+        $this->assertSame($this->support->id, EventReview::where('event_id', $id)->where('action', 'submitted')->sole()->actor_id);
+
+        try {
+            app(EventReviews::class)->approve($this->event->fresh(), $this->support);
+            $this->fail('Staff approved an event they sent for review themselves.');
+        } catch (StaffActionRefused $refused) {
+            $this->assertSame(EventReviews::OWN_SUBMISSION, $refused->getMessage());
+        }
+
+        $this->assertSame('in_review', $this->event->fresh()->status);
+
+        // Somebody else at myFiesta decides it.
+        $this->assertSame('published', app(EventReviews::class)->approve($this->event->fresh(), $this->staff(PlatformRole::Admin, 'Ada Admin')));
     }
 
     public function test_tickets_can_be_issued_but_not_emailed(): void

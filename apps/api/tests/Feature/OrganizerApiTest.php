@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Concerns\ReviewsEvents;
 use Tests\TestCase;
 
 /**
@@ -24,7 +25,7 @@ use Tests\TestCase;
  */
 class OrganizerApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, ReviewsEvents;
 
     private Organization $org;
 
@@ -43,6 +44,7 @@ class OrganizerApiTest extends TestCase
             'organization_id' => $this->org->id,
             'slug' => 'afro-fest',
             'title' => 'Afro Fest',
+            'description' => 'Afrobeats until late.',
             'currency' => 'CAD',
             'starts_at' => now()->addMonth(),
             'timezone' => 'America/Toronto',
@@ -323,8 +325,9 @@ class OrganizerApiTest extends TestCase
     {
         $this->asOrganizer($this->owner);
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
-            ->assertStatus(422);
+        $this->postJson("/api/organizer/events/{$this->event->id}/submit")
+            ->assertStatus(422)
+            ->assertJsonPath('reasons', ['Add at least one ticket on sale.']);
 
         TicketType::create([
             'event_id' => $this->event->id,
@@ -333,9 +336,11 @@ class OrganizerApiTest extends TestCase
             'status' => 'on_sale',
         ]);
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
+        $this->publishThroughReview($this->event)
             ->assertOk()
-            ->assertJsonPath('status', 'published');
+            ->assertJsonPath('status', 'in_review');
+
+        $this->assertSame('published', $this->event->refresh()->status);
     }
 
     public function test_republishing_keeps_the_original_announcement_date(): void
@@ -349,13 +354,16 @@ class OrganizerApiTest extends TestCase
 
         $this->asOrganizer($this->owner);
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published']);
+        $this->publishThroughReview($this->event)->assertOk();
         $first = $this->event->refresh()->published_at;
+        $this->assertNotNull($first);
 
         $this->travel(2)->days();
 
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft']);
-        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published']);
+        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'draft'])->assertOk();
+        $this->postJson("/api/organizer/events/{$this->event->id}/publish", ['status' => 'published'])
+            ->assertOk()
+            ->assertJsonPath('status', 'published');
 
         // Otherwise pulling an event down for an hour makes it look newly
         // announced in every feed sorted by that date.

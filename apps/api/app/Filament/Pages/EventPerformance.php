@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\EventStatus;
 use App\Filament\Resources\Events\EventResource;
 use App\Filament\Support\Listing;
 use App\Models\Event;
@@ -289,8 +290,10 @@ class EventPerformance extends Page implements HasTable
                     ->description(fn (Event $record): string => $record->timezone ?: 'UTC'),
                 TextColumn::make('status')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => EventStatus::tryFrom($state)?->label() ?? $state)
                     ->color(fn (string $state): string => match ($state) {
                         'published' => 'success',
+                        'in_review' => 'warning',
                         'cancelled' => 'danger',
                         default => 'gray',
                     }),
@@ -316,6 +319,7 @@ class EventPerformance extends Page implements HasTable
                 SelectFilter::make('currency')->label('Market')->options(Listing::CURRENCIES),
                 SelectFilter::make('status')->options([
                     'published' => 'Published',
+                    'in_review' => 'In review',
                     'draft' => 'Draft',
                     'cancelled' => 'Cancelled',
                 ]),

@@ -10,6 +10,8 @@ use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\Audit\Auditor;
+use App\Services\Events\EventReviews;
+use App\Services\Events\EventSnapshot;
 use App\Services\Organizations\Suspension;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,10 @@ use Illuminate\Support\Facades\Mail;
  */
 class EventModeration
 {
-    public function __construct(private readonly Auditor $auditor) {}
+    public function __construct(
+        private readonly Auditor $auditor,
+        private readonly EventReviews $reviews,
+    ) {}
 
     /** Put an event on the front page, or take it off. */
     public function feature(Event $event, User $staff, bool $featured): void
@@ -84,6 +89,10 @@ class EventModeration
 
             $locked->forceFill([
                 'status' => 'draft',
+                // Taken out of the review queue as well: there is nothing to
+                // approve while it is down. The organizer sends it again once
+                // the takedown is lifted.
+                'submitted_at' => null,
                 'is_featured' => false,
                 'taken_down_at' => now(),
                 'taken_down_reason' => mb_substr($reason, 0, 1000),
@@ -125,7 +134,7 @@ class EventModeration
 
         $wasPublished = $this->wasPublishedWhenTakenDown($event);
 
-        [$status, $waitsForSuspension] = DB::transaction(function () use ($event, $wasPublished) {
+        [$status, $waitsForSuspension] = DB::transaction(function () use ($event, $wasPublished, $staff) {
             $locked = $this->lock($event);
 
             if ($locked->taken_down_at === null) {
@@ -144,7 +153,12 @@ class EventModeration
 
             if ($waitsForSuspension) {
                 $status = 'draft';
-                $locked->forceFill(['unpublished_by_suspension_at' => now()]);
+                // As it stands now is what goes back when the suspension is
+                // lifted, and not anything edited while it waits.
+                $locked->forceFill([
+                    'unpublished_by_suspension_at' => now(),
+                    'unpublished_by_suspension_fingerprint' => EventSnapshot::fingerprint(EventSnapshot::of($locked)),
+                ]);
             }
 
             $locked->forceFill([
@@ -154,6 +168,14 @@ class EventModeration
                 'taken_down_reason' => null,
                 'taken_down_by' => null,
             ])->save();
+
+            // Lifting it is staff putting the event back on sale as it stands,
+            // which counts as its approval — the people who would review it
+            // have just looked at it. Waiting for a suspension, it is the same
+            // decision, carried out when that is lifted.
+            if ($status === 'published' || $waitsForSuspension) {
+                $this->reviews->recordApproval($locked, $staff, EventReviews::VIA_TAKEDOWN_LIFTED);
+            }
 
             return [$status, $waitsForSuspension];
         });

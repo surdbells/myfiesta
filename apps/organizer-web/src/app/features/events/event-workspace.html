@@ -25,7 +25,7 @@
             who has forgotten they never published it will read every figure
             below as a disaster rather than as a draft.
           -->
-          <ui-badge [tone]="statusTone()">{{ event.status }}</ui-badge>
+          <ui-badge [tone]="statusTone()">{{ statusLabel() }}</ui-badge>
 
           <span class="ws__fact inline-flex items-center gap-2">
             <ui-icon class="text-text-subtle" [icon]="whenIcon" size="sm" />
@@ -83,5 +83,20 @@
   was happening on four of the eight before they had a common frame.
 -->
 <div class="ws__panel pt-8 max-sm:pt-5">
-  <router-outlet />
+  <!--
+    Frozen while myFiesta reviews it: what staff approve has to be what goes
+    on sale. Said once, above the switched-off form, rather than discovered
+    on save. The Overview tab has the button that takes it back.
+  -->
+  @if (lockedHere()) {
+    <p id="review-lock" class="mb-6 rounded-md border-l-[3px] border-l-primary bg-[var(--primary-soft)] p-4 text-sm text-text" role="status">
+      <strong>This event is being reviewed, so it cannot be changed.</strong>
+      myFiesta looks at every event before it goes on sale. To change something,
+      <a [routerLink]="['/events', eventId]">withdraw it from review</a> on the Overview tab, then send it again.
+    </p>
+  }
+
+  <fieldset class="contents" [disabled]="lockedHere()" [attr.aria-describedby]="lockedHere() ? 'review-lock' : null">
+    <router-outlet />
+  </fieldset>
 </div>
