@@ -8,6 +8,7 @@ use App\Models\OrganizationIdentityDocument;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\SensitiveDataAccess;
 use App\Models\User;
+use App\Services\Audit\StaffRoles;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -79,9 +80,10 @@ class SensitiveDataAccessResource extends Resource
                 TextColumn::make('user.name')
                     ->label('Who')
                     ->placeholder('Someone no longer on the account')
-                    ->description(fn (SensitiveDataAccess $record): ?string => $record->user?->platform_role !== null
-                        ? 'myFiesta staff · '.$record->user->platform_role->label()
-                        : ($record->user ? 'Organizer team' : null))
+                    // The role they held when they read it, not the one they hold now.
+                    ->description(fn (SensitiveDataAccess $record): ?string => $record->user === null
+                        ? null
+                        : (StaffRoles::shared()->describe($record->user, $record->occurred_at) ?? 'Organizer team'))
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereIn(
                         'sensitive_data_accesses.user_id',
                         User::query()->where('name', 'ilike', '%'.$search.'%')->orWhere('email', 'ilike', '%'.$search.'%')->select('id'),

@@ -67,7 +67,8 @@ class TicketsTable
             TextColumn::make('holder_name')
                 ->label('Holder')
                 ->searchable(['holder_name', 'owner_email'])
-                ->sortable()
+                // Tickets with no name last, whichever way.
+                ->sortable(query: fn (Builder $query, string $direction): Builder => Listing::nullsLast($query, 'holder_name', $direction))
                 ->placeholder('No name given')
                 ->description(fn (Ticket $record) => $record->owner_email ?: $record->order?->buyer_email)
                 ->wrap(),

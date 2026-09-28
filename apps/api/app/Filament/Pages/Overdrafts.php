@@ -50,6 +50,8 @@ class Overdrafts extends Page implements HasTable
 
     protected static ?int $navigationSort = 30;
 
+    private const BADGE_CACHE = 'overdrafts:outstanding-count';
+
     /** The people who pay organizers, and so the ones who advance money. */
     public static function canAccess(): bool
     {
@@ -65,9 +67,15 @@ class Overdrafts extends Page implements HasTable
      */
     public static function getNavigationBadge(): ?string
     {
-        $owing = (int) Cache::remember('overdrafts:outstanding-count', 60, fn () => app(OverdraftBook::class)->outstandingCount());
+        $owing = (int) Cache::remember(self::BADGE_CACHE, 60, fn () => app(OverdraftBook::class)->outstandingCount());
 
         return $owing > 0 ? (string) $owing : null;
+    }
+
+    /** After something in this panel changed what is owed: an advance paid, a repayment recorded. */
+    public static function forgetNavigationBadge(): void
+    {
+        Cache::forget(self::BADGE_CACHE);
     }
 
     public static function getNavigationBadgeColor(): ?string

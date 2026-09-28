@@ -25,7 +25,7 @@ class TicketController extends Controller
             ->where('tickets.owner_user_id', $request->user()->id)
             ->whereIn('tickets.status', ['valid', 'checked_in'])
             // The order too, for the receipt on tickets this account bought.
-            ->with(['event', 'ticketType', 'order'])
+            ->with(['event.venue', 'ticketType', 'order'])
             // Soonest first: the one you need next is the one you want on
             // screen when you open the app at a door.
             ->join('events', 'events.id', '=', 'tickets.event_id')
@@ -100,7 +100,7 @@ class TicketController extends Controller
 
         return response()->json([
             'message' => "Sent to {$recipient->email}.",
-            'ticket' => new TicketResource($ticket->fresh()->load(['event', 'ticketType'])),
+            'ticket' => new TicketResource($ticket->fresh()->load(['event.venue', 'ticketType'])),
         ]);
     }
 }

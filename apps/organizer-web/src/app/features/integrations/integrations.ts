@@ -30,6 +30,7 @@ const EVENT_LABELS: Record<WebhookEventName, { title: string; hint: string }> = 
   'order.paid': { title: 'An order is paid', hint: 'Online or at the door, with the buyer and what they bought.' },
   'order.refunded': { title: 'An order is refunded', hint: 'All of it or part, with the amount and how many tickets stopped working.' },
   'ticket.checked_in': { title: 'Somebody is checked in', hint: 'The name on the ticket and how many it let in.' },
+  'order.disputed': { title: 'A payment is disputed', hint: 'The buyer asked their bank for the money back, with the amount, the reason and when evidence is due.' },
 };
 
 /**
@@ -56,6 +57,15 @@ export class IntegrationsScreen {
   readonly apiBase = inject(API_BASE_URL);
 
   readonly labels = EVENT_LABELS;
+
+  /**
+   * What an event is called here, or its own name for one this screen has
+   * not been taught yet — the server can add an event before the console
+   * ships a label for it, and a list that throws on it shows nothing at all.
+   */
+  label(name: string): { title: string; hint: string } {
+    return (EVENT_LABELS as Record<string, { title: string; hint: string } | undefined>)[name] ?? { title: name, hint: '' };
+  }
 
   readonly data = signal<Integrations | null>(null);
   readonly loading = signal(true);

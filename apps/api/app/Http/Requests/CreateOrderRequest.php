@@ -36,6 +36,9 @@ class CreateOrderRequest extends QuoteRequest
             'embedded' => ['sometimes', 'boolean'],
             'attendees.*.ticket_type_id' => ['required', 'uuid'],
             'attendees.*.answers' => ['nullable', 'array', 'max:50'],
+            // The reference a 502 came back with, sent with the next press so
+            // the new order takes over that one's hold (CheckoutService).
+            'retry_of' => ['nullable', 'string', 'max:16'],
 
             /*
              * The box by the pay button: the terms, the privacy policy and the

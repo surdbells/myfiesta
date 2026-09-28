@@ -80,12 +80,38 @@ final class RichText
             return null;
         }
 
-        // Block boundaries become spaces before the tags go, or "Doors at 9pm</p><p>Dress code"
+        // Block by block, before the tags go, or "Doors at 9pm</p><p>Dress code"
         // reads as "Doors at 9pmDress code".
-        $spaced = preg_replace('#</?(p|br|li|h[1-6]|blockquote|div|ul|ol|tr)\b[^>]*>#i', ' ', $html) ?? $html;
+        $blocks = preg_split('#</?(?:p|br|li|h[1-6]|blockquote|div|ul|ol|tr)\b[^>]*>#i', $html) ?: [$html];
 
-        $text = html_entity_decode(strip_tags($spaced), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+        $sentences = [];
+
+        foreach ($blocks as $block) {
+            $words = html_entity_decode(strip_tags($block), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $words = trim(preg_replace('/\s+/u', ' ', $words) ?? $words);
+
+            if ($words !== '') {
+                $sentences[] = $words;
+            }
+        }
+
+        /*
+         * Each block ends its sentence before the next begins. A space alone
+         * ran them together wherever the organizer had not typed a full stop
+         * — which is every list: "Photo ID may be requested</li><li>Tickets
+         * are transferable" came out as one sentence in the link preview, the
+         * search snippet and the calendar entry. The last block ends the text
+         * as it was written.
+         */
+        $last = count($sentences) - 1;
+
+        foreach ($sentences as $i => $sentence) {
+            if ($i < $last && ! preg_match('/[.!?:;,…]["\'”’)]*$/u', $sentence)) {
+                $sentences[$i] = $sentence.'.';
+            }
+        }
+
+        $text = implode(' ', $sentences);
 
         return $text === '' ? null : $text;
     }

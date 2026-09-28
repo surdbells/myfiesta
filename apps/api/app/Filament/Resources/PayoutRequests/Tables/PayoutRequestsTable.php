@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\PayoutRequests\Tables;
 
+use App\Filament\Pages\Overdrafts as OverdraftsPage;
 use App\Filament\Support\Listing;
 use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
+use App\Services\Payouts\OwnOrganization;
 use App\Services\Payouts\PayoutRequestRefused;
 use App\Services\Payouts\PayoutRequests;
 use App\Services\Payouts\SettlementRefused;
@@ -23,6 +25,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use WeakMap;
 
@@ -64,7 +67,9 @@ class PayoutRequestsTable
                 Listing::money('amount', 'Asked for')
                     ->description(fn (PayoutRequest $record) => $record->note)
                     ->searchable(['note'])
-                    ->summarize(Listing::totalsPerCurrency('amount')),
+                    // Waiting and paid only: a request withdrawn or refused
+                    // was never money anybody was going to send.
+                    ->summarize(Listing::totalsPerCurrency('amount', 'Waiting or paid', only: fn (QueryBuilder $query) => $query->whereIn('status', ['pending', 'paid']))),
 
                 TextColumn::make('owed_now')
                     ->label('Owed now')
@@ -191,6 +196,10 @@ class PayoutRequestsTable
             // Not while held: the organization is suspended and its payouts
             // are frozen. PayoutRequests refuses it as well.
             ->visible(fn (PayoutRequest $record) => $record->isPending() && $record->held_at === null)
+            // Not by somebody on the organization's own team: said on the
+            // button rather than after the form. PayoutRequests refuses too.
+            ->disabled(fn (PayoutRequest $record) => OwnOrganization::includesCurrentUser($record->organization_id))
+            ->tooltip(fn (PayoutRequest $record) => OwnOrganization::includesCurrentUser($record->organization_id) ? OwnOrganization::DECIDE_REQUEST : null)
             ->modalHeading(fn (PayoutRequest $record) => 'Pay '.($record->organization->name ?? 'this organization').'’s request for '.Listing::format((int) $record->amount, $record->currency).'?')
             ->modalDescription('Send the money first, then record it here. This writes the settlement and tells the organizer it was sent.')
             ->modalSubmitActionLabel('Record payment')
@@ -374,6 +383,10 @@ class PayoutRequestsTable
 
         $advance = $paid->overdraft();
 
+        if ($advance) {
+            OverdraftsPage::forgetNavigationBadge();
+        }
+
         Notification::make()
             ->title('Payment recorded')
             ->body($advance
@@ -390,6 +403,8 @@ class PayoutRequestsTable
             ->icon('heroicon-o-x-circle')
             ->color('danger')
             ->visible(fn (PayoutRequest $record) => $record->isPending())
+            ->disabled(fn (PayoutRequest $record) => OwnOrganization::includesCurrentUser($record->organization_id))
+            ->tooltip(fn (PayoutRequest $record) => OwnOrganization::includesCurrentUser($record->organization_id) ? OwnOrganization::DECIDE_REQUEST : null)
             ->modalHeading(fn (PayoutRequest $record) => 'Reject '.($record->organization->name ?? 'this organization').'’s request for '.Listing::format((int) $record->amount, $record->currency).'?')
             ->modalDescription('Nothing is paid. The organizer is emailed the reason below, and can ask again.')
             ->modalSubmitActionLabel('Reject the request')

@@ -3,6 +3,7 @@
 namespace App\Filament\Support;
 
 use App\Support\Money;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
@@ -96,24 +97,64 @@ final class Listing
         return TextColumn::make($name)
             ->label($label)
             ->alignEnd()
-            ->sortable()
+            ->sortable(query: fn (Builder $query, string $direction): Builder => self::sortByAmount($query, $name, $currencyColumn, $direction))
             ->formatStateUsing(fn ($state, $record) => $state === null
                 ? '—'
                 : self::format((int) $state, (string) data_get($record, $currencyColumn)));
     }
 
     /**
+     * Amounts in order, the only way they can be: one currency at a time.
+     *
+     * 10,000 naira is not more than 72 dollars, so each currency is ranked
+     * on its own, one after the other. And an amount that is not there — an
+     * event with no sales — comes last either way: Postgres would otherwise
+     * put it first when sorting down, above every event that sold anything.
+     *
+     * The amount is ordered by its bare name, as Filament does: it is often a
+     * total counted in the query (withSum), and Postgres accepts such a name
+     * in ORDER BY only on its own, with nothing around it but the direction.
+     */
+    public static function sortByAmount(Builder $query, string $column, string $currencyColumn, string $direction): Builder
+    {
+        $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+
+        return $query
+            ->orderBy($query->getModel()->qualifyColumn($currencyColumn))
+            ->orderByRaw($query->getQuery()->getGrammar()->wrap($column).' '.$direction.' nulls last');
+    }
+
+    /**
+     * A text column sorted with the rows that have none at the end, both ways.
+     */
+    public static function nullsLast(Builder $query, string $column, string $direction): Builder
+    {
+        $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+
+        return $query->orderByRaw($query->getQuery()->getGrammar()->wrap($query->getModel()->qualifyColumn($column)).' '.$direction.' nulls last');
+    }
+
+    /**
      * The total of a money column, one figure per currency.
      *
      * Over everything the filters currently match, not just the page on
-     * screen. Filter to one currency to sort by amount meaningfully; the
-     * totals are split whether or not you do.
+     * screen, and split per currency whatever the filters say.
+     *
+     * $only narrows what is counted, for a list whose rows are not all money
+     * — a withdrawn request was never going to be paid — and the label then
+     * says which rows the figure is.
+     *
+     * @param  (Closure(QueryBuilder): mixed)|null  $only
      */
-    public static function totalsPerCurrency(string $column, string $label = 'Total', string $currencyColumn = 'currency'): Summarizer
+    public static function totalsPerCurrency(string $column, string $label = 'Total', string $currencyColumn = 'currency', ?Closure $only = null): Summarizer
     {
         return Summarizer::make()
             ->label($label)
-            ->using(function (QueryBuilder $query) use ($column, $currencyColumn): string {
+            ->using(function (QueryBuilder $query) use ($column, $currencyColumn, $only): string {
+                if ($only !== null) {
+                    $only($query);
+                }
+
                 $totals = $query
                     ->selectRaw("{$currencyColumn} as summary_currency, coalesce(sum({$column}), 0) as summary_total")
                     ->groupBy($currencyColumn)

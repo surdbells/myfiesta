@@ -283,4 +283,37 @@ describe('the event screen and the review', () => {
     expect(labels).toContain('Submit for review');
     expect(labels).not.toContain('Put it on sale');
   });
+
+  /*
+   * While the organization is suspended. A night the suspension took off
+   * sale, with tickets sold, read "Draft", sat under "Not on sale yet", and
+   * offered "Put back on sale" — which the API refuses with a 403.
+   */
+  it('says a night the suspension took off sale is off sale, and offers nothing that would be refused', async () => {
+    shown = night({ off_sale_by_suspension: true, tickets_issued: 1, review: review({ on_submit: null, suspended: true }) });
+    const fixture = await open();
+
+    expect(text(fixture)).toContain('Off sale');
+    expect(text(fixture)).toContain('Off sale while you are suspended');
+    expect(text(fixture)).toContain('goes back on sale by itself when the suspension is lifted');
+    expect(text(fixture)).not.toContain('Draft');
+    expect(text(fixture)).not.toContain('Put back on sale');
+    expect(text(fixture)).not.toContain('Submit for review');
+
+    press(fixture, 'Event actions');
+    await settle(fixture);
+
+    const labels = menus[0].actions.map((action) => action.label);
+    expect(labels).not.toContain('Put back on sale');
+    expect(labels).not.toContain('Submit for review');
+  });
+
+  it('keeps their own draft a draft while suspended, with nothing to send it with', async () => {
+    shown = night({ review: review({ on_submit: null, suspended: true }) });
+    const fixture = await open();
+
+    expect(text(fixture)).toContain('Draft');
+    expect(text(fixture)).toContain('Nothing can be sent for review while this organization is suspended.');
+    expect(text(fixture)).not.toContain('Submit for review');
+  });
 });

@@ -52,6 +52,12 @@ export interface NewOrder extends Basket {
    * without it and keeps which version was agreed to, and when.
    */
   accept_terms: boolean;
+  /**
+   * The order the last press placed when its payment page could not be
+   * opened. The new order takes over its hold instead of holding the same
+   * places again.
+   */
+  retry_of?: string;
 }
 
 /** The windows the listing understands, each in the event's own zone. */

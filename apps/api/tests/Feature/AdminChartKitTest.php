@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Dashboard;
 use App\Services\Analytics\Charts\Format;
 use App\Services\Analytics\Charts\Scale;
 use DOMDocument;
@@ -70,6 +71,35 @@ class AdminChartKitTest extends TestCase
         $this->assertStringContainsString('class="mf-legend"', $html);
         $this->assertStringContainsString('<summary>Data table</summary>', $html);
         $this->assertSame(4, substr_count($html, '<th scope="row">'));
+    }
+
+    /**
+     * Charts that fit their cards. A chart is never narrower than 28rem, and
+     * two cards a row at a laptop's width were narrower than that: every
+     * half-width chart scrolled sideways, its figures cut off at the edge and
+     * a twelve-month series opened on its empty early months.
+     */
+    public function test_charts_are_only_paired_where_they_fit_and_a_series_over_time_opens_at_its_latest(): void
+    {
+        $styles = Blade::render('<x-charts.styles />');
+
+        // Paired by the room the grid has, not by the window, which also
+        // holds the sidebar.
+        $this->assertStringContainsString('.mf-cols { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 32rem), 1fr)); }', $styles);
+        $this->assertStringNotContainsString('@media (min-width: 64rem) { .mf-cols', $styles);
+        $this->assertSame(['md' => 1, '2xl' => 2], (new Dashboard)->getColumns());
+
+        // Over time, scrolled only when it must be, and then from its end.
+        $this->assertStringContainsString('.mf-scroll-latest { display: flex; flex-direction: row-reverse; }', $styles);
+
+        foreach (['line', 'bar'] as $chart) {
+            $html = Blade::render("<x-charts.{$chart} title=\"Sales\" :labels=\"['Jan', 'Feb']\" :series=\"[['name' => 'Gross', 'values' => [0, 5]]]\" />");
+            $this->assertStringContainsString('class="mf-scroll mf-scroll-latest"', $html, $chart);
+        }
+
+        // A ranking reads from its labels, so it keeps its start.
+        $ranking = Blade::render('<x-charts.hbar title="Top" :items="[[\'label\' => \'A\', \'value\' => 1]]" />');
+        $this->assertStringContainsString('class="mf-scroll"', $ranking);
     }
 
     public function test_an_empty_series_says_so_instead_of_drawing_a_flat_line(): void

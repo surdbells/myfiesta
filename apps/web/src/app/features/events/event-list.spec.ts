@@ -6,7 +6,7 @@ import { Meta } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { API_BASE_URL } from '../../core/api-base';
-import { EventList } from './event-list';
+import { EventList, byPrice } from './event-list';
 
 const API = 'https://api.myfiesta.test';
 
@@ -184,5 +184,60 @@ describe('EventList', () => {
     harness.detectChanges();
 
     expect(response.status).toBe(503);
+  });
+});
+
+/**
+ * Sorting by price across two currencies.
+ *
+ * The plain comparison of minor units put every Canadian night before every
+ * Nigerian one — ₦5,000 is 500000 to $89's 8900 — so "low to high" read
+ * $10 … $89, then ₦5,000. Each currency is now sorted on its own.
+ */
+describe('byPrice', () => {
+  const night = (slug: string, from_price: { amount: number; currency: 'CAD' | 'NGN' } | null) =>
+    ({ ...card, slug, from_price }) as unknown as Parameters<typeof byPrice>[0][number];
+
+  const listing = [
+    night('toronto-89', { amount: 8900, currency: 'CAD' }),
+    night('lagos-5000', { amount: 500000, currency: 'NGN' }),
+    night('toronto-free', { amount: 0, currency: 'CAD' }),
+    night('toronto-10', { amount: 1000, currency: 'CAD' }),
+    night('soon', null),
+    night('lagos-2000', { amount: 200000, currency: 'NGN' }),
+    night('lagos-free', { amount: 0, currency: 'NGN' }),
+  ];
+
+  const slugs = (direction: 'asc' | 'desc') => byPrice(listing, direction).map((e) => e.slug);
+
+  it('puts free first, then each currency cheapest first, and nights with no price last', () => {
+    expect(slugs('asc')).toEqual([
+      'toronto-free',
+      'lagos-free',
+      'toronto-10',
+      'toronto-89',
+      'lagos-2000',
+      'lagos-5000',
+      'soon',
+    ]);
+  });
+
+  it('turns each currency round for dearest first, with free after them', () => {
+    expect(slugs('desc')).toEqual([
+      'toronto-89',
+      'toronto-10',
+      'lagos-5000',
+      'lagos-2000',
+      'toronto-free',
+      'lagos-free',
+      'soon',
+    ]);
+  });
+
+  it('never compares naira with dollars', () => {
+    const order = slugs('asc');
+
+    // Every paid Canadian night together, and every paid Nigerian one.
+    expect(order.indexOf('toronto-89') + 1).toBe(order.indexOf('lagos-2000'));
   });
 });

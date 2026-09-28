@@ -18,6 +18,39 @@ type PriceChoice = 'all' | 'free' | 'paid';
 type SortChoice = 'soon' | 'price-asc' | 'price-desc';
 type AvailabilityChoice = 'any' | 'on_sale' | 'almost_sold_out' | 'sold_out';
 
+/**
+ * Cheapest first, or dearest first — within each currency.
+ *
+ * Minor units in two currencies are not one scale: ₦5,000 is 500000 and $89
+ * is 8900, so the plain comparison this replaced put every Canadian night
+ * before every Nigerian one and read ₦5,000 as dearer than $89. With no rate
+ * to convert at, each currency is sorted on its own, in the order its first
+ * night appears in the listing. Free is free in any currency, and leads (or,
+ * dearest first, closes) the list; a night with no price yet comes last
+ * either way. Ties keep the listing's own order.
+ */
+export function byPrice(events: EventSummary[], direction: 'asc' | 'desc'): EventSummary[] {
+  const currencies = [...new Set(events.filter((e) => e.from_price).map((e) => e.from_price!.currency))];
+
+  // Which run of the list a night belongs to: free, then each currency in
+  // turn (the other way round, dearest first), then no price at all.
+  const rank = (e: EventSummary): number => {
+    if (!e.from_price) return currencies.length + 1;
+    if (e.from_price.amount === 0) return direction === 'asc' ? 0 : currencies.length;
+
+    return currencies.indexOf(e.from_price.currency) + (direction === 'asc' ? 1 : 0);
+  };
+
+  return [...events].sort((a, b) => {
+    const order = rank(a) - rank(b);
+    if (order !== 0 || !a.from_price || !b.from_price) return order;
+
+    const difference = a.from_price.amount - b.from_price.amount;
+
+    return direction === 'asc' ? difference : -difference;
+  });
+}
+
 /** Which page this is: the whole listing, or one category's or one city's. */
 type Collection = { kind: 'category'; place: CategoryPlace } | { kind: 'city'; place: CityPlace } | null;
 
@@ -144,8 +177,7 @@ export class EventList {
 
     const sort = this.sort();
     if (sort !== 'soon') {
-      const amount = (e: EventSummary) => e.from_price?.amount ?? 0;
-      list = [...list].sort((a, b) => (sort === 'price-asc' ? amount(a) - amount(b) : amount(b) - amount(a)));
+      list = byPrice(list, sort === 'price-asc' ? 'asc' : 'desc');
     }
 
     return list;

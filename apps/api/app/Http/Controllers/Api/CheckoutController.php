@@ -122,6 +122,9 @@ class CheckoutController extends Controller
                 // Kept to answer a disputed payment; see CheckoutService.
                 purchaseIp: $request->ip(),
                 purchaseUserAgent: $request->userAgent(),
+                // The attempt this one replaces, when the last press could not
+                // open a payment page (below). Its hold becomes this order's.
+                retryOf: $request->input('retry_of'),
             );
         } catch (CheckoutException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
@@ -184,7 +187,10 @@ class CheckoutController extends Controller
 
             // The order and its hold stay. Their stock is still theirs for the
             // hold window, so retrying costs them nothing and they are not
-            // pushed to the back of a queue for our failure.
+            // pushed to the back of a queue for our failure. The reference
+            // comes back with the retry as retry_of, and the order placed then
+            // takes this one's hold over rather than holding the same places a
+            // second time (CheckoutService::replace).
             return response()->json([
                 'message' => 'We could not reach the payment provider. '
                     .'Nothing has been charged — please try again in a moment.',

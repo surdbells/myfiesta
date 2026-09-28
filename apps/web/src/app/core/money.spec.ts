@@ -1,4 +1,4 @@
-import { formatFrom, formatMoney } from './money';
+import { formatFrom, formatMoney, formatPrice } from './money';
 
 /**
  * Money arrives from the API as minor units and a currency, never as a
@@ -47,5 +47,17 @@ describe('formatFrom', () => {
   it('shows the lowest price otherwise', () => {
     expect(formatFrom({ amount: 2000, currency: 'CAD' }, 'CAD')).toBe('$20.00');
     expect(formatFrom({ amount: 500000, currency: 'NGN' }, 'NGN')).toBe('₦5,000');
+  });
+});
+
+describe('formatPrice', () => {
+  it('calls a price of nothing free, in either currency', () => {
+    expect(formatPrice({ amount: 0, currency: 'CAD' })).toBe('Free');
+    expect(formatPrice({ amount: 0, currency: 'NGN' })).toBe('Free');
+  });
+
+  it('writes any other price the way formatMoney does', () => {
+    expect(formatPrice({ amount: 2500, currency: 'CAD' })).toBe('$25.00');
+    expect(formatPrice(null)).toBe('—');
   });
 });

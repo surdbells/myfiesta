@@ -125,6 +125,25 @@ class TicketsScreenTest extends TestCase
             ->assertSuccessful();
     }
 
+    /** A ticket with no name on it sorts last, both ways: Postgres put it first going down. */
+    public function test_tickets_with_no_holder_name_sort_last(): void
+    {
+        $this->actAs($this->staff(PlatformRole::Support));
+        $event = $this->event($this->organization());
+        $type = $this->ticketType($event);
+
+        $ada = $this->paidOrder($event, $type, 1)->tickets()->sole();
+        $zara = $this->paidOrder($event, $type, 1, ['buyer_name' => 'Zara Bello'])->tickets()->sole();
+        $nameless = $this->paidOrder($event, $type, 1)->tickets()->sole();
+        $nameless->update(['holder_name' => null]);
+
+        Livewire::test(ListTickets::class)
+            ->sortTable('holder_name', 'desc')
+            ->assertCanSeeTableRecords([$zara, $ada, $nameless], inOrder: true)
+            ->sortTable('holder_name', 'asc')
+            ->assertCanSeeTableRecords([$ada, $zara, $nameless], inOrder: true);
+    }
+
     public function test_the_ticket_page_tells_its_story_without_the_code(): void
     {
         $this->actAs($this->staff(PlatformRole::Support));

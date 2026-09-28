@@ -47,6 +47,10 @@ final class ReviewActions
             ->color('success')
             ->authorize(fn () => EventReviews::currentMayDecide())
             ->visible(fn (Event $record) => $record->status === 'in_review' && $record->deleted_at === null)
+            // Somebody who sent it for review themselves is told so on the
+            // button, not after confirming. EventReviews refuses it as well.
+            ->disabled(fn (Event $record) => self::ownSubmission($record))
+            ->tooltip(fn (Event $record) => self::ownSubmission($record) ? EventReviews::OWN_SUBMISSION : null)
             ->requiresConfirmation()
             ->modalIcon(Heroicon::OutlinedCheckCircle)
             ->modalHeading(fn (Event $record) => 'Approve '.$record->title.'?')
@@ -61,6 +65,13 @@ final class ReviewActions
                     ? 'It is on sale, and the organizer has been emailed.'
                     : 'The organization is suspended, so it goes on sale when that is lifted. The organizer has been emailed.',
             ));
+    }
+
+    private static function ownSubmission(Event $record): bool
+    {
+        $staff = auth()->user();
+
+        return app(EventReviews::class)->isOwnSubmission($record, $staff instanceof User ? $staff : null);
     }
 
     /** @param  Closure(): ?string  $seen  the fingerprint of the event as the page showed it */

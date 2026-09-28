@@ -68,13 +68,19 @@
           (valueChange)="changeRole(member, $event)"
         />
 
-        <button
-          class="cursor-pointer justify-self-end border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger max-[720px]:justify-self-start"
-          type="button"
-          (click)="removing.set(member)"
-        >
-          @if (member.is_you) { Leave } @else { Remove }
-        </button>
+        @if (soleOwner(member)) {
+          <p class="m-0 max-w-[12rem] justify-self-end text-right text-xs text-text-muted max-[720px]:max-w-none max-[720px]:justify-self-start max-[720px]:text-left">
+            The only owner. Make somebody else an owner before {{ member.is_you ? 'you leave' : 'removing them' }}.
+          </p>
+        } @else {
+          <button
+            class="cursor-pointer justify-self-end border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-danger max-[720px]:justify-self-start"
+            type="button"
+            (click)="removing.set(member)"
+          >
+            @if (member.is_you) { Leave } @else { Remove }
+          </button>
+        }
       </li>
     }
   </ul>

@@ -36,7 +36,9 @@ final class EventReviewSheet
 {
     public static function configure(Schema $schema): Schema
     {
-        return $schema->components([
+        // Two cards a row only where a card has room for what is in it: at a
+        // laptop's width the title ran a word a line and the zone out of its card.
+        return $schema->columns(['default' => 1, 'lg' => 1, 'xl' => 2])->components([
             Section::make('Where it stands')
                 ->columns(['default' => 2, 'md' => 3])
                 ->schema([
@@ -97,7 +99,7 @@ final class EventReviewSheet
 
             Section::make('The listing')
                 ->description('As the public page shows it.')
-                ->columns(['default' => 1, 'md' => 3])
+                ->columns(['default' => 1, 'sm' => 2, 'lg' => 3, 'xl' => 2, '2xl' => 3])
                 ->schema([
                     ImageEntry::make('review_poster')
                         ->label('Poster')

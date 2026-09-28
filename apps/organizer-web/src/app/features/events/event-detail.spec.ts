@@ -228,6 +228,14 @@ describe('EventDetail: the review', () => {
     expect(button(fixture, 'Take off sale')).toBeTruthy();
   });
 
+  it('says when it was sent for review once, with the zone, and no double full stop', async () => {
+    const fixture = await render(event({ status: 'in_review', review: review({ submitted_at: '2026-09-28T10:58:00Z', on_submit: null }) }));
+
+    // 6:58 in the morning in Toronto, said as Toronto says it.
+    expect(text(fixture)).toMatch(/Sent .*?6:58\sa\.m\.\s(EDT|GMT-4)\. Somebody at myFiesta/);
+    expect(text(fixture)).not.toContain('..');
+  });
+
   it('takes it back from review after asking, so it can be changed', async () => {
     const fixture = await render(event({ status: 'in_review', review: review({ submitted_at: '2026-09-28T12:00:00Z', on_submit: null }) }));
 

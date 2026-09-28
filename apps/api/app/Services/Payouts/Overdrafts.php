@@ -243,6 +243,12 @@ class Overdrafts
             throw RepaymentRefused::because('Only platform administrators and finance can record a repayment.');
         }
 
+        // A repayment raises the balance the organization can next ask to be
+        // paid from, so it is recorded by somebody outside it.
+        if (OwnOrganization::includes($by, $organization)) {
+            throw RepaymentRefused::because(OwnOrganization::RECORD_REPAYMENT);
+        }
+
         if ($amount->amount <= 0) {
             throw RepaymentRefused::because('A repayment has to be more than zero.');
         }

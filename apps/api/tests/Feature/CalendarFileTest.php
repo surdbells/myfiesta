@@ -131,6 +131,37 @@ class CalendarFileTest extends TestCase
                 && str_contains($link, 'dates=20261004T020000Z%2F20261004T070000Z'));
     }
 
+    /**
+     * The order page, after buying, offered a Google link with no end and no
+     * place: it loaded the event with the five columns it shows, so the link
+     * was built from an event with no ends_at (three hours by default) and no
+     * venue. It has to be the event page's link, to the character.
+     */
+    public function test_the_order_page_offers_the_same_calendar_link_as_the_event_page(): void
+    {
+        Order::create([
+            'organization_id' => $this->event->organization_id,
+            'event_id' => $this->event->id,
+            'reference' => 'CALNDR23',
+            'buyer_email' => 'ada@example.com',
+            'buyer_name' => 'Ada',
+            'currency' => 'CAD',
+            'subtotal_amount' => 0,
+            'total_amount' => 0,
+            'net_revenue_amount' => 0,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $fromEvent = $this->getJson('/api/events/afro-fest')->assertOk()->json('data.calendar.google_url');
+
+        $this->getJson('/api/orders/CALNDR23')
+            ->assertOk()
+            ->assertJsonPath('event.calendar.google_url', $fromEvent)
+            ->assertJsonPath('event.calendar.google_url', fn (string $link) => str_contains($link, 'dates=20261004T020000Z%2F20261004T070000Z')
+                && str_contains($link, 'location=The+Opera+House'));
+    }
+
     public function test_the_tickets_email_carries_the_calendar_file(): void
     {
         $order = new Order(['reference' => 'ABC123', 'buyer_name' => 'Ada', 'access_token' => 'token']);

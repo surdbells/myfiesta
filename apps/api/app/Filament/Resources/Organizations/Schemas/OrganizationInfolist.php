@@ -13,6 +13,7 @@ use App\Models\OrganizationPayoutDetail;
 use App\Models\PayoutRequest;
 use App\Models\Repayment;
 use App\Models\User;
+use App\Services\Discovery\EventWindows;
 use App\Services\Payouts\OverdraftPosition;
 use App\Services\Payouts\Overdrafts;
 use App\Support\Money;
@@ -38,12 +39,15 @@ class OrganizationInfolist
 {
     public static function configure(Schema $schema): Schema
     {
-        return $schema->components([
+        // Two cards a row only where a card has room for its figures: at a
+        // laptop's width they were a word a line ("Owes myFie sta $21.0 5").
+        return $schema->columns(['default' => 1, 'lg' => 1, 'xl' => 2])->components([
             Section::make('Suspended')
                 ->icon('heroicon-o-no-symbol')
                 ->iconColor('danger')
                 ->description('Nothing is on sale and payouts are frozen. Tickets already sold still work at the door, and refunds can still be made.')
                 ->visible(fn (Organization $record) => $record->isSuspended())
+                ->columnSpanFull()
                 ->columns(['default' => 1, 'md' => 3])
                 ->schema([
                     TextEntry::make('suspension_reason')
@@ -62,7 +66,7 @@ class OrganizationInfolist
                             ->where('organization_id', $record->id)
                             ->whereNotNull('unpublished_by_suspension_at')
                             ->count()))
-                        ->helperText('Back on sale when it is lifted, unless they have happened by then.'),
+                        ->helperText('Back on sale when it is lifted, unless they have started by then.'),
                     TextEntry::make('held_requests')
                         ->label('Payout requests held')
                         ->state(fn (Organization $record) => number_format(PayoutRequest::query()
@@ -73,6 +77,7 @@ class OrganizationInfolist
                 ]),
 
             Section::make('Key numbers')
+                ->columnSpanFull()
                 ->columns(['default' => 2, 'md' => 4])
                 ->schema([
                     TextEntry::make('members_total')
@@ -88,7 +93,8 @@ class OrganizationInfolist
                         ->weight('semibold'),
                     TextEntry::make('on_sale_total')
                         ->label('On sale now')
-                        ->state(fn (Organization $record) => number_format($record->events()->where('status', 'published')->count()))
+                        // Not the nights already over: they stay published, and sell nothing.
+                        ->state(fn (Organization $record) => number_format(EventWindows::onSale($record->events()->getQuery(), now())->count()))
                         ->size('lg')
                         ->weight('semibold'),
                     TextEntry::make('owed')
@@ -100,7 +106,7 @@ class OrganizationInfolist
                 ]),
 
             Section::make('Organization')
-                ->columns(['default' => 1, 'md' => 3])
+                ->columns(['default' => 1, 'sm' => 2, '2xl' => 3])
                 ->collapsible()
                 ->schema([
                     TextEntry::make('name')->weight('medium'),

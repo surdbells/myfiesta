@@ -19,7 +19,10 @@ export const appConfig: ApplicationConfig = {
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
     ),
     // withFetch so requests made during server rendering are transferred to the
-    // client rather than being repeated the moment the page hydrates.
+    // client rather than being repeated the moment the page hydrates. Only an
+    // answer that may be kept is carried over: Angular drops one marked
+    // private, no-cache or no-store, which is why the API marks its public
+    // reads public (apps/api/routes/api.php).
     provideHttpClient(withFetch()),
     provideClientHydration(withEventReplay()),
   ],

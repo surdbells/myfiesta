@@ -11,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Support\Icons\Heroicon;
+use Livewire\Component;
 
 /**
  * Suspending an organization, and lifting it.
@@ -32,10 +33,10 @@ final class OrganizationActions
             ->visible(fn (Organization $record) => ! $record->isSuspended() && ! $record->trashed())
             ->modalIcon(Heroicon::OutlinedNoSymbol)
             ->modalHeading(fn (Organization $record) => 'Suspend '.$record->name.'?')
-            ->modalDescription('Every event it has on sale comes off sale, nothing can be sold — online, at the door or through resale — and nothing can be published. '
+            ->modalDescription('Every event it has on sale comes off sale (nights that are already over are left as they are), nothing can be sold — online, at the door or through resale — and nothing can be published. '
                 .'Payouts freeze: new requests are refused and waiting ones are held, not rejected. '
                 .'Tickets already sold still work at the door, and refunds can still be made. '
-                .'The owners are emailed. Lifting the suspension puts back on sale exactly the events it took off, if they have not happened yet.')
+                .'The owners are emailed. Lifting the suspension puts back on sale exactly the events it took off, if they have not started by then.')
             ->modalSubmitActionLabel('Suspend')
             ->schema([
                 Textarea::make('reason')
@@ -50,26 +51,33 @@ final class OrganizationActions
                     ->default(false)
                     ->helperText('In the console’s banner and in the email to the owners. Leave off when the reason is for us alone — the owners are still told they are suspended and how to reach support.'),
             ])
-            ->action(fn (Organization $record, array $data, Action $action) => Outcome::run(
-                $action,
-                'Organization suspended',
-                function (User $staff) use ($record, $data) {
-                    $done = app(Suspension::class)->suspend(
-                        $record,
-                        $staff,
-                        (string) $data['reason'],
-                        (bool) ($data['share_reason'] ?? false),
-                    );
+            ->action(function (Organization $record, array $data, Action $action, Component $livewire) {
+                Outcome::run(
+                    $action,
+                    'Organization suspended',
+                    function (User $staff) use ($record, $data) {
+                        $done = app(Suspension::class)->suspend(
+                            $record,
+                            $staff,
+                            (string) $data['reason'],
+                            (bool) ($data['share_reason'] ?? false),
+                        );
 
-                    return self::summary([
-                        self::count(count($done['events']), 'event', 'events').' taken off sale',
-                        self::count(count($done['held']), 'payout request', 'payout requests').' held',
-                        $done['told'] === 0
-                            ? 'no owner could be emailed — tell them another way'
-                            : self::count($done['told'], 'owner', 'owners').' emailed',
-                    ]);
-                },
-            ));
+                        return self::summary([
+                            self::count(count($done['events']), 'event', 'events').' taken off sale',
+                            self::count(count($done['held']), 'payout request', 'payout requests').' held',
+                            $done['told'] === 0
+                                ? 'no owner could be emailed — tell them another way'
+                                : self::count($done['told'], 'owner', 'owners').' emailed',
+                        ]);
+                    },
+                );
+
+                // The count of suspended organizations beside Organizations in
+                // the navigation, which is drawn outside this page. Here rather
+                // than in after(), which the organization's page sets itself.
+                $livewire->dispatch('refresh-sidebar');
+            });
     }
 
     public static function unsuspend(): Action
@@ -82,7 +90,7 @@ final class OrganizationActions
             ->visible(fn (Organization $record) => $record->isSuspended() && ! $record->trashed())
             ->modalHeading(fn (Organization $record) => 'Lift the suspension on '.$record->name.'?')
             ->modalDescription('Sales and publishing are allowed again. The events the suspension took off sale go back on sale unless they have started, or were cancelled, deleted or taken down since; '
-                .'those stay drafts. Held payout requests go back to waiting. The owners are emailed.')
+                .'those stay drafts, except that a night which is over by now goes back among their past events. Held payout requests go back to waiting. The owners are emailed.')
             ->modalSubmitActionLabel('Lift suspension')
             ->schema([
                 Textarea::make('note')
@@ -91,24 +99,29 @@ final class OrganizationActions
                     ->rows(2)
                     ->helperText('For the audit trail: what changed, or who decided.'),
             ])
-            ->action(fn (Organization $record, array $data, Action $action) => Outcome::run(
-                $action,
-                'Suspension lifted',
-                function (User $staff) use ($record, $data) {
-                    $done = app(Suspension::class)->unsuspend($record, $staff, $data['note'] ?? null);
+            ->action(function (Organization $record, array $data, Action $action, Component $livewire) {
+                Outcome::run(
+                    $action,
+                    'Suspension lifted',
+                    function (User $staff) use ($record, $data) {
+                        $done = app(Suspension::class)->unsuspend($record, $staff, $data['note'] ?? null);
 
-                    if (! $done['lifted']) {
-                        return 'It was not suspended.';
-                    }
+                        if (! $done['lifted']) {
+                            return 'It was not suspended.';
+                        }
 
-                    return self::summary([
-                        self::count(count($done['republished']), 'event', 'events').' back on sale',
-                        count($done['left']) > 0 ? self::count(count($done['left']), 'event', 'events').' left as drafts' : null,
-                        self::count(count($done['released']), 'payout request', 'payout requests').' released',
-                        self::count($done['told'], 'owner', 'owners').' emailed',
-                    ]);
-                },
-            ));
+                        return self::summary([
+                            self::count(count($done['republished']), 'event', 'events').' back on sale',
+                            count($done['finished']) > 0 ? self::count(count($done['finished']), 'finished night', 'finished nights').' back among their past events' : null,
+                            count($done['left']) > 0 ? self::count(count($done['left']), 'event', 'events').' left as drafts' : null,
+                            self::count(count($done['released']), 'payout request', 'payout requests').' released',
+                            self::count($done['told'], 'owner', 'owners').' emailed',
+                        ]);
+                    },
+                );
+
+                $livewire->dispatch('refresh-sidebar');
+            });
     }
 
     /** @param  list<string|null>  $parts */

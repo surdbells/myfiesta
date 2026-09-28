@@ -2,11 +2,13 @@
 
 namespace App\Filament\Actions;
 
+use App\Filament\Pages\Overdrafts as OverdraftsPage;
 use App\Filament\Support\Listing;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\Payouts\OverdraftPosition;
 use App\Services\Payouts\Overdrafts;
+use App\Services\Payouts\OwnOrganization;
 use App\Services\Payouts\RepaymentRefused;
 use App\Support\Money;
 use Filament\Actions\Action;
@@ -17,6 +19,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
+use Livewire\Component;
 
 /**
  * Record money an organization paid back to myFiesta outside the platform.
@@ -47,6 +50,10 @@ class RecordRepaymentAction extends Action
             ->color('gray')
             ->visible(fn ($record): bool => (auth()->user()?->platform_role?->canSettle() ?? false)
                 && self::owing($record) !== [])
+            // Not by somebody on the organization's own team: a repayment
+            // raises what it can next ask for. Overdrafts refuses it too.
+            ->disabled(fn ($record): bool => OwnOrganization::includesCurrentUser(self::organizationOf($record)))
+            ->tooltip(fn ($record): ?string => OwnOrganization::includesCurrentUser(self::organizationOf($record)) ? OwnOrganization::RECORD_REPAYMENT : null)
             ->modalIcon('heroicon-o-arrow-uturn-left')
             ->modalHeading(fn ($record): string => 'Record a repayment from '.(self::organizationOf($record)->name ?? 'this organization'))
             ->modalDescription('For money the organization paid back to myFiesta outside the platform, such as a bank transfer or an e-Transfer to us. '
@@ -130,7 +137,7 @@ class RecordRepaymentAction extends Action
                     ->validationMessages(['accepted' => 'Record it once the money has arrived.']),
             ])
             ->modalSubmitActionLabel('Record repayment')
-            ->action(function ($record, array $data, Action $action): void {
+            ->action(function ($record, array $data, Action $action, Component $livewire): void {
                 $organization = self::organizationOf($record);
                 $staff = auth()->user();
 
@@ -151,6 +158,16 @@ class RecordRepaymentAction extends Action
                 }
 
                 $left = app(Overdrafts::class)->position($organization, $currency);
+
+                // The row it was pressed on, and the count beside Overdrafts in
+                // the navigation, as they are now rather than as they were
+                // read before the repayment.
+                if (method_exists($livewire, 'flushCachedTableRecords')) {
+                    $livewire->flushCachedTableRecords();
+                }
+
+                OverdraftsPage::forgetNavigationBadge();
+                $livewire->dispatch('refresh-sidebar');
 
                 Notification::make()
                     ->title('Repayment recorded')

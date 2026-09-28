@@ -184,30 +184,64 @@
           </div>
         }
 
-        <h2 class="mt-10 border-b border-border pb-3 text-xl">Payment</h2>
-
         <!--
-          The one deliberate departure from the reference: no card fields.
-          Cards never touch this origin — the purchase finishes on the
-          processor's own page, which is the strongest security claim a
-          ticketing site can make and the only honest one.
+          Only when there is something to pay. A free order goes nowhere near
+          a processor, and a $0 checkout that talked about paying on Stripe's
+          page was describing a step that does not happen.
         -->
-        <div class="mt-6 flex items-start gap-4 rounded-lg bg-surface-sunken p-5">
-          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-lg" aria-hidden="true">🔒</span>
-          <p class="text-sm leading-[1.6] text-text-muted">
-            <strong class="text-text">You pay on {{ ev.currency === 'NGN' ? "Paystack's" : "Stripe's" }} secure page.</strong>
-            After you continue, {{ ev.currency === 'NGN' ? 'Paystack' : 'Stripe' }} takes the payment —
-            card, and whatever local methods they offer — and your card details never touch myFiesta.
-            @if (embed.active()) {
-              It opens in a new tab; this page moves on by itself once you have paid.
-            } @else {
-              You will be brought straight back here for your tickets.
-            }
-          </p>
-        </div>
+        @if (quote()?.requires_payment) {
+          <h2 class="payment mt-10 border-b border-border pb-3 text-xl">Payment</h2>
+
+          <!--
+            The one deliberate departure from the reference: no card fields.
+            Cards never touch this origin — the purchase finishes on the
+            processor's own page, which is the strongest security claim a
+            ticketing site can make and the only honest one.
+          -->
+          <div class="mt-6 flex items-start gap-4 rounded-lg bg-surface-sunken p-5">
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-lg" aria-hidden="true">🔒</span>
+            <p class="text-sm leading-[1.6] text-text-muted">
+              <strong class="text-text">You pay on {{ ev.currency === 'NGN' ? "Paystack's" : "Stripe's" }} secure page.</strong>
+              After you continue, {{ ev.currency === 'NGN' ? 'Paystack' : 'Stripe' }} takes the payment —
+              card, and whatever local methods they offer — and your card details never touch myFiesta.
+              @if (embed.active()) {
+                It opens in a new tab; this page moves on by itself once you have paid.
+              } @else {
+                You will be brought straight back here for your tickets.
+              }
+            </p>
+          </div>
+        }
 
         @if (orderError(); as message) {
           <p class="error mt-4 rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
+        }
+
+        <!--
+          The button, again, where a phone's form ends.
+
+          Below 900px the summary moves above the form so the total is the
+          first thing read — which put the only way to pay above the fields,
+          and somebody who had just ticked the box scrolled back up the page
+          to find it. Here it follows the form instead, with the total on it,
+          and the summary's own button is left to wide screens, where it sits
+          beside the form the whole way down.
+        -->
+        @if (quote(); as q) {
+          <button
+            class="place-order mt-6 hidden h-13 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[900px]:flex"
+            type="button"
+            [disabled]="!ready() || placing()"
+            (click)="placeOrder()"
+          >
+            @if (placing()) {
+              Placing your order…
+            } @else if (q.requires_payment) {
+              Continue to payment · {{ formatMoney(q.total) }}
+            } @else {
+              Reserve free tickets
+            }
+          </button>
         }
       </form>
 
@@ -331,8 +365,9 @@
               <dd class="figure m-0 mt-2 border-t border-border pt-3 text-right text-xl text-text">{{ formatMoney(q.total) }}</dd>
             </dl>
 
+            <!-- Wide screens only: on a phone the form ends with its own (above). -->
             <button
-              class="mt-5 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+              class="mt-5 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[900px]:hidden"
               type="button"
               [disabled]="!ready() || placing()"
               (click)="placeOrder()"

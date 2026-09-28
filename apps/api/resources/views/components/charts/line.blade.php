@@ -102,7 +102,7 @@
     @if (! $hasData)
         <div class="mf-empty" role="note">{{ $empty }}</div>
     @else
-        <div class="mf-scroll">
+        <div class="mf-scroll mf-scroll-latest">
             <svg viewBox="0 0 {{ $W }} {{ $H }}" role="img" aria-labelledby="{{ $uid }}-t {{ $uid }}-d" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                 <title id="{{ $uid }}-t">{{ $title }}</title>
                 <desc id="{{ $uid }}-d">{{ $summary }}</desc>

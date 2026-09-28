@@ -75,3 +75,178 @@ describe('EventDetail, when there is no event', () => {
     expect(TestBed.inject(DOCUMENT).title).toBe('Event unavailable — myFiesta');
   });
 });
+
+/** An event as the API sends it, with only what these pages read. */
+function detail(overrides: Record<string, unknown> = {}) {
+  const tier = (id: string, amount: number) => ({
+    id,
+    name: id,
+    description: null,
+    price: { amount, currency: 'CAD' },
+    admits: 1,
+    max_per_order: null,
+    status: 'on_sale',
+    sales_start_at: null,
+    sales_end_at: null,
+    sold_out: false,
+    opens_after: null,
+    waiting: false,
+  });
+
+  return {
+    slug: 'qa-free-night',
+    title: 'QA Free Night',
+    starts_at: '2026-10-03T23:00:00Z',
+    ends_at: '2026-10-04T03:00:00Z',
+    timezone: 'America/Toronto',
+    city: 'Toronto',
+    country: 'CA',
+    currency: 'CAD',
+    category: null,
+    poster_url: null,
+    og_image_url: null,
+    description: null,
+    description_text: null,
+    gallery: [],
+    subdivision: 'ON',
+    dress_code: null,
+    min_age: null,
+    id_required: false,
+    venue: { name: 'Harbourfront Loft', address: '8 Queens Quay West' },
+    organizer: { name: 'Lagos Nights', slug: 'lagos-nights', logo_url: null, description: null, is_verified: false },
+    questions: [],
+    add_ons: [],
+    calendar: { ics_url: 'https://api.myfiesta.test/x.ics', google_url: 'https://calendar.google.com/x' },
+    from_price: { amount: 0, currency: 'CAD' },
+    is_sold_out: false,
+    availability: { state: 'available', left: null },
+    waitlist: false,
+    ticket_types: [tier('General', 0)],
+    ...overrides,
+    ...(overrides['tiers'] ? { ticket_types: (overrides['tiers'] as [string, number][]).map(([id, amount]) => tier(id, amount)) } : {}),
+  };
+}
+
+/**
+ * A free night.
+ *
+ * Every price here led with "From" or "Starting from", so a free event read
+ * "From Free" in its header and "Starting from Free" on its ticket card.
+ */
+describe('EventDetail, when it is free', () => {
+  let http: HttpTestingController;
+
+  async function open(event: ReturnType<typeof detail>): Promise<HTMLElement> {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(`/${event.slug}`, EventDetail);
+    http.expectOne(`https://api.myfiesta.test/api/events/${event.slug}`).flush({ data: event });
+    http.match(() => true).forEach((request) => request.flush({}));
+    harness.detectChanges();
+
+    return harness.routeNativeElement as HTMLElement;
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: ':slug', component: EventDetail }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('says "Free", and never "From Free"', async () => {
+    const page = await open(detail());
+
+    expect(page.textContent).not.toMatch(/From\s+Free/);
+    expect(page.textContent).not.toMatch(/Starting from\s+Free/);
+    expect(page.querySelector('.card-price')?.textContent?.trim()).toBe('Free');
+    expect(page.querySelector('.price-line')?.textContent?.trim()).toBe('Free');
+  });
+
+  it('says where the paid tickets start, beside a free one', async () => {
+    const page = await open(detail({ tiers: [['General', 0], ['VIP', 4500]] }));
+
+    expect(page.querySelector('.price-line')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Free, or from $45.00');
+    expect(page.textContent).toContain('or from $45.00');
+  });
+
+  it('still says "From" a price that is not free', async () => {
+    const page = await open(detail({ from_price: { amount: 2500, currency: 'CAD' }, tiers: [['General', 2500]] }));
+
+    expect(page.querySelector('.price-line')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('From $25.00');
+  });
+});
+
+/**
+ * Share, in a browser that will neither share nor copy.
+ *
+ * With no share sheet and the clipboard refused, the button did nothing at
+ * all: the refusal was caught and dropped. The link is shown to copy instead.
+ */
+describe('EventDetail, sharing', () => {
+  let http: HttpTestingController;
+  const original = { share: navigator.share, clipboard: navigator.clipboard };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: ':slug', component: EventDetail }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'share', { value: original.share, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: original.clipboard, configurable: true });
+  });
+
+  it('shows the link to copy by hand when the clipboard is refused', async () => {
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new DOMException('Write permission denied.', 'NotAllowedError')) },
+      configurable: true,
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const page = await harness.navigateByUrl('/qa-free-night', EventDetail);
+    http.expectOne('https://api.myfiesta.test/api/events/qa-free-night').flush({ data: detail() });
+    http.match(() => true).forEach((request) => request.flush({}));
+    harness.detectChanges();
+
+    await page.share();
+    harness.detectChanges();
+
+    const link = (harness.routeNativeElement as HTMLElement).querySelector<HTMLInputElement>('#share-link');
+    expect(link?.value).toBe('https://myfiesta.ca/qa-free-night');
+    expect(page.shared()).toBe(false);
+  });
+
+  it('says nothing more when somebody closes the share sheet', async () => {
+    Object.defineProperty(navigator, 'share', {
+      value: () => Promise.reject(new DOMException('Share canceled', 'AbortError')),
+      configurable: true,
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const page = await harness.navigateByUrl('/qa-free-night', EventDetail);
+    http.expectOne('https://api.myfiesta.test/api/events/qa-free-night').flush({ data: detail() });
+    http.match(() => true).forEach((request) => request.flush({}));
+    harness.detectChanges();
+
+    await page.share();
+    harness.detectChanges();
+
+    expect((harness.routeNativeElement as HTMLElement).querySelector('#share-link')).toBeNull();
+  });
+});

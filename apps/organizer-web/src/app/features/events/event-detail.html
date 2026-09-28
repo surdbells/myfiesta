@@ -28,9 +28,12 @@
     <section class="in-review mb-6 grid gap-2 rounded-md border-l-[3px] border-l-primary bg-[var(--primary-soft)] p-4 text-sm" role="status">
       <h2 class="m-0 text-base font-semibold">Waiting for review</h2>
       <p class="m-0">
-        Sent {{ event.review.submitted_at ? when(event.review.submitted_at, event.timezone) : '' }}. Somebody at myFiesta
-        looks at every event before it goes on sale, usually within a working day, and we email you either way.
-        It cannot be changed while it waits.
+        <!-- With its zone, like every other time here: it is the venue's clock. -->
+        @if (event.review.submitted_at) {
+          Sent {{ sendTime(event.review.submitted_at) }}.
+        }
+        Somebody at myFiesta looks at every event before it goes on sale, usually within a working day, and we email
+        you either way. It cannot be changed while it waits.
       </p>
     </section>
   }

@@ -89,6 +89,21 @@ final class EventWindows
     }
 
     /**
+     * On sale now: published, and not over by its own listing. A night that
+     * has happened stays published — one of the organizer's past events —
+     * but nothing sells for it, so it is not counted as on sale.
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query  over `events`
+     * @return Builder<TModel>
+     */
+    public static function onSale(Builder $query, CarbonInterface $now): Builder
+    {
+        return $query->where('events.status', 'published')->whereRaw(self::endSql().' > ?', [$now]);
+    }
+
+    /**
      * Still happening or still to come.
      *
      * @param  Builder<Event>  $query

@@ -15,6 +15,7 @@ use App\Services\Events\EventDuplicator;
 use App\Services\Events\EventReviews;
 use App\Services\Events\ReviewRefused;
 use App\Services\Events\SalesReport;
+use App\Services\Organizations\Suspension;
 use App\Support\Paging;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -88,6 +89,10 @@ class EventController extends Controller
                 'title' => $e->title,
                 'kind' => $e->kind,
                 'status' => $e->status,
+                // A draft only because the platform suspended the organization
+                // while it was on sale. It is not one the organizer forgot, and
+                // it goes back on sale by itself when the suspension is lifted.
+                'off_sale_by_suspension' => $e->unpublished_by_suspension_at !== null,
                 'starts_at' => $e->starts_at,
                 'timezone' => $e->timezone,
                 'city' => $e->city,
@@ -240,6 +245,7 @@ class EventController extends Controller
             'title' => $event->title,
             'kind' => $event->kind,
             'status' => $event->status,
+            'off_sale_by_suspension' => $event->unpublished_by_suspension_at !== null,
             'description' => $event->description,
             'currency' => $event->currency,
             'starts_at' => $event->starts_at,
@@ -276,6 +282,9 @@ class EventController extends Controller
             'submitted_at' => $event->submitted_at?->toIso8601String(),
             'approved_at' => $event->approved_at?->toIso8601String(),
             'on_submit' => $reviews->whatSubmittingDoes($event),
+            // Nothing of a suspended organization's can be sent or put back
+            // on sale (EventReviews::submit), so no screen offers to.
+            'suspended' => Suspension::inForce($event->organization_id),
             // For an event on sale: whether taking it off and putting it back
             // would go straight back on sale, said before it is taken off.
             'unchanged_since_approval' => $reviews->unchangedSinceApproval($event),

@@ -1,5 +1,6 @@
-import { Component, input } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal, viewChild } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter } from 'rxjs';
 
 export interface TabLink {
   label: string;
@@ -27,12 +28,25 @@ export interface TabLink {
  * Marked as a tablist for assistive technology while remaining ordinary links,
  * because that is what they are — the panel is a routed view, not hidden
  * content on the same page.
+ *
+ * When the row is wider than the page it scrolls, and says so: the edge with
+ * more tabs past it fades out, and the current tab is always scrolled into
+ * view. A row cut off cleanly at a tab boundary otherwise reads as the whole
+ * row — "Flyer & gallery" and "Settings" sat past the right edge of an event
+ * at laptop widths with nothing to say they were there.
  */
 @Component({
   selector: 'ui-tabs',
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <nav class="tabs" [attr.aria-label]="label()">
+    <nav
+      #bar
+      class="tabs"
+      [class.tabs--more-before]="moreBefore()"
+      [class.tabs--more-after]="moreAfter()"
+      [attr.aria-label]="label()"
+      (scroll)="measure()"
+    >
       <ul>
         @for (tab of tabs(); track tab.label) {
           <li>
@@ -62,6 +76,17 @@ export interface TabLink {
       scrollbar-width: none;
     }
     .tabs::-webkit-scrollbar { display: none; }
+    /* The fade is a mask, not a colour laid over the row, so it works on
+       whatever the page behind it is. Three rem: about half a tab. */
+    .tabs--more-after {
+      mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+    }
+    .tabs--more-before {
+      mask-image: linear-gradient(to left, #000 calc(100% - 3rem), transparent);
+    }
+    .tabs--more-before.tabs--more-after {
+      mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+    }
     ul {
       display: flex;
       gap: var(--space-1);
@@ -112,4 +137,65 @@ export interface TabLink {
 export class UiTabs {
   readonly tabs = input.required<TabLink[]>();
   readonly label = input('Sections');
+
+  /** More tabs past the left edge, and past the right. */
+  readonly moreBefore = signal(false);
+  readonly moreAfter = signal(false);
+
+  private readonly bar = viewChild.required<ElementRef<HTMLElement>>('bar');
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+
+    afterNextRender(() => {
+      this.revealCurrent();
+      this.measure();
+
+      if (typeof ResizeObserver !== 'undefined') {
+        const resized = new ResizeObserver(() => this.measure());
+        resized.observe(this.bar().nativeElement);
+        destroyRef.onDestroy(() => resized.disconnect());
+      }
+    });
+
+    // A tab chosen from a link elsewhere, or by the back button, may be one
+    // scrolled out of sight: bring it in once the link has been marked.
+    const moved = inject(Router)
+      .events.pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe(() => setTimeout(() => {
+        this.revealCurrent();
+        this.measure();
+      }));
+    destroyRef.onDestroy(() => moved.unsubscribe());
+  }
+
+  /** Whether there is more of the row either side of what shows. */
+  measure(): void {
+    const bar = this.bar().nativeElement;
+    const hidden = bar.scrollWidth - bar.clientWidth;
+
+    this.moreBefore.set(hidden > 1 && bar.scrollLeft > 1);
+    this.moreAfter.set(hidden > 1 && bar.scrollLeft < hidden - 1);
+  }
+
+  /**
+   * The current tab, scrolled into the row if it is past an edge — along
+   * the row only, never the page up or down.
+   */
+  private revealCurrent(): void {
+    const bar = this.bar().nativeElement;
+    const current = bar.querySelector<HTMLElement>('a.is-active');
+
+    if (!current) return;
+
+    const row = bar.getBoundingClientRect();
+    const tab = current.getBoundingClientRect();
+    const room = 48;
+
+    if (tab.left < row.left) {
+      bar.scrollLeft -= row.left - tab.left + room;
+    } else if (tab.right > row.right) {
+      bar.scrollLeft += tab.right - row.right + room;
+    }
+  }
 }

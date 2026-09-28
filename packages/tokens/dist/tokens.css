@@ -126,6 +126,11 @@
   --on-scarce: #ffffff;
   --sold: #232823;
   --on-sold: #ffffff;
+
+  /* What the browser draws itself — scrollbars, form controls, the page
+     behind an overscroll — follows the palette. Without it those stayed
+     light in dark mode: a white scrollbar under every dark shelf. */
+  color-scheme: light;
 }
 
 /* No data-theme attribute is set for the default "system" setting, so this
@@ -170,6 +175,7 @@
     --on-scarce: #0b0f0c;
     --sold: #dce1dc;
     --on-sold: #131713;
+    color-scheme: dark;
   }
 }
 
@@ -212,4 +218,5 @@
   --on-scarce: #0b0f0c;
   --sold: #dce1dc;
   --on-sold: #131713;
+  color-scheme: dark;
 }

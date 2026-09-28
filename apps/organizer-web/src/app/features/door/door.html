@@ -33,7 +33,7 @@
   <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-4 py-3 text-sm text-warning" role="status" aria-live="polite">
     <strong class="font-semibold">No connection — checking from this phone’s list.</strong>
     @if (listCount() !== null) {
-      <span>{{ listCount() }} tickets, updated {{ listAge() }}.</span>
+      <span>{{ listCount() }} {{ listCount() === 1 ? 'ticket' : 'tickets' }}, updated {{ listAge() }}.</span>
     } @else {
       <span>No list saved yet: codes cannot be checked until there is signal.</span>
     }
@@ -45,7 +45,7 @@
   <p class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted" role="status" aria-live="polite">
     @if (listCount() !== null) {
       <span class="font-medium text-success">Ready if the signal drops</span>
-      <span>{{ listCount() }} tickets saved on this phone, updated {{ listAge() }}</span>
+      <span>{{ listCount() }} {{ listCount() === 1 ? 'ticket' : 'tickets' }} saved on this phone, updated {{ listAge() }}</span>
     } @else if (refreshingList()) {
       <span>Saving the ticket list to this phone…</span>
     } @else {

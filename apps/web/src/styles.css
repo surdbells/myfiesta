@@ -25,3 +25,15 @@
 /* Where the class names live: the app's templates, and the ui package's. */
 @source './app';
 @source '../../../packages/ui/src';
+
+/*
+ * The event page's buy bar is fixed to the foot of a phone's screen, over
+ * whatever the page ends with — the footer, whose last line sat under it. The
+ * page ends that much lower while the bar is there. Same breakpoint as the
+ * bar's own (event-detail.html).
+ */
+@media (width < 899px) {
+  body:has(.buy-bar) {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}

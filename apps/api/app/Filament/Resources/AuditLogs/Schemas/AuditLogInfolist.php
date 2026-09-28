@@ -4,6 +4,7 @@ namespace App\Filament\Resources\AuditLogs\Schemas;
 
 use App\Filament\Resources\AuditLogs\AuditEntries;
 use App\Models\AuditLog;
+use App\Services\Audit\StaffRoles;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -24,8 +25,12 @@ final class AuditLogInfolist
                         TextEntry::make('created_at')->label('When (UTC)')->dateTime('j M Y, H:i:s'),
                         TextEntry::make('who')
                             ->label('Who')
-                            ->state(fn (AuditLog $record): string => $record->actorName()
-                                .($record->actor?->platform_role !== null ? ' (myFiesta staff, '.$record->actor->platform_role->label().')' : '')),
+                            // The role they held when they did it, not the one they hold now.
+                            ->state(function (AuditLog $record): string {
+                                $staff = $record->isSystem() ? null : StaffRoles::shared()->describe($record->actor, $record->created_at);
+
+                                return $record->actorName().($staff !== null ? ' ('.$staff.')' : '');
+                            }),
                         TextEntry::make('actor_label')
                             ->label('Name recorded at the time')
                             ->placeholder('—'),

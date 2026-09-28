@@ -12,6 +12,8 @@ export interface EventRowData {
   timezone: string;
   city: string;
   status?: string;
+  /** A draft only because a suspension took it off sale. */
+  off_sale_by_suspension?: boolean;
   tickets_issued: number;
   capacity: number | null;
   poster_url: string | null;
@@ -42,7 +44,10 @@ export interface EventRowData {
       <span class="body">
         <span class="top">
           <span class="title">{{ event().title }}</span>
-          @if (event().status === 'draft') {
+          @if (event().off_sale_by_suspension) {
+            <!-- A draft in the column only: the suspension took it off sale. -->
+            <mf-badge tone="danger">Off sale</mf-badge>
+          } @else if (event().status === 'draft') {
             <mf-badge tone="warning">Draft</mf-badge>
           } @else if (event().status === 'in_review') {
             <mf-badge>In review</mf-badge>

@@ -148,6 +148,43 @@ class EventsScreenTest extends TestCase
             ->assertSuccessful();
     }
 
+    /**
+     * Sorted by gross, the events that sold come first, whichever way, and
+     * each currency is ranked on its own. Postgres puts nothing (an event
+     * with no sales) first when sorting down, and ranked ₦5,650 above $113.
+     */
+    public function test_sorting_by_gross_ranks_what_sold_within_each_currency(): void
+    {
+        $this->actAs($this->staff(PlatformRole::Finance));
+
+        $small = $this->event($this->organization('Small Room'), ['title' => 'Small Room']);
+        $big = $this->event($this->organization('Big Room'), ['title' => 'Big Room']);
+        $lagos = $this->event($this->organization('Eko Live'), ['title' => 'Eko Live', 'currency' => 'NGN']);
+        $empty = $this->event($this->organization('Nobody Came'), ['title' => 'Nobody Came']);
+
+        $this->paidOrder($small, $this->ticketType($small), 1);   // $56.50
+        $this->paidOrder($big, $this->ticketType($big), 4);       // $226.00
+        $this->paidOrder($lagos, $this->ticketType($lagos, ['price_amount' => 500000]), 1); // ₦5,650
+
+        Livewire::test(ListEvents::class)
+            ->sortTable('gross_amount', 'desc')
+            ->assertCanSeeTableRecords([$big, $small, $empty, $lagos], inOrder: true)
+            ->sortTable('gross_amount', 'asc')
+            ->assertCanSeeTableRecords([$small, $big, $empty, $lagos], inOrder: true);
+    }
+
+    /** "1 order", not "1 orders". */
+    public function test_the_event_page_counts_one_order_as_one(): void
+    {
+        $this->actAs($this->staff(PlatformRole::Support));
+        $event = $this->event($this->organization('Toronto Sound'));
+        $this->paidOrder($event, $this->ticketType($event), 1, ['channel' => 'door']);
+
+        Livewire::test(ViewEvent::class, ['record' => $event->getKey()])
+            ->assertSee('1 order, 1 at the door')
+            ->assertDontSee('1 orders');
+    }
+
     public function test_the_event_page_shows_key_numbers_and_ticket_types(): void
     {
         $this->actAs($this->staff(PlatformRole::Support));

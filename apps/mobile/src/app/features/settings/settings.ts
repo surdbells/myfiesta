@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Browser } from '@capacitor/browser';
 import type { AccountErasurePreview } from '@myfiesta/api-types';
+import { APP_VERSION } from '../../core/app-version';
 import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
 import { Reminders } from '../../core/reminders';
@@ -116,7 +117,11 @@ import {
         </mf-card>
       }
 
-      <button mfButton class="block" variant="secondary" block (click)="confirming.set(true)">
+      <!-- signOut() asks, in the one confirmation sheet every action uses.
+           A sheet of its own here asked first, and then signOut() asked
+           again: two "Sign out?" questions, with two different answers
+           about what happens to the tickets. -->
+      <button mfButton class="block" variant="secondary" block label="Signing out…" [loading]="busy()" (click)="signOut()">
         Sign out
       </button>
 
@@ -281,19 +286,6 @@ import {
       </ng-container>
     </mf-sheet>
 
-    <mf-sheet
-      [open]="confirming()"
-      heading="Sign out?"
-      subheading="Your tickets stay on your account. You will need your password to come back."
-      (closed)="confirming.set(false)"
-    >
-      <div class="confirm">
-        <button mfButton variant="danger" block label="Signing out…" [loading]="busy()" (click)="signOut()">
-          Sign out
-        </button>
-        <button mfButton variant="ghost" block (click)="confirming.set(false)">Stay signed in</button>
-      </div>
-    </mf-sheet>
   `,
   styles: `
     .account-actions {
@@ -343,12 +335,6 @@ import {
       font-size: var(--font-size-sm);
     }
 
-    .confirm {
-      display: grid;
-      gap: var(--space-3);
-      padding-top: var(--space-2);
-    }
-
     .version {
       margin-top: var(--space-6);
       text-align: center;
@@ -381,15 +367,14 @@ export class Settings {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
 
-  readonly version = '2.0.0';
+  /** The stores' number for this build, stamped from package.json (tools/stamp-mobile-version.cjs). */
+  readonly version = APP_VERSION;
 
   readonly themes: MfSegment[] = [
     { value: 'system', label: 'System' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
   ];
-
-  readonly confirming = signal(false);
 
   private readonly toasts = inject(ToastStore);
   private readonly dialogs = inject(Dialogs);
@@ -653,7 +638,9 @@ export class Settings {
     const sure = await this.dialogs.confirm({
       title: 'Sign out?',
       body: 'You are signed out on this phone, and need your email and password to get back in.',
-      consequences: ['The tickets kept on this phone, and their reminders, go too until you sign in again.'],
+      consequences: [
+        'Your tickets stay on your account. The copies kept on this phone, and their reminders, go until you sign in again.',
+      ],
       confirmLabel: 'Sign out',
       tone: 'default',
     });

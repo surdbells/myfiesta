@@ -262,6 +262,10 @@ export class Checkout {
         attendees: this.attendeeQuestions().length > 0 ? attendeesFor(this.slots(), this.attendeeAnswers()) : undefined,
         embedded: this.embed.active() || undefined,
         accept_terms: this.agreed(),
+        // The last press's order, when the payment page could not be opened
+        // for it: this one takes over its hold, so pressing again during a
+        // processor outage does not hold the same places twice over.
+        retry_of: this.store.unpaid() ?? undefined,
       })
       .subscribe({
         next: (order) => {
@@ -286,6 +290,12 @@ export class Checkout {
         error: (response) => {
           payTab?.close();
           this.placing.set(false);
+
+          // An order was placed, and only its payment page failed: the next
+          // press names it (retry_of) and inherits its hold.
+          const reference = response?.error?.reference;
+          if (typeof reference === 'string' && reference !== '') this.store.setUnpaid(this.slug, reference);
+
           this.orderError.set(
             response?.error?.message ??
               'That order could not be placed. Nothing has been charged — please try again.',

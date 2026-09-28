@@ -65,7 +65,7 @@
                       {{ endpoint.description }} ·
                     }
                     @for (name of endpoint.events; track name; let last = $last) {
-                      {{ labels[name].title }}{{ last ? '' : ', ' }}
+                      {{ label(name).title }}{{ last ? '' : ', ' }}
                     }
                   </p>
                   @if (!endpoint.enabled && endpoint.disabled_reason) {
@@ -199,8 +199,8 @@
             <label class="flex cursor-pointer items-start gap-3 text-sm">
               <input class="mt-0.5" type="checkbox" [name]="'event-' + name" [checked]="chosen().has(name)" (change)="toggleEvent(name, $any($event.target).checked)" />
               <span>
-                <span class="font-medium">{{ labels[name].title }}</span>
-                <span class="block text-text-muted">{{ labels[name].hint }}</span>
+                <span class="font-medium">{{ label(name).title }}</span>
+                <span class="block text-text-muted">{{ label(name).hint }}</span>
               </span>
             </label>
           }

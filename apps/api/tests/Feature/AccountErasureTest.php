@@ -421,6 +421,30 @@ class AccountErasureTest extends TestCase
         $this->withToken($token)->getJson('/api/auth/me')->assertOk();
     }
 
+    /**
+     * Staff, and the only owner of an organization.
+     *
+     * Only the staff access was named. The app then offered to open the
+     * organization's team with no sentence saying why, and taking the staff
+     * access away would only have led to a second refusal.
+     */
+    public function test_staff_who_are_also_the_only_owner_are_told_both(): void
+    {
+        $ada = $this->person();
+        $ada->forceFill(['platform_role' => PlatformRole::Support])->save();
+        $this->join($ada, $this->org, Role::Owner);
+
+        $refused = $this->withToken($this->tokenFor($ada))->getJson('/api/auth/erasure')
+            ->assertOk()
+            ->assertJsonPath('organizations.0.only_owner', true)
+            ->json('refused');
+
+        $this->assertStringContainsString('staff access', $refused);
+        $this->assertStringContainsString('You are also the only owner of Lagos Nights.', $refused);
+        $this->assertStringEndsWith('Make somebody else an owner, or close the organization, and then ask again.', $refused);
+        $this->assertSame(1, substr_count($refused, 'ask again'));
+    }
+
     public function test_the_privacy_pages_link_refuses_a_staff_account_too(): void
     {
         $support = $this->person();

@@ -136,6 +136,19 @@ class CheckoutService
          */
         ?string $purchaseIp = null,
         ?string $purchaseUserAgent = null,
+        /*
+         * The reference of this buyer's last attempt, when the payment page
+         * could not be opened for it (CheckoutController answers 502 with it).
+         *
+         * Pressing the button again used to open a second order beside the
+         * first, with a second hold on the same places: a buyer retrying
+         * through a processor outage held their tickets two, three, four
+         * times over, and an almost-sold-out tier read as sold out to
+         * everybody else for the length of a hold. Now the attempt that could
+         * not be paid is closed, and its stock handed to this one, inside the
+         * same transaction — see replace().
+         */
+        ?string $retryOf = null,
     ): Order {
         // A suspended organization sells nothing, here or at the door. Read
         // from the row now: its events come off sale in the same moment, but
@@ -160,8 +173,12 @@ class CheckoutService
         return DB::transaction(function () use (
             $event, $quantities, $buyerEmail, $buyerName, $codeInput, $refSlug, $user, $buyerPhone,
             $accessInput, $checkedAnswers, $addOns, $channel, $paymentMethod, $soldBy, $doorPassId,
-            $online, $purchaseIp, $purchaseUserAgent
+            $online, $purchaseIp, $purchaseUserAgent, $retryOf
         ) {
+            if ($online && filled($retryOf)) {
+                $this->replace($event, $retryOf);
+            }
+
             // Price inside the transaction so the figures cannot be computed
             // against stock or a code that changes before the hold is taken.
             $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns, $channel);
@@ -261,6 +278,50 @@ class CheckoutService
 
             return $order->refresh();
         });
+    }
+
+    /**
+     * Close an attempt whose payment page never opened, and give its stock to
+     * the order about to replace it.
+     *
+     * Only an online order of this event, still pending, never paid, and with
+     * no payment session on it: one nobody can pay, because the only way to
+     * pay an order is the page its session opens. So nothing is taken from
+     * anybody by naming somebody else's reference here, and a reference that
+     * is not such an order — paid by now, closed by the sweep, another
+     * event's — is left alone and the order is simply placed.
+     *
+     * In the caller's transaction, before the stock is counted: the places go
+     * from the old hold to the new one without ever being free in between, so
+     * a retry never loses the buyer the last tickets to somebody else, and
+     * nobody else ever sees them held twice. A new order rather than the old
+     * one reopened, because what is being retried may have changed — a
+     * corrected address, an answer — and because a payment session is opened
+     * with the order's own idempotency key, which a processor refuses to
+     * reuse with different parameters.
+     */
+    private function replace(Event $event, string $reference): void
+    {
+        $attempt = Order::query()
+            ->where('reference', strtoupper(trim($reference)))
+            ->where('event_id', $event->id)
+            ->where('channel', 'online')
+            ->where('status', 'pending')
+            ->whereNull('gateway_reference')
+            ->whereNull('paid_at')
+            ->lockForUpdate()
+            ->first();
+
+        if ($attempt === null) {
+            return;
+        }
+
+        InventoryHold::query()->where('order_id', $attempt->id)->delete();
+
+        // Closed the way an abandoned checkout is (AbandonedCheckouts), which
+        // the order page already explains as nothing having been charged — and
+        // which stops it counting as a use of any code it carried.
+        $attempt->update(['status' => 'cancelled']);
     }
 
     /**

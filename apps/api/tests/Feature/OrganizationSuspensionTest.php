@@ -49,8 +49,10 @@ use Tests\TestCase;
  * unsuspended." The reversal is the part most worth pinning down: lifting a
  * suspension must put back exactly what it took — not a draft, not an event
  * the organizer had taken off sale themselves, and not a night that has
- * already happened. And while it lasts, the people who already paid keep
- * their tickets and still get in.
+ * already started. A night that is over was never on sale to take, and one
+ * that ends while it lasts goes back among the past events, not to a draft
+ * for good. And while it lasts, the people who already paid keep their
+ * tickets and still get in.
  */
 class OrganizationSuspensionTest extends TestCase
 {
@@ -88,6 +90,8 @@ class OrganizationSuspensionTest extends TestCase
     public function test_suspending_takes_off_sale_only_what_was_on_sale_and_remembers_it(): void
     {
         $coming = $this->event($this->org, ['title' => 'Coming']);
+        // Started an hour ago and runs till two: on now, and still selling.
+        $tonight = $this->event($this->org, ['title' => 'Tonight', 'starts_at' => now()->subHour(), 'ends_at' => now()->addHours(4)]);
         $past = $this->event($this->org, ['title' => 'Past', 'starts_at' => now()->subWeek()]);
         $draft = $this->event($this->org, ['title' => 'Draft', 'status' => 'draft', 'published_at' => null]);
         $pulled = $this->event($this->org, ['title' => 'Pulled by the organizer', 'status' => 'draft']);
@@ -96,13 +100,18 @@ class OrganizationSuspensionTest extends TestCase
         $done = $this->suspension()->suspend($this->org, $this->admin, 'Chargebacks on three events in a week.');
 
         $this->assertFalse($done['already']);
-        $this->assertEqualsCanonicalizing([$coming->id, $past->id], $done['events']);
+        $this->assertEqualsCanonicalizing([$coming->id, $tonight->id], $done['events']);
 
-        foreach ([$coming, $past] as $event) {
+        foreach ([$coming, $tonight] as $event) {
             $event->refresh();
             $this->assertSame('draft', $event->status);
             $this->assertNotNull($event->unpublished_by_suspension_at);
         }
+
+        // Over a week ago: nothing sells for it, so there was nothing to take
+        // off. It stays one of their past events, with its sales.
+        $this->assertSame('published', $past->fresh()->status);
+        $this->assertNull($past->fresh()->unpublished_by_suspension_at);
 
         foreach ([$draft, $pulled] as $event) {
             $this->assertNull($event->fresh()->unpublished_by_suspension_at);
@@ -140,6 +149,57 @@ class OrganizationSuspensionTest extends TestCase
         $this->assertSame([$coming->id], $this->suspension()->unsuspend($this->org, $this->admin)['republished']);
     }
 
+    /**
+     * Found in a click-through: suspending Lagos Nights took its three
+     * finished nights off "sale" with its one to come, and lifting it left
+     * the three as drafts for good — with their sales behind them, listed as
+     * Draft in the console, and no way back, since sending a night for
+     * review needs a date to come.
+     */
+    public function test_a_night_that_ends_while_it_lasts_goes_back_among_the_past_events(): void
+    {
+        $weekend = $this->event($this->org, ['title' => 'Weekend', 'starts_at' => now()->addDay(), 'ends_at' => now()->addDay()->addHours(5)]);
+        $this->ticketType($weekend);
+        $later = $this->event($this->org, ['title' => 'Later']);
+        $this->ticketType($later);
+
+        $this->suspension()->suspend($this->org, $this->admin, 'Chargebacks on three events in a week.');
+        $this->assertSame('draft', $weekend->fresh()->status);
+
+        // The suspension outlasts the weekend.
+        $this->travel(3)->days();
+
+        $done = $this->suspension()->unsuspend($this->org, $this->admin);
+
+        $this->assertSame([$later->id], $done['republished']);
+        $this->assertSame([$weekend->id], $done['finished']);
+        $this->assertSame([], $done['left']);
+
+        $weekend->refresh();
+        $this->assertSame('published', $weekend->status);
+        $this->assertNull($weekend->unpublished_by_suspension_at);
+
+        // Published, and still nothing for sale: its night is over.
+        $this->expectsCheckoutToRefuse($weekend);
+
+        // Told as neither back on sale nor waiting for the organizer.
+        Mail::assertQueued(OrganizationUnsuspended::class, fn (OrganizationUnsuspended $mail) => $mail->backOnSale === ['Later'] && $mail->leftAsDrafts === []);
+        $this->assertSame([$weekend->id], AuditLog::where('action', 'organization.unsuspended')->sole()->metadata['events_finished']);
+    }
+
+    private function expectsCheckoutToRefuse(Event $event): void
+    {
+        try {
+            app(CheckoutService::class)->quote($event->fresh(), [$event->ticketTypes()->value('id') => 1]);
+        } catch (CheckoutException $refused) {
+            $this->assertStringContainsString('ended', $refused->getMessage());
+
+            return;
+        }
+
+        $this->fail('A night that is over was sold.');
+    }
+
     public function test_unsuspending_puts_back_only_the_remembered_events_still_to_come(): void
     {
         $coming = $this->event($this->org, ['title' => 'Coming']);
@@ -158,7 +218,8 @@ class OrganizationSuspensionTest extends TestCase
 
         $this->assertTrue($done['lifted']);
         $this->assertSame([$coming->id], $done['republished']);
-        $this->assertSame([$soon->id => 'already happened'], $done['left']);
+        $this->assertSame([$soon->id => 'already started'], $done['left']);
+        $this->assertSame([], $done['finished']);
 
         $this->assertSame('published', $coming->fresh()->status);
         $this->assertSame('draft', $soon->fresh()->status);
@@ -445,6 +506,59 @@ class OrganizationSuspensionTest extends TestCase
         $this->getJson("/api/organizer/events/{$event->id}")->assertOk();
         $this->getJson('/api/organizer/payouts')->assertOk();
         $this->patchJson("/api/organizer/events/{$event->id}", ['title' => 'Afro Fest, renamed'])->assertOk();
+    }
+
+    /**
+     * What the screens are told about a night the suspension took off sale.
+     *
+     * Its status is draft, and that was all a screen had: the phone listed it
+     * as "Still a draft — It is not visible to anybody yet" although it had
+     * been on sale with tickets sold, badged it Draft, and offered "Put back
+     * on sale", which the API then refused with a 403.
+     */
+    public function test_a_night_the_suspension_took_off_sale_is_said_to_be_and_nothing_offers_to_send_it(): void
+    {
+        $held = $this->event($this->org, ['title' => 'Detty December Warm-Up', 'starts_at' => now()->addWeek()]);
+        $this->ticketType($held);
+        $own = $this->event($this->org, ['title' => 'Their own draft', 'status' => 'draft', 'published_at' => null, 'starts_at' => now()->addWeek()]);
+        $this->ticketType($own);
+
+        $this->suspension()->suspend($this->org, $this->admin, 'Chargebacks on three events in a week.');
+        $this->actAsMember($this->owner);
+
+        $this->getJson("/api/organizer/events/{$held->id}")
+            ->assertOk()
+            ->assertJsonPath('status', 'draft')
+            ->assertJsonPath('off_sale_by_suspension', true)
+            ->assertJsonPath('review.suspended', true)
+            ->assertJsonPath('review.on_submit', null);
+
+        $this->getJson("/api/organizer/events/{$own->id}")
+            ->assertOk()
+            ->assertJsonPath('off_sale_by_suspension', false)
+            ->assertJsonPath('review.on_submit', null);
+
+        $rows = collect($this->getJson('/api/organizer/events')->assertOk()->json('data'))->keyBy('id');
+        $this->assertTrue($rows[$held->id]['off_sale_by_suspension']);
+        $this->assertFalse($rows[$own->id]['off_sale_by_suspension']);
+
+        // Not a draft somebody forgot; their own draft still is one.
+        $overview = $this->getJson('/api/organizer/overview')->assertOk()->json();
+        $drafts = collect($overview['attention'])->where('reason', 'Still a draft')->pluck('event_id')->all();
+        $this->assertSame([$own->id], $drafts);
+        $this->assertSame(1, $overview['selling']['draft_events']);
+
+        // Lifted: back on sale by itself, and their draft can be sent again.
+        $this->suspension()->unsuspend($this->org, $this->admin);
+
+        $this->getJson("/api/organizer/events/{$held->id}")
+            ->assertOk()
+            ->assertJsonPath('status', 'published')
+            ->assertJsonPath('off_sale_by_suspension', false)
+            ->assertJsonPath('review.suspended', false);
+        $this->getJson("/api/organizer/events/{$own->id}")
+            ->assertOk()
+            ->assertJsonPath('review.on_submit', 'review');
     }
 
     public function test_another_organization_is_not_refused(): void

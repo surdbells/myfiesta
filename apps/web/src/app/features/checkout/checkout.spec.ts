@@ -5,10 +5,11 @@ import { TestBed } from '@angular/core/testing';
 import { Meta } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { Api, NewOrder } from '../../core/api';
 import { API_BASE_URL } from '../../core/api-base';
 import { EventDetail, Money, Quote } from '../../core/api.types';
+import { CheckoutStore } from '../../core/checkout-store';
 import { Checkout } from './checkout';
 
 @Component({ template: '' })
@@ -538,5 +539,158 @@ describe('Checkout, when there is no event', () => {
 
     expect(TestBed.inject(Router).url).toBe('/afro/tickets');
     expect(response.status).toBe(200);
+  });
+});
+
+/**
+ * Pressing again after the payment page could not be opened.
+ *
+ * Each press used to place an order of its own, each with its own hold: a
+ * buyer retrying through a processor outage held the same places two, three
+ * times over. The order the 502 names is sent back with the next press.
+ */
+describe('Checkout, when the payment page could not be opened', () => {
+  let placed: NewOrder[];
+  let answers: (() => ReturnType<Api['order']>)[];
+
+  async function open() {
+    const harness = await RouterTestingHarness.create();
+    const page = await harness.navigateByUrl('/afro/checkout', Checkout);
+    page.first.set('Ada');
+    page.email.set('ada@example.com');
+    page.confirm.set('ada@example.com');
+    page.agreed.set(true);
+    harness.detectChanges();
+
+    return { harness, page };
+  }
+
+  const outage = () =>
+    throwError(() => ({
+      status: 502,
+      error: { message: 'We could not reach the payment provider.', reference: 'FAIL2345' },
+    }));
+
+  beforeEach(() => {
+    placed = [];
+    answers = [];
+    sessionStorage.setItem('myfiesta.basket.afro', JSON.stringify({ items: { general: 1 }, addOns: {}, code: '' }));
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: 'order/:reference', component: Elsewhere },
+          { path: ':slug/checkout', component: Checkout },
+          { path: ':slug/tickets', component: Elsewhere },
+        ]),
+        {
+          provide: Api,
+          useValue: {
+            event: () => of({ data: EVENT }),
+            quote: () => of({ ...QUOTE, total: cad(0), requires_payment: false }),
+            order: (_slug: string, order: NewOrder) => {
+              placed.push(order);
+
+              return (answers.shift() ?? (() => of({ reference: 'PAID2345', status: 'paid', payment: null })))();
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  afterEach(() => sessionStorage.clear());
+
+  it('names the order the failure left behind when it is pressed again', async () => {
+    answers = [outage];
+    const { harness, page } = await open();
+
+    page.placeOrder();
+    harness.detectChanges();
+    expect(page.orderError()).toContain('could not reach');
+
+    page.placeOrder();
+
+    expect(placed).toHaveLength(2);
+    expect(placed[0].retry_of).toBeUndefined();
+    expect(placed[1].retry_of).toBe('FAIL2345');
+  });
+
+  it('remembers it across a reload, with the basket', async () => {
+    answers = [outage];
+    const { page } = await open();
+    page.placeOrder();
+
+    // What a reloaded page reads its basket from.
+    const reloaded = new CheckoutStore();
+    reloaded.loadFor('afro');
+
+    expect(reloaded.unpaid()).toBe('FAIL2345');
+    expect(reloaded.lines()).toEqual([{ ticket_type_id: 'general', quantity: 1 }]);
+  });
+
+  it('forgets it once an order goes through', async () => {
+    const { page } = await open();
+    page.placeOrder();
+
+    expect(JSON.parse(sessionStorage.getItem('myfiesta.basket.afro') ?? 'null')).toBeNull();
+  });
+});
+
+/**
+ * Nothing to pay.
+ *
+ * A $0 checkout still told the buyer they would pay on Stripe's page, which
+ * is a step a free order never reaches.
+ */
+describe('Checkout, for free tickets', () => {
+  async function open(quote: Quote) {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: ':slug/checkout', component: Checkout },
+          { path: ':slug/tickets', component: Elsewhere },
+        ]),
+        { provide: Api, useValue: { event: () => of({ data: EVENT }), quote: () => of(quote) } },
+      ],
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/afro/checkout', Checkout);
+    harness.detectChanges();
+
+    return harness.routeNativeElement as HTMLElement;
+  }
+
+  beforeEach(() =>
+    sessionStorage.setItem('myfiesta.basket.afro', JSON.stringify({ items: { general: 1 }, addOns: {}, code: '' })),
+  );
+
+  afterEach(() => sessionStorage.clear());
+
+  it('says nothing about a payment page when nothing is charged', async () => {
+    const page = await open({ ...QUOTE, total: cad(0), requires_payment: false });
+
+    expect(page.querySelector('h2.payment')).toBeNull();
+    expect(page.textContent).not.toContain('secure page');
+    expect(page.textContent).toContain('Reserve free tickets');
+  });
+
+  it('still explains where the payment happens when there is one', async () => {
+    const page = await open(QUOTE);
+
+    expect(page.querySelector('h2.payment')?.textContent?.trim()).toBe('Payment');
+    expect(page.textContent).toContain("You pay on Stripe's secure page.");
+  });
+
+  it('ends the form with the way to pay, for a phone, where the summary sits above it', async () => {
+    const page = await open(QUOTE);
+    const form = page.querySelector('form')!;
+    const last = form.querySelector('button.place-order');
+
+    expect(last?.textContent).toContain('Continue to payment');
+    expect(last?.textContent).toContain('$27.00');
+    // After every field, and after the box that has to be ticked.
+    expect(form.querySelector('input[name="agreed"]')!.compareDocumentPosition(last!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

@@ -105,6 +105,43 @@ describe('EventCard', () => {
     expect(card.querySelector('img')).toBeNull();
     expect(card.querySelector('app-poster-art')).not.toBeNull();
   });
+
+  // A phone's two-column grid is narrower than the line. Cut with an
+  // ellipsis it read "MON, SEP 28, 7:00 …", losing the p.m.
+  it('keeps the time whole, to wrap below the day rather than be cut short', () => {
+    const when = draw(summary({ starts_at: '2026-09-28T23:00:00Z' })).querySelector('.evt__when')!;
+    const pieces = Array.from(when.querySelectorAll('.whitespace-nowrap')).map((piece) => piece.textContent?.replace(/\s/g, ' '));
+
+    expect(pieces).toEqual(['Mon, Sep 28,', '7:00 p.m.']);
+    expect(when.querySelector('.truncate')).toBeNull();
+    expect(when.textContent?.replace(/\s+/g, ' ').trim()).toBe('Mon, Sep 28, 7:00 p.m.');
+  });
+
+  it('keeps a past night to its date', () => {
+    const when = draw(summary({ starts_at: '2025-09-28T23:00:00Z' }), { past: true }).querySelector('.evt__when')!;
+
+    expect(when.textContent?.trim()).toBe('Sep 28, 2025');
+  });
+
+  // Saved, every heart read "Saved — tap to remove": the same words on every
+  // card, and "tap" to somebody with a keyboard.
+  it('names the heart for its event whether saved or not, and says which with aria-pressed', () => {
+    localStorage.clear();
+    const fixture = TestBed.createComponent(EventCard);
+    fixture.componentRef.setInput('event', summary());
+    fixture.detectChanges();
+
+    const heart = () => (fixture.nativeElement as HTMLElement).querySelector('button')!;
+    expect(heart().getAttribute('aria-label')).toBe('Save Afrobeats Rooftop');
+    expect(heart().getAttribute('aria-pressed')).toBe('false');
+
+    heart().click();
+    fixture.detectChanges();
+
+    expect(heart().getAttribute('aria-label')).toBe('Save Afrobeats Rooftop');
+    expect(heart().getAttribute('aria-pressed')).toBe('true');
+    localStorage.clear();
+  });
 });
 
 describe('AvailabilityBadge', () => {

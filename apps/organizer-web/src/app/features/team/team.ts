@@ -52,6 +52,18 @@ export class Team {
     return this.roleDrafts()[member.id] ?? member.role;
   }
 
+  /**
+   * The organization's one owner, who cannot leave or be removed until
+   * somebody else is an owner too — the server refuses it ("Every
+   * organization needs an owner"). Said on the row, rather than offered and
+   * refused after the question has been answered.
+   */
+  soleOwner(member: TeamMember): boolean {
+    const owners = (this.page()?.members ?? []).filter((m) => m.role === 'owner');
+
+    return member.role === 'owner' && owners.length === 1;
+  }
+
   private clearDraft(memberId: string): void {
     const { [memberId]: _, ...rest } = this.roleDrafts();
     this.roleDrafts.set(rest);

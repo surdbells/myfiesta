@@ -29,7 +29,14 @@ class OrderStatusController extends Controller
     {
         $order = Order::query()
             ->where('reference', strtoupper(trim($reference)))
-            ->with('event:id,slug,title,starts_at,timezone')
+            // Everything the calendar links are made of, as well as what is
+            // shown. Loaded with the page's five columns only, "Add to
+            // calendar" had no end time and no venue: every night became
+            // three hours long (CalendarFile's default) and happened nowhere.
+            ->with([
+                'event:id,slug,title,starts_at,ends_at,timezone,city,venue_id,status',
+                'event.venue',
+            ])
             ->first();
 
         // References are 8 characters from a 27-letter alphabet, so guessing

@@ -75,6 +75,10 @@
     .mf-scroll { overflow-x: auto; }
     .mf-chart svg { display: block; width: 100%; height: auto; font-family: inherit; overflow: visible; }
     .mf-scroll > svg { min-width: 28rem; }
+    /* A series over time, when it has to scroll: opened at its latest end,
+       which is where the figures somebody came for are. */
+    .mf-scroll-latest { display: flex; flex-direction: row-reverse; }
+    .mf-scroll-latest > svg { flex: none; }
     .mf-grid { stroke: var(--mf-grid); stroke-width: 1; shape-rendering: crispEdges; }
     .mf-axis { stroke: var(--mf-axis); stroke-width: 1; shape-rendering: crispEdges; }
     .mf-tick { fill: var(--mf-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -134,8 +138,10 @@
     .mf-spark .mf-line { stroke-width: 1.5; }
 
     .mf-stack { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1fr); }
-    .mf-cols { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1fr); }
-    @media (min-width: 64rem) { .mf-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    /* Side by side only where each column has room for a chart at its
+       smallest (28rem) inside a section's padding: decided by the space the
+       grid has, not the window, which also holds the sidebar. */
+    .mf-cols { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 32rem), 1fr)); }
     .mf-heading { font-size: 0.875rem; font-weight: 600; color: var(--mf-ink); margin: 0 0 0.25rem; }
     .mf-sub { font-size: 0.8125rem; color: var(--mf-muted); margin: 0 0 0.75rem; }
 

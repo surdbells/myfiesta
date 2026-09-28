@@ -54,13 +54,20 @@ class CheckoutFailureTest extends TestCase
         ]);
     }
 
-    private function order(): TestResponse
+    private function order(int $quantity = 1, ?string $retryOf = null): TestResponse
     {
         return $this->postJson('/api/events/gateway-down/orders', [
-            'items' => [['ticket_type_id' => $this->type->id, 'quantity' => 1]],
+            'items' => [['ticket_type_id' => $this->type->id, 'quantity' => $quantity]],
             'buyer' => ['name' => 'Ada', 'email' => 'ada@example.com'],
             'accept_terms' => true,
+            'retry_of' => $retryOf,
         ]);
+    }
+
+    /** Places held right now, across every order. */
+    private function held(): int
+    {
+        return (int) InventoryHold::where('expires_at', '>', now())->sum('quantity');
     }
 
     public function test_a_provider_failure_does_not_leak_its_error_to_the_buyer(): void
@@ -93,6 +100,66 @@ class CheckoutFailureTest extends TestCase
         // nothing and they are not sent to the back of a queue for our failure.
         $this->assertDatabaseHas('orders', ['reference' => $reference, 'status' => 'pending']);
         $this->assertSame(1, InventoryHold::where('expires_at', '>', now())->count());
+    }
+
+    /**
+     * Pressing the button again held the same places a second time.
+     *
+     * Found in a browser during a processor outage: each press opened a new
+     * pending order with a new forty-minute hold, so a buyer of three held
+     * six, then nine, and a tier that was nearly gone read as sold out to
+     * everybody else. The retry names the attempt the 502 came back with,
+     * and that attempt's hold becomes the new order's.
+     */
+    public function test_a_retry_takes_over_the_failed_attempts_hold_rather_than_holding_again(): void
+    {
+        Http::fake(['api.stripe.com/*' => Http::response([], 500)]);
+
+        $first = $this->order(3)->assertStatus(502)->json('reference');
+        $second = $this->order(3, retryOf: $first)->assertStatus(502)->json('reference');
+        $third = $this->order(3, retryOf: $second)->assertStatus(502)->json('reference');
+
+        $this->assertSame(3, $this->held());
+        $this->assertSame(1, Order::where('status', 'pending')->count());
+        $this->assertDatabaseHas('orders', ['reference' => $third, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['reference' => $first, 'status' => 'cancelled']);
+        $this->assertDatabaseHas('orders', ['reference' => $second, 'status' => 'cancelled']);
+    }
+
+    /** The last places stay the buyer's across the retry: they are never free in between. */
+    public function test_a_retry_for_the_last_places_is_not_refused_as_sold_out(): void
+    {
+        $this->type->update(['quantity_available' => 2]);
+
+        Http::fake(['api.stripe.com/*' => Http::response([], 500)]);
+
+        $first = $this->order(2)->assertStatus(502)->json('reference');
+
+        // Without the hand-over this was refused as sold out: the buyer's own
+        // hold had taken the last two places.
+        $this->order(2, retryOf: $first)->assertStatus(502);
+
+        $this->assertSame(2, $this->held());
+    }
+
+    /**
+     * Only an attempt nobody can pay is closed by naming it.
+     *
+     * One with a payment page open may be being paid for at this moment, and
+     * a paid one is somebody's tickets; naming either as retry_of changes
+     * nothing about it, and the new order is placed beside it as before.
+     */
+    public function test_retry_of_leaves_an_order_that_could_still_be_paid_alone(): void
+    {
+        Http::fake(['api.stripe.com/*' => Http::response([], 500)]);
+
+        $opened = $this->order()->assertStatus(502)->json('reference');
+        Order::where('reference', $opened)->update(['gateway' => 'stripe', 'gateway_reference' => 'cs_test_open']);
+
+        $this->order(retryOf: $opened)->assertStatus(502);
+
+        $this->assertDatabaseHas('orders', ['reference' => $opened, 'status' => 'pending']);
+        $this->assertSame(2, $this->held());
     }
 
     public function test_a_failed_order_is_never_marked_paid(): void
