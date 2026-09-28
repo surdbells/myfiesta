@@ -1,86 +1,177 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Subject, debounceTime } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import {
+  ConfirmDialog,
+  Selection,
   ToastStore,
   UiBadge,
+  UiBulkBar,
   UiButton,
+  UiColumnMenu,
   UiEmpty,
   UiErrorState,
+  UiFilterBar,
   UiIcon,
   UiPageHeader,
   UiPagination,
   UiSelect,
-  UiSkeleton,
-  type SelectOption,
-  UiFilterBar,
+  UiSortHeader,
+  UiTable,
+  createListState,
   type FilterChip,
+  type SelectOption,
 } from '@myfiesta/ui';
-import { Plus, Search, X } from 'lucide-angular';
+import { Pause, Play, Plus, X } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { EventOption, OrganizationCode, PageMeta } from '../../core/api.types';
+import { EventOption, OrganizationCode } from '../../core/api.types';
+import { messageFor } from '../../core/errors';
 import { shortEventTime } from '../../core/event-time';
+import { loadList, searchBox } from '../../core/list-loader';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
+import { SavedViews } from '../../shared/saved-views';
 import { EventCodes } from '../events/event-codes';
 
 /** The filter value for codes made for every event rather than one. */
 const ALL_EVENTS = 'all-events';
 
+/** Where a code stands, as the list and the server both name it. */
+const STATES: SelectOption[] = [
+  { value: 'usable', label: 'Active' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'paused', label: 'Off' },
+  { value: 'used_up', label: 'Used up' },
+  { value: 'expired', label: 'Ended' },
+];
+
+const KINDS: SelectOption[] = [
+  { value: 'discount', label: 'Money off' },
+  { value: 'promoter', label: 'Promoter link' },
+  { value: 'presale', label: 'Presale access' },
+];
+
 /**
- * Every discount and promoter code, across the organization's events.
+ * Every discount, promoter and presale code, across the organization's events.
  *
  * Codes were only reachable inside each event, so there was no one place to
  * see what is out there — and making a code meant finding the event first.
- * This lists them all, and makes new ones by asking which event it is for
- * and then using the same form as the event's own Codes tab, so the two
- * cannot drift apart.
+ * This lists them all, filtered by where they stand, what they do and which
+ * events they are for; makes new ones by asking which event it is for and
+ * then using the same form as the event's own Codes tab, so the two cannot
+ * drift apart; and turns several off or back on at once — a promoter leaving
+ * takes their dozen codes with them.
  *
- * Changing a code still happens on its event's tab, where the tickets it can
+ * Changing one code still happens on its event's tab, where the tickets it can
  * cover and the links it makes are in front of you.
  */
 @Component({
   selector: 'app-codes',
-  imports: [FormsModule, RouterLink, UiPageHeader, UiButton, UiBadge, UiSelect, UiIcon, UiEmpty, UiErrorState, UiSkeleton, UiPagination, EventCodes, UiFilterBar],
+  imports: [
+    FormsModule,
+    RouterLink,
+    EventCodes,
+    SavedViews,
+    UiBadge,
+    UiBulkBar,
+    UiButton,
+    UiColumnMenu,
+    UiEmpty,
+    UiErrorState,
+    UiFilterBar,
+    UiIcon,
+    UiPageHeader,
+    UiPagination,
+    UiSelect,
+    UiSortHeader,
+    UiTable,
+  ],
   templateUrl: './codes.html',
 })
 export class Codes {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
+  private readonly confirmDialog = inject(ConfirmDialog);
   readonly session = inject(SessionStore);
 
-  protected readonly searchIcon = Search;
   protected readonly plusIcon = Plus;
   protected readonly closeIcon = X;
+  protected readonly pauseIcon = Pause;
+  protected readonly resumeIcon = Play;
 
-  readonly codes = signal<OrganizationCode[]>([]);
-  readonly meta = signal<PageMeta | null>(null);
-  readonly loading = signal(true);
-  readonly failed = signal(false);
+  readonly stateOptions = STATES;
+  readonly kindOptions = KINDS;
+
+  readonly list = createListState({
+    list: 'codes',
+    filters: {
+      q: { kind: 'text' },
+      event_id: { kind: 'many' },
+      state: { kind: 'many' },
+      kind: { kind: 'many' },
+    },
+    sort: { column: 'created', direction: 'desc' },
+    columns: [
+      { id: 'code', label: 'Code', required: true },
+      { id: 'event', label: 'Event' },
+      { id: 'does', label: 'Does' },
+      { id: 'window', label: 'Runs', hidden: true },
+      { id: 'uses', label: 'Uses' },
+      { id: 'sold', label: 'Tickets sold' },
+      { id: 'status', label: 'Status' },
+    ],
+  });
+
+  readonly search = searchBox(this.list, 'q');
+  readonly selection = new Selection();
+
+  readonly page = loadList(this.list.query, () => this.api.organizationCodes(this.list.query()));
+
+  readonly codes = computed<OrganizationCode[]>(() => this.page.result()?.data ?? []);
+  readonly meta = computed(() => this.page.result()?.meta ?? null);
+  readonly loading = computed(() => this.page.loading() && this.page.result() === null);
+  readonly refreshing = computed(() => this.page.loading() && this.page.result() !== null);
+  readonly failed = this.page.failed;
+  readonly rowIds = computed(() => this.codes().map((code) => code.id));
+  readonly changing = signal(false);
 
   readonly events = signal<EventOption[]>([]);
-
-  readonly query = signal('');
-  readonly eventFilter = signal<string | null>(null);
-  readonly page = signal(1);
 
   /** Making a code: which event it is for, then the form. */
   readonly creating = signal(false);
   readonly createFor = signal<string | null>(null);
 
-  readonly filtered = computed(() => this.chips().length > 0);
+  readonly filtered = computed(() => this.list.active() > 0);
+
+  readonly eventChoices = computed<SelectOption[]>(() =>
+    this.events().map((event) => ({
+      value: event.id,
+      label: event.title,
+      hint: new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(event.starts_at)),
+    })),
+  );
+
+  readonly filterOptions = computed<SelectOption[]>(() => [{ value: ALL_EVENTS, label: 'Made for every event' }, ...this.eventChoices()]);
 
   /** What is on, in the words it was chosen by. */
   readonly chips = computed<FilterChip[]>(() => {
     const chips: FilterChip[] = [];
+    const values = this.list.values();
 
-    if (this.query().trim()) chips.push({ key: 'q', label: 'Search', value: this.query().trim() });
+    if (values.q) chips.push({ key: 'q', label: 'Search', value: String(values.q) });
 
-    if (this.eventFilter()) {
-      const event = this.events().find((option) => option.id === this.eventFilter());
-      chips.push({ key: 'event', label: 'Event', value: event?.title ?? 'One event' });
+    const events = values.event_id as readonly string[];
+    if (events.length > 0) {
+      const names = events.map((id) => (id === ALL_EVENTS ? 'Every event' : (this.events().find((e) => e.id === id)?.title ?? 'One event')));
+      chips.push({ key: 'event_id', label: events.length === 1 ? 'Event' : 'Events', value: listed(names) });
     }
+
+    const states = values.state as readonly string[];
+    if (states.length > 0) chips.push({ key: 'state', label: 'Status', value: listed(states.map((s) => labelOf(STATES, s))) });
+
+    const kinds = values.kind as readonly string[];
+    if (kinds.length > 0) chips.push({ key: 'kind', label: 'Does', value: listed(kinds.map((k) => labelOf(KINDS, k))) });
 
     return chips;
   });
@@ -92,33 +183,10 @@ export class Codes {
     const noun = meta.total === 1 ? 'code' : 'codes';
     const shown = Math.min(meta.per_page, this.codes().length);
 
-    return meta.total > shown
-      ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}`
-      : `${meta.total.toLocaleString()} ${noun}`;
+    return meta.total > shown ? `Showing ${shown} of ${meta.total.toLocaleString()} ${noun}` : `${meta.total.toLocaleString()} ${noun}`;
   });
 
-  remove(key: string): void {
-    if (key === 'q') this.search('');
-    if (key === 'event') this.filterByEvent('');
-  }
-
-  readonly filterOptions = computed<SelectOption[]>(() => [
-    { value: '', label: 'All codes' },
-    { value: ALL_EVENTS, label: 'Made for every event' },
-    ...this.eventChoices(),
-  ]);
-
-  readonly eventChoices = computed<SelectOption[]>(() =>
-    this.events().map((event) => ({
-      value: event.id,
-      label: event.title,
-      hint: new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(event.starts_at)),
-    })),
-  );
-
   readonly createForTitle = computed(() => this.events().find((e) => e.id === this.createFor())?.title ?? null);
-
-  private readonly typing = new Subject<void>();
 
   constructor() {
     this.api.eventOptions().subscribe({
@@ -126,61 +194,31 @@ export class Codes {
       error: () => undefined,
     });
 
-    this.typing.pipe(debounceTime(250)).subscribe(() => {
-      this.page.set(1);
-      this.load();
+    // A different set of rows makes the ticks meaningless.
+    effect(() => {
+      this.list.criteria();
+      untracked(() => this.selection.clear());
     });
 
-    this.load();
+    effect(() => {
+      const ids = this.rowIds();
+      untracked(() => this.selection.keep(ids));
+    });
   }
 
   load(): void {
-    this.loading.set(true);
-
-    this.api
-      .organizationCodes({ page: this.page(), eventId: this.eventFilter(), q: this.query() })
-      .subscribe({
-        next: ({ data, meta }) => {
-          this.codes.set(data);
-          this.meta.set(meta);
-          this.loading.set(false);
-          this.failed.set(false);
-        },
-        error: () => {
-          this.loading.set(false);
-          this.failed.set(true);
-        },
-      });
+    this.page.retry();
   }
 
-  search(value: string): void {
-    this.query.set(value);
-    this.typing.next();
-  }
-
-  filterByEvent(value: string | null): void {
-    this.eventFilter.set(value || null);
-    this.page.set(1);
-    this.load();
-  }
-
-  clear(): void {
-    this.query.set('');
-    this.eventFilter.set(null);
-    this.page.set(1);
-    this.load();
-  }
-
-  goToPage(page: number): void {
-    this.page.set(page);
-    this.load();
+  remove(key: string): void {
+    this.list.clear(key as 'q');
   }
 
   startCreating(): void {
     this.creating.set(true);
     // Straight to the form when the list is already narrowed to one event.
-    const filter = this.eventFilter();
-    this.createFor.set(filter && filter !== ALL_EVENTS ? filter : null);
+    const events = this.list.get('event_id') as readonly string[];
+    this.createFor.set(events.length === 1 && events[0] !== ALL_EVENTS ? events[0] : null);
   }
 
   stopCreating(): void {
@@ -191,8 +229,49 @@ export class Codes {
   onCreated(): void {
     this.toasts.show(`Code created for ${this.createForTitle() ?? 'the event'}.`, 'success');
     this.stopCreating();
-    this.page.set(1);
-    this.load();
+    this.list.goTo(1);
+    this.page.retry();
+  }
+
+  /** Several codes off, or back on, after saying which and what it does. */
+  async setActive(active: boolean): Promise<void> {
+    const chosen = this.codes().filter((code) => this.selection.has(code.id));
+    if (chosen.length === 0 || this.changing()) return;
+
+    const names = chosen.map((code) => code.code);
+    const some = chosen.length === 1 ? names[0] : `${chosen.length} codes`;
+
+    const sure = await this.confirmDialog.confirm({
+      title: active ? `Turn ${some} back on?` : `Turn ${some} off?`,
+      body: active
+        ? 'Buyers can use them again straight away, within their own dates and limits.'
+        : 'Buyers who try them at checkout are told the code is not valid. Nothing already sold changes.',
+      consequences: chosen.length > 1 ? [listed(names, 6)] : [],
+      confirmLabel: active ? 'Turn them on' : 'Turn them off',
+      tone: active ? 'default' : 'danger',
+    });
+
+    if (!sure) return;
+
+    this.changing.set(true);
+
+    try {
+      const { changed, skipped } = await firstValueFrom(this.api.setCodesActive(this.selection.ids(), active));
+
+      const done = changed === 1 ? '1 code' : `${changed} codes`;
+      this.toasts.show(active ? `${done} turned back on.` : `${done} turned off.`, 'success');
+
+      if (skipped.length > 0) {
+        this.toasts.show(`${listed(skipped.map((s) => s.code), 4)} left as ${skipped.length === 1 ? 'it was' : 'they were'}: the event is waiting for review.`, 'info');
+      }
+
+      this.selection.clear();
+      this.page.retry();
+    } catch (error) {
+      this.toasts.show(messageFor(error, 'The codes could not be changed.'), 'danger');
+    } finally {
+      this.changing.set(false);
+    }
   }
 
   describeDiscount(code: OrganizationCode): string {
@@ -221,6 +300,11 @@ export class Codes {
     return code.max_redemptions === null ? `${code.redemption_count}` : `${code.redemption_count} of ${code.max_redemptions}`;
   }
 
+  /** How far through its limit a code is, for the bar under the count. */
+  usedShare(code: OrganizationCode): number | null {
+    return code.max_redemptions ? Math.min(100, Math.round((code.redemption_count / code.max_redemptions) * 100)) : null;
+  }
+
   ticketsSold(code: OrganizationCode): number {
     return code.sales.reduce((total, sale) => total + sale.tickets, 0);
   }
@@ -228,4 +312,28 @@ export class Codes {
   eventDate(code: OrganizationCode): string {
     return code.event ? shortEventTime(code.event.starts_at, code.event.timezone) : '';
   }
+
+  /** When it works, in the event's own time where there is one. */
+  window(code: OrganizationCode): string {
+    const zone = code.event?.timezone;
+    const day = (iso: string) =>
+      new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', ...(zone ? { timeZone: zone } : {}) }).format(new Date(iso));
+
+    if (code.starts_at && code.ends_at) return `${day(code.starts_at)} – ${day(code.ends_at)}`;
+    if (code.starts_at) return `From ${day(code.starts_at)}`;
+    if (code.ends_at) return `Until ${day(code.ends_at)}`;
+    return 'Any time';
+  }
+}
+
+function labelOf(options: readonly SelectOption[], value: string): string {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+/** "A", "A and B", "A and 3 more" — or up to `max` by name. */
+function listed(names: readonly string[], max = 1): string {
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  if (names.length <= max) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, Math.max(1, max - 1)).join(', ')} and ${names.length - Math.max(1, max - 1)} more`;
 }

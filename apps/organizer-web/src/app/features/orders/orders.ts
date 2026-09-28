@@ -1,5 +1,4 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -29,11 +28,10 @@ import {
   type Sort,
 } from '@myfiesta/ui';
 import { Download } from 'lucide-angular';
-import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { Api, type ListQuery } from '../../core/api';
 import { EventOption, Money, OrderSignal, OrganizationOrder } from '../../core/api.types';
 import { saveFile, today } from '../../core/download';
-import { loadList } from '../../core/list-loader';
+import { loadList, searchBox } from '../../core/list-loader';
 import { formatMoney } from '../../core/money';
 import { SessionStore } from '../../core/session';
 import { SavedViews } from '../../shared/saved-views';
@@ -166,7 +164,7 @@ export class Orders {
   );
 
   /** The search box shows what is typed at once; the list follows a moment later. */
-  readonly search = signal(String(this.list.get('q') ?? ''));
+  readonly search = searchBox(this.list, 'q');
 
   readonly range = computed<DateRange>(() => ({
     from: (this.list.get('from') as string | null) ?? null,
@@ -239,21 +237,6 @@ export class Orders {
   });
 
   constructor() {
-    // The search box, into the list, once somebody stops typing.
-    toObservable(this.search)
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed())
-      .subscribe((q) => {
-        if (q !== this.list.get('q')) this.list.set('q', q);
-      });
-
-    // And back, when the list changes it: a chip removed, a view applied.
-    effect(() => {
-      const q = String(this.list.values().q ?? '');
-      untracked(() => {
-        if (q !== this.search()) this.search.set(q);
-      });
-    });
-
     // A different set of rows makes the ticks meaningless.
     effect(() => {
       this.list.criteria();

@@ -12,7 +12,7 @@
   all belong to one. Then the same form the event's own Codes tab uses.
 -->
 @if (creating()) {
-  <section class="mb-8 grid gap-4 rounded-xl border border-border bg-surface-raised p-6" aria-labelledby="new-code-heading">
+  <section class="card rise mb-8 grid gap-4 p-6" aria-labelledby="new-code-heading">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div class="grid gap-1">
         <h2 id="new-code-heading" class="text-lg">New code</h2>
@@ -52,86 +52,168 @@
 }
 
 <ui-filter-bar
-  class="mb-6 block"
+  class="mb-4 block"
   searchPlaceholder="Code, label or promoter"
   searchLabel="Search codes"
-  [search]="query()"
-  (searchChange)="search($event)"
+  [search]="search()"
+  (searchChange)="search.set($event)"
   [chips]="chips()"
   [summary]="summary()"
   (removed)="remove($event)"
-  (clearedAll)="clear()"
+  (clearedAll)="list.clearAll()"
 >
   <ui-select
     class="flex-[0_1_16rem] max-sm:flex-[1_1_100%]"
-    name="event"
-    ariaLabel="Event"
+    multiple
+    noun="events"
+    ariaLabel="Events"
+    placeholder="All events"
     searchPlaceholder="Search your events"
     [options]="filterOptions()"
-    [ngModel]="eventFilter() ?? ''"
-    (ngModelChange)="filterByEvent($event)"
+    [values]="$any(list.get('event_id'))"
+    (valuesChange)="list.set('event_id', $event)"
   />
+
+  <ui-select
+    class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+    multiple
+    noun="statuses"
+    ariaLabel="Status"
+    placeholder="Any status"
+    [options]="stateOptions"
+    [values]="$any(list.get('state'))"
+    (valuesChange)="list.set('state', $event)"
+  />
+
+  <ui-select
+    class="flex-[0_1_12rem] max-sm:flex-[1_1_100%]"
+    multiple
+    noun="kinds"
+    ariaLabel="What the code does"
+    placeholder="Does anything"
+    [options]="kindOptions"
+    [values]="$any(list.get('kind'))"
+    (valuesChange)="list.set('kind', $event)"
+  />
+
+  <span bar-actions class="flex items-center gap-2">
+    <app-saved-views list="codes" [state]="list" />
+    <ui-column-menu [state]="list" />
+  </span>
 </ui-filter-bar>
 
-@if (loading() && codes().length === 0) {
-  <div class="grid gap-2">
-    @for (n of [0, 1, 2]; track n) {
-      <div class="rounded-lg border border-border bg-surface-raised p-4"><ui-skeleton height="2.5rem" /></div>
-    }
-  </div>
+@if (loading()) {
+  <ui-table caption="Codes" [loading]="true" [loadingRows]="6" [loadingColumns]="list.visible().length + 1" />
 } @else if (failed()) {
   <ui-error-state title="Could not load your codes" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
 } @else if (codes().length === 0) {
   @if (filtered()) {
-    <ui-empty title="No codes match" hint="Try another search, or clear the filters." />
+    <ui-empty title="No codes match" hint="Try another search, or clear the filters.">
+      <button uiButton variant="secondary" type="button" (click)="list.clearAll()">Clear the filters</button>
+    </ui-empty>
   } @else {
     <ui-empty title="No codes yet" hint="Make one for an event: money off, a promoter's link, or early access to tickets." />
   }
 } @else {
-  <div class="overflow-hidden rounded-xl border border-border bg-surface-raised">
+  <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[48rem] border-collapse text-sm">
+      <table class="w-full min-w-[48rem] text-sm" [class.density-compact]="list.density() === 'compact'">
+        <caption class="sr-only">Codes</caption>
         <thead>
           <tr>
-            <th class="bg-surface-inset px-5 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Code</th>
-            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Event</th>
-            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Does</th>
-            <th class="bg-surface-inset px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Uses</th>
-            <th class="bg-surface-inset px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Tickets sold</th>
-            <th class="bg-surface-inset px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Status</th>
-            <th class="bg-surface-inset px-5 py-3"><span class="sr-only">Manage</span></th>
+            <th class="select-cell" scope="col">
+              <input
+                type="checkbox"
+                class="check"
+                aria-label="Select every code on this page"
+                [checked]="selection.all(rowIds())"
+                [indeterminate]="selection.some(rowIds())"
+                (change)="selection.toggleAll(rowIds())"
+              />
+            </th>
+            <th uiSort="code" label="Code" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            @if (list.isVisible('event')) {
+              <th scope="col">Event</th>
+            }
+            @if (list.isVisible('does')) {
+              <th scope="col">Does</th>
+            }
+            @if (list.isVisible('window')) {
+              <th uiSort="ends" label="Runs" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('uses')) {
+              <th uiSort="used" label="Uses" class="numeric" [sort]="list.sort()" (sorted)="list.sortBy($event)"></th>
+            }
+            @if (list.isVisible('sold')) {
+              <th scope="col" class="numeric">Tickets sold</th>
+            }
+            @if (list.isVisible('status')) {
+              <th scope="col">Status</th>
+            }
+            <th scope="col"><span class="sr-only">Manage</span></th>
           </tr>
         </thead>
         <tbody>
           @for (code of codes(); track code.id) {
-            <tr class="border-t border-border hover:bg-surface-hover">
-              <td class="px-5 py-3">
+            <tr [class.is-selected]="selection.has(code.id)">
+              <td class="select-cell">
+                <input
+                  type="checkbox"
+                  class="check"
+                  [attr.aria-label]="'Select the code ' + code.code"
+                  [checked]="selection.has(code.id)"
+                  (change)="selection.toggle(code.id)"
+                />
+              </td>
+              <td>
                 <span class="block font-mono font-semibold tracking-[0.04em]">{{ code.code }}</span>
                 @if (code.promoter_name || code.label) {
                   <span class="block text-xs text-text-muted">{{ code.promoter_name ?? code.label }}</span>
                 }
               </td>
-              <td class="px-4 py-3">
-                @if (code.event; as event) {
-                  <span class="block font-medium">{{ event.title }}</span>
-                  <span class="block text-xs text-text-muted">{{ eventDate(code) }}</span>
-                } @else {
-                  <span class="text-text-muted">Every event</span>
-                }
-              </td>
-              <td class="px-4 py-3">
-                {{ describeDiscount(code) }}
-                @if (code.unlocks.length > 0 && code.discount_type) {
-                  <span class="block text-xs text-text-muted">+ presale access</span>
-                }
-              </td>
-              <td class="px-4 py-3 text-right tabular-nums">{{ uses(code) }}</td>
-              <td class="px-4 py-3 text-right tabular-nums">{{ ticketsSold(code) }}</td>
-              <td class="px-4 py-3">
-                @let state = status(code);
-                <ui-badge [tone]="state.tone">{{ state.label }}</ui-badge>
-              </td>
-              <td class="px-5 py-3 text-right">
+              @if (list.isVisible('event')) {
+                <td>
+                  @if (code.event; as event) {
+                    <span class="block font-medium">{{ event.title }}</span>
+                    <span class="block text-xs text-text-muted">{{ eventDate(code) }}</span>
+                  } @else {
+                    <span class="text-text-muted">Every event</span>
+                  }
+                </td>
+              }
+              @if (list.isVisible('does')) {
+                <td>
+                  {{ describeDiscount(code) }}
+                  @if (code.unlocks.length > 0 && code.discount_type) {
+                    <span class="block text-xs text-text-muted">+ presale access</span>
+                  }
+                </td>
+              }
+              @if (list.isVisible('window')) {
+                <td class="whitespace-nowrap text-text-muted">{{ window(code) }}</td>
+              }
+              @if (list.isVisible('uses')) {
+                <td class="numeric">
+                  {{ uses(code) }}
+                  @if (usedShare(code); as share) {
+                    <!-- How far through its limit: a code about to run out is
+                         the one somebody should raise before the rush. -->
+                    <span class="ml-auto mt-1 block h-1 w-16 overflow-hidden rounded-full bg-surface-inset" aria-hidden="true">
+                      <span class="block h-full rounded-full" [class.bg-warning]="share >= 80" [class.bg-primary]="share < 80" [style.width.%]="share"></span>
+                    </span>
+                  }
+                </td>
+              }
+              @if (list.isVisible('sold')) {
+                <td class="numeric">{{ ticketsSold(code) }}</td>
+              }
+              @if (list.isVisible('status')) {
+                <td>
+                  @let state = status(code);
+                  <ui-badge [tone]="state.tone">{{ state.label }}</ui-badge>
+                </td>
+              }
+              <td class="text-right">
                 @if (code.event; as event) {
                   <a class="whitespace-nowrap text-sm font-medium text-primary-text no-underline hover:underline" [routerLink]="['/events', event.id, 'codes']">Manage</a>
                 }
@@ -144,10 +226,19 @@
 
     @if (meta(); as page) {
       @if (page.last_page > 1) {
-        <div class="border-t border-border px-5 py-3">
-          <ui-pagination [page]="page.current_page" [perPage]="page.per_page" [total]="page.total" noun="codes" (changed)="goToPage($event)" />
-        </div>
+        <ui-pagination [page]="page.current_page" [perPage]="page.per_page" [total]="page.total" noun="codes" (changed)="list.goTo($event)" />
       }
     }
   </div>
+
+  <ui-bulk-bar noun="codes" [count]="selection.count()" (cleared)="selection.clear()">
+    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing()" (click)="setActive(false)">
+      <ui-icon [icon]="pauseIcon" size="sm" />
+      Turn off
+    </button>
+    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing()" (click)="setActive(true)">
+      <ui-icon [icon]="resumeIcon" size="sm" />
+      Turn on
+    </button>
+  </ui-bulk-bar>
 }

@@ -1,6 +1,7 @@
-import { computed, signal, type Signal } from '@angular/core';
+import { computed, effect, signal, untracked, type Signal, type WritableSignal } from '@angular/core';
+import type { FilterDef, ListState } from '@myfiesta/ui';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { Observable, catchError, distinctUntilChanged, map, of, switchMap } from 'rxjs';
+import { Observable, catchError, debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 
 /** What a list screen shows while its rows are fetched, and after. */
 export interface ListLoader<T> {
@@ -71,4 +72,36 @@ export function loadList<T>(question: Signal<unknown>, fetch: () => Observable<T
     refused: refused.asReadonly(),
     retry: () => attempt.update((n) => n + 1),
   };
+}
+
+/**
+ * A search box bound to a list's text filter.
+ *
+ * The box shows what is typed at once; the list follows once typing stops, so
+ * "a", "ad", "ada" is one question rather than three. It follows the list
+ * back too — a chip removed, a saved view applied, the back button — so the
+ * box never says one thing while the list is filtered by another. Called in a
+ * field initialiser.
+ */
+export function searchBox<F extends Record<string, FilterDef>>(list: ListState<F>, key: keyof F & string, wait = 300): WritableSignal<string> {
+  const text = signal(String(list.get(key) ?? ''));
+
+  toObservable(text)
+    .pipe(debounceTime(wait), distinctUntilChanged(), takeUntilDestroyed())
+    .subscribe((value) => {
+      if (value !== (list.get(key) ?? '')) list.set(key, value);
+    });
+
+  // Only this filter's value: another filter changing mid-word must not put
+  // back what the list had before the last keystroke.
+  const current = computed(() => String(list.values()[key] ?? ''));
+
+  effect(() => {
+    const value = current();
+    untracked(() => {
+      if (value !== text()) text.set(value);
+    });
+  });
+
+  return text;
 }

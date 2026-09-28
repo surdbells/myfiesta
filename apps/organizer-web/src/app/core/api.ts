@@ -1059,12 +1059,19 @@ export class Api {
   // --- codes --------------------------------------------------------------
 
   /** Every code in the organization. event_id is an event, or 'all-events' for the ones made for every event. */
-  organizationCodes(filters: { page?: number; eventId?: string | null; q?: string }): Observable<Page<OrganizationCode>> {
-    let params = new HttpParams().set('page', filters.page ?? 1);
-    if (filters.eventId) params = params.set('event_id', filters.eventId);
-    if (filters.q?.trim()) params = params.set('q', filters.q.trim());
+  organizationCodes(query: ListQuery): Observable<Page<OrganizationCode>> {
+    return this.http.get<Page<OrganizationCode>>(`${this.base}/api/organizer/codes`, { params: listParams(query) });
+  }
 
-    return this.http.get<Page<OrganizationCode>>(`${this.base}/api/organizer/codes`, { params });
+  /**
+   * Turn several codes off, or back on. Codes on an event waiting for review
+   * are left as they are and named in `skipped`.
+   */
+  setCodesActive(ids: readonly string[], active: boolean): Observable<{ changed: number; skipped: { id: string; code: string; reason: string }[] }> {
+    return this.http.post<{ changed: number; skipped: { id: string; code: string; reason: string }[] }>(`${this.base}/api/organizer/codes/active`, {
+      ids,
+      active,
+    });
   }
 
   codes(eventId: string, page = 1): Observable<Page<PromoCode>> {
