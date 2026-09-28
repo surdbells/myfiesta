@@ -10,6 +10,7 @@ import {
   UiSelect,
   createListState,
   parseAmount,
+  sortLocally,
   type SelectOption,
 } from '@myfiesta/ui';
 
@@ -302,5 +303,29 @@ describe('UiColumnMenu', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.screen.list.density()).toBe('compact');
     expect(compact.getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('sortLocally', () => {
+  const rows = [
+    { name: 'bisi', owed: 300 },
+    { name: 'Ada', owed: null },
+    { name: 'Émile', owed: 100 },
+    { name: 'chidi', owed: 300 },
+  ];
+  const keys = { name: (r: (typeof rows)[number]) => r.name, owed: (r: (typeof rows)[number]) => r.owed };
+
+  it('reads text as people do, ignoring case and accents', () => {
+    expect(sortLocally(rows, { column: 'name', direction: 'asc' }, keys).map((r) => r.name)).toEqual(['Ada', 'bisi', 'chidi', 'Émile']);
+  });
+
+  it('puts the empty last either way, and keeps ties in the order they came', () => {
+    expect(sortLocally(rows, { column: 'owed', direction: 'desc' }, keys).map((r) => r.name)).toEqual(['bisi', 'chidi', 'Émile', 'Ada']);
+    expect(sortLocally(rows, { column: 'owed', direction: 'asc' }, keys).map((r) => r.name)).toEqual(['Émile', 'bisi', 'chidi', 'Ada']);
+  });
+
+  it('leaves the rows as they are without a sort it knows', () => {
+    expect(sortLocally(rows, null, keys)).toEqual(rows);
+    expect(sortLocally(rows, { column: 'nonsense', direction: 'asc' }, keys)).toEqual(rows);
   });
 });

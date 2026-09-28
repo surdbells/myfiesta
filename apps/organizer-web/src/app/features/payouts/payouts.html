@@ -185,85 +185,128 @@
     <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">By event</h2>
 
     @if (events().length === 0) {
-      <p class="block__none rounded-lg border border-border bg-surface-raised p-6 text-sm text-text-muted">Nothing has sold yet.</p>
+      <p class="block__none card p-6 text-sm text-text-muted">Nothing has sold yet.</p>
     } @else {
-      <!--
-        A heading row, because three money columns with no labels is three
-        numbers nobody can tell apart. It was left out on the grounds that
-        the words would be more chrome than the figures; looking at it, the
-        figures without them are unreadable.
-      -->
-      <p class="rows__head mb-2 grid grid-cols-[1fr_repeat(3,8rem)] gap-4 px-6 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle max-[800px]:hidden" aria-hidden="true">
-        <span></span>
-        <span class="text-right">Sold</span>
-        <span class="text-right">Sent</span>
-        <span class="text-right">Owed</span>
-      </p>
+      @if (events().length > 5) {
+        <!-- Past a glance's worth: find a night by name, or only what is still owed. -->
+        <div class="mb-3 flex flex-wrap items-center gap-3">
+          <input
+            class="max-w-[20rem]"
+            type="search"
+            aria-label="Find an event"
+            placeholder="Find an event"
+            [value]="eventSearch()"
+            (input)="eventSearch.set($any($event.target).value)"
+          />
+          <label class="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" class="check" [checked]="owedOnly()" (change)="owedOnly.set(!owedOnly())" />
+            Only what is still owed
+          </label>
+        </div>
+      }
 
-      <ul class="rows m-0 grid list-none gap-2 p-0">
-        @for (row of events(); track row.event_id ?? 'none') {
-          <li class="row grid grid-cols-[1fr_repeat(3,8rem)] items-center gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4 max-[800px]:grid-cols-1 max-[800px]:gap-2 max-[800px]:px-4">
-            <div class="row__what min-w-0 max-[800px]:col-span-full">
-              @if (row.event_id) {
-                <a class="row__title flex flex-wrap items-center gap-3 font-medium text-primary-text no-underline hover:underline hover:underline-offset-[3px]" [routerLink]="['/events', row.event_id]">{{ row.title }}</a>
-              } @else {
-                <span class="row__title flex flex-wrap items-center gap-3 font-medium text-text no-underline">{{ row.title }}</span>
+      <div class="card card--flush">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[36rem] text-sm">
+            <caption class="sr-only">What each event sold, what has been sent and what is owed</caption>
+            <thead>
+              <tr>
+                <th uiSort="title" label="Event" [sort]="eventSort()" (sorted)="eventSort.set($event)"></th>
+                <th uiSort="gross" label="Sold" class="numeric" [sort]="eventSort()" (sorted)="eventSort.set($event)"></th>
+                <th uiSort="settled" label="Sent" class="numeric" [sort]="eventSort()" (sorted)="eventSort.set($event)"></th>
+                <th uiSort="balance" label="Owed" class="numeric" [sort]="eventSort()" (sorted)="eventSort.set($event)"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of shownEvents(); track row.event_id ?? 'none') {
+                <tr>
+                  <td>
+                    @if (row.event_id) {
+                      <a class="font-medium text-primary-text no-underline hover:underline" [routerLink]="['/events', row.event_id]">{{ row.title }}</a>
+                    } @else {
+                      <span class="font-medium">{{ row.title }}</span>
+                    }
+                    <span class="mt-0.5 block text-xs text-text-muted">{{ when(row.starts_at) }}</span>
+                  </td>
+                  <td class="numeric text-text-muted">{{ cash(row.gross) }}</td>
+                  <td class="numeric text-text-muted">{{ cash(row.settled) }}</td>
+                  <td class="numeric font-semibold" [class.text-primary-text]="row.balance.amount > 0">{{ cash(row.balance) }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="4" class="text-text-muted">No event matches that.</td>
+                </tr>
               }
-              <p class="row__when mt-1 text-sm text-text-muted">{{ when(row.starts_at) }}</p>
-            </div>
-
-            <p class="row__figure text-right font-normal text-text-muted tabular-nums max-[800px]:flex max-[800px]:items-baseline max-[800px]:justify-between max-[800px]:text-left">
-              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Sold</span>
-              {{ cash(row.gross) }}
-            </p>
-
-            <p class="row__figure text-right font-normal text-text-muted tabular-nums max-[800px]:flex max-[800px]:items-baseline max-[800px]:justify-between max-[800px]:text-left">
-              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Sent</span>
-              {{ cash(row.settled) }}
-            </p>
-
-            <p class="row__figure text-right font-medium tabular-nums max-[800px]:mt-1 max-[800px]:border-t max-[800px]:border-border-subtle max-[800px]:pt-3 max-[800px]:text-text max-[800px]:flex max-[800px]:items-baseline max-[800px]:justify-between max-[800px]:text-left">
-              <span class="row__cap hidden text-xs uppercase tracking-[0.08em] text-text-subtle max-[800px]:inline">Owed</span>
-              {{ cash(row.balance) }}
-            </p>
-          </li>
-        }
-      </ul>
+            </tbody>
+          </table>
+        </div>
+      </div>
     }
   </section>
 
   <!-- ------------------------------------------------------------- payments -->
   <section class="block mt-12">
-    <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Payments to you</h2>
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <h2 class="block__title text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Payments to you</h2>
+      @if (settlements().length > 5) {
+        <ui-select
+          class="w-[14rem]"
+          multiple
+          noun="kinds"
+          ariaLabel="Kind of payment"
+          placeholder="Every payment"
+          [options]="paymentTypeOptions"
+          [values]="paymentTypes()"
+          (valuesChange)="paymentTypes.set([...$event])"
+        />
+      }
+    </div>
 
     @if (settlements().length === 0) {
-      <p class="block__none rounded-lg border border-border bg-surface-raised p-6 text-sm text-text-muted">Nothing has been sent yet.</p>
+      <p class="block__none card p-6 text-sm text-text-muted">Nothing has been sent yet.</p>
     } @else {
-      <ul class="rows m-0 grid list-none gap-2 p-0">
-        @for (payment of settlements(); track payment.id) {
-          <li class="row grid grid-cols-[1fr_auto] items-center gap-4 rounded-lg border border-border bg-surface-raised px-6 py-4">
-            <div class="row__what min-w-0 max-[800px]:col-span-full">
-              <p class="row__title flex flex-wrap items-center gap-3 font-medium text-text no-underline">
-                {{ cash(payment.amount) }}
-                <ui-badge [tone]="settlementTone(payment.type)">{{ settlementLabel(payment.type) }}</ui-badge>
-              </p>
-              <p class="row__when mt-1 text-sm text-text-muted">
-                {{ when(payment.settled_at) }} · {{ railLabel(payment.rail) }}
-                @if (payment.event) {
-                  · {{ payment.event.title }}
-                }
-              </p>
-              @if (payment.note) {
-                <p class="row__note mt-2 text-pretty text-sm text-text-subtle">{{ payment.note }}</p>
+      <div class="card card--flush">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[36rem] text-sm">
+            <caption class="sr-only">Payments sent to you</caption>
+            <thead>
+              <tr>
+                <th uiSort="settled_at" label="Sent" [sort]="paymentSort()" (sorted)="paymentSort.set($event)"></th>
+                <th scope="col">How</th>
+                <th scope="col">For</th>
+                <th uiSort="amount" label="Amount" class="numeric" [sort]="paymentSort()" (sorted)="paymentSort.set($event)"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (payment of shownSettlements(); track payment.id) {
+                <tr>
+                  <td class="whitespace-nowrap">
+                    {{ when(payment.settled_at) }}
+                    @if (payment.note) {
+                      <span class="mt-0.5 block max-w-[28rem] text-pretty text-xs text-text-subtle">{{ payment.note }}</span>
+                    }
+                  </td>
+                  <td class="whitespace-nowrap text-text-muted">{{ railLabel(payment.rail) }}</td>
+                  <td>{{ payment.event?.title ?? '—' }}</td>
+                  <td class="numeric">
+                    <span class="font-semibold">{{ cash(payment.amount) }}</span>
+                    <span class="mt-1 flex justify-end gap-1">
+                      <ui-badge [tone]="settlementTone(payment.type)">{{ settlementLabel(payment.type) }}</ui-badge>
+                      @if (payment.status !== 'success') {
+                        <ui-badge tone="danger">{{ payment.status }}</ui-badge>
+                      }
+                    </span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="4" class="text-text-muted">No payment of that kind.</td>
+                </tr>
               }
-            </div>
-
-            @if (payment.status !== 'success') {
-              <ui-badge tone="danger">{{ payment.status }}</ui-badge>
-            }
-          </li>
-        }
-      </ul>
+            </tbody>
+          </table>
+        </div>
+      </div>
     }
   </section>
 
@@ -273,7 +316,7 @@
       <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Payout requests</h2>
       <ul class="m-0 grid list-none gap-2 p-0">
         @for (request of pastRequests(); track request.id) {
-          <li class="grid gap-1 rounded-lg border border-border bg-surface-raised px-6 py-3">
+          <li class="card grid gap-1 px-6 py-3">
             <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span class="font-medium tabular-nums">{{ cash(request.amount) }}</span>
               <ui-badge [tone]="requestTone(request.status)">{{ requestLabel(request.status) }}</ui-badge>
@@ -298,7 +341,7 @@
     <h2 class="block__title mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-text-subtle">Where it goes</h2>
 
     @if (destination(); as where) {
-      <div class="dest flex items-center gap-4 rounded-lg border border-border bg-surface-raised p-6 shadow-(--shadow-card) max-[560px]:flex-wrap">
+      <div class="dest card flex items-center gap-4 p-6 max-[560px]:flex-wrap">
         <ui-icon
           class="dest__mark text-text-subtle"
           [icon]="where.rail === 'interac' ? interacIcon : bankIcon"

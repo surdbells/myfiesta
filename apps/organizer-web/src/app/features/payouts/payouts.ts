@@ -15,6 +15,9 @@ import {
   UiSelect,
   UiSkeleton,
   type SelectOption,
+  UiSortHeader,
+  sortLocally,
+  type Sort,
 } from '@myfiesta/ui';
 import { Banknote, Landmark, Pencil, ShieldCheck } from 'lucide-angular';
 import { Api } from '../../core/api';
@@ -67,6 +70,7 @@ interface DestinationDraft {
     UiErrorState,
     UiSkeleton,
     UiIcon,
+    UiSortHeader,
   ],
   templateUrl: './payouts.html',
 })
@@ -273,6 +277,51 @@ export class Payouts {
 
   readonly events = computed(() => this.statement()?.events ?? []);
   readonly settlements = computed(() => this.statement()?.settlements ?? []);
+
+  // --- reading the statement ------------------------------------------------
+  //
+  // The statement comes whole, so its two tables sort and narrow in the
+  // browser: by what is still owed first, because that is what somebody
+  // opens this screen to find out.
+
+  readonly eventSort = signal<Sort>({ column: 'balance', direction: 'desc' });
+  readonly eventSearch = signal('');
+  /** Only the nights with money still to come. */
+  readonly owedOnly = signal(false);
+
+  readonly shownEvents = computed(() => {
+    const term = fold(this.eventSearch());
+    const rows = this.events().filter(
+      (row) => (!term || fold(row.title).includes(term)) && (!this.owedOnly() || row.balance.amount > 0),
+    );
+
+    return sortLocally(rows, this.eventSort(), {
+      title: (row) => row.title,
+      starts_at: (row) => (row.starts_at ? Date.parse(row.starts_at) : null),
+      gross: (row) => row.gross.amount,
+      settled: (row) => row.settled.amount,
+      balance: (row) => row.balance.amount,
+    });
+  });
+
+  readonly paymentSort = signal<Sort>({ column: 'settled_at', direction: 'desc' });
+  readonly paymentTypes = signal<string[]>([]);
+
+  readonly paymentTypeOptions: SelectOption[] = [
+    { value: 'full', label: 'Full' },
+    { value: 'partial', label: 'Partial' },
+    { value: 'overdraft', label: 'Includes an advance' },
+  ];
+
+  readonly shownSettlements = computed(() => {
+    const types = this.paymentTypes();
+    const rows = this.settlements().filter((row) => types.length === 0 || types.includes(row.type));
+
+    return sortLocally(rows, this.paymentSort(), {
+      settled_at: (row) => (row.settled_at ? Date.parse(row.settled_at) : null),
+      amount: (row) => row.amount.amount,
+    });
+  });
   readonly destination = computed<PayoutDestination | null>(
     () => this.statement()?.destination ?? null,
   );
@@ -452,4 +501,9 @@ export class Payouts {
       tone: current ? 'danger' : 'default',
     });
   }
+}
+
+/** Case and accents aside, for matching what somebody typed against a title. */
+function fold(text: string): string {
+  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 }
