@@ -141,6 +141,8 @@ export class UiTable {
   `,
   styles: `
     :host { padding: 0; }
+    /* A column of amounts is headed on the side its figures line up on. */
+    :host(.numeric) .sort { justify-content: flex-end; }
     .sort {
       display: flex;
       align-items: center;
@@ -148,6 +150,10 @@ export class UiTable {
       width: 100%;
       padding: var(--space-3) var(--space-4);
       font: inherit;
+      /* A button does not inherit these from its heading on its own, so a
+         sortable heading read in a different case from the ones beside it. */
+      text-transform: inherit;
+      letter-spacing: inherit;
       color: inherit;
       text-align: inherit;
       background: none;

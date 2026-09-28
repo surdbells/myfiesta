@@ -2,27 +2,50 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, type TestRequest } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL } from '../../core/api';
+import type { OrganizationOrder } from '../../core/api.types';
 import { Orders } from './orders';
 
 /**
- * The orders screen's date filter, as the server receives it.
+ * The orders screen, as the server receives it.
  *
- * The picker counts days on the reader's calendar. A yyyy-mm-dd sent on its
- * own is read by the server as a day in Greenwich, which for a Toronto
- * organizer is a "Today" that ends in the early evening. So the zone travels
- * with the days, to the list and to the spreadsheet alike.
+ * What is pinned is what the reader cannot see go wrong: several statuses
+ * sent as several values rather than the last one; the days sent in the
+ * reader's own zone (a yyyy-mm-dd alone is a Greenwich day, which for a
+ * Toronto organizer is a "Today" that ends in the early evening); the export
+ * asking for the same list in the same order; the ticked rows exported alone;
+ * and a link carrying the filters opening the list it describes.
  */
 describe('Orders', () => {
   let backend: HttpTestingController;
 
-  const empty = { data: [], meta: { total: 0, per_page: 25, current_page: 1, last_page: 1, summary: null } };
+  const order = (id: string): OrganizationOrder => ({
+    id,
+    reference: `REF${id}`,
+    buyer_name: `Buyer ${id}`,
+    buyer_email: `${id}@example.com`,
+    status: 'paid',
+    paid_at: '2026-09-20T20:00:00Z',
+    tickets_count: 1,
+    event: { id: 'ev-1', title: 'Afro Fest' },
+    total: { amount: 5000, currency: 'CAD' },
+    refunded: { amount: 0, currency: 'CAD' },
+    signals: [],
+  });
+
+  const page = (rows: OrganizationOrder[] = []) => ({
+    data: rows,
+    meta: { total: rows.length, per_page: 25, current_page: 1, last_page: 1, summary: null },
+  });
 
   beforeEach(() => {
+    localStorage.clear();
+
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
+        provideRouter([{ path: 'orders', component: Orders }]),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: API_BASE_URL, useValue: 'http://api.test' },
@@ -34,55 +57,123 @@ describe('Orders', () => {
 
   afterEach(() => backend.verify());
 
-  function render() {
-    const page = TestBed.createComponent(Orders).componentInstance;
+  async function open(url = '/orders', rows: OrganizationOrder[] = []) {
+    const harness = await RouterTestingHarness.create();
+    const screen = await harness.navigateByUrl(url, Orders);
+
     backend.expectOne('http://api.test/api/organizer/events/options').flush({ data: [] });
 
-    return page;
+    const settle = async () => {
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+    };
+
+    await settle();
+    // The saved views load beside the list; none here.
+    for (const views of backend.match((r) => r.url === 'http://api.test/api/organizer/saved-views')) views.flush({ data: [] });
+    const first = listRequest();
+    first.flush(page(rows));
+    await settle();
+
+    return { screen, harness, settle, first };
   }
 
-  /** The list is asked for a quarter of a second after the last change. */
-  async function listRequest(): Promise<TestRequest> {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const request = backend.expectOne((r) => r.url === 'http://api.test/api/organizer/orders');
-    request.flush(empty);
-
-    return request;
-  }
+  const listRequest = (): TestRequest => backend.expectOne((r) => r.url === 'http://api.test/api/organizer/orders');
 
   const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  it('opens the list a link describes, sending several values of one filter as several', async () => {
+    const { first } = await open('/orders?status=refunded&status=pending&q=ada&sort=total&dir=asc');
+
+    const params = first.request.params;
+    expect(params.getAll('status[]')).toEqual(['refunded', 'pending']);
+    expect(params.get('q')).toBe('ada');
+    expect(params.get('sort')).toBe('total');
+    expect(params.get('dir')).toBe('asc');
+    expect(params.has('timezone')).toBe(false);
+  });
+
   it('asks for a range in the reader’s own zone', async () => {
-    const page = render();
-    await listRequest();
+    const { screen, settle } = await open();
 
-    page.range.set({ from: '2026-02-07', to: '2026-02-07' });
-    page.refine();
+    screen.setRange({ from: '2026-02-07', to: '2026-02-07' });
+    await settle();
 
-    const params = (await listRequest()).request.params;
+    const params = listRequest().request.params;
     expect(params.get('from')).toBe('2026-02-07');
     expect(params.get('to')).toBe('2026-02-07');
     expect(params.get('timezone')).toBe(zone());
   });
 
-  it('exports the same days in the same zone', async () => {
-    const page = render();
-    await listRequest();
+  it('asks for amounts in the smallest unit', async () => {
+    const { screen, settle } = await open();
 
-    page.range.set({ from: '2026-02-01', to: null });
-    page.export();
+    screen.setAmounts({ min: 5000, max: null });
+    await settle();
+
+    const params = listRequest().request.params;
+    expect(params.get('min_total')).toBe('5000');
+    expect(params.has('max_total')).toBe(false);
+  });
+
+  it('exports the same list, in the same zone and the same order', async () => {
+    const { screen, settle } = await open('/orders?sort=total&dir=desc');
+
+    screen.setRange({ from: '2026-02-01', to: null });
+    await settle();
+    listRequest().flush(page());
+
+    screen.export();
 
     const request = backend.expectOne((r) => r.url === 'http://api.test/api/organizer/orders/export');
     expect(request.request.params.get('from')).toBe('2026-02-01');
     expect(request.request.params.get('timezone')).toBe(zone());
+    expect(request.request.params.get('sort')).toBe('total');
+    expect(request.request.params.has('page')).toBe(false);
     // Answered with a refusal so no file is saved: only the question matters here.
     request.flush(null, { status: 503, statusText: 'Service Unavailable' });
   });
 
-  it('names no zone when no days are chosen', async () => {
-    render();
+  it('exports only the ticked orders when asked to', async () => {
+    const { screen } = await open('/orders', [order('a'), order('b'), order('c')]);
 
-    expect((await listRequest()).request.params.has('timezone')).toBe(false);
+    screen.selection.toggle('a');
+    screen.selection.toggle('c');
+    screen.export(true);
+
+    const request = backend.expectOne((r) => r.url === 'http://api.test/api/organizer/orders/export');
+    expect(request.request.params.getAll('ids[]')).toEqual(['a', 'c']);
+    request.flush(null, { status: 503, statusText: 'Service Unavailable' });
+  });
+
+  it('forgets the ticks when the filter changes what the rows are', async () => {
+    const { screen, settle } = await open('/orders', [order('a'), order('b')]);
+
+    screen.selection.toggle('a');
+    expect(screen.selection.count()).toBe(1);
+
+    screen.list.set('status', ['refunded']);
+    await settle();
+    listRequest().flush(page());
+
+    expect(screen.selection.count()).toBe(0);
+  });
+
+  it('says a refusal is a refusal, and a failure can be tried again', async () => {
+    const { screen, settle } = await open();
+
+    screen.list.set('q', 'x');
+    await settle();
+    listRequest().flush(null, { status: 500, statusText: 'Server Error' });
+    await settle();
+    expect(screen.failed()).toBe(true);
+
+    screen.load();
+    await settle();
+    listRequest().flush(page([order('a')]));
+    await settle();
+    expect(screen.failed()).toBe(false);
+    expect(screen.orders().length).toBe(1);
   });
 });

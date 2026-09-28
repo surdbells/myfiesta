@@ -432,26 +432,8 @@ export class Api {
    * Params are dropped when empty rather than sent blank: an empty q would
    * make the server run a LIKE '%%' over every row to no purpose.
    */
-  organizationOrders(query: {
-    q?: string;
-    event_id?: string;
-    status?: string;
-    /** Both ends inclusive, as yyyy-mm-dd. */
-    from?: string;
-    to?: string;
-    /** The zone those days are days in; Greenwich when left out. */
-    timezone?: string;
-    page?: number;
-  }): Observable<OrganizationOrderPage> {
-    let params = new HttpParams();
-
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined && value !== null && value !== '') {
-        params = params.set(key, String(value));
-      }
-    }
-
-    return this.http.get<OrganizationOrderPage>(`${this.base}/api/organizer/orders`, { params });
+  organizationOrders(query: ListQuery): Observable<OrganizationOrderPage> {
+    return this.http.get<OrganizationOrderPage>(`${this.base}/api/organizer/orders`, { params: listParams(query) });
   }
 
   /** The statement: what is owed, by which night, and what has been sent. */
@@ -758,15 +740,12 @@ export class Api {
     return this.http.delete<void>(`${this.base}/api/organizer/saved-views/${encodeURIComponent(id)}`);
   }
 
-  /** Every order the filter matches — not only the page on screen — as a CSV. */
-  exportOrders(query: { q?: string; event_id?: string; status?: string; from?: string; to?: string; timezone?: string }): Observable<Blob> {
-    let params = new HttpParams();
-
-    for (const [key, value] of Object.entries(query)) {
-      if (value) params = params.set(key, value);
-    }
-
-    return this.http.get(`${this.base}/api/organizer/orders/export`, { params, responseType: 'blob' });
+  /**
+   * Every order the filter matches — not only the page on screen — as a CSV,
+   * in the list's order. With `ids`, only those orders.
+   */
+  exportOrders(query: ListQuery): Observable<Blob> {
+    return this.http.get(`${this.base}/api/organizer/orders/export`, { params: listParams(query), responseType: 'blob' });
   }
 
   guests(
@@ -1145,4 +1124,34 @@ export class Api {
       `${this.base}/api/organizer/events/${eventId}/codes/${id}`,
     );
   }
+}
+
+/**
+ * What a list asks for: each filter that is on, the sort and the page, as
+ * ListState.query() produces it. Arrays are several values of one filter.
+ */
+export type ListQuery = Readonly<Record<string, string | number | readonly string[] | null | undefined>>;
+
+/**
+ * A list's query as the API reads it.
+ *
+ * Several values of one filter go as `status[]=paid&status[]=refunded`, which
+ * is how Laravel reads an array (App\Support\Listing). Empty values are left
+ * out rather than sent blank: an empty q would make the server run a
+ * LIKE '%%' over every row to no purpose.
+ */
+export function listParams(query: ListQuery): HttpParams {
+  let params = new HttpParams();
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value === null || value === undefined || value === '') continue;
+
+    if (Array.isArray(value)) {
+      for (const item of value) params = params.append(`${key}[]`, String(item));
+    } else {
+      params = params.set(key, String(value));
+    }
+  }
+
+  return params;
 }
