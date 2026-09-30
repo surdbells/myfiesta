@@ -42,10 +42,17 @@ class TimeZonesTest extends TestCase
 
     public function test_it_says_which_edition_php_reads_and_one_night_in_it(): void
     {
-        $edition = ShowTimeZones::edition(timezone_version_get());
+        $version = timezone_version_get();
+
+        // A distribution's PHP (Ubuntu's, on CI) reads the system's files and
+        // reports 0.system, which names no edition; the command says so rather
+        // than inventing one. Only a numbered copy has an IANA name to print.
+        $says = $version === '0.system'
+            ? 'which do not say which edition they are (0.system)'
+            : "IANA's ".ShowTimeZones::edition($version)." ({$version})";
 
         $this->artisan('app:time-zones')
-            ->expectsOutputToContain("IANA's {$edition} (".timezone_version_get().')')
+            ->expectsOutputToContain($says)
             ->expectsOutputToContain('Vancouver at 04:00 UTC on 15 November 2026: '.$this->phpNight()->format('H:i, \U\T\CP').'.')
             ->expectsOutputToContain('The database, from its own copy: ')
             ->assertSuccessful();
