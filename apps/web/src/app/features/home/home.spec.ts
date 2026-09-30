@@ -142,6 +142,46 @@ describe('Home', () => {
     for (const img of others) expect(img.getAttribute('loading')).toBe('lazy');
   });
 
+  it("offers a shelf's arrows only while some of it is off-screen", () => {
+    // jsdom lays nothing out: five 280px cards are 1480px of shelf, in a
+    // frame 1152px wide at 1280 and 1728px wide at 1920.
+    const observers: (() => void)[] = [];
+    let box = 1152;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains('rail') ? 1480 : 0;
+    });
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains('rail') ? box : 0;
+    });
+
+    try {
+      const { fixture, page } = open(discovery({ weekend: [1, 2, 3, 4, 5].map(() => night()) }));
+      fixture.detectChanges();
+      const arrows = () => page.querySelectorAll('button[aria-label^="Scroll This weekend"]').length;
+
+      expect(arrows()).toBe(2);
+
+      box = 1728;
+      observers.forEach((resized) => resized());
+      fixture.detectChanges();
+
+      expect(arrows()).toBe(0);
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('states only counted figures', () => {
     const { page } = open();
 

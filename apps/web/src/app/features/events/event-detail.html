@@ -1,13 +1,13 @@
 @if (notFound()) {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>Event not found</h1>
     <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
     <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (unavailable()) {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>This event could not be loaded</h1>
-    <p class="muted">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
+    <p class="muted max-w-[56ch]">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
     <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (event(); as ev) {
@@ -18,7 +18,7 @@
   -->
   <div class="event-stage backdrop" [style.--backdrop]="ev.poster_url ? 'url(' + ev.poster_url + ')' : null">
   <article
-    class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8 max-[899px]:pb-32 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12"
+    class="wrap frame pb-24 pt-8 max-[899px]:pb-32 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px] min-[900px]:items-start min-[900px]:gap-12"
   >
     @if (ev.poster_url) {
       <!--
@@ -28,36 +28,60 @@
         uploaded. Decorative alt: the overlay says everything the image would.
         Not the kit's .hero, which is a padded, bordered panel: inside one the
         poster sat framed in a band of gradient instead of filling the top.
+
+        No taller than about half the window, above a phone. It spans the
+        whole frame, and at 21:9 across a 1920px screen it stood 740px tall
+        and pushed the price beside the words below the fold.
+
+        The band spans the frame; the poster in it stops at 21:9 of that
+        height. Held to the height alone, it went on widening with the window
+        and cropping harder as it did — of an organizer's 16:9 artwork, 53% of
+        the height showed at 1920 and 40% at 2560, against 76% at 21:9 — and
+        a face or a line of type in the top or bottom third went with it.
+        Wider than that, the band is the same poster blurred, so the page's
+        edges still hold and the name stays on the poster's own lower edge.
       -->
-      <div class="event-poster relative mb-8 overflow-hidden rounded-(--radius-overlay) shadow-(--shadow-floating) min-[900px]:col-span-full">
+      <div class="event-poster relative isolate mb-8 overflow-hidden rounded-(--radius-overlay) bg-surface-inset shadow-(--shadow-floating) min-[900px]:col-span-full">
+        <div class="relative mx-auto min-[701px]:max-w-[calc(min(55vh,32rem)*21/9)]">
+          <img
+            class="block aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-[4/5]"
+            [src]="ev.poster_url"
+            alt=""
+            fetchpriority="high"
+          />
+          <div
+            class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.82)_0%,rgba(5,10,7,0.25)_45%,transparent_70%)] max-[700px]:bg-[linear-gradient(to_top,rgba(5,10,7,0.92)_0%,rgba(5,10,7,0.6)_40%,rgba(5,10,7,0.1)_75%,transparent_100%)]"
+            aria-hidden="true"
+          ></div>
+          <div class="absolute inset-x-0 bottom-0 grid justify-items-start gap-1 p-8 text-neutral-0 max-sm:p-5">
+            @if (ev.category) {
+              <!--
+                A dark glass chip, not a light one. It sits where the gradient
+                has barely begun on a wide screen, and a 16% white chip over a
+                pale poster left its 12px white label at 2.5:1. At 60% of the
+                scrim's own near-black it holds 5:1 over a white poster with no
+                gradient under it at all, so it reads on anything.
+              -->
+              <span class="category-chip mb-1 rounded-full border border-[rgba(255,255,255,0.18)] bg-[rgba(5,10,7,0.6)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] backdrop-blur-[4px]">
+                {{ ev.category }}
+              </span>
+            }
+            <h1 class="text-balance text-[clamp(1.75rem,4vw,2.75rem)] leading-[1.15]">{{ ev.title }}</h1>
+            <p class="text-lg text-neutral-200 max-sm:text-base">
+              {{ when() }} <span aria-hidden="true">·</span> {{ ev.venue?.name ?? ev.city }}
+            </p>
+          </div>
+        </div>
+        <!-- The same file as the poster, so no second download, and after it
+             so the poster's fetchpriority is the one the request goes out
+             with. Behind it by z-index; hidden on a phone, where the poster
+             is the band. -->
         <img
-          class="aspect-[21/9] w-full bg-surface-inset object-cover max-[700px]:aspect-[4/5]"
+          class="absolute inset-0 -z-10 h-full w-full scale-125 object-cover blur-2xl brightness-75 max-[700px]:hidden"
           [src]="ev.poster_url"
           alt=""
-          fetchpriority="high"
-        />
-        <div
-          class="absolute inset-0 bg-[linear-gradient(to_top,rgba(5,10,7,0.82)_0%,rgba(5,10,7,0.25)_45%,transparent_70%)] max-[700px]:bg-[linear-gradient(to_top,rgba(5,10,7,0.92)_0%,rgba(5,10,7,0.6)_40%,rgba(5,10,7,0.1)_75%,transparent_100%)]"
           aria-hidden="true"
-        ></div>
-        <div class="absolute inset-x-0 bottom-0 grid justify-items-start gap-1 p-8 text-neutral-0 max-sm:p-5">
-          @if (ev.category) {
-            <!--
-              A dark glass chip, not a light one. It sits where the gradient
-              has barely begun on a wide screen, and a 16% white chip over a
-              pale poster left its 12px white label at 2.5:1. At 60% of the
-              scrim's own near-black it holds 5:1 over a white poster with no
-              gradient under it at all, so it reads on anything.
-            -->
-            <span class="category-chip mb-1 rounded-full border border-[rgba(255,255,255,0.18)] bg-[rgba(5,10,7,0.6)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] backdrop-blur-[4px]">
-              {{ ev.category }}
-            </span>
-          }
-          <h1 class="text-balance text-[clamp(1.75rem,4vw,2.75rem)] leading-[1.15]">{{ ev.title }}</h1>
-          <p class="text-lg text-neutral-200 max-sm:text-base">
-            {{ when() }} <span aria-hidden="true">·</span> {{ ev.venue?.name ?? ev.city }}
-          </p>
-        </div>
+        />
       </div>
     } @else {
       <!--
@@ -339,9 +363,9 @@
   -->
   @if (anythingOnSale()) {
     <div
-      class="buy-bar fixed inset-x-0 bottom-0 z-40 hidden border-t border-border bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-[12px] max-[899px]:block"
+      class="buy-bar frame fixed inset-x-0 bottom-0 z-40 hidden border-t border-border bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-[12px] max-[899px]:block"
     >
-      <div class="mx-auto flex max-w-[640px] items-center gap-4">
+      <div class="flex items-center gap-4">
         <div class="min-w-0">
           <p class="text-xs text-text-subtle">{{ free() ? 'Tickets' : 'From' }}</p>
           <p class="text-lg font-bold text-primary-text tabular-nums">{{ startingFrom() }}</p>
@@ -356,5 +380,5 @@
     </div>
   }
 } @else {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
+  <section class="wrap frame pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }

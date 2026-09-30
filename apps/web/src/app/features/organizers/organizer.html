@@ -1,5 +1,5 @@
 @if (notFound()) {
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>Organizer not found</h1>
     <p class="mt-2 text-text-muted">
       This organizer may not have published anything yet, or the link may be wrong.
@@ -7,7 +7,7 @@
     <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (unavailable()) {
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>This page could not be loaded</h1>
     <p class="mt-2 text-text-muted">
       Something on our side did not answer in time. Try again in a minute — the link is fine.
@@ -15,7 +15,7 @@
     <a class="mt-6 inline-block font-semibold text-primary-text" routerLink="/events">See what&#39;s on</a>
   </section>
 } @else if (organizer(); as org) {
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <nav class="mb-4 text-sm text-text-muted" aria-label="Breadcrumb">
       <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
       <span aria-hidden="true"> / </span>

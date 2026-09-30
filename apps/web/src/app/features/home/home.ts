@@ -26,6 +26,7 @@ import { AvailabilityBadge } from '../../shared/availability-badge';
 import { categoryIcon } from '../../shared/category-art';
 import { EventCard } from '../../shared/event-card';
 import { OrganizerPitch } from '../../shared/organizer-pitch';
+import { Overflows } from '../../shared/overflows';
 import { PosterArt } from '../../shared/poster-art';
 
 /** A shelf of events with a reason for being a shelf, and a way to see all of them. */
@@ -79,6 +80,7 @@ const COUNTRIES: Record<string, string> = { CA: 'Canada', NG: 'Nigeria' };
     UiIcon,
     AvailabilityBadge,
     PosterArt,
+    Overflows,
     LucideAngularModule,
   ],
   templateUrl: './home.html',

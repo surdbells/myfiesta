@@ -1,7 +1,7 @@
 @if (loading()) {
-  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8"><p class="muted" role="status">Finding your tickets…</p></section>
+  <section class="wrap frame-[520px] pb-24 pt-8"><p class="muted" role="status">Finding your tickets…</p></section>
 } @else if (notFound()) {
-  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8">
+  <section class="wrap frame-[520px] pb-24 pt-8">
     <h1 class="text-2xl">We cannot find those tickets</h1>
     <p class="muted">
       Check the link in your confirmation email — some email apps cut long links
@@ -9,7 +9,7 @@
     </p>
   </section>
 } @else if (order(); as o) {
-  <section class="wrap mx-auto max-w-[520px] px-6 pb-24 pt-8" (click)="requestFullBrightness()">
+  <section class="wrap frame-[520px] pb-24 pt-8" (click)="requestFullBrightness()">
     <header class="mb-8 grid justify-items-start gap-1">
       <p class="eyebrow">{{ o.event.organizer }}</p>
       <h1 class="text-2xl">{{ o.event.title }}</h1>

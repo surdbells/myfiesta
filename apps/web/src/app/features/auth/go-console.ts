@@ -15,7 +15,7 @@ import { CONSOLE_URL } from '../../core/console-url';
   selector: 'mf-go-console',
   standalone: true,
   template: `
-    <section class="grid min-h-[40vh] place-items-center px-6">
+    <section class="frame grid min-h-[40vh] place-items-center">
       <p class="muted" role="status">Taking you to the organizer console…</p>
     </section>
   `,

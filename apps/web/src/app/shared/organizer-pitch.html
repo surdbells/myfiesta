@@ -6,7 +6,7 @@
   different room from the listings around it, and should read as one.
 -->
 <section
-  class="pitch relative isolate mt-24 overflow-hidden bg-[linear-gradient(140deg,var(--color-brand-800)_0%,var(--color-brand-900)_45%,var(--color-neutral-950)_100%)] px-6 text-neutral-0"
+  class="pitch frame relative isolate mt-24 overflow-hidden bg-[linear-gradient(140deg,var(--color-brand-800)_0%,var(--color-brand-900)_45%,var(--color-neutral-950)_100%)] text-neutral-0"
   [class]="compact() ? 'py-16' : 'py-20 max-sm:py-16'"
   aria-labelledby="pitch-title"
 >
@@ -17,7 +17,7 @@
   ></span>
 
   <div
-    class="pitch__inner mx-auto grid max-w-[1240px] items-center gap-12"
+    class="pitch__inner grid items-center gap-12"
     [class]="compact() ? 'justify-items-center text-center' : 'grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] max-[980px]:grid-cols-1 max-[980px]:gap-10'"
   >
     <div class="grid content-start gap-5" [class.justify-items-center]="compact()">

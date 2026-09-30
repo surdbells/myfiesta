@@ -26,7 +26,7 @@
   ></span>
 
   <div
-    class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] items-center gap-12 px-6 pb-20 pt-16 max-[1024px]:grid-cols-1 max-[1024px]:gap-9 max-[1024px]:pb-12 max-sm:pt-9"
+    class="hero__inner frame grid grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] items-center gap-12 pb-20 pt-16 max-[1024px]:grid-cols-1 max-[1024px]:gap-9 max-[1024px]:pb-12 max-sm:pt-9"
   >
     <div class="hero__copy @container min-w-0">
       @if (loading()) {
@@ -154,7 +154,7 @@
       </div>
     } @else if (lead(); as event) {
       <ul
-        class="mosaic m-0 grid list-none grid-cols-2 gap-4 p-0 max-[1024px]:-mx-6 max-[1024px]:flex max-[1024px]:snap-x max-[1024px]:snap-mandatory max-[1024px]:overflow-x-auto max-[1024px]:px-6 max-[1024px]:scroll-px-6 max-[1024px]:pb-2 max-[1024px]:[scrollbar-width:none]"
+        class="mosaic m-0 grid list-none grid-cols-2 gap-4 p-0 max-[1024px]:bleed max-[1024px]:flex max-[1024px]:snap-x max-[1024px]:snap-mandatory max-[1024px]:overflow-x-auto max-[1024px]:pb-2 max-[1024px]:[scrollbar-width:none]"
         aria-label="On sale now"
       >
         <li class="mosaic__lead relative row-span-2 min-w-0 max-[1024px]:w-[min(78vw,20rem)] max-[1024px]:shrink-0 max-[1024px]:snap-start">
@@ -262,7 +262,9 @@
           [queryParams]="shelf.all"
           >See all <span class="sr-only">{{ shelf.title | lowercase }}</span><ui-icon [icon]="arrowIcon" size="sm"
         /></a>
-        @if (scrolls(shelf)) {
+        <!-- Only while there is something off-screen: on a wide screen a
+             short shelf fits, and arrows that move nothing read as broken. -->
+        @if (scrolls(shelf) && row.overflows()) {
           <button
             class="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-field-border bg-surface-raised text-text [font-family:inherit] hover:bg-surface-hover max-sm:hidden"
             type="button"
@@ -283,13 +285,17 @@
       </div>
     </header>
 
+    <!-- The padding is set per branch: bleed carries its own, and a p-0 here
+         would sort after it and take the rail back in off the window's edge. -->
     <ul
       #track
-      class="rail m-0 grid list-none p-0"
+      appOverflows
+      #row="overflows"
+      class="rail m-0 grid list-none py-0"
       [class]="
         scrolls(shelf)
-          ? 'grid-flow-col auto-cols-[17.5rem] gap-5 overflow-x-auto snap-x snap-mandatory pb-3 -mx-6 px-6 scroll-px-6 [scrollbar-width:thin] max-sm:auto-cols-[min(72vw,15.5rem)] max-sm:gap-4'
-          : 'grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-5 max-sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] max-sm:gap-3'
+          ? 'grid-flow-col auto-cols-[17.5rem] gap-5 overflow-x-auto snap-x snap-mandatory pb-3 bleed [scrollbar-width:thin] max-sm:auto-cols-[min(72vw,15.5rem)] max-sm:gap-4'
+          : 'grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-5 px-0 max-sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] max-sm:gap-3'
       "
     >
       @for (event of shelf.events; track event.slug) {
@@ -301,7 +307,7 @@
   </section>
 </ng-template>
 
-<div class="wrap mx-auto max-w-[1240px] px-6">
+<div class="wrap frame">
   @if (loading()) {
     <section class="mt-16" aria-busy="true" aria-label="Loading what is on">
       <span class="shimmer mb-5 h-8 w-56"></span>
@@ -341,13 +347,13 @@
     now, set apart so it reads as that rather than as more of the same.
   -->
   <div class="almost-band mt-16 bg-[color-mix(in_srgb,var(--scarce)_8%,var(--surface-sunken))] pb-14 pt-1 max-sm:mt-12">
-    <div class="mx-auto max-w-[1240px] px-6">
+    <div class="frame">
       <ng-container *ngTemplateOutlet="shelfTemplate; context: { $implicit: shelf }" />
     </div>
   </div>
 }
 
-<div class="wrap mx-auto max-w-[1240px] px-6">
+<div class="wrap frame">
   @if (!loading() && !failed()) {
     <!--
       Categories: a real poster from each wherever there is one, the
@@ -365,7 +371,12 @@
             >All events <ui-icon [icon]="arrowIcon" size="sm"
           /></a>
         </header>
-        <ul class="m-0 grid list-none grid-cols-4 gap-4 p-0 max-[1024px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-3">
+        <!-- Four across, then all eight in a row from 1800px: in a frame as
+             wide as the window, four across made each card 560px wide and
+             700px tall on a large screen. Counts that divide the eight rather
+             than as many as fit: those left a row of two under six at 1920,
+             and at 2560 an empty ninth column past the last card. -->
+        <ul class="m-0 grid list-none grid-cols-4 gap-4 p-0 min-[1800px]:grid-cols-8 max-[1024px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-3">
           @for (kind of categories(); track kind.category) {
             <li class="min-w-0">
               <a
@@ -424,7 +435,9 @@
           <h2 id="cities-title" class="text-[clamp(1.4rem,2.4vw,1.75rem)] font-bold tracking-[-0.02em]">Events by city</h2>
           <p class="text-sm text-text-muted">Where the nights are, and how many are on.</p>
         </header>
-        <ul class="m-0 grid list-none grid-cols-3 gap-4 p-0 max-[1024px]:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-3">
+        <!-- Likewise: three across, then all six in a row from 1800px, so
+             the six make two full rows or one and never four over two. -->
+        <ul class="m-0 grid list-none grid-cols-3 gap-4 p-0 min-[1800px]:grid-cols-6 max-[1024px]:grid-cols-2 max-sm:grid-cols-1 max-sm:gap-3">
           @for (place of cities().slice(0, 6); track place.city + place.country) {
             <li class="min-w-0">
               <a

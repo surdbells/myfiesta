@@ -27,6 +27,61 @@
 @source '../../../packages/ui/src';
 
 /*
+ * The page's frame: the whole width of the window, less one gutter a side.
+ *
+ * Every page used to be a centred column — 1240px here, 1120px there, a third
+ * number on the header and the footer — which on a 1920px screen left a third
+ * of it as grey margin, and whose edges lined up only where somebody had kept
+ * the numbers the same. One gutter, used by every frame, and the header, the
+ * page and the footer start and end on the same line by construction.
+ *
+ * 5% of the window, and never under 16px, which is what a thumb and a rounded
+ * phone corner need. In vw rather than %, so a frame nested inside something
+ * narrower still lines up with the window's edges, and so a shelf can bleed
+ * back out by exactly the gutter.
+ */
+:root {
+  --page-gutter: max(1rem, 5vw);
+}
+
+/*
+ * The frame itself. No max-width: at 2560px the page is 2560px, and what must
+ * not grow with it — a paragraph, a form — keeps its own measure instead
+ * (below, and max-w-[66ch] on the words inside wide layouts).
+ *
+ * Utilities rather than plain classes so they take variants (the home page's
+ * posters bleed only below 1024px) and sit in the utilities layer — which
+ * also means a p-* or px-* on the same element sorts after them and wins, so
+ * a frame carries neither.
+ */
+@utility frame {
+  width: 100%;
+  padding-inline: var(--page-gutter);
+}
+
+/*
+ * A frame whose content keeps a measure: frame-[68ch] for a legal page,
+ * frame-[520px] for a ticket. Still the full width, with the padding grown to
+ * centre the measure — and never less than the gutter, so on a phone it is
+ * the same frame as everything else.
+ */
+@utility frame-* {
+  width: 100%;
+  padding-inline: max(var(--page-gutter), (100% - --value([length])) / 2);
+}
+
+/*
+ * A row that scrolls sideways inside a frame: out to the window's edges, so a
+ * card leaves the screen rather than a line in its middle, with the first card
+ * on the gutter at rest and each snap landing back on it.
+ */
+@utility bleed {
+  margin-inline: calc(-1 * var(--page-gutter));
+  padding-inline: var(--page-gutter);
+  scroll-padding-inline: var(--page-gutter);
+}
+
+/*
  * Where a sticky panel stops: below the sticky site header, with room to
  * breathe. The event page's rail and the checkout summaries stuck 24px from
  * the top of the window, which is under a 61px header — the panel's own

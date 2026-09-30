@@ -18,7 +18,7 @@ import { Seo } from '../../core/seo';
   selector: 'mf-not-found',
   imports: [RouterLink],
   template: `
-    <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+    <section class="wrap frame-[720px] pb-24 pt-8">
       <h1>Page not found</h1>
       <p class="mt-2 text-text-muted">
         Nothing lives at this address. If somebody sent you the link, part of it may be missing.

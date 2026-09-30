@@ -29,10 +29,14 @@ export class App {
   /**
    * The menu on a phone.
    *
-   * Below 700px the header has room for the mark and one action, and the
+   * Below 780px the header has room for the mark and one action, and the
    * navigation used to simply disappear — leaving somebody at a door with no
    * way to "My tickets" from the header on the device they were most likely
    * holding. Closed on every navigation, so choosing a page is one tap.
+   *
+   * 780 rather than 700 since the page gutter became 5% a side: between 700
+   * and about 760px the brand, four links and two actions no longer fit one
+   * row, and "My tickets" wrapped and grew the sticky header.
    */
   readonly menuOpen = signal(false);
 

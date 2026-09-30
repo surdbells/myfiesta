@@ -9,10 +9,14 @@
  * elements inside one article scope is the design, not a leftover.
  */
 
+/* Top and bottom only. The measure and the sides are the site's frame
+   (frame-[68ch] in the template), so the text sits in the same gutter as the
+   header on a phone. That frame is the full width, so the .prose box it also
+   wears must not narrow it — the 68ch is kept as the frame's measure instead. */
 .wrap {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-5) var(--space-9);
+  max-width: none;
+  padding-top: var(--space-7);
+  padding-bottom: var(--space-9);
 }
 
 h1 {

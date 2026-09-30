@@ -109,7 +109,7 @@ export class EventList {
    *
    * Open, they filled the whole first screen before a single event — somebody
    * who came to browse had to scroll past a form to see anything. Closed by
-   * default below 860px; always open beside the results on a wide screen,
+   * default below 960px; always open beside the results on a wide screen,
    * where the CSS ignores this.
    */
   readonly filtersOpen = signal(false);

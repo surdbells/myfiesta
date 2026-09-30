@@ -1,17 +1,17 @@
 <!-- The event's poster colour carried through buying: the same light as its page. -->
 <div class="backdrop backdrop-calm" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
 @if (notFound()) {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>Event not found</h1>
     <p class="muted">This event may have been unpublished, or the link may be wrong.</p>
   </section>
 } @else if (unavailable()) {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>This event could not be loaded</h1>
-    <p class="muted">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
+    <p class="muted max-w-[56ch]">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
   </section>
 } @else if (event(); as ev) {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <!-- Inside somebody else's page there is no "Home" to go back to: the
          page around the frame is theirs. The event is named instead. -->
     @if (embed.active()) {
@@ -33,7 +33,17 @@
       <app-checkout-steps [current]="2" [free]="free()" />
     </div>
 
-    <div class="mt-8 grid grid-cols-[minmax(0,1fr)_400px] items-start gap-8 max-[900px]:grid-cols-1">
+    <!--
+      The form keeps a measure; the summary keeps to the frame's edge. As
+      wide as the frame less the summary, the form was 1872px across a 2560px
+      screen — four inputs 440px each, "First name" 1400px from "Confirm
+      email". It stops at 64rem, two fields a row, and the room left over
+      goes between it and the summary, as it does on the ticket choice.
+
+      One column below 960px rather than 900px: beside a 400px summary, a
+      frame 5% in from each side left two fields 157px wide at 920px.
+    -->
+    <div class="mt-8 grid grid-cols-[minmax(0,64rem)_400px] items-start justify-between gap-8 max-[960px]:grid-cols-1">
       <!-- --------------------------------------------------- attendee -->
       <form class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-8 shadow-(--shadow-raised) max-sm:p-5" (ngSubmit)="placeOrder()">
         <h2 class="border-b border-border pb-3 text-xl">Attendee details</h2>
@@ -136,7 +146,7 @@
           for the terms in force (apps/api/resources/legal) — LegalCopiesTest
           fails if these drift from it.
         -->
-        <p class="refund-summary mb-0 mt-2 ml-[30px] text-sm leading-[1.5] text-text-muted">
+        <p class="refund-summary mb-0 mt-2 ml-[30px] max-w-[65ch] text-sm leading-[1.5] text-text-muted">
           Refunds are up to the organizer, except that you are owed one if the event is cancelled.
         </p>
 
@@ -150,7 +160,7 @@
         @if (buyerQuestions().length > 0) {
           <h2 class="mt-10 border-b border-border pb-3 text-xl">{{ ev.organizer.name }} asks</h2>
 
-          <div class="mt-6 grid gap-5">
+          <div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-5">
             @for (question of buyerQuestions(); track question.id) {
               <app-question-field
                 [question]="question"
@@ -167,7 +177,7 @@
           <!-- One block per ticket, numbered the way the refusal from the
                server numbers them: "answer for ticket 2" has to point at
                something a reader can find. -->
-          <div class="mt-6 grid gap-6">
+          <div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] gap-6">
             @for (slot of slots(); track slot.key) {
               <fieldset class="grid gap-5 rounded-lg border border-border bg-surface-sunken p-5">
                 <legend class="px-2 text-sm font-semibold">
@@ -204,7 +214,7 @@
           -->
           <div class="mt-6 flex items-start gap-4 rounded-lg bg-surface-sunken p-5">
             <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-lg" aria-hidden="true">🔒</span>
-            <p class="text-sm leading-[1.6] text-text-muted">
+            <p class="max-w-[65ch] text-sm leading-[1.6] text-text-muted">
               <strong class="text-text">You pay on {{ ev.currency === 'NGN' ? "Paystack's" : "Stripe's" }} secure page.</strong>
               After you continue, {{ ev.currency === 'NGN' ? 'Paystack' : 'Stripe' }} takes the payment —
               card, and whatever local methods they offer — and your card details never touch myFiesta.
@@ -224,7 +234,7 @@
         <!--
           The button, again, where a phone's form ends.
 
-          Below 900px the summary moves above the form so the total is the
+          Below 960px the summary moves above the form so the total is the
           first thing read — which put the only way to pay above the fields,
           and somebody who had just ticked the box scrolled back up the page
           to find it. Here it follows the form instead, with the total on it,
@@ -233,7 +243,7 @@
         -->
         @if (quote(); as q) {
           <button
-            class="place-order mt-6 hidden h-13 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[900px]:flex"
+            class="place-order mt-6 hidden h-13 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[960px]:flex"
             type="button"
             [disabled]="!ready() || placing()"
             (click)="placeOrder()"
@@ -255,7 +265,7 @@
         away while the buyer was typing, and what is being paid should be
         readable at the moment it is agreed to.
       -->
-      <aside class="sticky top-(--sticky-top) grid content-start gap-6 self-start max-[900px]:static max-[900px]:order-first">
+      <aside class="sticky top-(--sticky-top) grid content-start gap-6 self-start max-[960px]:static max-[960px]:order-first">
         <div class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-overlay)">
           @if (ev.poster_url) {
             <div class="relative mb-5 overflow-hidden rounded-lg">
@@ -374,7 +384,7 @@
 
             <!-- Wide screens only: on a phone the form ends with its own (above). -->
             <button
-              class="mt-5 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[900px]:hidden"
+              class="mt-5 flex h-13 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-primary text-base font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 max-[960px]:hidden"
               type="button"
               [disabled]="!ready() || placing()"
               (click)="placeOrder()"
@@ -417,6 +427,6 @@
     </div>
   </section>
 } @else {
-  <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
+  <section class="wrap frame pb-24 pt-8"><p class="muted" role="status">Loading…</p></section>
 }
 </div>

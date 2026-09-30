@@ -1,5 +1,5 @@
 @if (notFound()) {
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>Nothing here by that name</h1>
     <p class="mt-2 max-w-[56ch] text-text-muted">
       There is no category or city at this address. If somebody sent you the link, part of it may be missing.
@@ -10,9 +10,9 @@
     </p>
   </section>
 } @else if (unavailable()) {
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
+  <section class="wrap frame pb-24 pt-8">
     <h1>These events could not be loaded</h1>
-    <p class="muted mt-2">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
+    <p class="muted mt-2 max-w-[56ch]">Something on our side did not answer in time. Try again in a minute — the link is fine.</p>
   </section>
 } @else {
   @if (collection(); as page) {
@@ -46,7 +46,7 @@
         class="absolute inset-0 -z-10 bg-[linear-gradient(95deg,color-mix(in_srgb,var(--color-neutral-950)_88%,transparent)_0%,color-mix(in_srgb,var(--color-neutral-950)_45%,transparent)_65%,color-mix(in_srgb,var(--color-neutral-950)_20%,transparent)_100%)]"
         aria-hidden="true"
       ></span>
-      <div class="mx-auto grid max-w-[1240px] gap-4 px-6 pb-12 pt-8 max-sm:pb-9">
+      <div class="frame grid gap-4 pb-12 pt-8 max-sm:pb-9">
         <nav class="text-sm text-neutral-300" aria-label="Breadcrumb">
           <a class="text-neutral-300 no-underline hover:text-neutral-0 hover:underline" routerLink="/">Home</a>
           <span aria-hidden="true"> / </span>
@@ -63,7 +63,7 @@
     </header>
   }
 
-  <section class="wrap mx-auto max-w-[1240px] px-6 pb-8 pt-8">
+  <section class="wrap frame pb-8 pt-8">
     @if (!collection()) {
       <nav class="mb-4 text-sm text-text-muted" aria-label="Breadcrumb">
         <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
@@ -74,18 +74,24 @@
       <p class="mt-2 max-w-[52ch] text-lg text-text-muted">{{ subheading() }}</p>
     }
 
-    <div class="mt-8 grid grid-cols-[16.5rem_minmax(0,1fr)] items-start gap-8 max-[860px]:mt-6 max-[860px]:grid-cols-1 max-[860px]:gap-4">
+    <!--
+      Beside the results only from 960px. The panel takes 16.5rem whatever
+      the width, and with a 5% gutter a side the results beside it had room
+      for one 15rem card up to about 890px: a single card 500px wide where
+      there had been two. Stacked instead, the same width shows three.
+    -->
+    <div class="mt-8 grid grid-cols-[16.5rem_minmax(0,1fr)] items-start gap-8 max-[960px]:mt-6 max-[960px]:grid-cols-1 max-[960px]:gap-4">
       <!-- ------------------------------------------------------------ filters -->
       <aside
-        class="filters sticky top-20 grid gap-6 self-start rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card) max-[860px]:static max-[860px]:gap-0 max-[860px]:p-4"
+        class="filters sticky top-20 grid gap-6 self-start rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card) max-[960px]:static max-[960px]:gap-0 max-[960px]:p-4"
         aria-label="Filters"
       >
         <div class="flex items-center justify-between gap-3">
-          <h2 class="text-lg max-[860px]:hidden">Filters</h2>
+          <h2 class="text-lg max-[960px]:hidden">Filters</h2>
 
           <!-- On a phone the heading becomes the switch for the panel. -->
           <button
-            class="hidden h-10 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-base font-semibold text-text [font-family:inherit] max-[860px]:inline-flex"
+            class="hidden h-10 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-base font-semibold text-text [font-family:inherit] max-[960px]:inline-flex"
             type="button"
             aria-controls="event-filters"
             [attr.aria-expanded]="filtersOpen()"
@@ -112,7 +118,7 @@
 
         <div
           id="event-filters"
-          class="filters__body grid gap-6 max-[860px]:pt-4 max-[860px]:data-[open=false]:hidden"
+          class="filters__body grid gap-6 max-[960px]:pt-4 max-[960px]:data-[open=false]:hidden"
           [attr.data-open]="filtersOpen()"
         >
           <fieldset class="grid gap-2">

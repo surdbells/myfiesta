@@ -22,7 +22,7 @@ import { EventSummary } from '../core/api.types';
   imports: [UiIcon],
   template: `
     @if (shown()) {
-      <section class="promo mx-auto mt-24 max-w-[1240px] px-6" aria-labelledby="promo-title">
+      <section class="promo frame mt-24" aria-labelledby="promo-title">
         <div
           class="relative isolate grid grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] items-center gap-10 overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised p-12 shadow-(--shadow-raised) max-[900px]:grid-cols-1 max-[900px]:p-8 max-sm:p-6"
         >
