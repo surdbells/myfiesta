@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { inject, isDevMode } from '@angular/core';
 import { Router } from '@angular/router';
 import { SessionStore } from './core/session';
+import { introFirst } from './core/intro';
 
 /**
  * Where a session may go.
@@ -44,7 +45,17 @@ export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
+    // A first launch opens on the introduction instead (core/intro.ts).
+    canActivate: [introFirst],
     loadComponent: () => import('./features/browse/home').then((m) => m.Home),
+  },
+  {
+    // What the app does, for going out and for running events. Shown once, on
+    // a first launch, and again from Settings or signing in — so no guard:
+    // somebody signed out has to reach it. Its own chunk: most launches never
+    // load it.
+    path: 'welcome',
+    loadComponent: () => import('./features/intro/intro').then((m) => m.IntroScreen),
   },
   {
     path: 'browse',

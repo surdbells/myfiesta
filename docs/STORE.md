@@ -162,10 +162,44 @@ Commit what it writes; builds never run it.
   background is the same colour.
 - Android: adaptive icons (foreground inside the 66dp safe circle, on white),
   legacy square and round icons for Android 7, all five densities. The launch
-  screen is the platform's own: the icon on #0b0f0c, set in
-  `res/values/styles.xml`, the same on every version. The template's splash
-  images are gone — on Android 12 they appeared after the system's splash, as
-  a second one — and so is the Android-robot default the theme used to show.
+  screen is the platform's own SplashScreen API: `res/values/styles.xml`
+  gives the launch theme `Theme.SplashScreen` with #0b0f0c as
+  `windowSplashScreenBackground` and `drawable-*/splash_icon.png` — the mark
+  alone, inside the 192dp circle Android 12 keeps of a 288dp icon with no
+  background — as `windowSplashScreenAnimatedIcon`, handing over to
+  `AppTheme.NoActionBar` (`postSplashScreenTheme`). Android 11 and older get
+  the same picture from `core-splashscreen`, drawn as the window background
+  and then held by the plugin. `AppTheme.NoActionBar` carries the same icon,
+  ground and icon size, because Capacitor has already switched to it when the
+  plugin installs the compat splash, and the library reads the picture from
+  the theme that is on: without them it has nothing to hold the splash with,
+  and the mark goes at the app's first frame. The app's own window is
+  #0b0f0c too, so no version shows white between the splash and the first
+  screen. The template's splash images are gone — on
+  Android 12 they appeared after the system's splash, as a second one — and
+  so is the Android-robot default the theme used to show.
+
+Both phones open on the same picture: the mic on #0b0f0c. The app's first
+screen replaces it only once it has rendered. `@capacitor/splash-screen`
+(linked through SPM on iOS — it ships a `Package.swift` — and through Gradle
+on Android; `npm run check` confirms both) holds the launch screen, and
+`core/launch-screen.ts` takes it down after the first navigation's screen has
+rendered, or after four seconds whatever happened. The plugin's own timer
+(`launchShowDuration`, 6 seconds, in `capacitor.config.ts`) is only a
+backstop, for a start where none of the app's code runs — a WebView too old
+for the bundle — which would otherwise be a splash that never leaves, over a
+screen that takes no touches. On iPhone the plugin lays
+`LaunchScreen.storyboard` over the WebView, so the operating system's launch
+screen and the plugin's are the same image and the hand-over does not show.
+
+A first launch then opens on the introduction (`/welcome`, four pages: what
+the app does for somebody going out and for somebody running events, ending
+on **Get started** or **I run events**), once; You → **Show the
+introduction** opens it again, and **What is myFiesta?** on the sign-in
+screen does the same for somebody without an account. A launch from a link
+skips it, and it waits for the next launch. A phone updating with an account
+already signed in is not a first launch, and does not see it. Nothing on it
+needs a network, so App Review sees it the same on any connection.
 
 It is not `@capacitor/assets`: that pins `@capacitor/cli` 5 and `sharp` 0.32,
 and installing it into this workspace brought a critical advisory (node-tar)

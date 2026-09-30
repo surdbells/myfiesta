@@ -235,7 +235,10 @@ describe('Settings, signing out and the version', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: 'sign-in', children: [] }]),
+        provideRouter([
+          { path: 'sign-in', children: [] },
+          { path: 'welcome', children: [] },
+        ]),
         { provide: Api, useValue: { me: async () => ({ name: 'Ada Okafor', email: 'ada@example.test', email_verified: true, phone: null, timezone: null, organizations: [] }) } },
         {
           provide: SessionStore,
@@ -301,6 +304,15 @@ describe('Settings, signing out and the version', () => {
 
     expect(asked).toHaveLength(1);
     expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('opens the introduction again, over Settings', async () => {
+    const fixture = await open();
+
+    button(fixture.nativeElement as HTMLElement, 'Show the introduction')!.click();
+    await fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/welcome');
   });
 
   it('says the version the stores have, from package.json', async () => {

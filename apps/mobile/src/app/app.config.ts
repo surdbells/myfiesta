@@ -13,6 +13,8 @@ import { Theme } from './core/theme';
 import { Navigation } from './core/navigation';
 import { LinkedScreenReuse } from './core/deep-links';
 import { ReportingErrorHandler } from './core/error-reporting';
+import { LaunchScreen } from './core/launch-screen';
+import { Intro } from './core/intro';
 
 /**
  * Whether the phone has been asked for less movement.
@@ -72,13 +74,22 @@ export const appConfig: ApplicationConfig = {
       // Listening before the first navigation, so it knows where the app opened.
       inject(Navigation);
 
+      // The launch screen stays up until that first screen has rendered —
+      // and its limit starts now, before anything below could hang.
+      inject(LaunchScreen).holdUntilFirstScreen();
+
       const theme = inject(Theme);
       const session = inject(SessionStore);
       const reminders = inject(Reminders);
+      const intro = inject(Intro);
 
       await theme.restore();
       await session.restore();
       await reminders.restore();
+
+      // Whether that first screen is the introduction. After the session:
+      // an account already on the phone is an update, not a first run.
+      await intro.restore();
     }),
   ],
 };

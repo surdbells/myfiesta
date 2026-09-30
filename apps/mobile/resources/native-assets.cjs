@@ -34,9 +34,13 @@ const zlib = require('node:zlib');
  * - The 512px icon the Play listing asks for, into resources/store/, since
  *   it is uploaded by hand rather than built into the app.
  * - The iPhone launch image on #0b0f0c, the colour the WebView paints before
- *   the app does (capacitor.config.ts). Android has no launch image: since
- *   Android 12 the system draws the icon on the theme's splash colour itself,
- *   and res/values/styles.xml sets that colour for every version.
+ *   the app does (capacitor.config.ts).
+ * - Android's launch icon: the same mic, on nothing. Android has no launch
+ *   image — since Android 12 the system draws the splash itself from two
+ *   values in the theme, a colour and an icon, and the compat library draws
+ *   the same on older phones — so the ground is res/values/styles.xml's
+ *   #0b0f0c and the picture is only the mark. Both phones open on the same
+ *   thing: the mic on the app's dark ground.
  */
 
 const MOBILE = join(__dirname, '..');
@@ -472,7 +476,27 @@ function android(mark) {
   writePng(join(__dirname, 'store/play-icon-512.png'), place(blank(512, 512, ICON_GROUND), mark, Math.round(512 * 0.62)), {
     opaque: true,
   });
+
+  // The launch icon (styles.xml, windowSplashScreenAnimatedIcon). A 288dp
+  // square of which the system shows only the middle 192dp circle, cropping
+  // whatever falls outside it; the mark is sized from its own proportions so
+  // its corners sit well inside that circle. Transparent around it, because
+  // the ground is the theme's colour rather than part of the picture — one
+  // #0b0f0c, not two that could drift apart.
+  const reach = SPLASH_CIRCLE * 0.84;
+  const tall = reach / Math.hypot(1, mark.width / mark.height);
+
+  for (const [density, scale] of ANDROID_DENSITIES) {
+    const side = Math.round(288 * scale);
+
+    writePng(join(ANDROID_RES, `drawable-${density}`, 'splash_icon.png'), place(blank(side, side), mark, Math.round(tall * scale)), {
+      opaque: false,
+    });
+  }
 }
+
+/** The circle, in dp, that Android 12 shows of a 288dp launch icon with no icon background. */
+const SPLASH_CIRCLE = 192;
 
 /** Inside a square inset by `margin` on each side, corners rounded by `radius` of its side. */
 function roundedSquare(x, y, margin, radius) {

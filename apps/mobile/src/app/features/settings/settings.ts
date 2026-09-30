@@ -6,6 +6,7 @@ import { APP_VERSION } from '../../core/app-version';
 import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
 import { Reminders } from '../../core/reminders';
+import { INTRO_PATH } from '../../core/intro';
 import { Api, ApiError, Ticket } from '../../core/api';
 import { Discover } from '../../core/discovery';
 import { messageOf, fieldErrors } from '../../core/errors';
@@ -116,6 +117,12 @@ import {
           />
         </mf-card>
       }
+
+      <mf-card class="block">
+        <p class="label">The app</p>
+        <button mfButton class="mt" variant="secondary" block (click)="showIntroduction()">Show the introduction</button>
+        <p class="hint muted">What myFiesta does, for going out and for running events — the pages a new phone opens on.</p>
+      </mf-card>
 
       <!-- signOut() asks, in the one confirmation sheet every action uses.
            A sheet of its own here asked first, and then signOut() asked
@@ -654,6 +661,11 @@ export class Settings {
 
   go(path: string): void {
     void this.router.navigate([path]);
+  }
+
+  /** The first-launch pages again, over this screen: Skip comes back here. */
+  showIntroduction(): Promise<boolean> {
+    return this.router.navigateByUrl(INTRO_PATH);
   }
 
   // --- deleting the account ---------------------------------------------------

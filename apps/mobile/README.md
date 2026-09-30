@@ -69,18 +69,24 @@ gap; `docs/DECISIONS.md` says why.
 and the signing configuration, which are release assets rather than build
 output.
 
+The launch screen is the mic on #0b0f0c on both phones, and it stays up until
+the app's first screen has rendered rather than for a fixed time:
+`@capacitor/splash-screen` holds it and `src/app/core/launch-screen.ts` takes
+it down. `docs/STORE.md` says how each platform draws it.
+
 ## What is in here
 
 ```
 src/app/ui/        every control the app draws. Ours, not Ionic's.
 src/app/core/      the API client, discovery, the session, the theme, money, time
-src/app/features/  browse, tickets, organizer, door, auth, settings
+src/app/features/  intro, browse, tickets, organizer, door, auth, settings
 ```
 
 ### The screens
 
 | Screen | Route | What it is |
 | ------ | ----- | ---------- |
+| The introduction | `/welcome` | four pages a first launch opens on — going out, and running events — ending on Get started or I run events; shown once, skipped for a launch from a link and for an update already signed in, and again from You or from signing in |
 | What's on | `/` | a swipeable carousel of featured nights, what is coming up, and what happened recently |
 | Find something on | `/browse` | search with city, category and free-entry filters, paged |
 | An event | `/e/:slug` | poster, when and where, ticket tiers with prices and sold-out states, gallery, organizer, a waitlist for a sold-out night, and a buy bar that hands off to the web checkout |
@@ -92,7 +98,7 @@ src/app/features/  browse, tickets, organizer, door, auth, settings
 | Your events | `/events` | organizer: upcoming and past, with arrivals |
 | One night | `/events/:id` | organizer: what it took, and the guest list |
 | Door | `/door` | the scanner — camera or typed code, working with or without signal — plus selling to walk-ups, opened by a door-pass link |
-| You | `/settings` | name, theme, reminders, your lists, sign out |
+| You | `/settings` | name, theme, reminders, your lists, the introduction again, sign out |
 | Getting in | `/sign-in`, `/join`, `/forgotten-password` | signing in, making an attendee account, asking for a reset link |
 
 Buying is not rebuilt in the app: **Get tickets** opens the web checkout in the

@@ -37,6 +37,17 @@ export type MfIconSize = 'sm' | 'md' | 'lg' | 'xl';
       flex-shrink: 0;
       color: currentColor;
     }
+
+    /*
+     * The glyph as a block, so the icon is exactly its size. Left inline, the
+     * svg sat on a line of text: a 24px icon took a 32px box with the gap
+     * under it, and anything that centred the box — the intro's round chips,
+     * an icon button — drew the glyph about 4px high.
+     */
+    lucide-icon,
+    :host ::ng-deep lucide-icon > svg {
+      display: block;
+    }
   `,
 })
 export class MfIcon {

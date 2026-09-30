@@ -87,13 +87,13 @@ export class App {
 
   /**
    * The bar is for moving between places, so it is absent everywhere moving is
-   * not the point: signing in, a door pass, and the full-screen ticket
-   * somebody is holding up at a door.
+   * not the point: the introduction, signing in, a door pass, and the
+   * full-screen ticket somebody is holding up at a door.
    */
   readonly showTabs = computed(() => {
     if (this.session.locked()) return false;
 
-    return !/^\/(sign-in|join|forgotten-password|door|door-pass|ui|tickets\/.)/.test(this.nav.url());
+    return !/^\/(welcome|sign-in|join|forgotten-password|door|door-pass|ui|tickets\/.)/.test(this.nav.url());
   });
 
   /**

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -9,32 +9,69 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <!--
+      The theme the app runs in, once the launch screen has gone.
+
+      Its window is the launch screen's #0b0f0c rather than the DayNight
+      default, which is white on a phone set to light. The WebView paints the
+      same colour before the app draws (capacitor.config.ts), so whatever shows
+      for a frame between the splash leaving and the first screen arriving —
+      on a slow phone, say — is the dark ground and not a white flash at a
+      dark door.
+
+      It carries the launch screen's picture as well, for Android 11 and
+      older. Capacitor's BridgeActivity switches to this theme before any
+      plugin loads, so by the time @capacitor/splash-screen hands over from
+      the launch screen, the compat library it uses reads the picture from
+      this theme, not from AppTheme.NoActionBarLaunch. Without these three
+      it has no mark to show, and no icon size to lay out the view it holds
+      the splash with, so that view cannot be built: the plugin gives up
+      holding the splash, and the mark goes as soon as the app's window
+      draws. Android 12 and up take the picture from the launch theme and
+      read none of these.
+
+      splashScreenIconSize is not on the library's public list, but the
+      library's own layout for that view asks the theme for it, and a theme
+      is the only place it can come from. The value is the size the launch
+      theme draws the icon at, so the hand-over does not move the mark.
+    -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="splashScreenIconSize" tools:ignore="PrivateResource">@dimen/splashscreen_icon_size_no_background</item>
     </style>
 
 
     <!--
-      What shows between the tap and the first frame: the icon on the app's
-      dark ground, the same on every Android version.
+      What shows between the tap and the app's first screen: the mic on the
+      app's dark ground, the same picture the iPhone opens on.
 
-      Android 12 and up draw this themselves from these three values, and the
-      compat library draws the same thing on older phones. Left unset, the
-      library's default icon is the generic Android robot, which is what the
-      template shipped. The old full-screen splash image is gone: on Android
-      12 it showed after the system's own splash, a second launch screen in
-      a different place.
+      Android 12 and up draw this themselves from these values (the
+      SplashScreen API), and the compat library draws the same thing on older
+      phones as the window's background, then holds it with the same values
+      from AppTheme.NoActionBar (above). Left unset, the library's default
+      icon is the generic Android robot, which is what the template shipped.
+      The old full-screen splash image is gone: on Android 12 it showed after
+      the system's own splash, a second launch screen in a different place.
 
-      The icon is the adaptive foreground on the icon's white, so it reads as
-      the launcher icon grown larger. #0b0f0c is capacitor.config.ts's
-      backgroundColor, so the splash hands over to the WebView without a
-      flash of white at a dark door.
+      The icon is the mark alone, drawn by resources/native-assets.cjs inside
+      the circle Android 12 keeps of an icon with no background; the ground
+      is only this colour, so there is one #0b0f0c and not two that could
+      drift apart. It is capacitor.config.ts's backgroundColor too.
+
+      @capacitor/splash-screen keeps it up until the first screen has
+      rendered (core/launch-screen.ts). This theme gives way to
+      AppTheme.NoActionBar before that — BridgeActivity switches to it in
+      onCreate — and postSplashScreenTheme names it too, for the compat
+      library whenever it is installed while this theme is still on.
     -->
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen.IconBackground">
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

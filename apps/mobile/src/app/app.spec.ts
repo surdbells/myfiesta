@@ -100,6 +100,10 @@ describe('the shell', () => {
       expect(await at('/forgotten-password')).toBe(false);
     });
 
+    it('stays out of the way of the introduction, which has its own way forward', async () => {
+      expect(await at('/welcome')).toBe(false);
+    });
+
     it('stays out of the way of a door and a ticket being held up', async () => {
       // An organizer working their own door: an attendee asking for /door is
       // sent home by the route guard before the bar is ever a question.

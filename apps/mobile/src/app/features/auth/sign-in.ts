@@ -2,6 +2,7 @@ import { Component, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api, ApiError } from '../../core/api';
+import { INTRO_PATH } from '../../core/intro';
 import { SessionStore } from '../../core/session';
 import { MfButton, MfField } from '../../ui';
 
@@ -75,6 +76,9 @@ import { MfButton, MfField } from '../../ui';
         <button class="link" type="button" (click)="go('/forgotten-password')">
           Forgotten your password?
         </button>
+        <!-- The introduction again. Settings has it too, but Settings needs
+             an account, and the You tab brings somebody without one here. -->
+        <button class="link" type="button" (click)="showIntroduction()">What is myFiesta?</button>
       </div>
 
       <p class="note">
@@ -179,6 +183,11 @@ export class SignIn {
 
   go(path: string): void {
     void this.router.navigate([path]);
+  }
+
+  /** The first-launch pages again, over this screen: Skip comes back here. */
+  showIntroduction(): Promise<boolean> {
+    return this.router.navigateByUrl(INTRO_PATH);
   }
 
   async submit(): Promise<void> {

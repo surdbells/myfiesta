@@ -4,6 +4,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { Discover } from './discovery';
+import { INTRO_PATH, Intro } from './intro';
 import { SessionStore } from './session';
 
 /**
@@ -144,6 +145,7 @@ export class DeepLinks {
   private readonly zone = inject(NgZone);
   private readonly discover = inject(Discover);
   private readonly session = inject(SessionStore);
+  private readonly intro = inject(Intro);
 
   /** The last link handed to the browser, and when. */
   private handedOn: { link: string; at: number } | null = null;
@@ -188,8 +190,14 @@ export class DeepLinks {
       return false;
     }
 
+    // Somebody on their way somewhere. The introduction waits for a launch
+    // of their own rather than stand in front of what they came for — and is
+    // not left underneath it either, for back to return to.
+    this.intro.postpone();
+    const replaceUrl = this.router.url.split(/[?#]/)[0] === INTRO_PATH;
+
     // Plugin events arrive outside Angular's zone.
-    this.zone.run(() => void this.router.navigateByUrl(route));
+    this.zone.run(() => void this.router.navigateByUrl(route, { replaceUrl }));
 
     return true;
   }
