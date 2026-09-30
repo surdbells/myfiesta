@@ -1,5 +1,5 @@
 <!-- The event's poster colour carried through buying: the same light as its page. -->
-<div class="backdrop" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
+<div class="backdrop backdrop-calm" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
 @if (notFound()) {
   <section class="wrap mx-auto max-w-[1240px] px-6 pb-24 pt-8">
     <h1>Event not found</h1>
@@ -15,20 +15,22 @@
     <!-- Inside somebody else's page there is no "Home" to go back to: the
          page around the frame is theirs. The event is named instead. -->
     @if (embed.active()) {
-      <p class="text-sm font-medium text-text-muted">{{ ev.title }}</p>
+      <p class="text-sm font-medium text-text">{{ ev.title }}</p>
     } @else {
-      <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
-        <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
+      <!-- In the page's own text colour, like everything written straight on
+           the poster wash: a muted grey there fell to 2.6:1 on a pale poster. -->
+      <nav class="text-sm text-text" aria-label="Breadcrumb">
+        <a class="text-text no-underline hover:underline" routerLink="/">Home</a>
         <span aria-hidden="true"> / </span>
-        <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
+        <a class="text-text no-underline hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
         <span aria-hidden="true"> / </span>
-        <span class="font-medium text-text">Tickets</span>
+        <span class="font-semibold text-text">Tickets</span>
       </nav>
     }
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-6">
       <h1 class="text-3xl">Select tickets</h1>
-      <app-checkout-steps [current]="1" />
+      <app-checkout-steps [current]="1" [free]="free()" />
     </div>
 
     <!--
@@ -55,7 +57,7 @@
               <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-inherit underline underline-offset-2 [font-family:inherit]" type="button" (click)="removeAccess()">Remove</button>
             </p>
           } @else if (!accessOpen()) {
-            <button class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-primary-text underline underline-offset-2 [font-family:inherit]" type="button" (click)="accessOpen.set(true)">
+            <button class="cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-text underline underline-offset-2 [font-family:inherit]" type="button" (click)="accessOpen.set(true)">
               Have a presale code?
             </button>
           } @else {
@@ -136,24 +138,28 @@
         </div>
 
         @if (tiers().length === 0) {
-          <p class="muted mt-6">Nothing is on sale for this event right now.</p>
+          <p class="mt-6 text-text">Nothing is on sale for this event right now.</p>
         } @else {
           <div class="mt-6 grid gap-4">
             @for (type of tiers(); track type.id) {
               <!--
                 A tier card: what it is on the left, what it costs and how many on
                 the right, split by a rule. A picked tier lights its whole edge; a
-                sold-out one stays on the page, dimmed, because "gone" is
+                sold-out one stays on the page, set back, because "gone" is
                 information and an absent row reads as a bug.
+
+                Set back by a sunken card and a muted price, not by fading the
+                card: at 55% opacity the poster wash showed through it, and
+                took the "Sold out" badge and the tier's name down with it.
               -->
               <div
-                class="tier relative rounded-xl border bg-surface-raised p-6 transition-[box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease)"
+                class="tier relative rounded-xl border p-6 transition-[box-shadow,border-color] duration-(--motion-base) ease-(--motion-ease)"
                 [class]="
                   !buyable(type)
-                    ? 'border-border opacity-55'
+                    ? 'off-sale border-border bg-surface-inset'
                     : quantity(type.id) > 0
-                      ? 'border-primary shadow-(--shadow-overlay)'
-                      : 'border-border shadow-(--shadow-card) hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--border))] hover:shadow-(--shadow-raised)'
+                      ? 'border-primary bg-surface-raised shadow-(--shadow-overlay)'
+                      : 'border-border bg-surface-raised shadow-(--shadow-card) hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--border))] hover:shadow-(--shadow-raised)'
                 "
               >
                 <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 max-sm:grid-cols-1">
@@ -200,7 +206,7 @@
                   </div>
 
                   <div class="grid justify-items-end gap-3 border-l border-border pl-6 max-sm:justify-items-start max-sm:border-l-0 max-sm:border-t max-sm:pl-0 max-sm:pt-4">
-                    <p class="figure text-2xl text-primary-text">{{ formatPrice(type.price) }}</p>
+                    <p class="figure text-2xl" [class]="buyable(type) ? 'text-primary-text' : 'text-text-muted'">{{ formatPrice(type.price) }}</p>
 
                     <div class="stepper flex items-center gap-1 rounded-md bg-surface-inset p-[3px]">
                       <button
@@ -242,7 +248,7 @@
           <section class="mt-10">
             <h2 class="text-xl">Add to your order</h2>
             @if (!hasSelection()) {
-              <p class="mt-2 text-sm text-text-muted">Choose a ticket first — these are bought with one.</p>
+              <p class="mt-2 text-sm text-text">Choose a ticket first — these are bought with one.</p>
             }
 
             <div class="mt-5 grid gap-3">
@@ -303,7 +309,7 @@
         the same job in the space there is.
       -->
       <aside
-        class="sticky top-6 self-start overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-overlay) max-[980px]:hidden"
+        class="sticky top-(--sticky-top) self-start overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-overlay) max-[980px]:hidden"
         aria-label="Your order"
       >
         @if (ev.poster_url) {
@@ -339,16 +345,16 @@
                     <span class="font-medium tabular-nums">{{ line.quantity }}×</span>
                     {{ line.name }}
                   </span>
-                  <span class="shrink-0 text-text-muted tabular-nums">{{ formatMoney(line.total) }}</span>
+                  <span class="shrink-0 text-text-muted tabular-nums">{{ formatPrice(line.total) }}</span>
                 </li>
               }
             </ul>
 
             <p class="flex items-baseline justify-between gap-4 border-t border-border pt-4">
               <span class="text-sm font-medium">Subtotal</span>
-              <span class="figure text-xl">
+              <span class="rail-subtotal figure text-xl">
                 @if (quote(); as q) {
-                  {{ formatMoney(q.subtotal) }}
+                  {{ formatPrice(q.subtotal) }}
                 } @else {
                   —
                 }
@@ -365,8 +371,15 @@
             Continue to checkout
           </button>
 
-          <!-- Said before the next page rather than sprung on it. -->
-          <p class="text-xs text-text-subtle">Fees and tax are itemized on the next page, before you pay.</p>
+          <!-- Said before the next page rather than sprung on it — and not said
+               at all on a free night, where nobody pays. -->
+          <p class="rail-note text-xs text-text-muted">
+            @if (free()) {
+              Nothing to pay. Your tickets are reserved on the next page.
+            } @else {
+              Fees and tax are itemized on the next page, before you pay.
+            }
+          </p>
         </div>
       </aside>
     </div>
@@ -388,7 +401,7 @@
           <span class="text-xs uppercase tracking-[0.08em] text-text-subtle">Subtotal</span>
           <span class="font-semibold tabular-nums">
             @if (quote(); as q) {
-              {{ formatMoney(q.subtotal) }}
+              {{ formatPrice(q.subtotal) }}
             } @else {
               —
             }

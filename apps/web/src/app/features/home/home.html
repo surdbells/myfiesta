@@ -28,7 +28,7 @@
   <div
     class="hero__inner mx-auto grid max-w-[1240px] grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] items-center gap-12 px-6 pb-20 pt-16 max-[1024px]:grid-cols-1 max-[1024px]:gap-9 max-[1024px]:pb-12 max-sm:pt-9"
   >
-    <div class="hero__copy min-w-0">
+    <div class="hero__copy @container min-w-0">
       @if (loading()) {
         <span class="shimmer shimmer--dark h-8 w-64 rounded-full"></span>
         <span class="shimmer shimmer--dark mt-6 h-[4.5rem] w-[min(34rem,90%)]"></span>
@@ -56,14 +56,20 @@
         What, where and when — each with a real label, visible, because a
         placeholder vanishes the moment somebody starts typing and a label
         does not. The city picker lists only cities with something on.
+
+        One row only where the form itself is wide enough for it, which is
+        measured on the form's column rather than the window: beside the
+        posters on a desktop the column is 640px at most, and four across cut
+        the search box to "Artist, event, ven…" and "This weekend" to "This
+        wee". There, and on a tablet, "What" takes a row of its own.
       -->
       <form
-        class="finder mt-8 grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] items-stretch gap-1 rounded-xl bg-surface-raised p-1.5 text-text shadow-(--shadow-floating) max-md:grid-cols-2 max-sm:grid-cols-1"
+        class="finder mt-8 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-stretch gap-1 rounded-xl bg-surface-raised p-1.5 text-text shadow-(--shadow-floating) @min-[50rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto] max-sm:grid-cols-1"
         role="search"
         aria-label="Find events"
         (ngSubmit)="search()"
       >
-        <label class="finder__field group grid cursor-text gap-0.5 rounded-lg px-3.5 py-2.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) focus-within:bg-surface-hover hover:bg-surface-hover max-md:col-span-2 max-sm:col-span-1">
+        <label class="finder__field group col-span-3 grid cursor-text gap-0.5 rounded-lg px-3.5 py-2.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) focus-within:bg-surface-hover hover:bg-surface-hover @min-[50rem]:col-span-1 max-sm:col-span-1">
           <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">What</span>
           <span class="flex items-center gap-2">
             <ui-icon class="shrink-0 text-text-subtle" [icon]="searchIcon" size="sm" />
@@ -115,7 +121,7 @@
         </label>
 
         <button
-          class="finder__go inline-flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border-0 bg-primary px-6 text-[15px] font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:bg-primary-hover max-md:col-span-2 max-sm:col-span-1"
+          class="finder__go inline-flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border-0 bg-primary px-6 text-[15px] font-semibold text-on-primary transition-colors duration-(--motion-fast) ease-(--motion-ease) [font-family:inherit] hover:bg-primary-hover"
           type="submit"
         >
           <ui-icon [icon]="searchIcon" size="sm" />

@@ -93,6 +93,15 @@ export class OrderStatus implements OnDestroy {
     if (this.timer) clearTimeout(this.timer);
   }
 
+  /**
+   * Nothing was charged: a free night, or a code that took it all. Said as
+   * that rather than as a payment of $0.00, which is a step that never
+   * happened.
+   */
+  free(): boolean {
+    return this.order()?.total.amount === 0;
+  }
+
   when(): string {
     const order = this.order();
     if (!order) return '';

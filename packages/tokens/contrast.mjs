@@ -29,6 +29,13 @@ const PAIRS = [
   ['text-muted', 'surface', 4.5, 'secondary text'],
   ['text-muted', 'surface-raised', 4.5, 'secondary text on a card'],
   ['text-subtle', 'surface', 4.5, 'hints and placeholders'],
+  // Hints are written on every ground, not only a page's: a footer heading on
+  // the sunken ground, "Sold out" on a card, a select's empty value on an
+  // inset. Checked on white alone, the light one passed at 4.62:1 while it
+  // read 4.33:1 in the footer and 3.99:1 in a select.
+  ['text-subtle', 'surface-sunken', 4.5, 'hints on the page ground'],
+  ['text-subtle', 'surface-raised', 4.5, 'hints on a card'],
+  ['text-subtle', 'surface-inset', 4.5, "a field's empty value"],
   ['on-primary', 'primary', 4.5, 'a primary button label'],
   ['on-primary', 'primary-hover', 4.5, 'a primary button, hovered'],
   ['on-accent', 'accent', 4.5, 'an accent button label'],

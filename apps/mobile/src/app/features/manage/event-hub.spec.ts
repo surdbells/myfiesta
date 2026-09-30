@@ -77,7 +77,10 @@ describe('the event screen and the review', () => {
     submitForReview: ReturnType<typeof vi.fn>;
     withdrawFromReview: ReturnType<typeof vi.fn>;
     publish: ReturnType<typeof vi.fn>;
+    cancellationPreview: ReturnType<typeof vi.fn>;
+    cancel: ReturnType<typeof vi.fn>;
   };
+  let decided: ConfirmRequest[];
   let context: { get: ReturnType<typeof vi.fn>; forget: ReturnType<typeof vi.fn>; peek: () => null; remember: () => void };
   let toasts: { show: ReturnType<typeof vi.fn> };
 
@@ -89,6 +92,7 @@ describe('the event screen and the review', () => {
     yes = true;
     chosen = null;
     menus = [];
+    decided = [];
 
     organizer = {
       summary: vi.fn(async () => null),
@@ -100,6 +104,8 @@ describe('the event screen and the review', () => {
       }),
       withdrawFromReview: answer({ status: 'draft', outcome: 'withdrawn', message: 'Taken back from review. Make your changes, then send it again.' }),
       publish: answer({ status: 'draft', outcome: 'unpublished', message: 'Taken off sale.' }),
+      cancellationPreview: vi.fn(async () => ({ ticket_holders: 0, orders_to_refund: 0, refund_total: { amount: 0, currency: 'CAD' } })),
+      cancel: vi.fn(async () => ({ notified: 0, refunded: 0, failed: 0 })),
     };
     context = { get: vi.fn(async () => shown), forget: vi.fn(), peek: () => null, remember: () => undefined };
     toasts = { show: vi.fn() };
@@ -117,6 +123,10 @@ describe('the event screen and the review', () => {
       menu: vi.fn(async (options: MenuOptions) => {
         menus.push(options);
         return chosen;
+      }),
+      decide: vi.fn(async (request: ConfirmRequest) => {
+        decided.push(request);
+        return { confirmed: false, reason: null };
       }),
     };
 
@@ -306,6 +316,54 @@ describe('the event screen and the review', () => {
     const labels = menus[0].actions.map((action) => action.label);
     expect(labels).not.toContain('Put back on sale');
     expect(labels).not.toContain('Submit for review');
+  });
+
+  /*
+   * Sharing a night that has no public page. "Share" and "Share the link"
+   * were offered on a draft and on a night a suspension held, and handed out
+   * an address that answers 404.
+   */
+  it('offers the link only while there is a public page to open', async () => {
+    const draft = await open();
+
+    expect(() => press(draft, 'Share')).toThrow();
+    press(draft, 'Event actions');
+    await settle(draft);
+    expect(menus[0].actions.map((action) => action.label)).not.toContain('Share the link');
+
+    shown = night({ status: 'published' });
+    const published = await open();
+
+    press(published, 'Event actions');
+    await settle(published);
+    expect(menus[1].actions.map((action) => action.label)).toEqual(expect.arrayContaining(['Share the link', 'See the public page']));
+    expect(() => press(published, 'Share')).not.toThrow();
+  });
+
+  it('says there is nobody to tell when nobody holds a ticket, rather than "0 people"', async () => {
+    chosen = 'cancel';
+    const fixture = await open();
+
+    press(fixture, 'Event actions');
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(decided).toHaveLength(1);
+    expect(decided[0].body).toBe('Nobody holds a ticket yet, so there is nobody to tell.');
+    expect(decided[0].confirmLabel).toBe('Cancel the event');
+  });
+
+  it('still counts the people it will tell when somebody holds a ticket', async () => {
+    chosen = 'cancel';
+    organizer.cancellationPreview = vi.fn(async () => ({ ticket_holders: 3, orders_to_refund: 0, refund_total: { amount: 0, currency: 'CAD' } }));
+    const fixture = await open();
+
+    press(fixture, 'Event actions');
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(decided[0].body).toBe('3 people hold a ticket and will be told.');
+    expect(decided[0].confirmLabel).toBe('Cancel and tell them');
   });
 
   it('keeps their own draft a draft while suspended, with nothing to send it with', async () => {

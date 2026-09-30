@@ -26,6 +26,16 @@ use Illuminate\Support\Facades\DB;
  */
 class OverviewController extends Controller
 {
+    /**
+     * An order that stands: it was paid, and not all of it came back.
+     *
+     * The events list and an event's own sales count these, and this screen
+     * counted only 'paid' — so one partial refund took a whole order out of
+     * the dashboard, and the same event read $400 here and $500 one tap away,
+     * both beside "6/205 sold".
+     */
+    private const LIVE_ORDERS = ['paid', 'partially_refunded'];
+
     public function index(Request $request): JsonResponse
     {
         $organization = $this->organization($request);
@@ -117,7 +127,7 @@ class OverviewController extends Controller
 
         $since = fn (int $days) => Order::query()
             ->where('organization_id', $organization->id)
-            ->where('status', 'paid')
+            ->whereIn('status', self::LIVE_ORDERS)
             ->where('paid_at', '>=', now()->subDays($days));
 
         // Money leaves this API as an amount and a currency together, never as
@@ -178,7 +188,7 @@ class OverviewController extends Controller
 
         $rows = Order::query()
             ->where('organization_id', $organization->id)
-            ->where('status', 'paid')
+            ->whereIn('status', self::LIVE_ORDERS)
             ->where('currency', $currency)
             ->where('paid_at', '>=', now()->subDays(29)->startOfDay())
             ->selectRaw('date(paid_at) as day, sum(net_revenue_amount) as net, count(*) as orders')
@@ -249,7 +259,7 @@ class OverviewController extends Controller
         $net = $maySeeMoney
             ? Order::query()
                 ->whereIn('event_id', $events->pluck('id'))
-                ->where('status', 'paid')
+                ->whereIn('status', self::LIVE_ORDERS)
                 ->selectRaw('event_id, sum(net_revenue_amount) as net')
                 ->groupBy('event_id')
                 ->pluck('net', 'event_id')

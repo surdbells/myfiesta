@@ -257,4 +257,34 @@ class OverviewTest extends TestCase
         $this->assertSame(6000, $row['net']['amount']);
         $this->assertSame('CAD', $row['net']['currency']);
     }
+
+    /**
+     * A partial refund leaves the rest of the order standing.
+     *
+     * The dashboard counted 'paid' orders only, and the events list counts
+     * partially refunded ones too: the same event read $400 on one and $500
+     * on the other, each beside the same "6/205 sold".
+     */
+    public function test_a_partly_refunded_order_counts_here_as_it_does_in_the_events_list(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $event = $this->event();
+
+        TicketType::create([
+            'event_id' => $event->id, 'name' => 'General', 'price_amount' => 5000,
+            'status' => 'on_sale', 'quantity_available' => 40,
+        ]);
+
+        $this->paidOrder($event, 6000, now()->subDay());
+        $this->paidOrder($event, 4000, now())->update(['status' => 'partially_refunded']);
+
+        $overview = $this->overview();
+        $listed = collect($this->getJson('/api/organizer/events')->assertOk()->json('data'))->firstWhere('id', $event->id);
+
+        $this->assertSame(10000, $listed['revenue']['amount']);
+        $this->assertSame($listed['revenue']['amount'], $overview['selling_events'][0]['net']['amount']);
+        $this->assertSame(10000, $overview['money']['sold_7d']['amount']);
+        $this->assertSame(2, $overview['money']['orders_7d']);
+        $this->assertSame(4000, $overview['sales_by_day'][29]['net']['amount']);
+    }
 }

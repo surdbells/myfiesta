@@ -27,6 +27,21 @@
 @source '../../../packages/ui/src';
 
 /*
+ * Where a sticky panel stops: below the sticky site header, with room to
+ * breathe. The event page's rail and the checkout summaries stuck 24px from
+ * the top of the window, which is under a 61px header — the panel's own
+ * heading slid behind the glass. Inside somebody else's page there is no
+ * header, and the panel stops near the top again. In rem, as the header is,
+ * so the two grow together when somebody enlarges the text.
+ */
+:root {
+  --sticky-top: 1.5rem;
+}
+:root:has(.site-header) {
+  --sticky-top: calc(4rem + 1.5rem);
+}
+
+/*
  * The event page's buy bar is fixed to the foot of a phone's screen, over
  * whatever the page ends with — the footer, whose last line sat under it. The
  * page ends that much lower while the bar is there. Same breakpoint as the

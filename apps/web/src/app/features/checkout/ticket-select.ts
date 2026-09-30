@@ -121,6 +121,24 @@ export class TicketSelect {
     return [...tickets, ...extras];
   });
 
+  /**
+   * Nothing here costs anything: the basket as the server priced it, or,
+   * before anything is chosen, every ticket and extra on the page.
+   *
+   * A free night read as a sale all the way through — "$0.00" beside each
+   * line, "before you pay" under the button, "Details & payment" in the
+   * steps — for a checkout that only ever reserves.
+   */
+  readonly free = computed(() => {
+    const quote = this.quote();
+    if (this.hasSelection() && quote) return quote.requires_payment === false;
+    if (this.hasSelection()) return this.chosen().every((line) => line.total.amount === 0);
+
+    const tiers = this.tiers();
+
+    return tiers.length > 0 && tiers.every((t) => t.price.amount === 0) && this.addOns().every((a) => a.price.amount === 0);
+  });
+
   /** The presale code field: closed until asked for, since most buyers have none. */
   readonly accessOpen = signal(false);
   readonly accessInput = signal('');

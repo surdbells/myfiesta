@@ -9,7 +9,8 @@
     <!--
       The journey, drawn done. Selection and payment are behind the buyer by
       the time this page exists; the only step that can still be in motion is
-      the confirmation itself, while the webhook settles.
+      the confirmation itself, while the webhook settles. A free order had no
+      payment to go through, and its middle step says what it was instead.
     -->
     @if (o.status === 'paid' || o.status === 'pending') {
     <p class="steps mb-2 flex flex-wrap items-center justify-center gap-3 text-sm font-medium" aria-hidden="true">
@@ -20,7 +21,7 @@
       <span class="h-px w-10 bg-border-strong"></span>
       <span class="inline-flex items-center gap-2">
         <span class="grid h-7 w-7 place-items-center rounded-full bg-success text-xs font-bold text-text-inverse">✓</span>
-        Payment
+        {{ free() ? 'Your details' : 'Payment' }}
       </span>
       <span class="h-px w-10 bg-border-strong"></span>
       <span class="inline-flex items-center gap-2 text-text-muted">
@@ -53,8 +54,13 @@
           <dd class="m-0 font-semibold tabular-nums">
             <code class="select-all text-sm tracking-[0.04em]">{{ o.reference }}</code>
           </dd>
-          <dt class="text-text-muted">Paid</dt>
-          <dd class="m-0 font-semibold tabular-nums">{{ formatMoney(o.total) }}</dd>
+          @if (free()) {
+            <dt class="text-text-muted">Price</dt>
+            <dd class="m-0 font-semibold">Free</dd>
+          } @else {
+            <dt class="text-text-muted">Paid</dt>
+            <dd class="m-0 font-semibold tabular-nums">{{ formatMoney(o.total) }}</dd>
+          }
         </dl>
 
         <!--

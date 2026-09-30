@@ -42,7 +42,14 @@
         ></div>
         <div class="absolute inset-x-0 bottom-0 grid justify-items-start gap-1 p-8 text-neutral-0 max-sm:p-5">
           @if (ev.category) {
-            <span class="mb-1 rounded-full bg-[rgba(255,255,255,0.16)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] backdrop-blur-[4px]">
+            <!--
+              A dark glass chip, not a light one. It sits where the gradient
+              has barely begun on a wide screen, and a 16% white chip over a
+              pale poster left its 12px white label at 2.5:1. At 60% of the
+              scrim's own near-black it holds 5:1 over a white poster with no
+              gradient under it at all, so it reads on anything.
+            -->
+            <span class="category-chip mb-1 rounded-full border border-[rgba(255,255,255,0.18)] bg-[rgba(5,10,7,0.6)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] backdrop-blur-[4px]">
               {{ ev.category }}
             </span>
           }
@@ -154,7 +161,7 @@
 
     <!-- ---------------------------------------------------------- the rail -->
     <div
-      class="rail mt-8 grid content-start gap-6 min-[900px]:sticky min-[900px]:top-6 min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:max-h-[calc(100vh-var(--space-7))] min-[900px]:overflow-y-auto"
+      class="rail mt-8 grid content-start gap-6 min-[900px]:sticky min-[900px]:top-(--sticky-top) min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:max-h-[calc(100vh-var(--sticky-top)-1.5rem)] min-[900px]:overflow-y-auto min-[900px]:[scrollbar-width:thin]"
     >
       <!-- The facts, each behind its glyph. -->
       <section class="detail rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Event details">

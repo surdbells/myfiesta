@@ -68,11 +68,14 @@ const COLOUR_PROPERTIES =
  * the web shares, so they live there and are no less defined for it. The web's
  * base layer likewise declares the hooks its classes take from the element
  * they style (the poster behind a .backdrop), with the value they fall back to.
+ * The public site's sheet says where its sticky panels stop, which is a fact
+ * about its own header.
  */
 const DEFINITIONS = [
   'packages/tokens/dist/tokens.css',
   'apps/mobile/src/styles.css',
   'packages/ui/styles/base.css',
+  'apps/web/src/styles.css',
 ];
 
 /** Every custom property those sheets actually declare. */

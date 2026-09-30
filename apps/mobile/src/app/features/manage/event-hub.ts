@@ -221,7 +221,11 @@ import {
             @if (session.can('door.scan') && ev.status !== 'cancelled') {
               <button mfButton (click)="scan()"><mf-icon [icon]="scanIcon" size="sm" /> Scan tickets</button>
             }
-            <button mfButton variant="secondary" (click)="share()"><mf-icon [icon]="shareIcon" size="sm" /> Share</button>
+            <!-- Only once there is a page to share: a draft's or a held night's
+                 link opens a 404, whatever the share sheet says about it. -->
+            @if (ev.status === 'published') {
+              <button mfButton variant="secondary" (click)="share()"><mf-icon [icon]="shareIcon" size="sm" /> Share</button>
+            }
           </div>
 
           <mf-list class="block" heading="What it sells">
@@ -724,6 +728,13 @@ export class EventHub implements OnInit {
     const ev = this.event();
     if (!ev) return;
 
+    // The public page exists only while it is on sale. Handing out the link
+    // to a draft sends everybody who taps it to "Event not found".
+    if (ev.status !== 'published') {
+      this.toasts.show('It is not public yet. The link works once it is on sale.', 'danger');
+      return;
+    }
+
     try {
       await Share.share({ title: ev.title, text: `${ev.title} — ${this.when()}`, url: this.publicUrl(ev) });
     } catch {
@@ -763,8 +774,11 @@ export class EventHub implements OnInit {
         hint: ev.review.unchanged_since_approval ? 'You can put it straight back' : 'Putting it back needs another review',
       });
     }
-    items.push({ key: 'share', label: 'Share the link', icon: Share2 });
-    if (ev.status === 'published') items.push({ key: 'view', label: 'See the public page', icon: ExternalLink });
+    // Both only while there is a public page to go to.
+    if (ev.status === 'published') {
+      items.push({ key: 'share', label: 'Share the link', icon: Share2 });
+      items.push({ key: 'view', label: 'See the public page', icon: ExternalLink });
+    }
     if (this.session.can('events.create')) {
       items.push({ key: 'duplicate', label: 'Duplicate', icon: Copy, hint: 'A new night with the same tickets' });
       // Once it repeats, its dates are managed under Repeats rather than started again.
@@ -1049,16 +1063,22 @@ export class EventHub implements OnInit {
     // The reason is held to what the server takes (10 to 500 characters), and
     // the cancel is sent from the sheet: a refusal is read in it with the
     // reason still written, rather than in a toast after it has closed.
+    //
+    // With nobody holding a ticket there is nobody to tell, and it says so
+    // rather than "0 people hold a ticket and will be told".
+    const nobody = preview.ticket_holders === 0;
     const { confirmed } = await this.dialogs.decide({
       title: `Cancel ${ev.title}?`,
-      body: `${preview.ticket_holders} ${preview.ticket_holders === 1 ? 'person holds' : 'people hold'} a ticket and will be told.`,
+      body: nobody
+        ? 'Nobody holds a ticket yet, so there is nobody to tell.'
+        : `${preview.ticket_holders} ${preview.ticket_holders === 1 ? 'person holds' : 'people hold'} a ticket and will be told.`,
       consequences: [
         ...(refund
           ? [`${preview.orders_to_refund} ${preview.orders_to_refund === 1 ? 'order is' : 'orders are'} refunded, ${formatMoney(preview.refund_total)} in all.`]
           : []),
         'This cannot be undone.',
       ],
-      confirmLabel: 'Cancel and tell them',
+      confirmLabel: nobody ? 'Cancel the event' : 'Cancel and tell them',
       cancelLabel: 'Keep it',
       tone: 'danger',
       reason: {
@@ -1066,7 +1086,7 @@ export class EventHub implements OnInit {
         required: true,
         minLength: 10,
         maxLength: 500,
-        hint: 'Ticket holders read this in the email that tells them. At least 10 characters.',
+        hint: nobody ? 'At least 10 characters.' : 'Ticket holders read this in the email that tells them. At least 10 characters.',
         placeholder: 'The venue has had to close',
       },
       busyLabel: 'Cancelling…',
@@ -1076,7 +1096,8 @@ export class EventHub implements OnInit {
     if (!confirmed || !result) return;
 
     const failed = result.failed ? ` ${result.failed} refunds need a person — you will get an email.` : '';
-    this.toasts.show(`Cancelled. ${result.notified} told, ${result.refunded} refunded.${failed}`, result.failed ? 'danger' : 'success');
+    const told = nobody ? '' : ` ${result.notified} told, ${result.refunded} refunded.`;
+    this.toasts.show(`Cancelled.${told}${failed}`, result.failed ? 'danger' : 'success');
     await this.load();
   }
 

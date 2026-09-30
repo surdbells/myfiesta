@@ -1,5 +1,5 @@
 <!-- The event's poster colour carried through buying: the same light as its page. -->
-<div class="backdrop" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
+<div class="backdrop backdrop-calm" [style.--backdrop]="event()?.poster_url ? 'url(' + event()?.poster_url + ')' : null">
 @if (notFound()) {
   <section class="wrap mx-auto max-w-[1120px] px-6 pb-24 pt-8">
     <h1>Event not found</h1>
@@ -15,20 +15,22 @@
     <!-- Inside somebody else's page there is no "Home" to go back to: the
          page around the frame is theirs. The event is named instead. -->
     @if (embed.active()) {
-      <p class="text-sm font-medium text-text-muted">{{ ev.title }}</p>
+      <p class="text-sm font-medium text-text">{{ ev.title }}</p>
     } @else {
-      <nav class="text-sm text-text-muted" aria-label="Breadcrumb">
-        <a class="text-text-muted no-underline hover:text-text hover:underline" routerLink="/">Home</a>
+      <!-- In the page's own text colour, like everything written straight on
+           the poster wash: a muted grey there fell to 3.4:1 on a dark poster. -->
+      <nav class="text-sm text-text" aria-label="Breadcrumb">
+        <a class="text-text no-underline hover:underline" routerLink="/">Home</a>
         <span aria-hidden="true"> / </span>
-        <a class="text-text-muted no-underline hover:text-text hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
+        <a class="text-text no-underline hover:underline" [routerLink]="['/', ev.slug]">{{ ev.title }}</a>
         <span aria-hidden="true"> / </span>
-        <span class="font-medium text-text">Checkout</span>
+        <span class="font-semibold text-text">Checkout</span>
       </nav>
     }
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-6">
       <h1 class="text-3xl">Checkout</h1>
-      <app-checkout-steps [current]="2" />
+      <app-checkout-steps [current]="2" [free]="quote()?.requires_payment === false" />
     </div>
 
     <div class="mt-8 grid grid-cols-[minmax(0,1fr)_400px] items-start gap-8 max-[900px]:grid-cols-1">
@@ -253,7 +255,7 @@
         away while the buyer was typing, and what is being paid should be
         readable at the moment it is agreed to.
       -->
-      <aside class="sticky top-6 grid content-start gap-6 self-start max-[900px]:static max-[900px]:order-first">
+      <aside class="sticky top-(--sticky-top) grid content-start gap-6 self-start max-[900px]:static max-[900px]:order-first">
         <div class="rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-overlay)">
           @if (ev.poster_url) {
             <div class="relative mb-5 overflow-hidden rounded-lg">

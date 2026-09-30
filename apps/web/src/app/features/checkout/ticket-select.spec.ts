@@ -494,3 +494,119 @@ describe('TicketSelect, joining the waitlist', () => {
     expect(page.waitDone()).toBe("You're on the waitlist.");
   });
 });
+
+/**
+ * A free night reads free the whole way through.
+ *
+ * The tiers already said "Free", and the rest of the page still said "$0.00"
+ * beside each line and as the subtotal, "before you pay" under the button,
+ * and "Details & payment" in the steps — for a checkout that only reserves.
+ */
+describe('TicketSelect, a free night', () => {
+  let http: HttpTestingController;
+
+  const FREE: TicketType = { ...GENERAL, id: 'free', name: 'Free entry', price: { amount: 0, currency: 'CAD' } };
+  const EARLY: TicketType = { ...GENERAL, id: 'early', name: 'Early bird', sold_out: true, availability: { state: 'sold_out', left: null } };
+
+  async function open(tiers: TicketType[]) {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/afro/tickets', TicketSelect);
+
+    http.expectOne('https://api.myfiesta.test/api/events/afro').flush({ data: { ...AFRO, from_price: tiers[0].price, ticket_types: tiers } });
+    harness.detectChanges();
+
+    const page = harness.routeDebugElement!.componentInstance as TicketSelect;
+    const root = harness.routeNativeElement as HTMLElement;
+
+    return { harness, page, root, text: () => (root.textContent ?? '').replace(/\s+/g, ' ') };
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: ':slug/tickets', component: TicketSelect }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+        { provide: RESPONSE_INIT, useValue: { status: 200 } },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    http.verify();
+    sessionStorage.clear();
+  });
+
+  it('says Free, not $0.00, and says nothing about paying', async () => {
+    const { harness, page, root, text } = await open([FREE]);
+
+    // Before anything is chosen, from the tiers alone.
+    expect(root.querySelector('.rail-note')?.textContent).toContain('Nothing to pay');
+    expect(text()).toContain('Your details');
+    expect(text()).not.toContain('Details & payment');
+
+    page.adjust(FREE, 1);
+    http.expectOne('https://api.myfiesta.test/api/events/afro/quote').flush({
+      subtotal: { amount: 0, currency: 'CAD' },
+      total: { amount: 0, currency: 'CAD' },
+      requires_payment: false,
+    });
+    harness.detectChanges();
+
+    expect(root.querySelector('.rail-subtotal')?.textContent?.trim()).toBe('Free');
+    expect(text()).not.toContain('$0.00');
+    expect(text()).not.toContain('before you pay');
+    expect(text()).toContain('Your details');
+  });
+
+  it('keeps the paying words on a night that costs something', async () => {
+    const { harness, page, root, text } = await open([GENERAL]);
+
+    page.adjust(GENERAL, 1);
+    http.expectOne('https://api.myfiesta.test/api/events/afro/quote').flush({
+      subtotal: { amount: 2500, currency: 'CAD' },
+      total: { amount: 2800, currency: 'CAD' },
+      requires_payment: true,
+    });
+    harness.detectChanges();
+
+    expect(root.querySelector('.rail-subtotal')?.textContent?.trim()).toBe('$25.00');
+    expect(root.querySelector('.rail-note')?.textContent).toContain('before you pay');
+    expect(text()).toContain('Details & payment');
+  });
+
+  /*
+   * What is written straight on the poster wash, rather than on a card. The
+   * wash can be any colour, and the muted grey and brand green these used
+   * fell to 2–3.6:1 on a pale poster in the dark theme and a dark one in the
+   * light. Only the page's own text colour holds on every poster (the sums
+   * are in wash-contrast.spec).
+   */
+  it('writes only in the page text colour on the wash', async () => {
+    const { root } = await open([GENERAL]);
+
+    const onTheWash = [
+      ...root.querySelectorAll<HTMLElement>('nav[aria-label="Breadcrumb"], nav[aria-label="Breadcrumb"] a'),
+      ...root.querySelectorAll<HTMLElement>('.steps, .steps > span'),
+      [...root.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Have a presale code?'))!,
+    ];
+
+    expect(onTheWash.length).toBeGreaterThan(5);
+    for (const element of onTheWash) {
+      expect(element.className, element.outerHTML.slice(0, 80)).not.toMatch(/text-(text-muted|text-subtle|primary-text)\b/);
+    }
+    expect(root.querySelector('.backdrop')?.classList).toContain('backdrop-calm');
+  });
+
+  it('sets a tier that is gone back without fading its badge into the wash', async () => {
+    const { root } = await open([EARLY, GENERAL]);
+    const card = [...root.querySelectorAll<HTMLElement>('.tier')].find((c) => c.textContent?.includes('Early bird'))!;
+
+    expect(card.textContent).toContain('Sold out');
+    expect(card.className).not.toMatch(/opacity-/);
+    expect(card.className).toContain('bg-surface-inset');
+  });
+});

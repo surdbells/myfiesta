@@ -870,6 +870,25 @@ th.numeric {
   );
 }
 
+/*
+ * Calmer at the top, for a page that writes straight onto the wash there — a
+ * breadcrumb, a heading, the steps of checkout — rather than onto cards.
+ *
+ * A wash can be any colour, so what is written on it has to hold on the worst
+ * one: in the page's own text colour, over a black poster in the light theme
+ * or a white one in the dark, 30% of the ground kept 4.5:1 and not a hair
+ * more. 45% keeps 6:1 and still carries the poster's colour. Muted greys and
+ * brand-coloured text cannot be made safe here at any strength that leaves a
+ * wash, which is why such a page writes only in --text over it.
+ */
+.backdrop.backdrop-calm::after {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--surface-sunken) 45%, transparent) 0%,
+    var(--surface-sunken) 100%
+  );
+}
+
 /* On a card (a .hero), the poster fades into the card's own surface rather
    than the page's, and keeps more of its colour at the top. */
 .hero.backdrop::after {

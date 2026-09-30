@@ -103,7 +103,7 @@
   --field-border: #6f776f;
   --text: #131713;
   --text-muted: #545b54;
-  --text-subtle: #6f776f;
+  --text-subtle: #646c64;
   --text-inverse: #ffffff;
   --primary: #0e753b;
   --primary-hover: #0a5c2e;
@@ -153,7 +153,7 @@
     --field-border: #7f887f;
     --text: #e9ede9;
     --text-muted: #a5aea6;
-    --text-subtle: #7f887f;
+    --text-subtle: #8d968d;
     --text-inverse: #131713;
     --primary: #7ecea0;
     --primary-hover: #b7e1c9;
@@ -197,7 +197,7 @@
   --field-border: #7f887f;
   --text: #e9ede9;
   --text-muted: #a5aea6;
-  --text-subtle: #7f887f;
+  --text-subtle: #8d968d;
   --text-inverse: #131713;
   --primary: #7ecea0;
   --primary-hover: #b7e1c9;

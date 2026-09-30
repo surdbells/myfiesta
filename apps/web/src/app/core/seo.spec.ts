@@ -113,6 +113,18 @@ describe('Seo', () => {
     expect(content).not.toContain('null');
   });
 
+  it('says a free night is free, never "From $0.00"', () => {
+    seo.forEvent(event({ from_price: { amount: 0, currency: 'CAD' } }), 'https://myfiesta.ca/afrobeats-rooftop');
+
+    for (const selector of ['name="description"', 'property="og:description"']) {
+      const content = meta.getTag(selector)?.content ?? '';
+
+      expect(content).toContain('Free.');
+      expect(content).not.toContain('$0.00');
+      expect(content).not.toContain('From');
+    }
+  });
+
   it('keeps previews within the length the networks show', () => {
     seo.forEvent(event({ description_text: 'x'.repeat(1000) }), 'https://myfiesta.ca/afrobeats-rooftop');
 

@@ -34,7 +34,9 @@ export class Seo {
       timeZone: event.timezone,
     }).format(new Date(event.starts_at));
 
-    const price = event.from_price ? `From ${formatMoney(event.from_price)}. ` : '';
+    // "Free." on a free night, as the page and its cards say it: "From $0.00"
+    // in a search snippet or a WhatsApp preview reads as a price nobody set.
+    const price = !event.from_price ? '' : event.from_price.amount === 0 ? 'Free. ' : `From ${formatMoney(event.from_price)}. `;
     const where = event.venue?.name ?? event.city;
     // description_text, never description: this lands in a WhatsApp preview
     // and a search snippet, where HTML is shown as the tags it is made of.
