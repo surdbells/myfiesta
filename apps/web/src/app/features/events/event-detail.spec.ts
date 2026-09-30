@@ -250,3 +250,96 @@ describe('EventDetail, sharing', () => {
     expect((harness.routeNativeElement as HTMLElement).querySelector('#share-link')).toBeNull();
   });
 });
+
+/**
+ * The rail beside the words, on a wide screen.
+ *
+ * It always stuck, held to the window's height with a scroll of its own. At
+ * 1280×720 the rail is taller than that, and "See all their events" sat
+ * behind a scroll nobody knew was there. It sticks now only when all of it
+ * fits below the header, and otherwise scrolls with the page.
+ */
+describe('EventDetail, the rail', () => {
+  let http: HttpTestingController;
+  let windowHeight: number;
+  let header: HTMLStyleElement;
+
+  /** The rail as the free night draws it on a laptop: 745px, under an 88px header. */
+  const RAIL = 745;
+
+  beforeEach(() => {
+    windowHeight = 900;
+
+    // jsdom lays nothing out: the heights a browser would measure, and the
+    // observer it would have.
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('rail') ? RAIL : 0;
+    });
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (this: Element) {
+      return this === document.documentElement ? windowHeight : 0;
+    });
+    header = document.head.appendChild(document.createElement('style'));
+    header.textContent = '.rail { top: 88px; }';
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: ':slug', component: EventDetail }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    header.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function open(): Promise<{ harness: RouterTestingHarness; rail: HTMLElement }> {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/qa-free-night', EventDetail);
+    http.expectOne('https://api.myfiesta.test/api/events/qa-free-night').flush({ data: detail() });
+    http.match(() => true).forEach((request) => request.flush({}));
+    harness.detectChanges();
+
+    return { harness, rail: (harness.routeNativeElement as HTMLElement).querySelector<HTMLElement>('.rail')! };
+  }
+
+  it('never keeps part of itself behind a scroll of its own', async () => {
+    const { rail } = await open();
+
+    expect(rail.className).not.toMatch(/overflow-y-auto|max-h-/);
+  });
+
+  it('sticks when all of it fits below the header, as at 1440×900', async () => {
+    const { rail } = await open();
+
+    expect(rail.classList).toContain('sticks');
+  });
+
+  it('scrolls with the page when it is taller than that, as at 1280×720, and sticks again when there is room', async () => {
+    windowHeight = 720;
+    const { harness, rail } = await open();
+
+    expect(rail.classList).not.toContain('sticks');
+
+    windowHeight = 900;
+    window.dispatchEvent(new Event('resize'));
+    harness.detectChanges();
+
+    expect(rail.classList).toContain('sticks');
+  });
+
+  it('counts the header it sticks under', async () => {
+    // Room for the rail in the window, but not below the header.
+    windowHeight = 800;
+    const { rail } = await open();
+
+    expect(rail.classList).not.toContain('sticks');
+  });
+});

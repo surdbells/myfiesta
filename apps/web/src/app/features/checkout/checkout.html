@@ -30,7 +30,7 @@
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-6">
       <h1 class="text-3xl">Checkout</h1>
-      <app-checkout-steps [current]="2" [free]="quote()?.requires_payment === false" />
+      <app-checkout-steps [current]="2" [free]="free()" />
     </div>
 
     <div class="mt-8 grid grid-cols-[minmax(0,1fr)_400px] items-start gap-8 max-[900px]:grid-cols-1">
@@ -278,7 +278,7 @@
                     {{ line.name }}
                   </span>
                   <span class="text-right font-medium tabular-nums">
-                    {{ formatMoney(line.line_total) }}
+                    {{ formatPrice(line.line_total) }}
                     @if (line.discount.amount > 0) {
                       <span class="block text-xs font-normal text-success">−{{ formatMoney(line.discount) }}</span>
                     }
@@ -331,10 +331,13 @@
             <!-- Every figure that makes up the total, before anybody is sent
                  anywhere. The service charge is our 8%, named and shown —
                  folding it silently into the total made the total
-                 unexplainable from the lines above it. -->
+                 unexplainable from the lines above it. A line, the subtotal
+                 or the total that comes to nothing reads "Free", as the page
+                 before wrote it: "$0.00" three times over "Reserve free
+                 tickets" read like a bill for something free. -->
             <dl class="m-0 mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
               <dt class="text-text-muted">Subtotal</dt>
-              <dd class="m-0 text-right tabular-nums">{{ formatMoney(q.subtotal) }}</dd>
+              <dd class="m-0 text-right tabular-nums">{{ formatPrice(q.subtotal) }}</dd>
 
               @if (q.discount.amount > 0) {
                 <dt class="text-text-muted">Discount</dt>
@@ -366,7 +369,7 @@
               }
 
               <dt class="mt-2 border-t border-border pt-3 text-lg font-semibold text-text">Total</dt>
-              <dd class="figure m-0 mt-2 border-t border-border pt-3 text-right text-xl text-text">{{ formatMoney(q.total) }}</dd>
+              <dd class="figure m-0 mt-2 border-t border-border pt-3 text-right text-xl text-text">{{ formatPrice(q.total) }}</dd>
             </dl>
 
             <!-- Wide screens only: on a phone the form ends with its own (above). -->

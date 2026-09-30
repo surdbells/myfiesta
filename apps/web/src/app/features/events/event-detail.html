@@ -160,8 +160,17 @@
     </div>
 
     <!-- ---------------------------------------------------------- the rail -->
+    <!--
+      Sticks beside the words only when all of it fits in the window below
+      the header (railSticks, measured in the browser). Taller than that, it
+      scrolls with the page: held to the window's height with a scroll of its
+      own, the foot of the organizer's card sat out of sight in a scroll
+      nobody knew was there.
+    -->
     <div
-      class="rail mt-8 grid content-start gap-6 min-[900px]:sticky min-[900px]:top-(--sticky-top) min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:max-h-[calc(100vh-var(--sticky-top)-1.5rem)] min-[900px]:overflow-y-auto min-[900px]:[scrollbar-width:thin]"
+      #rail
+      class="rail mt-8 grid content-start gap-6 min-[900px]:top-(--sticky-top) min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-2 min-[900px]:mt-0 min-[900px]:[&.sticks]:sticky"
+      [class.sticks]="railSticks()"
     >
       <!-- The facts, each behind its glyph. -->
       <section class="detail rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" aria-label="Event details">

@@ -786,7 +786,15 @@ export class EventHub implements OnInit {
     }
     if (this.session.can('door.scan') && !cancelled) items.push({ key: 'scan', label: 'Scan tickets', icon: ScanLine });
     if (this.session.can('events.cancel') && !cancelled) {
-      items.push({ key: 'cancel', label: 'Cancel the event', icon: XCircle, danger: true, hint: 'Tells every ticket holder, and can refund them' });
+      // As the question after it says it: a draft, or a night in review,
+      // usually has nobody holding a ticket, and then nobody to tell.
+      //
+      // It says nothing about refunds then. The count only takes tickets that
+      // are valid or in, so a paid order whose one ticket is up for resale or
+      // was voided is still refunded, and only the question after it, asked of
+      // the orders themselves, can say so.
+      const hint = ev.tickets_issued > 0 ? 'Tells every ticket holder, and can refund them' : 'Nobody holds a ticket yet, so nobody to tell';
+      items.push({ key: 'cancel', label: 'Cancel the event', icon: XCircle, danger: true, hint });
     }
 
     const chosen = await this.dialogs.menu({ title: ev.title, subtitle: this.when(), actions: items });

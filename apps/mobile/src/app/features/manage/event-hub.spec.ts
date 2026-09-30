@@ -353,6 +353,47 @@ describe('the event screen and the review', () => {
     expect(decided[0].confirmLabel).toBe('Cancel the event');
   });
 
+  /*
+   * The menu said "Tells every ticket holder, and can refund them" on a draft
+   * nobody could have bought yet.
+   */
+  it('offers to cancel a night nobody holds a ticket for without promising to tell anybody', async () => {
+    const draft = await open();
+
+    press(draft, 'Event actions');
+    await settle(draft);
+    expect(menus[0].actions.find((action) => action.key === 'cancel')?.hint).toBe('Nobody holds a ticket yet, so nobody to tell');
+
+    shown = night({ status: 'published', tickets_issued: 12 });
+    const selling = await open();
+
+    press(selling, 'Event actions');
+    await settle(selling);
+    expect(menus[1].actions.find((action) => action.key === 'cancel')?.hint).toBe('Tells every ticket holder, and can refund them');
+  });
+
+  /*
+   * The menu said "nobody to tell or refund" on a night whose one paid order
+   * had its ticket up for resale, and the question after it then refunded
+   * that order. The count on the night leaves such tickets out; the refunds
+   * come from the orders.
+   */
+  it('leaves refunds to the question when the night counts no tickets but still has paid orders', async () => {
+    chosen = 'cancel';
+    shown = night({ status: 'published', tickets_issued: 0 });
+    organizer.cancellationPreview = vi.fn(async () => ({ ticket_holders: 0, orders_to_refund: 1, refund_total: { amount: 4000, currency: 'CAD' } }));
+    const fixture = await open();
+
+    press(fixture, 'Event actions');
+    await settle(fixture);
+    await settle(fixture);
+
+    const hint = menus[0].actions.find((action) => action.key === 'cancel')?.hint;
+    expect(hint).toBe('Nobody holds a ticket yet, so nobody to tell');
+    expect(hint).not.toMatch(/refund/i);
+    expect(decided[0].consequences).toContain('1 order is refunded, $40.00 in all.');
+  });
+
   it('still counts the people it will tell when somebody holds a ticket', async () => {
     chosen = 'cancel';
     organizer.cancellationPreview = vi.fn(async () => ({ ticket_holders: 3, orders_to_refund: 0, refund_total: { amount: 0, currency: 'CAD' } }));

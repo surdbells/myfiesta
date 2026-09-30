@@ -53,7 +53,7 @@ export {
 export { Selection, UiBulkBar } from './selection';
 export { sortLocally, type SortKeys } from './local-sort';
 export { UiColumnMenu } from './column-menu';
-export { UiSavedViews, type ViewChoice } from './saved-views';
+export { UiSavedViews, type ViewChoice, type ViewSave } from './saved-views';
 export { UiAmountRange, parseAmount, type AmountRange } from './amount-range';
 
 // --- filtering and reading a table ---------------------------------------

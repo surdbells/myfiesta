@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DOCUMENT, Injector, afterNextRender, inject, signal } from '@angular/core';
+import { Component, DOCUMENT, ElementRef, Injector, afterNextRender, afterRenderEffect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
 import { BadgeCheck, CalendarDays, Clock, Heart, MapPin, Share2 } from 'lucide-angular';
@@ -53,7 +53,49 @@ export class EventDetail {
 
   readonly formatMoney = formatMoney;
 
+  private readonly rail = viewChild<ElementRef<HTMLElement>>('rail');
+
+  /**
+   * Whether the rail sticks beside the page as it scrolls: only when all of
+   * it fits in the window below the header.
+   *
+   * It always stuck, held to the window's height with a scroll of its own. On
+   * a laptop the rail is taller than that, and "See all their events", at the
+   * foot of the organizer's card, sat behind a scroll nobody knew was there.
+   * Too tall to stick, it now scrolls with the page, all of it reachable.
+   * Only the browser can measure; on the server nothing sticks, and an
+   * unscrolled page looks the same either way.
+   */
+  readonly railSticks = signal(false);
+
   constructor() {
+    afterRenderEffect((onCleanup) => {
+      const rail = this.rail()?.nativeElement;
+      const view = this.document.defaultView;
+      if (!rail || !view || typeof ResizeObserver === 'undefined') return;
+
+      // Measured again when the rail changes height (a link to copy appears,
+      // a font arrives) and when the window does.
+      const measure = () => {
+        // Its own `top`, where it would stick: under the site header.
+        const top = parseFloat(view.getComputedStyle(rail).top) || 0;
+        this.railSticks.set(top + rail.offsetHeight <= this.document.documentElement.clientHeight);
+      };
+
+      // Once now, too: the observer's first word waits for a frame to be
+      // drawn, which a tab opened in the background may not draw for a while.
+      measure();
+
+      const resized = new ResizeObserver(measure);
+      resized.observe(rail);
+      view.addEventListener('resize', measure);
+
+      onCleanup(() => {
+        resized.disconnect();
+        view.removeEventListener('resize', measure);
+      });
+    });
+
     // A promoter's ref rides the shared link; kept for the order so the
     // promoter gets credit even though checkout is two pages away.
     this.store.ref.set(this.route.snapshot.queryParamMap.get('ref'));

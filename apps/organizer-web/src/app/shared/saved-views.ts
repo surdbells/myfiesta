@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { tap } from 'rxjs';
-import { ConfirmDialog, ToastStore, UiSavedViews, type FilterDef, type ListState, type ViewChoice } from '@myfiesta/ui';
+import { ConfirmDialog, ToastStore, UiSavedViews, type FilterDef, type ListState, type ViewChoice, type ViewSave } from '@myfiesta/ui';
 import { Api } from '../core/api';
 import type { SavedView, SavedViewList } from '../core/api.types';
 import { messageFor } from '../core/errors';
@@ -91,8 +91,15 @@ export class SavedViews {
    * Keep what the list shows now under a name — asked first, like everything
    * that writes on the server, and saying so when it replaces a view of the
    * same name, whose filters are then gone.
+   *
+   * Settled either way, so the box empties only for a view that was kept.
    */
-  protected async save(name: string): Promise<void> {
+  protected async save(request: ViewSave): Promise<void> {
+    const kept = await this.keep(request.name);
+    request.settle(kept);
+  }
+
+  private async keep(name: string): Promise<boolean> {
     const replacing = this.views().find((v) => v.name.toLowerCase() === name.toLowerCase());
     let saved: SavedView | null = null;
 
@@ -113,10 +120,12 @@ export class SavedViews {
     this.saving.set(false);
 
     const view = saved as SavedView | null;
-    if (!done || !view) return;
+    if (!done || !view) return false;
 
     this.views.set([...this.views().filter((v) => v.id !== view.id), view].sort((a, b) => a.name.localeCompare(b.name)));
     this.toasts.show(`Saved as “${view.name}”.`, 'success');
+
+    return true;
   }
 
   protected async remove(choice: ViewChoice): Promise<void> {

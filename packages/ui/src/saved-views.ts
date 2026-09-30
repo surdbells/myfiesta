@@ -10,6 +10,19 @@ export interface ViewChoice {
 }
 
 /**
+ * A name to keep the list's view under, handed to the screen to ask about
+ * and save.
+ *
+ * The screen calls `settle` once the question is answered: true when the view
+ * was kept. Until then the name stays in the box — a question answered no, or
+ * a save that failed, used to take the typed name with it.
+ */
+export interface ViewSave {
+  readonly name: string;
+  settle(kept: boolean): void;
+}
+
+/**
  * A list's saved views: pick one, keep the current one under a name, or let
  * one go.
  *
@@ -167,11 +180,12 @@ export class UiSavedViews {
   readonly example = input('Refunds this week');
 
   readonly applied = output<ViewChoice>();
-  readonly saved = output<string>();
+  readonly saved = output<ViewSave>();
   readonly deleted = output<ViewChoice>();
 
   private readonly trigger = viewChild<ElementRef<HTMLElement>>('trigger');
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
+  private readonly nameBox = viewChild<ElementRef<HTMLInputElement>>('name');
 
   protected readonly menu = new Popover(
     () => this.trigger(),
@@ -196,12 +210,30 @@ export class UiSavedViews {
     this.menu.hide();
   }
 
+  /**
+   * Hand the name to the screen, and empty the box only once it is kept.
+   *
+   * The question is a modal dialog, and opening one closes every open menu —
+   * this panel with it. Answered no, or failed, the panel comes back with the
+   * name still in the box and the cursor in it, so trying again, or changing
+   * the name, is where it was left.
+   */
   protected save(): void {
     const name = this.draft().trim().replace(/\s+/g, ' ');
-    if (!name) return;
+    if (!name || this.saving()) return;
 
-    this.saved.emit(name);
-    this.draft.set('');
+    this.saved.emit({
+      name,
+      settle: (kept) => {
+        if (kept) {
+          this.draft.set('');
+          return;
+        }
+
+        this.menu.show();
+        this.nameBox()?.nativeElement.focus();
+      },
+    });
   }
 }
 

@@ -7,7 +7,7 @@ import { AnswerValue, EventDetail, Money, Quote, ReceiptTax } from '../../core/a
 import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout-answers';
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, rememberPayment } from '../../core/embed';
-import { formatMoney } from '../../core/money';
+import { formatMoney, formatPrice } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
 import { QuestionField } from './question-field';
@@ -77,8 +77,37 @@ export class Checkout {
   readonly attendeeAnswers = signal<Record<string, Record<string, AnswerValue>>>({});
 
   readonly formatMoney = formatMoney;
+  readonly formatPrice = formatPrice;
 
   readonly slug = this.route.snapshot.paramMap.get('slug')!;
+
+  /**
+   * Nothing to pay, so the middle step is only details.
+   *
+   * The server's word once the basket is priced. Before that, the prices
+   * already on the page — the event's, for what is in the basket — so a free
+   * night reads "Your details" from the first paint. It read "Details &
+   * payment" until the quote came back, and then changed. Only a code can make
+   * a priced basket free, and only the quote can say so.
+   */
+  readonly free = computed(() => {
+    const quote = this.quote();
+    if (quote) return quote.requires_payment === false;
+
+    const event = this.event();
+    if (!event) return false;
+
+    const tiers = [...(this.store.access()?.ticket_types ?? []), ...(event.ticket_types ?? [])];
+    // A price the page does not have counts as a price: the quote will say.
+    const costs = (priced: { id: string; price: Money }[], id: string) =>
+      priced.find((item) => item.id === id)?.price.amount !== 0;
+
+    return (
+      this.store.lines().length > 0 &&
+      !this.store.lines().some((line) => costs(tiers, line.ticket_type_id)) &&
+      !this.store.addOnLines().some((line) => costs(event.add_ons ?? [], line.add_on_id))
+    );
+  });
 
   readonly buyerQuestions = computed(() =>
     (this.event()?.questions ?? []).filter((question) => !question.per_attendee),

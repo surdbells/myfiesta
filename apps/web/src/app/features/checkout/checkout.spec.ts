@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { Meta } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { Api, NewOrder } from '../../core/api';
 import { API_BASE_URL } from '../../core/api-base';
 import { EventDetail, Money, Quote } from '../../core/api.types';
@@ -182,7 +182,7 @@ describe('Checkout, the bill', () => {
     ).toEqual([
       ['Subtotal', '$50.00'],
       ['Discount', '−$50.00'],
-      ['Total', '$0.00'],
+      ['Total', 'Free'],
     ]);
   });
 
@@ -676,6 +676,25 @@ describe('Checkout, for free tickets', () => {
     expect(page.textContent).toContain('Reserve free tickets');
   });
 
+  /*
+   * The ticket page says "Free"; the bill after it said "1× Free entry $0.00",
+   * "Subtotal $0.00" and "Total $0.00", right above "Reserve free tickets".
+   */
+  it('reads "Free" on the bill, as the page before it did', async () => {
+    const line = { ...QUOTE.lines[0], name: 'Free entry', unit_price: cad(0), line_total: cad(0) };
+    const page = await open({ ...QUOTE, lines: [line], subtotal: cad(0), service_charge: cad(0), net_revenue: cad(0), total: cad(0), requires_payment: false });
+
+    const summary = page.querySelector('aside ul li')!.textContent!.replace(/\s+/g, ' ').trim();
+    const rows = Array.from(page.querySelectorAll('aside dl dt')).map((dt) => [dt.textContent!.trim(), dt.nextElementSibling!.textContent!.trim()]);
+
+    expect(summary).toBe('1× Free entry Free');
+    expect(rows).toEqual([
+      ['Subtotal', 'Free'],
+      ['Total', 'Free'],
+    ]);
+    expect(page.textContent).not.toContain('$0.00');
+  });
+
   it('still explains where the payment happens when there is one', async () => {
     const page = await open(QUOTE);
 
@@ -692,5 +711,64 @@ describe('Checkout, for free tickets', () => {
     expect(last?.textContent).toContain('$27.00');
     // After every field, and after the box that has to be ticked.
     expect(form.querySelector('input[name="agreed"]')!.compareDocumentPosition(last!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+/**
+ * The steps, before the basket is priced.
+ *
+ * A free night's read "Details & payment" until the quote came back, then
+ * changed to "Your details". What is in the basket, at the event's own
+ * prices, already says whether there is anything to pay.
+ */
+describe('Checkout, the steps before the price', () => {
+  let quotes: Subject<Quote>;
+
+  async function open(price: number): Promise<RouterTestingHarness> {
+    quotes = new Subject<Quote>();
+    const event = { ...EVENT, ticket_types: [{ id: 'general', price: cad(price) }], add_ons: [] } as unknown as EventDetail;
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: ':slug/checkout', component: Checkout },
+          { path: ':slug/tickets', component: Elsewhere },
+        ]),
+        { provide: Api, useValue: { event: () => of({ data: event }), quote: () => quotes } },
+      ],
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/afro/checkout', Checkout);
+    harness.detectChanges();
+
+    return harness;
+  }
+
+  const steps = (harness: RouterTestingHarness) =>
+    (harness.routeNativeElement as HTMLElement).querySelector('.steps')!.textContent!.replace(/\s+/g, ' ');
+
+  beforeEach(() =>
+    sessionStorage.setItem('myfiesta.basket.afro', JSON.stringify({ items: { general: 1 }, addOns: {}, code: '' })),
+  );
+
+  afterEach(() => sessionStorage.clear());
+
+  it('says "Your details" for a free basket before it is priced, and still once it is', async () => {
+    const harness = await open(0);
+
+    expect(steps(harness)).toContain('Your details');
+    expect(steps(harness)).not.toContain('Details & payment');
+
+    quotes.next({ ...QUOTE, total: cad(0), requires_payment: false });
+    harness.detectChanges();
+
+    expect(steps(harness)).toContain('Your details');
+  });
+
+  it('says "Details & payment" for a basket with a price, before it is priced', async () => {
+    const harness = await open(2500);
+
+    expect(steps(harness)).toContain('Details & payment');
   });
 });
