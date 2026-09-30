@@ -58,7 +58,7 @@
   </ui-empty>
 } @else {
   <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
-    <div class="overflow-x-auto">
+    <div uiScrollRegion="Orders for this event">
       <table class="orders w-full min-w-[44rem] text-sm" [class.density-compact]="list.density() === 'compact'">
         <caption class="sr-only">Orders for this event</caption>
         <thead>

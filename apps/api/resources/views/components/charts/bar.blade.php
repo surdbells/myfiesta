@@ -139,7 +139,7 @@
     @if (! $hasData || $n === 0)
         <div class="mf-empty" role="note">{{ $empty }}</div>
     @else
-        <div class="mf-scroll mf-scroll-latest">
+        <x-charts.scroll-region class="mf-scroll mf-scroll-latest" :label="$title">
             <svg viewBox="0 0 {{ $W }} {{ $H }}" role="img" aria-labelledby="{{ $uid }}-t {{ $uid }}-d" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
                 <title id="{{ $uid }}-t">{{ $title }}</title>
                 <desc id="{{ $uid }}-d">{{ $summary }}</desc>
@@ -171,7 +171,7 @@
                     @endforeach
                 </g>
             </svg>
-        </div>
+        </x-charts.scroll-region>
 
         <x-charts.legend :items="array_map(fn ($s, $i) => ['name' => $s['name'], 'slot' => $s['slot'] ?? $i + 1], $series, array_keys($series))" />
 

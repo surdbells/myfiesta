@@ -206,7 +206,7 @@
       }
 
       <div class="card card--flush">
-        <div class="overflow-x-auto">
+        <div uiScrollRegion="By event">
           <table class="w-full min-w-[36rem] text-sm">
             <caption class="sr-only">What each event sold, what has been sent and what is owed</caption>
             <thead>
@@ -266,7 +266,7 @@
       <p class="block__none card p-6 text-sm text-text-muted">Nothing has been sent yet.</p>
     } @else {
       <div class="card card--flush">
-        <div class="overflow-x-auto">
+        <div uiScrollRegion="Payments to you">
           <table class="w-full min-w-[36rem] text-sm">
             <caption class="sr-only">Payments sent to you</caption>
             <thead>

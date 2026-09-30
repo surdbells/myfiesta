@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { ToastStore, UiButton } from '@myfiesta/ui';
+import { ToastStore, UiButton, UiScrollRegion } from '@myfiesta/ui';
 import { SITE_URL } from '../../core/site-url';
 
 type Style = 'button' | 'inline';
@@ -18,7 +18,7 @@ type Style = 'button' | 'inline';
  */
 @Component({
   selector: 'app-event-embed',
-  imports: [UiButton],
+  imports: [UiButton, UiScrollRegion],
   template: `
     <h2 class="section mb-3 text-base font-semibold">On your own site</h2>
 
@@ -47,7 +47,7 @@ type Style = 'button' | 'inline';
         }
       </div>
 
-      <pre class="m-0 overflow-x-auto rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs leading-relaxed">{{ snippet() }}</pre>
+      <pre uiScrollRegion="Code to paste" class="m-0 rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs leading-relaxed">{{ snippet() }}</pre>
 
       <div>
         <button uiButton type="button" variant="secondary" size="sm" (click)="copy()">{{ copied() ? 'Copied' : 'Copy code' }}</button>

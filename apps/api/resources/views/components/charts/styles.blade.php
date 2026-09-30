@@ -72,7 +72,17 @@
     @foreach (array_keys($light) as $slot) .mf-s{{ $slot }} { --mf-c: var(--mf-s{{ $slot }}); } @endforeach
 
     .mf-chart { position: relative; margin: 0; color: var(--mf-ink-2); min-width: 0; }
-    .mf-scroll { overflow-x: auto; }
+    /* A chart narrower than its smallest scrolls sideways, and so does a data
+       table wider than a phone; neither draws a scrollbar while it does. The
+       bars or the column cut off at the edge say there is more, and a
+       trackpad, a finger or Shift with the wheel reach it. A keyboard reaches
+       it through the tab stop the box takes while it scrolls (scroll-region),
+       with its ring drawn inside, where the section around it cannot clip it.
+       Filament's own tables and tabs lose theirs in the admin layout
+       (filament/admin-layout). */
+    .mf-scroll, .mf-table-x { overflow-x: auto; scrollbar-width: none; }
+    .mf-scroll::-webkit-scrollbar, .mf-table-x::-webkit-scrollbar { display: none; }
+    .mf-scroll:focus-visible, .mf-table-x:focus-visible { outline: 2px solid var(--mf-s2); outline-offset: -2px; }
     .mf-chart svg { display: block; width: 100%; height: auto; font-family: inherit; overflow: visible; }
     .mf-scroll > svg { min-width: 28rem; }
     /* A series over time, when it has to scroll: opened at its latest end,
@@ -136,7 +146,11 @@
     .mf-data { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--mf-ink-2); }
     .mf-data summary { cursor: pointer; color: var(--mf-muted); width: max-content; }
     .mf-data summary:hover { color: var(--mf-ink-2); }
-    .mf-table-wrap { max-height: 20rem; overflow: auto; margin-top: 0.5rem; }
+    /* Two boxes, because one cannot hide one scrollbar and keep the other:
+       the outer scrolls down and keeps its bar, which says how long the
+       table is; the inner scrolls a table wider than a phone sideways and
+       draws none, like a chart (.mf-table-x, above). */
+    .mf-table-wrap { max-height: 20rem; overflow-y: auto; margin-top: 0.5rem; }
     .mf-data table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
     .mf-data th, .mf-data td { text-align: left; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--mf-grid); }
     .mf-data th { color: var(--mf-muted); font-weight: 500; }

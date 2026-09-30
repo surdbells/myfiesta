@@ -10,29 +10,33 @@
 
 <details class="mf-data">
     <summary>Data table</summary>
+    {{-- Down in the outer box, which keeps its scrollbar; sideways in the
+         inner one, which draws none (see .mf-table-wrap in the styles). --}}
     <div class="mf-table-wrap">
-        <table>
-            <caption class="mf-sr">{{ $caption }}</caption>
-            <thead>
-                <tr>
-                    @foreach ($headers as $i => $header)
-                        <th scope="col" @class(['mf-num' => $i > 0])>{{ $header }}</th>
-                    @endforeach
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($rows as $row)
+        <x-charts.scroll-region class="mf-table-x" :label="$caption.', data table'">
+            <table>
+                <caption class="mf-sr">{{ $caption }}</caption>
+                <thead>
                     <tr>
-                        @foreach ($row as $i => $cell)
-                            @if ($i === 0)
-                                <th scope="row">{{ $cell }}</th>
-                            @else
-                                <td class="mf-num">{{ $cell }}</td>
-                            @endif
+                        @foreach ($headers as $i => $header)
+                            <th scope="col" @class(['mf-num' => $i > 0])>{{ $header }}</th>
                         @endforeach
                     </tr>
-                @endforeach
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach ($rows as $row)
+                        <tr>
+                            @foreach ($row as $i => $cell)
+                                @if ($i === 0)
+                                    <th scope="row">{{ $cell }}</th>
+                                @else
+                                    <td class="mf-num">{{ $cell }}</td>
+                                @endif
+                            @endforeach
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </x-charts.scroll-region>
     </div>
 </details>

@@ -116,7 +116,7 @@
   }
 } @else {
   <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
-    <div class="overflow-x-auto">
+    <div uiScrollRegion="Codes">
       <table class="w-full min-w-[48rem] text-sm" [class.density-compact]="list.density() === 'compact'">
         <caption class="sr-only">Codes</caption>
         <thead>

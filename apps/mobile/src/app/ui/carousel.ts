@@ -19,11 +19,24 @@ import {
  *
  * Dots are a position readout, not a control. They are hidden from screen
  * readers, which already have a scrollable list and do not need decoration.
+ *
+ * The track draws no scrollbar (scroll-x, in styles.css): the peek says
+ * there is more, and a finger does the rest. The cards in it are not things
+ * a keyboard can move to, so while there is more than one the track itself
+ * takes a tab stop, and the arrow keys scroll it — for anybody on a
+ * Bluetooth keyboard.
  */
 @Component({
   selector: 'mf-carousel',
   template: `
-    <div #track class="track" (scroll)="onScroll()" [attr.aria-label]="ariaLabel()" role="group">
+    <div
+      #track
+      class="track scroll-x"
+      (scroll)="onScroll()"
+      [attr.aria-label]="ariaLabel()"
+      [attr.tabindex]="count() > 1 ? 0 : null"
+      role="group"
+    >
       <ng-content />
     </div>
 
@@ -46,9 +59,7 @@ import {
       /* The peek: the next card's edge is what says "there is more". */
       grid-auto-columns: min(82%, 22rem);
       gap: var(--space-3);
-      overflow-x: auto;
       scroll-snap-type: x mandatory;
-      scrollbar-width: none;
       /* Full-bleed inside a padded screen, so a card can reach the edge. */
       margin: 0 calc(var(--space-5) * -1);
       padding: 0 var(--space-5);
@@ -58,10 +69,6 @@ import {
          the side of the phone. */
       scroll-padding-inline: var(--space-5);
       overscroll-behavior-x: contain;
-    }
-
-    .track::-webkit-scrollbar {
-      display: none;
     }
 
     .track ::ng-deep > * {

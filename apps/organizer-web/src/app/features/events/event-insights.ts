@@ -1,5 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { UiScrollRegion } from '@myfiesta/ui';
 import { InsightSource, InsightSummary, SalesInsights } from '../../core/api.types';
 import { formatMoney } from '../../core/money';
 
@@ -29,7 +30,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
  */
 @Component({
   selector: 'app-event-insights',
-  imports: [DatePipe],
+  imports: [DatePipe, UiScrollRegion],
   template: `
     @let s = insights().summary;
     @let prev = insights().previous;
@@ -121,7 +122,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
       @if (insights().sources.length > 0) {
         <div class="overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-card)">
           <h3 class="px-6 pt-5 text-base font-semibold">Where buyers came from</h3>
-          <div class="overflow-x-auto">
+          <div uiScrollRegion="Where buyers came from">
             <table class="mt-3 w-full text-left text-sm tabular-nums">
               <thead class="text-xs text-text-muted">
                 <tr>
@@ -158,7 +159,7 @@ const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
         <div class="overflow-hidden rounded-(--radius-card) border border-border-subtle bg-surface-raised shadow-(--shadow-card)">
           <h3 class="px-6 pt-5 text-base font-semibold">Against {{ prev.title }}</h3>
           <p class="px-6 text-xs text-text-muted">{{ prev.starts_at | date: 'd MMM y' }} — your last night before this one.</p>
-          <div class="overflow-x-auto">
+          <div [uiScrollRegion]="'Against ' + prev.title">
             <table class="mt-3 w-full text-left text-sm tabular-nums">
               <thead class="text-xs text-text-muted">
                 <tr>

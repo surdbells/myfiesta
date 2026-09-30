@@ -40,7 +40,7 @@ export interface TabLink {
   template: `
     <nav
       #bar
-      class="tabs"
+      class="tabs scroll-x"
       [class.tabs--more-before]="moreBefore()"
       [class.tabs--more-after]="moreAfter()"
       [attr.aria-label]="label()"
@@ -69,14 +69,12 @@ export interface TabLink {
     </nav>
   `,
   styles: `
+    /* Scrolls rather than wraps (scroll-x, which also hides the bar). A
+       wrapped second row of tabs changes the page's height as you move
+       between them. */
     .tabs {
       border-bottom: 1px solid var(--border);
-      /* Scrolls rather than wraps. A wrapped second row of tabs changes the
-         page's height as you move between them. */
-      overflow-x: auto;
-      scrollbar-width: none;
     }
-    .tabs::-webkit-scrollbar { display: none; }
     /* The fade is a mask, not a colour laid over the row, so it works on
        whatever the page behind it is. Three rem: about half a tab. */
     .tabs--more-after {

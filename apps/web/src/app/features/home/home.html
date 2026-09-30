@@ -154,7 +154,7 @@
       </div>
     } @else if (lead(); as event) {
       <ul
-        class="mosaic m-0 grid list-none grid-cols-2 gap-4 p-0 max-[1024px]:bleed max-[1024px]:flex max-[1024px]:snap-x max-[1024px]:snap-mandatory max-[1024px]:overflow-x-auto max-[1024px]:pb-2 max-[1024px]:[scrollbar-width:none]"
+        class="mosaic m-0 grid list-none grid-cols-2 gap-4 p-0 max-[1024px]:bleed max-[1024px]:flex max-[1024px]:snap-x max-[1024px]:snap-mandatory max-[1024px]:scroll-x max-[1024px]:pb-2"
         aria-label="On sale now"
       >
         <li class="mosaic__lead relative row-span-2 min-w-0 max-[1024px]:w-[min(78vw,20rem)] max-[1024px]:shrink-0 max-[1024px]:snap-start">
@@ -286,7 +286,9 @@
     </header>
 
     <!-- The padding is set per branch: bleed carries its own, and a p-0 here
-         would sort after it and take the rail back in off the window's edge. -->
+         would sort after it and take the rail back in off the window's edge.
+         A scrolling row draws no scrollbar (scroll-x); its pb-3 is room for
+         the cards' shadows, which the row would otherwise clip. -->
     <ul
       #track
       appOverflows
@@ -294,7 +296,7 @@
       class="rail m-0 grid list-none py-0"
       [class]="
         scrolls(shelf)
-          ? 'grid-flow-col auto-cols-[17.5rem] gap-5 overflow-x-auto snap-x snap-mandatory pb-3 bleed [scrollbar-width:thin] max-sm:auto-cols-[min(72vw,15.5rem)] max-sm:gap-4'
+          ? 'grid-flow-col auto-cols-[17.5rem] gap-5 scroll-x snap-x snap-mandatory pb-3 bleed max-sm:auto-cols-[min(72vw,15.5rem)] max-sm:gap-4'
           : 'grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-5 px-0 max-sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] max-sm:gap-3'
       "
     >

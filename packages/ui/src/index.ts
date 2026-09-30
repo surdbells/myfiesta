@@ -39,6 +39,8 @@ export { UiBreadcrumb, type Crumb } from './breadcrumb';
 
 // Data
 export { UiTable, UiSortHeader, type Sort, type SortDirection } from './table';
+// A table's frame: scrolls sideways without a bar, and from the keyboard.
+export { UiScrollRegion } from './scroll-region';
 // One list's filters, sort, page and columns, kept in the address and this browser.
 export {
   createListState,

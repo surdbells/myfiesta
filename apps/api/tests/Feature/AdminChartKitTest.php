@@ -130,6 +130,44 @@ class AdminChartKitTest extends TestCase
         $this->assertStringContainsString('.mf-hbar .mf-row { grid-template-columns: minmax(0, 1fr);', $styles);
     }
 
+    /**
+     * No scrollbar under anything that scrolls sideways: a chart narrower
+     * than its smallest, a data table wider than a phone, Filament's own
+     * tables and tabs. The grey bar under a chart said nothing the bars cut
+     * off at its edge did not. Without it a keyboard has only the tab stop the
+     * box takes while it scrolls, so that is held here too, and so is the bar
+     * that says how long a data table is, which scrolls down.
+     */
+    public function test_what_scrolls_sideways_draws_no_scrollbar_and_a_keyboard_can_still_scroll_it(): void
+    {
+        $styles = Blade::render('<x-charts.styles />');
+
+        $this->assertStringContainsString('.mf-scroll, .mf-table-x { overflow-x: auto; scrollbar-width: none; }', $styles);
+        $this->assertStringContainsString('.mf-scroll::-webkit-scrollbar, .mf-table-x::-webkit-scrollbar { display: none; }', $styles);
+        $this->assertStringContainsString('.mf-scroll:focus-visible, .mf-table-x:focus-visible { outline: 2px solid var(--mf-s2); outline-offset: -2px; }', $styles);
+
+        // Down in one box, which keeps its bar; sideways in another inside it.
+        $this->assertStringContainsString('.mf-table-wrap { max-height: 20rem; overflow-y: auto; margin-top: 0.5rem; }', $styles);
+        $this->assertDoesNotMatchRegularExpression('/\.mf-table-wrap[^{]*\{[^}]*scrollbar/', $styles);
+
+        foreach (['line', 'bar'] as $chart) {
+            $html = Blade::render("<x-charts.{$chart} title=\"Sales\" :labels=\"['Jan', 'Feb']\" :series=\"[['name' => 'Gross', 'values' => [0, 5]]]\" />");
+
+            // A named stop, and only while there is something past the edge.
+            $this->assertMatchesRegularExpression('/<div\s+role="region" aria-label="Sales" class="mf-scroll mf-scroll-latest"\s+x-data="\{ scrolls: false \}"/', $html, $chart);
+            $this->assertStringContainsString('x-bind:tabindex="scrolls ? 0 : null"', $html, $chart);
+            $this->assertStringContainsString('new ResizeObserver(measure).observe(box)', $html, $chart);
+            $this->assertStringNotContainsString(' tabindex="0"', $html, $chart);
+
+            $this->assertMatchesRegularExpression('/<div\s+role="region" aria-label="Sales, data table" class="mf-table-x"/', $html, $chart);
+        }
+
+        // Filament's own, on every panel page.
+        $layout = view('filament.admin-layout')->render();
+        $this->assertStringContainsString('.fi-ta-content-ctn, .fi-tabs { scrollbar-width: none; }', $layout);
+        $this->assertStringContainsString('.fi-ta-content-ctn::-webkit-scrollbar, .fi-tabs::-webkit-scrollbar { display: none; }', $layout);
+    }
+
     public function test_an_empty_series_says_so_instead_of_drawing_a_flat_line(): void
     {
         $html = Blade::render('<x-charts.line title="Sales" :labels="[\'a\', \'b\']" :series="[[\'name\' => \'Gross\', \'values\' => [0, 0]]]" empty="No sales yet." />');

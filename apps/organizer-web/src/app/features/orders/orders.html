@@ -136,7 +136,7 @@
       off the side, and the total is what somebody opened the screen to see.
     -->
     <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
-      <div class="overflow-x-auto">
+      <div uiScrollRegion="Orders">
         <table class="w-full text-sm max-sm:block" [class.density-compact]="list.density() === 'compact'">
           <caption class="sr-only">Orders</caption>
           <thead class="max-sm:hidden">

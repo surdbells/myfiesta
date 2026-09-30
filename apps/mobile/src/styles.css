@@ -159,6 +159,36 @@ h3 {
 }
 
 /*
+ * A row that scrolls sideways — the chips over a list, a carousel, the
+ * intro's pages — and draws no scrollbar while it does.
+ *
+ * The same rule as scroll-x in packages/ui: the row says it scrolls by the
+ * card or chip it cuts off at the edge, and a finger does the rest. Hidden in
+ * every engine the app runs in: scrollbar-width where the WebView reads it,
+ * the pseudo-element in the Android and iOS WebViews that predate it. A row
+ * that is not a row of buttons takes a tab stop for a Bluetooth keyboard, and
+ * its ring is drawn inside, where the screen that clips the row cannot cut it.
+ * Positioned, so that anything absolutely positioned in it, such as a label
+ * only a screen reader hears, scrolls and is clipped with the row rather than
+ * with the page, which it would otherwise widen for a finger to drag sideways.
+ *
+ * Sideways rows only: the bar goes in both directions.
+ */
+.scroll-x {
+  position: relative;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-x:focus-visible {
+  outline-offset: -2px;
+}
+
+/*
  * Focus is drawn for the keyboard, not for the finger.
  *
  * A ring that appears on every tap reads as a stuck button on a touchscreen;

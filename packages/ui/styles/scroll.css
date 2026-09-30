@@ -1,0 +1,45 @@
+/*
+ * A row that scrolls sideways, and draws no scrollbar while it does.
+ *
+ * A shelf of nights, a strip of tabs, a table wider than a phone: each had a
+ * grey bar under it on Windows, and on a Mac whenever it shows scrollbars,
+ * and the bar said nothing the row does not already say by cutting a card or
+ * a column off at its edge. Hidden in every engine: scrollbar-width for
+ * Firefox and for the Chromium and Safari versions that read it, the
+ * pseudo-element for the ones before them.
+ *
+ * Only the bar goes. A finger, a trackpad and Shift with the wheel scroll the
+ * row as they did, and a row that is not a list of links takes a tab stop so
+ * the arrow keys do too (uiScrollRegion in the kit, for tables). Its focus
+ * ring is drawn inside the row, where a row that clips its content, or a card
+ * that clips the row, cannot cut it off.
+ *
+ * Positioned, so that it holds everything in it. Something absolutely
+ * positioned inside the row is placed against the nearest positioned box
+ * above it, and scrolls and is clipped with that box, not with the row. A
+ * table's last heading is often a label only a screen reader hears
+ * (<span class="sr-only">Refund</span>), which is absolutely positioned; with
+ * the page as its box, it sat at the right edge of the whole table, outside
+ * the row and the card around it, and the page scrolled sideways by that much.
+ *
+ * Sideways rows only. The bar goes in both directions, because no engine but
+ * Chromium can hide one and keep the other, so a box that also scrolls down
+ * would lose the bar that says how long it is.
+ *
+ * A utility rather than a class in base.css so that it takes variants: the
+ * front page's posters scroll only below 1024px (max-[1024px]:scroll-x). Not
+ * imported in a layer, which is what @utility needs to be a utility at all.
+ */
+@utility scroll-x {
+  position: relative;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}

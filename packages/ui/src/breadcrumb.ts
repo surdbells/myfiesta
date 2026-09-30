@@ -25,7 +25,7 @@ export interface Crumb {
   imports: [RouterLink],
   template: `
     <nav class="crumbs" aria-label="Breadcrumb">
-      <ol class="crumbs__list">
+      <ol class="crumbs__list scroll-x">
         @for (crumb of crumbs(); track crumb.label; let last = $last) {
           <li class="crumbs__item">
             @if (crumb.link && !last) {
@@ -48,12 +48,9 @@ export interface Crumb {
       list-style: none;
       font-size: var(--font-size-sm);
       /* A long event name should not wrap the trail onto two lines and push
-         the page heading down. */
-      overflow-x: auto;
-      scrollbar-width: none;
+         the page heading down: it scrolls instead (scroll-x, with no bar). */
       white-space: nowrap;
     }
-    .crumbs__list::-webkit-scrollbar { display: none; }
     .crumbs__item { display: flex; align-items: center; gap: var(--space-2); }
     .crumbs__item + .crumbs__item::before {
       content: '/';

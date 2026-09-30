@@ -17,13 +17,15 @@ export interface MfChip {
  * toggles for picking several at once, with a tick on each that is on.
  *
  * The row scrolls sideways rather than wrapping, so a long set of filters
- * never pushes the list itself down the screen.
+ * never pushes the list itself down the screen. It draws no scrollbar while
+ * it does (scroll-x, in styles.css); every chip is a button, so a keyboard
+ * reaches the ones past the edge by moving to them.
  */
 @Component({
   selector: 'mf-chips',
   imports: [MfIcon],
   template: `
-    <div class="row" role="group" [attr.aria-label]="ariaLabel()">
+    <div class="row scroll-x" role="group" [attr.aria-label]="ariaLabel()">
       @for (chip of options(); track chip.value) {
         <button
           type="button"
@@ -52,15 +54,9 @@ export interface MfChip {
     .row {
       display: flex;
       gap: var(--space-2);
-      overflow-x: auto;
-      scrollbar-width: none;
       /* Let the chips run to the screen edge and scroll from there. */
       margin: 0 calc(var(--space-5) * -1);
       padding: 2px var(--space-5);
-    }
-
-    .row::-webkit-scrollbar {
-      display: none;
     }
 
     .chip {

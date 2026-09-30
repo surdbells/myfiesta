@@ -12,6 +12,7 @@ import {
   UiEmpty,
   UiErrorState,
   UiPageHeader,
+  UiScrollRegion,
   UiSkeleton,
 } from '@myfiesta/ui';
 import { API_BASE_URL, Api } from '../../core/api';
@@ -47,7 +48,7 @@ const EVENT_LABELS: Record<WebhookEventName, { title: string; hint: string }> = 
  */
 @Component({
   selector: 'app-integrations',
-  imports: [FormsModule, DatePipe, UiPageHeader, UiButton, UiAlert, UiBadge, UiConfirm, UiEmpty, UiErrorState, UiSkeleton],
+  imports: [FormsModule, DatePipe, UiPageHeader, UiButton, UiAlert, UiBadge, UiConfirm, UiEmpty, UiErrorState, UiScrollRegion, UiSkeleton],
   templateUrl: './integrations.html',
 })
 export class IntegrationsScreen {

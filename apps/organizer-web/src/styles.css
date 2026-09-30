@@ -21,6 +21,7 @@
 @import '../../../packages/tokens/dist/tokens.css';
 @import '../../../packages/ui/styles/base.css' layer(base);
 @import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../../packages/ui/styles/scroll.css';
 
 /* Where the class names live: the app's templates, and the ui package's. */
 @source './app';

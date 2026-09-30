@@ -1,6 +1,7 @@
 import { Component, computed, input, output } from '@angular/core';
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-angular';
 import { UiIcon, type LucideIconData } from './icon';
+import { UiScrollRegion } from './scroll-region';
 
 /** Which way a column is sorted, or not. */
 export type SortDirection = 'asc' | 'desc' | null;
@@ -23,7 +24,8 @@ export interface Sort {
  * every one of those screens was reimplementing:
  *
  *   - a horizontal scroll container, so a wide table scrolls itself instead of
- *     the page
+ *     the page — with no scrollbar, and a tab stop for the keyboard while
+ *     there is anything past the edge (UiScrollRegion)
  *   - a sticky header that survives that scroll
  *   - the loading state, as skeleton rows rather than a spinner that collapses
  *     the layout and makes the page jump when data lands
@@ -32,8 +34,9 @@ export interface Sort {
  */
 @Component({
   selector: 'ui-table',
+  imports: [UiScrollRegion],
   template: `
-    <div class="table__scroll" [attr.aria-busy]="loading() ? 'true' : null">
+    <div class="table__scroll" [uiScrollRegion]="caption()" [attr.aria-busy]="loading() ? 'true' : null">
       <table class="table" [class.density-compact]="density() === 'compact'">
         <caption class="sr-only">{{ caption() }}</caption>
         <ng-content select="[tableHead]" />
@@ -60,9 +63,11 @@ export interface Sort {
   `,
   styles: `
     .table__scroll {
-      overflow-x: auto;
       /* The header sticks to the top of this box, so it needs to be the thing
-         that scrolls vertically too when the caller constrains the height. */
+         that scrolls vertically too when the caller constrains the height.
+         Its bar is hidden in both directions (scroll-x), so a capped table
+         would scroll down with no bar saying how long it is. No screen caps
+         one; a list that long pages instead. */
       max-height: inherit;
       border-radius: var(--radius-card);
     }

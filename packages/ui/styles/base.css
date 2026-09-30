@@ -702,17 +702,30 @@ tbody tr.is-selected:hover {
 /* --- tables -------------------------------------------------------------- */
 
 /* Wide content scrolls inside its own container so the page body never scrolls
-   sideways on a phone. */
+   sideways on a phone, and draws no scrollbar while it does, like every other
+   sideways row (scroll-x, in scroll.css): the column cut off at the edge says
+   there is more. Positioned for the same reason as scroll-x: a heading's
+   label for a screen reader is absolutely positioned, and against the page
+   rather than the container it widens the page it was meant to keep still. */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background-color: var(--surface-raised);
   box-shadow: var(--shadow-card);
 }
+.table-scroll:not(.table-scroll--sticky) {
+  scrollbar-width: none;
+}
+.table-scroll:not(.table-scroll--sticky)::-webkit-scrollbar {
+  display: none;
+}
 
 /* A table long enough to scroll keeps its header. Without this, the tenth row
-   of an order list is four numbers with nothing saying which is which. */
+   of an order list is four numbers with nothing saying which is which. It
+   scrolls down too, so it keeps its bars: no engine but Chromium can hide one
+   and keep the other, and the one down the side says how long the list is. */
 .table-scroll--sticky {
   max-height: 70vh;
   overflow-y: auto;

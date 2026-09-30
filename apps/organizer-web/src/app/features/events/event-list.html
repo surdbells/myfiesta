@@ -181,7 +181,7 @@
   }
 } @else if (layout() === 'table') {
   <div class="card card--flush" [class.opacity-60]="refreshing()" [attr.aria-busy]="refreshing() || null">
-    <div class="overflow-x-auto">
+    <div uiScrollRegion="Events">
       <table class="w-full min-w-[64rem] text-sm" [class.density-compact]="list.density() === 'compact'">
         <caption class="sr-only">Events, with what each has sold</caption>
         <thead>
