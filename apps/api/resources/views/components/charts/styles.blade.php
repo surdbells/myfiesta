@@ -100,6 +100,27 @@
     .mf-band:hover .mf-hit-area, .mf-row:hover .mf-hit-area { fill: var(--mf-grid); fill-opacity: 0.35; }
     a.mf-row:focus-visible { outline: 2px solid var(--mf-s2); outline-offset: 1px; }
 
+    /* A ranking, drawn in HTML so its words are the page's size at any width
+       (see hbar). The label beside its bar where there is room, and on its
+       own line above it where there is not: never scrolled sideways, because
+       the values at the tips are what a ranking is read for. */
+    .mf-hbar { container-type: inline-size; margin: 0; padding: 0; list-style: none; }
+    .mf-hbar .mf-row { display: grid; grid-template-columns: minmax(0, min(30%, 12.5rem)) minmax(0, 1fr); align-items: center; column-gap: 0.75rem; min-height: 1.875rem; padding: 0 0.25rem; border-radius: 0.25rem; color: inherit; text-decoration: none; }
+    .mf-hbar .mf-row:hover { background: color-mix(in srgb, var(--mf-grid) 35%, transparent); }
+    .mf-hbar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 0.75rem; color: var(--mf-ink-2); }
+    .mf-hbar-line { display: flex; align-items: center; gap: 0.375rem; min-width: 0; align-self: stretch; border-left: 1px solid var(--mf-axis); }
+    .mf-hbar-bars { position: relative; flex: 0 1 auto; min-width: 0; width: calc((100% - 7.5rem) * var(--mf-reach)); height: 0.875rem; }
+    .mf-hbar .mf-track, .mf-hbar .mf-bar { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 0 4px 4px 0; }
+    .mf-hbar .mf-track { background: var(--mf-track); }
+    .mf-hbar .mf-bar { min-width: 2px; background: var(--mf-c); }
+    .mf-hbar .mf-value { flex: none; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--mf-ink); white-space: nowrap; }
+    @container (width < 28rem) {
+        .mf-hbar .mf-row { grid-template-columns: minmax(0, 1fr); row-gap: 0.125rem; padding-block: 0.25rem; }
+        .mf-hbar-label { text-align: left; }
+        .mf-hbar-line { min-height: 1.125rem; }
+        .mf-hbar-bars { width: calc((100% - 6.5rem) * var(--mf-reach)); }
+    }
+
     .mf-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.5rem 0 0; padding: 0; list-style: none; font-size: 0.8125rem; color: var(--mf-ink-2); }
     .mf-legend li { display: inline-flex; align-items: center; gap: 0.375rem; }
     .mf-swatch { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: 2px; background: var(--mf-c); flex: none; }
@@ -156,5 +177,7 @@
         .mf-line { stroke: CanvasText; }
         .mf-bar, .mf-seg, .mf-area, .mf-end, .mf-dot { fill: CanvasText; }
         .mf-swatch { background: CanvasText; forced-color-adjust: none; }
+        .mf-hbar .mf-bar { background: CanvasText; forced-color-adjust: none; }
+        .mf-hbar .mf-track { background: GrayText; forced-color-adjust: none; }
     }
 </style>

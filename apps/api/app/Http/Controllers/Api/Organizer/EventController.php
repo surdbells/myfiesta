@@ -10,6 +10,7 @@ use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
 use App\Services\Audit\Auditor;
+use App\Services\Checkout\TurnedAway;
 use App\Services\Events\EventCanceller;
 use App\Services\Events\EventDuplicator;
 use App\Services\Events\EventReviews;
@@ -450,6 +451,9 @@ class EventController extends Controller
             'currency' => $event->currency,
             'starts_at' => $event->starts_at,
             'ends_at' => $event->ends_at,
+            // Over by its own listing, when online sales stop: a night weeks
+            // gone is not "On sale", and there is nothing left to take off sale.
+            'sales_ended' => TurnedAway::pastSelling($event, now()),
             'timezone' => $event->timezone,
             'city' => $event->city,
             'subdivision' => $event->subdivision,

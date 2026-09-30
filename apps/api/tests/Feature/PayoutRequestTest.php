@@ -372,7 +372,9 @@ class PayoutRequestTest extends TestCase
 
         Livewire::test(ListPayoutRequests::class)
             ->callTableAction('reject', $request, ['reason' => 'Please re-enter your bank details.'])
-            ->assertHasNoTableActionErrors();
+            ->assertHasNoTableActionErrors()
+            // One fewer waiting beside Payout requests, without a reload.
+            ->assertDispatched('refresh-sidebar');
 
         $this->assertSame('rejected', $request->fresh()->status);
     }

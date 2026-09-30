@@ -13,6 +13,13 @@
 
     Values sit at the tip of each bar. Labels too long for the column are cut
     with an ellipsis and given in full in the row's tooltip and the table.
+
+    Drawn in HTML rather than SVG, so its words are always the page's size.
+    As a picture it was scaled to its box: 12px labels read at 8px on a phone,
+    and a minimum width that kept them legible pushed every value past the
+    right edge, reached only by scrolling sideways — and a ranking is read
+    from its values. Where the chart is narrow, each label sits on its own
+    line above its bar instead of beside it.
 --}}
 @props([
     'title',
@@ -30,17 +37,6 @@
     $F = \App\Services\Analytics\Charts\Format::class;
 
     $items = array_values($items);
-    $n = count($items);
-
-    $W = 640;
-    $rowH = 30;
-    $pt = 4;
-    $labelW = 200;
-    $valueW = 120;
-    $barX = $labelW + 12;
-    $barMax = $W - $barX - $valueW;
-    $H = $pt * 2 + $n * $rowH;
-    $thick = 14;
 
     $max = 0.0;
     $hasData = false;
@@ -49,20 +45,8 @@
         $hasData = $hasData || (float) $item['value'] > 0;
     }
 
-    $c = fn (float $v) => $F::coord($v);
-    $len = fn ($v) => $max > 0 ? max(0, (float) $v) / $max * $barMax : 0;
-
-    // A bar square at its start and rounded at its data end.
-    $shape = function (float $x, float $y, float $w, float $h) use ($c): string {
-        $r = min(4, $w / 2, $h / 2);
-
-        return 'M'.$c($x).' '.$c($y)
-            .' L'.$c($x + $w - $r).' '.$c($y)
-            .' Q'.$c($x + $w).' '.$c($y).' '.$c($x + $w).' '.$c($y + $r)
-            .' L'.$c($x + $w).' '.$c($y + $h - $r)
-            .' Q'.$c($x + $w).' '.$c($y + $h).' '.$c($x + $w - $r).' '.$c($y + $h)
-            .' L'.$c($x).' '.$c($y + $h).' Z';
-    };
+    // A share of the longest bar there is room for, 0 to 1.
+    $share = fn ($v) => $max > 0 ? max(0, (float) $v) / $max : 0.0;
 
     $display = function (array $item) use ($F, $format, $currency): string {
         $value = $F::value($item['value'], $format, $currency);
@@ -76,55 +60,42 @@
         return $value;
     };
 
-    $uid = 'mfh-'.substr(md5($title.json_encode($items)), 0, 10);
-
-    $summary = $description ?? ($n === 0 ? 'No items.' : collect($items)->take(3)
-        ->map(fn ($item, $i) => ($i + 1).'. '.$item['label'].' '.$display($item))
-        ->implode('; ').($n > 3 ? '; and '.($n - 3).' more.' : '.'));
+    $number = fn (float $v) => rtrim(rtrim(number_format($v, 4, '.', ''), '0'), '.') ?: '0';
 @endphp
 
 <figure {{ $attributes->class(['mf-chart']) }} data-chart="hbar">
     @if (! $hasData)
         <div class="mf-empty" role="note">{{ $empty }}</div>
     @else
-        <div class="mf-scroll">
-            <svg viewBox="0 0 {{ $W }} {{ $H }}" role="img" aria-labelledby="{{ $uid }}-t {{ $uid }}-d" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-                <title id="{{ $uid }}-t">{{ $title }}</title>
-                <desc id="{{ $uid }}-d">{{ $summary }}</desc>
-
-                <line class="mf-axis" x1="{{ $barX }}" x2="{{ $barX }}" y1="{{ $pt }}" y2="{{ $H - $pt }}" aria-hidden="true" />
-
-                @foreach ($items as $i => $item)
-                    @php
-                        $y = $pt + $i * $rowH;
-                        $mid = $y + $rowH / 2;
-                        $length = $len($item['value']);
-                        $tip = $item['label'].': '.$display($item).(filled($item['hint'] ?? null) ? ' — '.$item['hint'] : '');
-                        $rowSlot = ($item['other'] ?? false) ? 0 : (int) ($item['slot'] ?? $hue);
-                    @endphp
-                    @if (filled($item['url'] ?? null))
-                        <a class="mf-row mf-s{{ $rowSlot }}" href="{{ $item['url'] }}">
-                    @else
-                        <g class="mf-row mf-s{{ $rowSlot }}">
-                    @endif
-                        <rect class="mf-hit-area" x="0" y="{{ $y }}" width="{{ $W }}" height="{{ $rowH }}" />
-                        <text class="mf-label" x="{{ $labelW }}" y="{{ $c($mid) }}" text-anchor="end" dominant-baseline="middle">{{ \Illuminate\Support\Str::limit($item['label'], 30) }}</text>
-                        @if (array_key_exists('capacity', $item) && $item['capacity'] !== null && $item['capacity'] > 0)
-                            <path class="mf-track" d="{{ $shape($barX, $mid - $thick / 2, max(2, $len($item['capacity'])), $thick) }}" />
-                        @endif
-                        @if ($length > 0)
-                            <path class="mf-bar" d="{{ $shape($barX, $mid - $thick / 2, max(2, $length), $thick) }}" />
-                        @endif
-                        <text class="mf-value" x="{{ $c($barX + max($length, array_key_exists('capacity', $item) && $item['capacity'] ? $len($item['capacity']) : 0) + 6) }}" y="{{ $c($mid) }}" dominant-baseline="middle">{{ $display($item) }}</text>
-                        <title>{{ $tip }}</title>
-                    @if (filled($item['url'] ?? null))
-                        </a>
-                    @else
-                        </g>
-                    @endif
-                @endforeach
-            </svg>
-        </div>
+        <ol class="mf-hbar" aria-label="{{ $title }}">
+            @foreach ($items as $item)
+                @php
+                    $length = $share($item['value']);
+                    $capacity = array_key_exists('capacity', $item) && $item['capacity'] !== null && $item['capacity'] > 0 ? $share($item['capacity']) : 0.0;
+                    // What the bar and its track reach together; the value sits past it.
+                    $reach = max($length, $capacity);
+                    $tip = $item['label'].': '.$display($item).(filled($item['hint'] ?? null) ? ' — '.$item['hint'] : '');
+                    $rowSlot = ($item['other'] ?? false) ? 0 : (int) ($item['slot'] ?? $hue);
+                    $tag = filled($item['url'] ?? null) ? 'a' : 'div';
+                @endphp
+                <li>
+                    <{{ $tag }} class="mf-row mf-s{{ $rowSlot }}" @if ($tag === 'a') href="{{ $item['url'] }}" @endif title="{{ $tip }}">
+                        <span class="mf-hbar-label">{{ $item['label'] }}</span>
+                        <span class="mf-hbar-line">
+                            <span class="mf-hbar-bars" style="--mf-reach: {{ $number($reach) }}">
+                                @if ($capacity > 0)
+                                    <span class="mf-track" style="width: {{ $number($capacity / $reach * 100) }}%"></span>
+                                @endif
+                                @if ($length > 0)
+                                    <span class="mf-bar" style="width: {{ $number($length / $reach * 100) }}%"></span>
+                                @endif
+                            </span>
+                            <span class="mf-value">{{ $display($item) }}</span>
+                        </span>
+                    </{{ $tag }}>
+                </li>
+            @endforeach
+        </ol>
 
         <x-charts.data-table
             :caption="$title"

@@ -317,4 +317,25 @@ class EventManagementTest extends TestCase
 
         $this->assertNull($theirs->refresh()->label);
     }
+
+    /**
+     * Whether the night is over by its own listing: the moment online sales
+     * stop (TurnedAway::pastSelling). The console's header said "On sale",
+     * and offered to take it off sale, on a night weeks gone.
+     */
+    public function test_the_console_is_told_when_a_nights_sales_have_ended(): void
+    {
+        $this->signedInAs(Role::Owner);
+        $show = fn () => $this->getJson("/api/organizer/events/{$this->event->id}")->assertOk();
+
+        $show()->assertJsonPath('sales_ended', false);
+
+        // No end listed: twelve hours after it starts.
+        $this->event->update(['starts_at' => now()->subHours(13), 'ends_at' => null]);
+        $show()->assertJsonPath('sales_ended', true);
+
+        // An end listed: selling until then, however long ago it started.
+        $this->event->update(['ends_at' => now()->addHour()]);
+        $show()->assertJsonPath('sales_ended', false);
+    }
 }

@@ -914,9 +914,12 @@ class PayoutOverdraftTest extends TestCase
         $page->callMountedAction()->assertHasFormErrors(['reason' => 'required']);
         $this->assertSame('pending', $request->fresh()->status);
 
+        // The navigation says so at once, as a repayment does: one fewer
+        // waiting beside Payout requests, and one owing beside Overdrafts.
         $page->fillForm(['reason' => 'Advance for the festival, agreed on the phone.'])
             ->callMountedAction()
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertDispatched('refresh-sidebar');
 
         $request->refresh();
         $this->assertSame('paid', $request->status);
@@ -933,7 +936,9 @@ class PayoutOverdraftTest extends TestCase
 
         Livewire::test(ListPayoutRequests::class)
             ->callTableAction('pay', $request, ['amount' => '300.00', 'rail' => 'interac'])
-            ->assertHasNoTableActionErrors();
+            ->assertHasNoTableActionErrors()
+            // One fewer waiting beside Payout requests, without a reload.
+            ->assertDispatched('refresh-sidebar');
 
         $this->assertSame('paid', $request->fresh()->status);
         $this->assertNull($request->fresh()->overdraft_amount);

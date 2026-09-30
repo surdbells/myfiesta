@@ -111,6 +111,12 @@
         <div class="card px-5 py-4">
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">On this page</p>
           <p class="figure mt-1 text-2xl">{{ cash(totals.gross) }}</p>
+          <!-- Money received only: a payment still confirming is listed, not added in. -->
+          @if (totals.confirming) {
+            <p class="mt-1 text-xs text-text-muted">
+              Not counting {{ totals.confirming }} {{ totals.confirming === 1 ? 'order' : 'orders' }} still confirming
+            </p>
+          }
         </div>
         <div class="card px-5 py-4">
           <p class="text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Refunded</p>

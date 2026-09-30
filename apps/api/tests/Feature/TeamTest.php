@@ -239,4 +239,29 @@ class TeamTest extends TestCase
         $this->assertStringContainsString('see what events made, and process refunds', $html);
         $this->assertStringContainsString("/join/{$token}", $html);
     }
+
+    /**
+     * Every description finishes "you can …", in the email, on the join page
+     * and after "Can " in the console's role menus — so each starts with what
+     * the person does. Marketing's and the owner's had no verb: "Can the guest
+     * list, promoter codes and messages to ticket holders".
+     */
+    public function test_every_role_is_described_as_something_somebody_can_do(): void
+    {
+        $verbs = ['do', 'run', 'see', 'manage', 'scan'];
+
+        foreach (Role::cases() as $role) {
+            $described = TeamInvitationMail::describe($role->value);
+
+            $this->assertContains(strtok($described, ' '), $verbs, "As {$role->label()} you can {$described}.");
+        }
+
+        $this->assertSame('manage the guest list, promoter codes and messages to ticket holders', TeamInvitationMail::describe('marketing'));
+
+        $token = $this->invite('marketing@example.com', 'marketing');
+        $invitation = OrganizationInvitation::whereNull('revoked_at')->sole();
+        $html = (new TeamInvitationMail($invitation->load(['organization', 'inviter']), $token))->render();
+
+        $this->assertStringContainsString('As Marketing you can manage the guest list, promoter codes and messages to ticket holders.', $html);
+    }
 }

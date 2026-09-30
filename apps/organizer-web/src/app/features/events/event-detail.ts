@@ -22,7 +22,7 @@ import { formatMoney, toMajorUnits, toMinorUnits } from '../../core/money';
 import { SessionStore } from '../../core/session';
 import { EventEmbed } from './event-embed';
 import { EventSales } from './event-sales';
-import { eventStatusLabel, reviewStepLabel } from './event-status';
+import { eventStatusLabel, nightIsOver, reviewStepLabel } from './event-status';
 import { EventWorkspace } from './event-workspace';
 
 @Component({
@@ -64,6 +64,14 @@ export class EventDetail {
   readonly history = computed(() => this.review()?.history ?? []);
   readonly statusLabel = eventStatusLabel;
   readonly stepLabel = reviewStepLabel;
+
+  /** Published, and its night over: nothing on sale to take off. */
+  readonly over = computed(() => nightIsOver(this.event()));
+
+  /** "1 order · 2 tickets · 0 arrived": one of a thing is not "1 orders". */
+  counted(n: number, one: string, many: string): string {
+    return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  }
 
   /*
    * Reminders live on this page rather than behind another click.

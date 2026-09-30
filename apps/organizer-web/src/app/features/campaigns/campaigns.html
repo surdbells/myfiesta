@@ -202,20 +202,20 @@
                   <p class="text-xs text-text-muted">
                     @switch (campaign.status) {
                       @case ('sent') {
-                        Sent {{ campaign.sent_at | date: 'd MMM, HH:mm' }} to {{ campaign.recipients }}
+                        Sent {{ timeOf(campaign.sent_at) }} to {{ campaign.recipients }}
                         {{ campaign.recipients === 1 ? 'person' : 'people' }}
                         @if (campaign.suppressed) {
                           ({{ campaign.suppressed }} left out)
                         }
                       }
                       @case ('scheduled') {
-                        Goes {{ campaign.scheduled_for | date: 'EEE d MMM, HH:mm' }}
+                        Goes {{ timeOf(campaign.scheduled_for, true) }}
                       }
                       @case ('cancelled') {
                         Cancelled — nobody got it
                       }
                       @default {
-                        Started {{ campaign.created_at | date: 'd MMM' }}
+                        Started {{ dayOf(campaign.created_at) }}
                       }
                     }
                   </p>
@@ -261,6 +261,7 @@
       [heading]="'Cancel “' + campaign.subject + '”?'"
       consequence="Nobody will get it. You can write it again from scratch if you change your mind."
       confirmLabel="Cancel it"
+      cancelLabel="Keep it"
       busyLabel="Cancelling…"
       destructive
       [busy]="cancellingBusy()"

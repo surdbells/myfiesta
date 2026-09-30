@@ -471,6 +471,13 @@ export interface OrganizerEventPage extends Page<OrganizerEvent> {
 export interface OrganizerEventDetail extends OrganizerEvent {
   description: string | null;
   ends_at: string | null;
+  /**
+   * Over by its own listing — past its end, or twelve hours after it starts
+   * when none is given — which is when online sales stop. A published night
+   * that is over is no longer on sale. Optional for a copy this phone kept
+   * from before the API said.
+   */
+  sales_ended?: boolean;
   subdivision: string | null;
   country: string;
   category: string | null;
@@ -1236,8 +1243,13 @@ export interface OrganizationOrderPage {
     per_page: number;
     current_page: number;
     last_page: number;
-    /** Null where the page spans currencies — two sets of money do not add. */
-    summary: { gross: Money; refunded: Money; net: Money } | null;
+    /**
+     * The money received on this page: paid orders, less what was refunded.
+     * `confirming` counts the orders on it still being confirmed, which are
+     * listed but not added in. Null where the page spans currencies — two
+     * sets of money do not add.
+     */
+    summary: { gross: Money; refunded: Money; net: Money; confirming?: number } | null;
   };
 }
 

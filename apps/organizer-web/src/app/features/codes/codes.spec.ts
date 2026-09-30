@@ -133,6 +133,71 @@ describe('Codes', () => {
     expect(screen.selection.count()).toBe(0);
   });
 
+  /*
+   * "Turn 2 codes back on?" over two codes already on: a question read and
+   * wrong. It counts, names and sends only the codes it would change.
+   */
+  it('offers nothing to turn on when every ticked code is on already', async () => {
+    const { screen, settle } = await open('/codes', [code('a'), code('b')]);
+
+    screen.selection.toggle('a');
+    screen.selection.toggle('b');
+    await settle();
+
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('ui-bulk-bar button'));
+    const labelled = (label: string) => buttons.find((b) => b.textContent?.trim() === label)!;
+    expect(labelled('Turn on').disabled).toBe(true);
+    expect(labelled('Turn off').disabled).toBe(false);
+
+    await screen.setActive(true);
+    await settleDialogs();
+
+    expect(asked()).toBeNull();
+    backend.expectNone('http://api.test/api/organizer/codes/active');
+  });
+
+  it('counts and sends only the codes that would change, and says the rest stay', async () => {
+    const { screen, settle } = await open('/codes', [code('a'), code('b', { is_active: false }), code('c', { is_active: false })]);
+
+    screen.selection.toggle('a');
+    screen.selection.toggle('b');
+    screen.selection.toggle('c');
+
+    const done = screen.setActive(true);
+    await settleDialogs();
+
+    expect(asked()?.title).toBe('Turn 2 codes back on?');
+    expect(asked()?.text).toContain('CODEB and CODEC');
+    expect(asked()?.text).toContain('The other one ticked is already on, and stays as it is.');
+    expect(asked()?.buttons).toEqual(['Cancel', 'Turn them on']);
+
+    await answer('Turn them on');
+
+    const request = backend.expectOne('http://api.test/api/organizer/codes/active');
+    expect(request.request.body).toEqual({ ids: ['b', 'c'], active: true });
+    request.flush({ changed: 2, skipped: [] });
+
+    await done;
+    await settle();
+    listRequest().flush(page([code('a'), code('b'), code('c')]));
+  });
+
+  it('says one code as one code', async () => {
+    const { screen } = await open('/codes', [code('a', { is_active: false })]);
+
+    screen.selection.toggle('a');
+    const done = screen.setActive(true);
+    await settleDialogs();
+
+    expect(asked()?.title).toBe('Turn CODEA back on?');
+    expect(asked()?.text).toContain('Buyers can use it again straight away, within its own dates and limits.');
+    expect(asked()?.buttons).toEqual(['Cancel', 'Turn it on']);
+
+    await answer('Cancel');
+    await done;
+    backend.expectNone('http://api.test/api/organizer/codes/active');
+  });
+
   it('changes nothing when the answer is no', async () => {
     const { screen } = await open('/codes', [code('a')]);
 

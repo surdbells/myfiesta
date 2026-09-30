@@ -176,4 +176,30 @@ describe('Orders', () => {
     expect(screen.failed()).toBe(false);
     expect(screen.orders().length).toBe(1);
   });
+
+  /*
+   * The page's takings are money received; a payment still confirming is on
+   * the page but not in them, and the figure says it left it out.
+   */
+  it('says which orders on the page its takings leave out', async () => {
+    const { screen, harness, settle } = await open();
+    const cad = (amount: number) => ({ amount, currency: 'CAD' as const });
+
+    screen.list.set('q', 'ada');
+    await settle();
+    listRequest().flush({
+      data: [order('a'), { ...order('b'), status: 'pending', paid_at: null, tickets_count: 0 }],
+      meta: {
+        total: 2,
+        per_page: 25,
+        current_page: 1,
+        last_page: 1,
+        summary: { gross: cad(5000), refunded: cad(0), net: cad(5000), confirming: 1 },
+      },
+    });
+    await settle();
+
+    const text = (harness.routeNativeElement?.textContent ?? '').replace(/\s+/g, ' ');
+    expect(text, text).toContain('Not counting 1 order still confirming');
+  });
 });

@@ -1,4 +1,4 @@
-import type { EventReviewStep, EventStatus } from '../../core/api.types';
+import type { EventReviewStep, EventStatus, OrganizerEventDetail } from '../../core/api.types';
 
 /**
  * What an event's status is called, and the colour it is allowed to be.
@@ -34,6 +34,25 @@ export function eventStatusTone(status: EventStatus | string): 'neutral' | 'bran
     default:
       return 'success';
   }
+}
+
+/**
+ * A published night that is over by its own listing: past its end, which is
+ * when online sales stop. It is not "On sale" any more, and there is nothing
+ * left to take off sale. The server says so (`sales_ended`); nothing here
+ * works out when a night ends.
+ */
+export function nightIsOver(event: Pick<OrganizerEventDetail, 'status' | 'sales_ended'> | null | undefined): boolean {
+  return event?.status === 'published' && event.sales_ended === true;
+}
+
+/** What to call it in a header: the status, or "Over" for a night that is. */
+export function eventStandingLabel(event: Pick<OrganizerEventDetail, 'status' | 'sales_ended'> | null | undefined): string {
+  return nightIsOver(event) ? 'Over' : eventStatusLabel(event?.status ?? 'draft');
+}
+
+export function eventStandingTone(event: Pick<OrganizerEventDetail, 'status' | 'sales_ended'> | null | undefined): ReturnType<typeof eventStatusTone> {
+  return nightIsOver(event) ? 'neutral' : eventStatusTone(event?.status ?? 'draft');
 }
 
 /** One step of the review history, in words an organizer reads. */

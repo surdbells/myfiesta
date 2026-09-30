@@ -29,16 +29,22 @@ import { Component, input } from '@angular/core';
       color: var(--primary-soft-text);
       background-color: var(--primary-soft);
     }
+    /*
+     * The tinted tones write in their colour taken a quarter of the way to
+     * the text: on its own tint the colour alone fell under 4.5:1 for this
+     * size of type — the warning 4.14:1 on a card and 3.62:1 on an inset.
+     * Towards the text is darker in light and lighter in dark, so both gain.
+     */
     .badge--success {
-      color: var(--success);
+      color: color-mix(in srgb, var(--success) 75%, var(--text));
       background-color: color-mix(in srgb, var(--success) 12%, transparent);
     }
     .badge--warning {
-      color: var(--warning);
+      color: color-mix(in srgb, var(--warning) 75%, var(--text));
       background-color: color-mix(in srgb, var(--warning) 14%, transparent);
     }
     .badge--danger {
-      color: var(--danger);
+      color: color-mix(in srgb, var(--danger) 75%, var(--text));
       background-color: color-mix(in srgb, var(--danger) 12%, transparent);
     }
   `,

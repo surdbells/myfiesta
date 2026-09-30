@@ -38,7 +38,11 @@
     </section>
   }
 
-  @if (event.status !== 'cancelled' && session.canPublish()) {
+  <!--
+    Nor a night that is over: it is not on sale, so there is nothing to take
+    off sale, and its page stays up among the organizer's past events.
+  -->
+  @if (event.status !== 'cancelled' && !over() && session.canPublish()) {
     <div class="actions mb-6 flex flex-wrap items-center gap-4">
       @if (event.status === 'published') {
         <button uiButton variant="secondary" type="button" [loading]="publishing()" [disabled]="publishing()" (click)="takeOffSale()">
@@ -131,8 +135,8 @@
     </section>
 
     <p class="counts mt-3 text-sm text-text-muted tabular-nums">
-      {{ totals.orders }} orders · {{ totals.tickets_issued }} tickets ·
-      {{ totals.checked_in }} arrived
+      {{ counted(totals.orders, 'order', 'orders') }} · {{ counted(totals.tickets_issued, 'ticket', 'tickets') }} ·
+      {{ totals.checked_in.toLocaleString() }} arrived
     </p>
 
     <app-event-sales [eventId]="eventId" />

@@ -53,10 +53,10 @@ export class Team {
   }
 
   /**
-   * The organization's one owner, who cannot leave or be removed until
-   * somebody else is an owner too — the server refuses it ("Every
-   * organization needs an owner"). Said on the row, rather than offered and
-   * refused after the question has been answered.
+   * The organization's one owner, who cannot leave, be removed or step down
+   * to another role until somebody else is an owner too — the server refuses
+   * it ("Every organization needs an owner"). Said on the row, rather than
+   * offered and refused after the question has been answered.
    */
   soleOwner(member: TeamMember): boolean {
     const owners = (this.page()?.members ?? []).filter((m) => m.role === 'owner');
@@ -142,7 +142,8 @@ export class Team {
   }
 
   async changeRole(member: TeamMember, role: string | null): Promise<void> {
-    if (!role || role === this.displayRole(member)) return;
+    // The only owner cannot step down; the dropdown is switched off and says so.
+    if (!role || role === this.displayRole(member) || this.soleOwner(member)) return;
 
     const was = this.displayRole(member);
 

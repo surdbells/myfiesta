@@ -65,9 +65,9 @@ export class Selection {
   imports: [UiIcon],
   template: `
     @if (count() > 0) {
-      <div class="bulk" role="region" [attr.aria-label]="count() + ' ' + noun() + ' selected'">
+      <div class="bulk" role="region" [attr.aria-label]="count() + ' ' + said() + ' selected'">
         <p class="bulk__count" aria-live="polite">
-          <strong>{{ count() }}</strong> {{ noun() }} selected
+          <strong>{{ count() }}</strong> {{ said() }} selected
         </p>
         <div class="bulk__actions">
           <ng-content />
@@ -132,7 +132,14 @@ export class UiBulkBar {
   readonly count = input.required<number>();
   /** "orders", "codes": what is selected. */
   readonly noun = input('rows');
+  /** One of them: "order", "code". Without it, the noun less its final "s". */
+  readonly one = input<string | null>(null);
   readonly cleared = output<void>();
+
+  /** "1 guest selected", not "1 guests selected". */
+  protected readonly said = computed(() =>
+    this.count() === 1 ? (this.one() ?? this.noun().replace(/s$/, '')) : this.noun(),
+  );
 
   protected readonly clearIcon = X;
 }

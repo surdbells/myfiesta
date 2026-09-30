@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { API_BASE_URL } from '../../core/api';
 import type { PayoutOverdraft, PayoutStatement } from '../../core/api.types';
 import { allowDialogs, answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
+import { SessionStore, type StaffSession } from '../../core/session';
 import { Payouts } from './payouts';
 
 const PAYOUTS = 'http://api.test/api/organizer/payouts';
@@ -159,6 +160,44 @@ describe('Payouts', () => {
     expect(page).toContain('Owed to you');
     expect(page).not.toContain('myFiesta advanced');
     expect(fixture.nativeElement.querySelector('[aria-labelledby="overdraft-title"]')).toBeNull();
+  });
+
+  it('tells a member who is not an owner that the owner decides where payouts go', () => {
+    const page = text(render({ ...statement(20_000, null), can_change_destination: false }));
+
+    expect(page).toContain("Only the organization's owner can change where payouts go.");
+  });
+
+  /*
+   * Staff acting as the organization hold the owner's role — the admin says
+   * they see the console "as an owner" — so "only the owner" was a
+   * contradiction. They are told what the server says when it refuses them.
+   */
+  it('tells staff acting as the organization why they cannot change it', () => {
+    TestBed.inject(SessionStore).startImpersonation({
+      token: 'staff-token',
+      user: { name: 'Ada Okoro', email: 'ada@myfiesta.ca' },
+      abilities: ['organizer', 'impersonation'],
+      organizations: [{ id: 'org-1', name: 'Demo Eko', slug: 'demo-eko', role: 'owner', permissions: ['money.view'] }],
+      impersonation: {
+        id: 'session-1',
+        organization: { id: 'org-1', name: 'Demo Eko' },
+        staff: { name: 'Ada Okoro' },
+        reason: 'Ticket #4411',
+        started_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        withheld: ['payouts.destination'],
+      },
+    } as StaffSession);
+
+    try {
+      const page = text(render({ ...statement(20_000, null), can_change_destination: false }));
+
+      expect(page).toContain('Where payouts are sent is the owners’ decision alone. Staff cannot change it while acting as the organization.');
+      expect(page).not.toContain("Only the organization's owner");
+    } finally {
+      sessionStorage.clear();
+    }
   });
 });
 

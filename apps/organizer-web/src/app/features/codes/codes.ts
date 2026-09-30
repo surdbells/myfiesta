@@ -233,21 +233,43 @@ export class Codes {
     this.page.retry();
   }
 
-  /** Several codes off, or back on, after saying which and what it does. */
-  async setActive(active: boolean): Promise<void> {
-    const chosen = this.codes().filter((code) => this.selection.has(code.id));
-    if (chosen.length === 0 || this.changing()) return;
+  /** The ticked codes on this page. */
+  readonly ticked = computed(() => this.codes().filter((code) => this.selection.has(code.id)));
 
-    const names = chosen.map((code) => code.code);
-    const some = chosen.length === 1 ? names[0] : `${chosen.length} codes`;
+  /** Whether Turn off, and Turn on, would change any of them. */
+  readonly anyOn = computed(() => this.ticked().some((code) => code.is_active));
+  readonly anyOff = computed(() => this.ticked().some((code) => !code.is_active));
+
+  /**
+   * Several codes off, or back on, after saying which and what it does.
+   *
+   * Only the codes it would change are counted, named and sent: "Turn 2 codes
+   * back on?" over two codes already on was a question read and wrong. Those
+   * already that way are said to stay as they are.
+   */
+  async setActive(active: boolean): Promise<void> {
+    const chosen = this.ticked();
+    const changing = chosen.filter((code) => code.is_active !== active);
+    if (changing.length === 0 || this.changing()) return;
+
+    const names = changing.map((code) => code.code);
+    const one = changing.length === 1;
+    const some = one ? names[0] : `${changing.length} codes`;
+    const them = one ? 'it' : 'them';
+    const already = chosen.length - changing.length;
 
     const sure = await this.confirmDialog.confirm({
       title: active ? `Turn ${some} back on?` : `Turn ${some} off?`,
       body: active
-        ? 'Buyers can use them again straight away, within their own dates and limits.'
-        : 'Buyers who try them at checkout are told the code is not valid. Nothing already sold changes.',
-      consequences: chosen.length > 1 ? [listed(names, 6)] : [],
-      confirmLabel: active ? 'Turn them on' : 'Turn them off',
+        ? `Buyers can use ${them} again straight away, within ${one ? 'its' : 'their'} own dates and limits.`
+        : `Buyers who try ${them} at checkout are told the code is not valid. Nothing already sold changes.`,
+      consequences: [
+        ...(one ? [] : [listed(names, 6)]),
+        ...(already > 0
+          ? [`${already === 1 ? 'The other one ticked is' : `The other ${already} ticked are`} already ${active ? 'on' : 'off'}, and ${already === 1 ? 'stays' : 'stay'} as ${already === 1 ? 'it is' : 'they are'}.`]
+          : []),
+      ],
+      confirmLabel: active ? `Turn ${them} on` : `Turn ${them} off`,
       tone: active ? 'default' : 'danger',
     });
 
@@ -256,7 +278,7 @@ export class Codes {
     this.changing.set(true);
 
     try {
-      const { changed, skipped } = await firstValueFrom(this.api.setCodesActive(this.selection.ids(), active));
+      const { changed, skipped } = await firstValueFrom(this.api.setCodesActive(changing.map((code) => code.id), active));
 
       const done = changed === 1 ? '1 code' : `${changed} codes`;
       this.toasts.show(active ? `${done} turned back on.` : `${done} turned off.`, 'success');

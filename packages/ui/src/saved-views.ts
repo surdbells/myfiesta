@@ -82,7 +82,7 @@ export interface ViewChoice {
             type="text"
             maxlength="60"
             autocomplete="off"
-            placeholder="Refunds this week"
+            [placeholder]="example()"
             [id]="panelId + '-name'"
             [value]="draft()"
             (input)="draft.set($any($event.target).value)"
@@ -163,6 +163,8 @@ export class UiSavedViews {
   readonly activeId = input<string | null>(null);
   readonly loading = input(false);
   readonly saving = input(false);
+  /** A name somebody might give a view of this list, shown in the empty box. */
+  readonly example = input('Refunds this week');
 
   readonly applied = output<ViewChoice>();
   readonly saved = output<string>();

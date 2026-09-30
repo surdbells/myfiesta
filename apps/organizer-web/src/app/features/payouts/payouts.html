@@ -118,7 +118,7 @@
           @if (canChangeDestination()) {
             Add an Interac address or a bank account, then ask to be paid.
           } @else {
-            {{ ownerOnly }} Ask them to add an Interac address or a bank account.
+            {{ ownerOnly() }} Ask them to add an Interac address or a bank account.
           }
         </p>
       </div>
@@ -393,7 +393,7 @@
               details as often as anybody. Only the form is withheld, because
               choosing whose account the money lands in is the owner's call.
             -->
-            <p class="dest__owner mt-2 text-sm text-text-muted">{{ ownerOnly }}</p>
+            <p class="dest__owner mt-2 text-sm text-text-muted">{{ ownerOnly() }}</p>
           }
         </div>
 
@@ -412,7 +412,7 @@
         <button uiButton type="button" (click)="openForm()">Add payout details</button>
       </ui-empty>
     } @else {
-      <ui-empty title="No payout details yet" [hint]="ownerOnly" />
+      <ui-empty title="No payout details yet" [hint]="ownerOnly()" />
     }
   </section>
 }

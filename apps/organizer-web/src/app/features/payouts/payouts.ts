@@ -24,6 +24,7 @@ import { Api } from '../../core/api';
 import { Money, PayoutOverdraft, PayoutRequestRow, PayoutStatement, PayoutDestination } from '../../core/api.types';
 import { amountProblem, formatMoney, toMinorUnits } from '../../core/money';
 import { isEmailUnverified, messageFor } from '../../core/errors';
+import { SessionStore } from '../../core/session';
 
 /** The destination form, as somebody types it. */
 interface DestinationDraft {
@@ -78,6 +79,7 @@ export class Payouts {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastStore);
   private readonly confirmDialog = inject(ConfirmDialog);
+  private readonly session = inject(SessionStore);
 
   protected readonly interacIcon = Banknote;
   protected readonly bankIcon = Landmark;
@@ -335,8 +337,18 @@ export class Payouts {
    */
   readonly canChangeDestination = computed(() => this.statement()?.can_change_destination ?? false);
 
-  /** What everybody else is told in place of the Add and Change buttons. */
-  readonly ownerOnly = "Only the organization's owner can change where payouts go.";
+  /**
+   * What everybody else is told in place of the Add and Change buttons.
+   *
+   * Staff acting as the organization hold the owner's role, so "only the
+   * owner" would contradict the admin, which says they see the console as an
+   * owner. They are told what the server tells them when it refuses.
+   */
+  readonly ownerOnly = computed(() =>
+    this.session.impersonation()?.withheld.includes('payouts.destination')
+      ? 'Where payouts are sent is the owners’ decision alone. Staff cannot change it while acting as the organization.'
+      : "Only the organization's owner can change where payouts go.",
+  );
 
   /**
    * Whether there is money owed with nowhere to send it.

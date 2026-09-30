@@ -1,5 +1,4 @@
 import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -41,7 +40,6 @@ type When = CampaignDraft['send'];
   selector: 'app-campaigns',
   imports: [
     FormsModule,
-    DatePipe,
     SavedViews,
     UiPageHeader,
     UiButton,
@@ -389,6 +387,28 @@ export class Campaigns {
         this.load();
       },
     });
+  }
+
+  /**
+   * When it went, or goes, written as the rest of the console writes a time —
+   * "Sep 28, 6:15 p.m." — rather than the day-first, 24-hour "28 Sep, 18:15"
+   * of a date pipe. In the reader's own zone: a campaign is not one night's.
+   */
+  timeOf(iso: string | null, withWeekday = false): string {
+    if (!iso) return '';
+
+    return new Intl.DateTimeFormat('en-CA', {
+      ...(withWeekday ? { weekday: 'short' as const } : {}),
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  }
+
+  /** "Sep 28": the day a draft was started. */
+  dayOf(iso: string): string {
+    return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric' }).format(new Date(iso));
   }
 
   audienceLabel(value: CampaignAudience): string {

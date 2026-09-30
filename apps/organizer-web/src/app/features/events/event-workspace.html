@@ -101,7 +101,15 @@
   The routed panel below the tabs. The gap is here rather than on each screen,
   so a tab that forgets it does not sit flush against the tab strip — which
   was happening on four of the eight before they had a common frame.
+
+  Only for an event there is: the one this phone saved or the server sent,
+  or — out of signal — the one the door is working from its saved list. An
+  address the server says is no event (a stale link, a slug in place of the
+  id) gets the "not found" above and nothing else: the door's controls under
+  it, asking for the passes and the list of an event that does not exist,
+  read as a door that works.
 -->
+@if (event() || unreachable()) {
 <div class="ws__panel pt-8 max-sm:pt-5">
   <!--
     Frozen while myFiesta reviews it: what staff approve has to be what goes
@@ -120,3 +128,4 @@
     <router-outlet />
   </fieldset>
 </div>
+}

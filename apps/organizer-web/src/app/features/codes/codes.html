@@ -232,11 +232,12 @@
   </div>
 
   <ui-bulk-bar noun="codes" [count]="selection.count()" (cleared)="selection.clear()">
-    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing()" (click)="setActive(false)">
+    <!-- Each only when it would change one of the ticked codes. -->
+    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing() || !anyOn()" (click)="setActive(false)">
       <ui-icon [icon]="pauseIcon" size="sm" />
       Turn off
     </button>
-    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing()" (click)="setActive(true)">
+    <button uiButton variant="secondary" size="sm" type="button" [disabled]="changing() || !anyOff()" (click)="setActive(true)">
       <ui-icon [icon]="resumeIcon" size="sm" />
       Turn on
     </button>

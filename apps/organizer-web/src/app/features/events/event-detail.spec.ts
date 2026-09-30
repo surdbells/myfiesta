@@ -8,7 +8,7 @@ import { API_BASE_URL, authInterceptor } from '../../core/api';
 import { answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
 import { SessionStore } from '../../core/session';
 import { EventDetail } from './event-detail';
-import { eventStatusLabel, eventStatusTone, reviewStepLabel } from './event-status';
+import { eventStandingLabel, eventStandingTone, eventStatusLabel, eventStatusTone, reviewStepLabel } from './event-status';
 
 const BASE = 'http://api.test/api/organizer/events/ev-1';
 
@@ -329,5 +329,116 @@ describe('event status words', () => {
       'On sale as the next date of an approved series',
     );
     expect(reviewStepLabel({ action: 'withdrawn', via: null, reason: null, at, by: 'Ada' })).toBe('Taken back from review');
+  });
+});
+
+/**
+ * A night that is over, and a night's figures when there is one of a thing.
+ *
+ * Afrobeats Rooftop, weeks gone, said "On sale" in its header and offered to
+ * take it off sale; its totals read "1 orders · 2 tickets".
+ */
+describe('EventDetail: a finished night, and counts of one', () => {
+  let backend: HttpTestingController;
+  let session: SessionStore;
+
+  beforeEach(() => {
+    localStorage.clear();
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'http://api.test' },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'ev-1' }) }, parent: null },
+        },
+      ],
+    });
+
+    backend = TestBed.inject(HttpTestingController);
+    session = TestBed.inject(SessionStore);
+
+    session.start({
+      token: 'test-token',
+      user: { name: 'Ada Okafor', email: 'ada@example.test' },
+      abilities: ['attendee', 'organizer'],
+      organizations: [
+        {
+          id: 'org-1',
+          name: 'Lagos Nights',
+          slug: 'lagos-nights',
+          role: 'owner',
+          permissions: ['events.view', 'events.edit', 'events.publish', 'money.view'],
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    backend.verify();
+    session.clear();
+  });
+
+  async function render(shown: OrganizerEventDetail, orders: number, tickets: number) {
+    const fixture = TestBed.createComponent(EventDetail);
+    fixture.detectChanges();
+
+    backend.expectOne(BASE).flush(shown);
+    backend.expectOne(`${BASE}/reminders`).flush({ data: [] });
+    backend.expectOne(`${BASE}/series`).flush({ series: null });
+    const cad = (amount: number) => ({ amount, currency: 'CAD' as const });
+    backend.expectOne(`${BASE}/summary`).flush({
+      currency: 'CAD',
+      gross: cad(5_000),
+      discounts: cad(0),
+      tax: cad(0),
+      service_charge: cad(0),
+      refunds: cad(0),
+      net: cad(5_000),
+      orders,
+      tickets_issued: tickets,
+      checked_in: 0,
+    });
+    fixture.detectChanges();
+    // The sales breakdown below the totals is its own screen's business.
+    backend.match(`${BASE}/sales`);
+    await settle();
+
+    return fixture;
+  }
+
+  const text = (fixture: { nativeElement: HTMLElement }) => (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
+
+  it('offers nothing to take off sale once the night is over', async () => {
+    const fixture = await render(event({ status: 'published', sales_ended: true }), 1, 2);
+
+    expect(text(fixture)).not.toContain('Take off sale');
+  });
+
+  it('still offers it while the night is on sale', async () => {
+    const fixture = await render(event({ status: 'published', sales_ended: false }), 3, 5);
+
+    expect(text(fixture)).toContain('Take off sale');
+    expect(text(fixture)).toContain('3 orders · 5 tickets · 0 arrived');
+  });
+
+  it('says one order as one order', async () => {
+    const fixture = await render(event({ status: 'published', sales_ended: true }), 1, 1);
+
+    expect(text(fixture)).toContain('1 order · 1 ticket · 0 arrived');
+  });
+});
+
+describe('what a finished night is called', () => {
+  it('is "Over", not "On sale", once the server says its sales have ended', () => {
+    expect(eventStandingLabel(event({ status: 'published', sales_ended: true }))).toBe('Over');
+    expect(eventStandingTone(event({ status: 'published', sales_ended: true }))).toBe('neutral');
+    expect(eventStandingLabel(event({ status: 'published', sales_ended: false }))).toBe('On sale');
+    // A copy saved before the server said reads as it did.
+    expect(eventStandingLabel(event({ status: 'published' }))).toBe('On sale');
+    expect(eventStandingLabel(event({ status: 'cancelled', sales_ended: true }))).toBe('Cancelled');
   });
 });

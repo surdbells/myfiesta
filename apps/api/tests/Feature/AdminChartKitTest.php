@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Blade;
 use Tests\TestCase;
 
 /**
- * The admin's chart kit, rendered and read back as SVG.
+ * The admin's chart kit, rendered and read back: as SVG, and a ranking as
+ * the HTML list it is drawn with.
  *
  * A chart that renders without an error can still draw nothing, draw the
  * wrong number of bars, or produce markup no browser will parse. These render
@@ -38,6 +39,26 @@ class AdminChartKitTest extends TestCase
     private function marks(DOMXPath $xpath, string $class, string $element = '*'): int
     {
         return $xpath->query("//s:{$element}[contains(concat(' ', normalize-space(@class), ' '), ' {$class} ')]")->length;
+    }
+
+    /**
+     * A ranking's list, read back as XML like the SVG charts.
+     *
+     * @return array{0: DOMXPath, 1: string}
+     */
+    private function ranking(string $html): array
+    {
+        $this->assertSame(1, preg_match('/<ol class="mf-hbar".*?<\/ol>/s', $html, $match), 'No ranking was rendered.');
+
+        $document = new DOMDocument;
+        $this->assertTrue(@$document->loadXML($match[0]), 'The ranking is not well-formed.');
+
+        return [new DOMXPath($document), $match[0]];
+    }
+
+    private function classed(DOMXPath $xpath, string $class): int
+    {
+        return $xpath->query("//*[contains(concat(' ', normalize-space(@class), ' '), ' {$class} ')]")->length;
     }
 
     public function test_a_line_chart_draws_one_line_per_series_and_a_hover_target_per_point(): void
@@ -97,9 +118,16 @@ class AdminChartKitTest extends TestCase
             $this->assertStringContainsString('class="mf-scroll mf-scroll-latest"', $html, $chart);
         }
 
-        // A ranking reads from its labels, so it keeps its start.
+        // A ranking is read from its values, at the tips of its bars, so it
+        // never scrolls: its words are HTML at the page's size, and a narrow
+        // chart puts each label above its bar. As a scaled picture it read at
+        // 8px on a phone, with every value past the right edge.
         $ranking = Blade::render('<x-charts.hbar title="Top" :items="[[\'label\' => \'A\', \'value\' => 1]]" />');
-        $this->assertStringContainsString('class="mf-scroll"', $ranking);
+        $this->assertStringNotContainsString('mf-scroll', $ranking);
+        $this->assertStringNotContainsString('<svg', $ranking);
+        $this->assertStringContainsString('.mf-hbar { container-type: inline-size;', $styles);
+        $this->assertStringContainsString('@container (width < 28rem) {', $styles);
+        $this->assertStringContainsString('.mf-hbar .mf-row { grid-template-columns: minmax(0, 1fr);', $styles);
     }
 
     public function test_an_empty_series_says_so_instead_of_drawing_a_flat_line(): void
@@ -156,13 +184,17 @@ class AdminChartKitTest extends TestCase
             ],
         ]);
 
-        [$xpath, $svg] = $this->svg($html);
+        [$xpath, $list] = $this->ranking($html);
 
-        $this->assertSame(2, $this->marks($xpath, 'mf-bar', 'path'), 'A zero is a row with no bar.');
-        $this->assertSame(3, $xpath->query('//*[contains(@class, "mf-row")]')->length);
-        $this->assertSame(1, $xpath->query('//s:a[@href="https://example.test/a"]')->length, 'A row with a url is a link.');
-        $this->assertStringContainsString('$2,500.00', $svg);
-        $this->assertStringContainsString('Toronto Collective With A Very Long Name Indeed: $1,250.00', $svg, 'The full label is in the tooltip.');
+        $this->assertSame(2, $this->classed($xpath, 'mf-bar'), 'A zero is a row with no bar.');
+        $this->assertSame(3, $this->classed($xpath, 'mf-row'));
+        $this->assertSame(1, $xpath->query('//a[@href="https://example.test/a"]')->length, 'A row with a url is a link.');
+        $this->assertStringContainsString('$2,500.00', $list);
+        $this->assertStringContainsString('title="Toronto Collective With A Very Long Name Indeed: $1,250.00"', $list, 'The full label is in the tooltip.');
+
+        // The longest bar reaches the end; the next is half of it.
+        $this->assertStringContainsString('style="--mf-reach: 1"', $list);
+        $this->assertStringContainsString('style="--mf-reach: 0.5"', $list);
     }
 
     public function test_a_ranking_against_capacity_draws_a_track_behind_each_bar(): void
@@ -174,11 +206,13 @@ class AdminChartKitTest extends TestCase
             ],
         ]);
 
-        [$xpath, $svg] = $this->svg($html);
+        [$xpath, $list] = $this->ranking($html);
 
-        $this->assertSame(1, $this->marks($xpath, 'mf-track', 'path'));
-        $this->assertSame(2, $this->marks($xpath, 'mf-bar', 'path'));
-        $this->assertStringContainsString('45 / 100 (45%)', $svg);
+        $this->assertSame(1, $this->classed($xpath, 'mf-track'));
+        $this->assertSame(2, $this->classed($xpath, 'mf-bar'));
+        $this->assertStringContainsString('45 / 100 (45%)', $list);
+        // Friday's track is the full reach and its bar 45% of it.
+        $this->assertStringContainsString('<span class="mf-bar" style="width: 45%"></span>', $list);
     }
 
     public function test_a_donut_draws_a_segment_per_part_and_the_parts_add_up(): void

@@ -329,25 +329,32 @@ class OrderController extends Controller
      * and Lagos nights has two sets of money, and adding them produces a
      * number that is true of nothing.
      *
+     * Money that came in, only. A payment still confirming is on the page —
+     * it is what somebody rings about — but it is not takings until it lands,
+     * so it is counted apart rather than added to the figures.
+     *
      * @param  Collection<int, Order>  $orders
      * @return array<string, mixed>|null
      */
     private function summary($orders): ?array
     {
-        $currencies = $orders->pluck('currency')->unique();
+        $received = $orders->filter(fn (Order $order) => in_array($order->status, ['paid', 'partially_refunded', 'refunded'], true));
+
+        $currencies = ($received->isEmpty() ? $orders : $received)->pluck('currency')->unique();
 
         if ($currencies->count() !== 1) {
             return null;
         }
 
         $currency = (string) $currencies->first();
-        $gross = (int) $orders->sum('total_amount');
-        $refunded = (int) $orders->sum(fn (Order $order) => (int) $order->refunded_amount);
+        $gross = (int) $received->sum('total_amount');
+        $refunded = (int) $received->sum(fn (Order $order) => (int) $order->refunded_amount);
 
         return [
             'gross' => ['amount' => $gross, 'currency' => $currency],
             'refunded' => ['amount' => $refunded, 'currency' => $currency],
             'net' => ['amount' => $gross - $refunded, 'currency' => $currency],
+            'confirming' => $orders->where('status', 'pending')->count(),
         ];
     }
 

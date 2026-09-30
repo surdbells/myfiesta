@@ -10,7 +10,7 @@ import { OrganizerEventDetail } from '../../core/api.types';
 import { longEventTime } from '../../core/event-time';
 import { SessionStore } from '../../core/session';
 import { SITE_URL } from '../../core/site-url';
-import { eventStatusLabel, eventStatusTone } from './event-status';
+import { eventStandingLabel, eventStandingTone } from './event-status';
 
 /**
  * The tabs that change what a buyer sees or pays. While the event is being
@@ -209,9 +209,10 @@ export class EventWorkspace {
     return tabs;
   });
 
-  readonly statusTone = computed(() => eventStatusTone(this.event()?.status ?? 'draft'));
+  // "Over" for a night that is, as the list says it, rather than "On sale".
+  readonly statusTone = computed(() => eventStandingTone(this.event()));
 
-  readonly statusLabel = computed(() => eventStatusLabel(this.event()?.status ?? 'draft'));
+  readonly statusLabel = computed(() => eventStandingLabel(this.event()));
 
   /** Waiting for myFiesta: nothing a buyer sees can change until it is decided or taken back. */
   readonly inReview = computed(() => this.event()?.status === 'in_review');

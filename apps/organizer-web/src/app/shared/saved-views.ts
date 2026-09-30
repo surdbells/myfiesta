@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { tap } from 'rxjs';
 import { ConfirmDialog, ToastStore, UiSavedViews, type FilterDef, type ListState, type ViewChoice } from '@myfiesta/ui';
 import { Api } from '../core/api';
 import type { SavedView, SavedViewList } from '../core/api.types';
@@ -25,6 +25,7 @@ import { SessionStore } from '../core/session';
       [activeId]="activeId()"
       [loading]="loading()"
       [saving]="saving()"
+      [example]="example()"
       (applied)="apply($event)"
       (saved)="save($event)"
       (deleted)="remove($event)"
@@ -43,6 +44,9 @@ export class SavedViews {
   private readonly views = signal<SavedView[]>([]);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+
+  /** A name somebody might give a view of this list, in its empty box. */
+  protected readonly example = computed(() => EXAMPLES[this.list()]);
 
   protected readonly choices = computed<ViewChoice[]>(() => this.views().map(({ id, name }) => ({ id, name })));
 
@@ -83,18 +87,36 @@ export class SavedViews {
     if (view) this.state().apply(view.state);
   }
 
+  /**
+   * Keep what the list shows now under a name — asked first, like everything
+   * that writes on the server, and saying so when it replaces a view of the
+   * same name, whose filters are then gone.
+   */
   protected async save(name: string): Promise<void> {
+    const replacing = this.views().find((v) => v.name.toLowerCase() === name.toLowerCase());
+    let saved: SavedView | null = null;
+
     this.saving.set(true);
 
-    try {
-      const { data } = await firstValueFrom(this.api.saveView(this.list(), name, this.state().snapshot()));
-      this.views.set([...this.views().filter((v) => v.id !== data.id), data].sort((a, b) => a.name.localeCompare(b.name)));
-      this.toasts.show(`Saved as “${data.name}”.`, 'success');
-    } catch (error) {
-      this.toasts.show(messageFor(error, 'The view could not be saved.'), 'danger');
-    } finally {
-      this.saving.set(false);
-    }
+    const done = await this.confirmDialog.confirm({
+      title: replacing ? `Replace the view “${replacing.name}”?` : `Keep this view as “${name}”?`,
+      body: replacing
+        ? 'It keeps what the list shows now — its filters, sort and columns — in place of what it kept before.'
+        : 'What the list shows now — its filters, sort and columns — is kept under Views on this list, for you in this organization.',
+      confirmLabel: replacing ? 'Replace the view' : 'Keep the view',
+      busyLabel: 'Keeping it…',
+      tone: 'default',
+      run: () => this.api.saveView(this.list(), name, this.state().snapshot()).pipe(tap(({ data }) => (saved = data))),
+      failure: (error) => messageFor(error, 'The view could not be saved.'),
+    });
+
+    this.saving.set(false);
+
+    const view = saved as SavedView | null;
+    if (!done || !view) return;
+
+    this.views.set([...this.views().filter((v) => v.id !== view.id), view].sort((a, b) => a.name.localeCompare(b.name)));
+    this.toasts.show(`Saved as “${view.name}”.`, 'success');
   }
 
   protected async remove(choice: ViewChoice): Promise<void> {
@@ -110,6 +132,18 @@ export class SavedViews {
     if (gone) this.views.set(this.views().filter((v) => v.id !== choice.id));
   }
 }
+
+/** What somebody might call a view of each list: "Refunds this week" is not a view of events. */
+const EXAMPLES: Record<SavedViewList, string> = {
+  orders: 'Refunds this week',
+  'event-orders': 'Refunds this week',
+  codes: 'Promoter codes in use',
+  'event-codes': 'Promoter codes in use',
+  guests: 'Not arrived yet',
+  campaigns: 'Scheduled to send',
+  payouts: 'Paid this month',
+  events: 'Toronto, next month',
+};
 
 /** The same state written the same way, whatever order its keys arrived in. */
 function canonical(state: Readonly<Record<string, unknown>>): string {

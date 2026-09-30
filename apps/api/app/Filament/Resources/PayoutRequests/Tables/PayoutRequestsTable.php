@@ -27,6 +27,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
+use Livewire\Component;
 use WeakMap;
 
 /**
@@ -271,7 +272,7 @@ class PayoutRequestsTable
                     ->helperText('Required for unverified details. Shown to the organizer when the amount differs from what they asked for.')
                     ->rows(3),
             ])
-            ->action(function (PayoutRequest $record, array $data, HasActions $livewire) {
+            ->action(function (PayoutRequest $record, array $data, HasActions&Component $livewire) {
                 $amount = new Money((int) round(((float) $data['amount']) * 100), $record->currency);
 
                 // Read again rather than from the row: the balance may have
@@ -290,7 +291,7 @@ class PayoutRequestsTable
                     return;
                 }
 
-                self::record($record, $amount, (string) $data['rail'], $data['note'] ?? null);
+                self::record($livewire, $record, $amount, (string) $data['rail'], $data['note'] ?? null);
             });
     }
 
@@ -359,8 +360,9 @@ class PayoutRequestsTable
             })
             // Done or refused, the pay form underneath has nothing left to do.
             ->cancelParentActions()
-            ->action(function (PayoutRequest $record, array $data, array $arguments) {
+            ->action(function (PayoutRequest $record, array $data, array $arguments, Component $livewire) {
                 self::record(
+                    $livewire,
                     $record,
                     new Money((int) ($arguments['amount'] ?? 0), $record->currency),
                     (string) ($arguments['rail'] ?? ''),
@@ -371,7 +373,7 @@ class PayoutRequestsTable
     }
 
     /** Pay it, and say how that went. */
-    private static function record(PayoutRequest $record, Money $amount, string $rail, ?string $note, ?string $overdraftReason = null): void
+    private static function record(Component $livewire, PayoutRequest $record, Money $amount, string $rail, ?string $note, ?string $overdraftReason = null): void
     {
         try {
             $paid = app(PayoutRequests::class)->pay($record, auth()->user(), $amount, $rail, $note, $overdraftReason);
@@ -386,6 +388,11 @@ class PayoutRequestsTable
         if ($advance) {
             OverdraftsPage::forgetNavigationBadge();
         }
+
+        // The counts beside Payout requests and Overdrafts in the navigation,
+        // which is drawn outside this table: one fewer waiting, and one more
+        // owing after an advance. As a repayment and a suspension do.
+        $livewire->dispatch('refresh-sidebar');
 
         Notification::make()
             ->title('Payment recorded')
@@ -415,7 +422,7 @@ class PayoutRequestsTable
                     ->rows(3)
                     ->helperText('Say what they need to do, e.g. "Your bank details could not be verified — please re-enter them."'),
             ])
-            ->action(function (PayoutRequest $record, array $data) {
+            ->action(function (PayoutRequest $record, array $data, Component $livewire) {
                 try {
                     app(PayoutRequests::class)->reject($record, auth()->user(), (string) $data['reason']);
                 } catch (PayoutRequestRefused $refused) {
@@ -423,6 +430,9 @@ class PayoutRequestsTable
 
                     return;
                 }
+
+                // One fewer waiting beside Payout requests in the navigation.
+                $livewire->dispatch('refresh-sidebar');
 
                 Notification::make()->title('Request rejected')->body('The organizer has been told why.')->success()->send();
             });

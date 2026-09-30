@@ -121,8 +121,32 @@ describe('Team', () => {
     const tolu = rows.find((row) => row.textContent?.includes('Tolu Bello'))!;
 
     expect(Array.from(ada.querySelectorAll('button')).map((b) => b.textContent?.trim())).not.toContain('Leave');
-    expect(ada.textContent).toContain('The only owner. Make somebody else an owner before you leave.');
+    expect(ada.textContent).toContain('The only owner. Make somebody else an owner before you leave or change your role.');
     expect(Array.from(tolu.querySelectorAll('button')).map((b) => b.textContent?.trim())).toContain('Remove');
+  });
+
+  /*
+   * Stepping down is refused like leaving is ("Every organization needs an
+   * owner"): the dropdown asked "Change your own role to Manager?" and the
+   * server said no after the answer.
+   */
+  it('does not let the only owner change their own role, and asks nothing', async () => {
+    const fixture = TestBed.createComponent(Team);
+    backend.expectOne(TEAM).flush(team());
+    fixture.detectChanges();
+
+    const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('li'));
+    const trigger = (name: string) =>
+      rows.find((row) => row.textContent?.includes(name))!.querySelector<HTMLButtonElement>('[aria-label^="Role for"]')!;
+
+    expect(trigger('Ada Okafor').disabled).toBe(true);
+    expect(trigger('Tolu Bello').disabled).toBe(false);
+
+    void fixture.componentInstance.changeRole(team().members[0], 'manager');
+    await settle();
+
+    expect(asked()).toBeNull();
+    backend.expectNone(`${TEAM}/members/u-1`);
   });
 
   it('offers Leave to an owner when there is another', () => {

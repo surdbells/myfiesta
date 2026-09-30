@@ -48,14 +48,19 @@ class TeamInvitationMail extends Mailable
         );
     }
 
-    /** What a role can do, in the words the console uses. */
+    /**
+     * What a role can do, in the words the console uses.
+     *
+     * Each finishes "you can …" — here, on the join page, and after "Can " in
+     * the console's role menus — so each starts with a verb.
+     */
     public static function describe(string $role): string
     {
         return match ($role) {
-            'owner' => 'everything, including where payouts are sent and who is on the team',
+            'owner' => 'do everything, including where payouts are sent and who is on the team',
             'manager' => 'run events end to end — tickets, codes, the door, orders and refunds',
             'finance' => 'see what events made, and process refunds',
-            'marketing' => 'the guest list, promoter codes and messages to ticket holders',
+            'marketing' => 'manage the guest list, promoter codes and messages to ticket holders',
             'door' => 'scan tickets at the door, and nothing else',
             default => $role,
         };

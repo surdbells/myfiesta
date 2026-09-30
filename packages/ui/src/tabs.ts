@@ -1,6 +1,5 @@
 import { Component, DestroyRef, ElementRef, afterNextRender, inject, input, signal, viewChild } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { filter } from 'rxjs';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 export interface TabLink {
   label: string;
@@ -51,11 +50,13 @@ export interface TabLink {
         @for (tab of tabs(); track tab.label) {
           <li>
             <a
+              #link
               [routerLink]="tab.route"
               routerLinkActive="is-active"
               [routerLinkActiveOptions]="{ exact: tab.exact ?? false }"
               #active="routerLinkActive"
               [attr.aria-current]="active.isActive ? 'page' : null"
+              (isActiveChange)="$event && reveal(link)"
             >
               {{ tab.label }}
               @if (tab.count !== null && tab.count !== undefined) {
@@ -148,7 +149,6 @@ export class UiTabs {
     const destroyRef = inject(DestroyRef);
 
     afterNextRender(() => {
-      this.revealCurrent();
       this.measure();
 
       if (typeof ResizeObserver !== 'undefined') {
@@ -157,16 +157,6 @@ export class UiTabs {
         destroyRef.onDestroy(() => resized.disconnect());
       }
     });
-
-    // A tab chosen from a link elsewhere, or by the back button, may be one
-    // scrolled out of sight: bring it in once the link has been marked.
-    const moved = inject(Router)
-      .events.pipe(filter((event) => event instanceof NavigationEnd))
-      .subscribe(() => setTimeout(() => {
-        this.revealCurrent();
-        this.measure();
-      }));
-    destroyRef.onDestroy(() => moved.unsubscribe());
   }
 
   /** Whether there is more of the row either side of what shows. */
@@ -181,13 +171,16 @@ export class UiTabs {
   /**
    * The current tab, scrolled into the row if it is past an edge — along
    * the row only, never the page up or down.
+   *
+   * Called when a link becomes the current one, whichever way it did: a page
+   * loaded straight at the tab, a tab chosen, a link from elsewhere, the back
+   * button. Not after the first render, which was the only moment it used to
+   * look on a page loaded at a tab's address: the link is marked current a
+   * moment later, so a reload at /pictures found no current tab and left
+   * "Flyer & gallery" past the right edge of a phone.
    */
-  private revealCurrent(): void {
+  protected reveal(current: HTMLElement): void {
     const bar = this.bar().nativeElement;
-    const current = bar.querySelector<HTMLElement>('a.is-active');
-
-    if (!current) return;
-
     const row = bar.getBoundingClientRect();
     const tab = current.getBoundingClientRect();
     const room = 48;
@@ -197,5 +190,7 @@ export class UiTabs {
     } else if (tab.right > row.right) {
       bar.scrollLeft += tab.right - row.right + room;
     }
+
+    this.measure();
   }
 }

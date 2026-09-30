@@ -349,6 +349,31 @@ class OrganizerOrderSearchTest extends TestCase
         $this->assertSame(1_620_000, $single['gross']['amount']);
     }
 
+    /**
+     * The page's takings are money that came in. A payment still confirming
+     * is listed — it is what somebody rings about — but it is not takings
+     * yet, and it was in "On this page" and "Net" as if it were.
+     */
+    public function test_the_page_total_counts_only_money_received(): void
+    {
+        $this->signedInAs(Role::Owner);
+
+        $this->order($this->priced(5_400));
+        $this->order($this->priced(10_400) + ['status' => 'refunded']);
+        $this->order($this->priced(5_000) + ['status' => 'pending', 'paid_at' => null]);
+
+        $summary = $this->orders()['meta']['summary'];
+
+        $this->assertSame(15_800, $summary['gross']['amount']);
+        $this->assertSame(1, $summary['confirming']);
+
+        // Only confirming: nothing received, and it says so.
+        $none = $this->orders(['status' => 'pending'])['meta']['summary'];
+        $this->assertSame(0, $none['gross']['amount']);
+        $this->assertSame('CAD', $none['gross']['currency']);
+        $this->assertSame(1, $none['confirming']);
+    }
+
     public function test_marketing_cannot_open_the_list_at_all(): void
     {
         $this->signedInAs(Role::Marketing);

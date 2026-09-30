@@ -65,12 +65,18 @@
           [ariaLabel]="'Role for ' + member.name"
           [options]="roleOptions()"
           [value]="displayRole(member)"
+          [disabled]="soleOwner(member)"
           (valueChange)="changeRole(member, $event)"
         />
 
+        <!--
+          The only owner keeps the role as well as the place: stepping down is
+          refused like leaving is ("Every organization needs an owner"), so
+          neither is offered and then refused after the question.
+        -->
         @if (soleOwner(member)) {
           <p class="m-0 max-w-[12rem] justify-self-end text-right text-xs text-text-muted max-[720px]:max-w-none max-[720px]:justify-self-start max-[720px]:text-left">
-            The only owner. Make somebody else an owner before {{ member.is_you ? 'you leave' : 'removing them' }}.
+            The only owner. Make somebody else an owner before {{ member.is_you ? 'you leave or change your role' : 'removing them or changing their role' }}.
           </p>
         } @else {
           <button
