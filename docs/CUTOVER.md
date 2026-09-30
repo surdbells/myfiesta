@@ -14,7 +14,10 @@ database to check: Nigerian sales start on this platform.
 - **The dump stays on its machine.** Load it into MySQL on the migration host
   and point `LEGACY_DB_HOST`, `LEGACY_DB_DATABASE`, `LEGACY_DB_USERNAME` and
   `LEGACY_DB_PASSWORD` at it. Nothing else in the application reads that
-  connection.
+  connection. Or, with the old app on the same server as this one, point them
+  at its live database through an account that can only read it: no dump at
+  all, and nothing written there
+  ([RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md#121-the-old-database-read-only)).
 - **A read-only Stripe key.** In the Stripe account the old platform charged
   through, create a restricted key with *read* on Checkout Sessions,
   PaymentIntents, Refunds and Disputes, and nothing else. Put it in
@@ -32,24 +35,79 @@ database to check: Nigerian sales start on this platform.
   The 34 accounts on SHA-1 passwords arrive with none and reset on first
   sign-in. Blogs, newsletter, featured, notes and the hand-written
   `transactions` table are not imported.
+- **See what a run would do** without doing it:
+  `php artisan legacy:import --dry-run` reads everything, writes nothing, and
+  says per table how many rows would come, would be tried again, are already
+  here, or wait for another.
+
+## In one go, or with a parallel run
+
+**In one go.** The old app is frozen, a final dump is taken, and everything
+is imported into a database that has never had an import. The freeze lasts
+as long as the whole import does.
+
+**With a parallel run.** The first import goes into this platform's own
+database days before, while the old app is still selling, and is run again —
+hourly, say — to bring what is new. Each run brings only rows the database
+does not have yet, and lists the rows the old app has changed or deleted since
+they came across, for a person to settle ("Rows that changed after they came
+across"). On the day, the freeze lasts only as long as the last run: the rows
+of the final hour. The rest of the day is the same.
+
+A parallel run reads the old database as it is, so it needs the old database
+reachable while the old app runs: on the same server, or through a tunnel
+([RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md#12-moving-off-the-old-app-on-this-server)
+has both, and the commands for every step below on that server). A run while
+the old app sells leaves the checkouts of the last 48 hours for a later run,
+because one of them may be being paid for that minute; the last run, after
+the freeze, brings them with `--frozen`.
+
+Until the switch nobody but staff uses this platform. Anything done here in
+between — an event made, a ticket sold — is not in the old app, and never
+will be.
+
+That is made so, not hoped for. From the first run this platform holds the
+old app's events, on sale, and its organizers' accounts; open to everybody,
+it would sell seats the old app is still selling, and an organizer signing up
+here with an old account's address would stop that account and its events
+coming across. So the API and the console answer staff's addresses alone
+until the switch, with the payment webhooks let through
+([RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md#123-the-order-of-it),
+step 0, on aaPanel; a firewall or load-balancer rule anywhere else).
 
 ## On the day, in this order
 
 1. **Freeze the old app.** Stop it taking orders and stop it writing. A
    Stripe Checkout Session it opened before the freeze can still be paid until
    it expires (24 hours unless the old app set less). You can wait that out,
-   or go ahead: a payment that lands after the dump shows up in the report as
-   `paid_in_stripe_only`.
-2. **Take the final dump** and load it on the migration host.
-3. **Import into an empty database.** Run `php artisan migrate --force`, then:
+   or go ahead: a payment that lands after the dump (or the last run) shows up
+   in the report as `paid_in_stripe_only`.
+2. **Take the final dump** and load it on the migration host. With a parallel
+   run there is nothing to load: the old database itself, frozen, is read.
+3. **Import.** In one go, into an empty database: run
+   `php artisan migrate --force` first. With a parallel run, into the same
+   database every earlier run went into. Either way:
 
    ```
-   php artisan legacy:import
+   php artisan legacy:import --frozen
    ```
 
-   A database holding a rehearsal import keeps the rehearsal's copy of every
-   row it already has: rows are never updated, only added. So the final
-   import goes into a database that has never had one.
+   `--frozen` because the old app has stopped: a checkout it opened in the
+   last 48 hours will never be settled there, so it comes across as it
+   stands, and a payment that lands on it after all is what
+   `legacy:reconcile` reports as `paid_in_stripe_only`. Without it, those are
+   left for a later run that a frozen app makes pointless.
+
+   Rows are never updated here, only added. In one go, a database that held a
+   rehearsal import would keep the rehearsal's copy of every row, so the final
+   import goes into one that never had an import. With a parallel run the
+   database has had every run, and every change the old app made to a row
+   after it came across has been listed and settled by now ("Rows that changed
+   after they came across"). If that list has grown past settling by hand,
+   the way out is the other shape: an empty database and one import.
+
+   Only one import runs at a time against a database, whoever starts it. A
+   second one says another is running and does nothing.
 
    The command ends with the rows that did not come across, if any, and exits
    non-zero while there are some. Fix the cause and run it again (see
@@ -82,7 +140,10 @@ database to check: Nigerian sales start on this platform.
    This records refunds made in Stripe that the old database never heard
    about, and nothing else, without emailing organizers about them (see
    "Refunded in Stripe, not here").
-8. **Sign off the report**, then **switch DNS** to this platform.
+8. **Sign off the report**, then **switch myfiesta.ca** to this platform:
+   DNS, or, with the old app on this same server under aaPanel, its site's
+   configuration, which is instant and as quick to put back
+   ([RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md#125-switching-myfiestaca)).
 9. **Afterwards:** delete the restricted key in Stripe, remove
    `LEGACY_STRIPE_KEY`, and keep the reports with the cutover record.
 
@@ -114,10 +175,71 @@ reason is kept in `legacy_import_failures.left_behind_because`.
 The run is not one big transaction on purpose: that would hold locks for as
 long as the import takes and lose everything to one bad row two hours in.
 
+A row that has come across is passed over by every later run and never
+changed, but it is not forgotten. What the old row said is kept beside it as a
+digest (`legacy_map.source_hash`: of the columns the import reads, never the
+values), and a later run that finds the old row saying something else, or
+gone, lists it (next section). Rows imported before the digest was kept have
+none to compare with, and are not reported on a guess.
+
+A sale whose checkout the old app opened in the last 48 hours is left for a
+later run and counted as `left for later`: somebody may be paying for it in
+the old app that minute, and brought across now it would arrive cancelled and
+stay so. A run once it is older brings it as the old app then says. After the
+freeze, `--frozen` brings them all as they stand.
+
+`--dry-run` does everything but write, and prints the same table a run does
+with what it would do. It cannot say whether a row would fail — only writing
+it tells — and it clears and retries nothing.
+
+One import at a time: `legacy:import` holds a lock in this database (a
+Postgres advisory lock) for as long as it runs, and one started meanwhile,
+from any shell or container, says another is running and does nothing. The
+lock goes with the process's connection, so a run that was killed leaves
+nothing behind to clear.
+
 Two things not to do. Do not delete rows from `legacy_map` to force a row
 in again: what it points at is still there and would be made twice. And do
 not expect a fix in the old database to reach a row that has already come
-across; fix those here.
+across; fix those here. Each run lists them.
+
+## Rows that changed after they came across
+
+During a parallel run the old app keeps writing to the rows already imported:
+a refund, a night moved, a ticket scanned at the door, an organizer's new
+address. The import never changes a row it already made — by then a ledger
+entry, a refund or a ticket may hang off it — so every run says which rows
+moved instead, and each is for a person to settle. The run ends:
+
+```
+  WARN  Rows changed in the old app since they came across.
+  Nothing here was changed: each is for a person to settle.
+  tickets_sales changed .................................. 17, 18
+  events changed ......................................... 176
+  ticket_issued deleted in the old app ................... 901
+```
+
+then, for orders, a table of each one's legacy sale id, its reference here,
+its status here, the old app's status now, and what to do. Ids, references and
+statuses only, never a name, an address or a ticket code: the output ends up in
+logs. A row is listed on every run from then on, settled or not — it is
+compared with what it said when it came across, which nothing here changes —
+so keep a list of the ones settled.
+
+| Old table | What has usually changed | What to do here |
+| --- | --- | --- |
+| `tickets_sales` (orders) | the payment status | what the table's last column says. *Refunded in the old app*: the money went back through Stripe, and step 7's `legacy:reconcile --apply` records it — nothing else to do. If `legacy:reconcile` calls it `matched` instead, Stripe holds no refund and the old app only said so: ask the organizer. *Paid in the old app since*: `legacy:reconcile` lists it as `paid_in_stripe_only`; settle it as that class says. *No longer paid there*: look the payment up in `legacy:reconcile`'s report. *Status agrees*: the basket, the buyer or the amount changed; compare the two by hand, and a change of money is an engineer's ledger entry, never an edit. |
+| `events` | title, date, time, venue, on or off sale | make the same change here. A night the old app cancelled needs the organizer's word on refunds before it is cancelled here. |
+| `event_tickets` | price, how many, on or off sale | the same change to the ticket type here. |
+| `ticket_issued` | checked in at the door, or the holder's name | a check-in at a night that has passed needs nothing. A name, correct here. |
+| `user_accounts` | name, email, phone, password | the address matters most, being what they sign in with: have it changed here, or tell the person to sign in with the old one and change it. A password changed there does not come across; "forgot password" does it. |
+| `settlements` | the amount or the note of a payout already made | compare with the old platform's payout records, as "What this does not check" asks for all of them; a correction is an engineer's ledger entry. |
+
+**Deleted in the old app.** A row that came across and is no longer in the old
+database is listed as deleted and kept here: an order the old app deleted may
+still be somebody's tickets. Decide with the organizer. A ticket that should
+not exist is voided in the admin's Tickets screen; nothing is deleted, because
+the ledger and the audit log could not follow.
 
 **`legacy:reconcile`** without `--apply` only reads, and can be run any number
 of times. Each run writes a new report. `--resume` carries on the latest

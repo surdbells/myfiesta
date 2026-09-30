@@ -192,6 +192,106 @@ final class LegacyRules
     }
 
     /**
+     * How long a checkout the old app started may still be paid, in hours.
+     *
+     * Stripe keeps a Checkout Session open for 24 hours at most. Doubled,
+     * because the old database's times carry no zone and are read here as
+     * UTC while it may have written Toronto's clock, which is four or five
+     * hours behind: a session read as 25 hours old can be 20.
+     */
+    public const OPEN_CHECKOUT_HOURS = 48;
+
+    /**
+     * Whether a sale the import would bring across as cancelled may yet be paid.
+     *
+     * An import while the old app is still selling — a rehearsal, or one of
+     * the runs of a parallel run — reads baskets people are paying for at that
+     * moment. Brought across then, one arrives as an abandoned checkout, and
+     * is never looked at again: the payment a minute later reaches the old
+     * app and not this one. So a run leaves those for a later one, by which
+     * time the old app knows whether they were paid.
+     *
+     * Only the ones that would arrive cancelled, and only while young; a sale
+     * with no date at all has been sitting there since before anybody can say.
+     */
+    public static function checkoutMayStillBePaid(
+        ?string $paymentStatus,
+        ?string $startedAt,
+        CarbonImmutable $now,
+    ): bool {
+        if (self::orderStatus($paymentStatus) !== 'cancelled' || trim((string) $startedAt) === '') {
+            return false;
+        }
+
+        try {
+            $started = CarbonImmutable::parse((string) $startedAt, 'UTC');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $started->greaterThan($now->subHours(self::OPEN_CHECKOUT_HOURS));
+    }
+
+    /**
+     * What a row of the old database said, as a digest.
+     *
+     * Kept in legacy_map beside what the row became, so a later run can tell
+     * a row that changed in the old app since it came across from one that did
+     * not. Only the columns the import reads, by name, in a fixed order: a
+     * column nothing here reads changes nothing that came across, and
+     * reporting it would bury the changes that did. A column the old table
+     * turns out not to have is left out rather than refused. Each value as
+     * text: drivers disagree about whether an id is a number or a string, and
+     * a digest that moved with that would report every row as changed.
+     * serialize() rather than JSON, which refuses a string that is not valid
+     * UTF-8 — and a legacy row is allowed to hold one.
+     *
+     * A digest, never the values: a row can hold a password hash or a ticket
+     * code, and neither belongs anywhere but the table it was imported into.
+     *
+     * @param  object|array<string, mixed>  $row
+     * @param  list<string>  $columns  the columns the import reads from that table
+     */
+    public static function fingerprint(object|array $row, array $columns): string
+    {
+        $values = array_intersect_key((array) $row, array_flip($columns));
+
+        ksort($values);
+
+        $values = array_map(
+            fn (mixed $value): ?string => match (true) {
+                $value === null => null,
+                is_bool($value) => $value ? '1' : '0',
+                is_scalar($value) => (string) $value,
+                default => serialize($value),
+            },
+            $values,
+        );
+
+        return hash('sha256', serialize($values));
+    }
+
+    /**
+     * What a person does about an order the old app changed after it came across.
+     *
+     * The import never changes an order it made: by then a ledger entry, a
+     * refund or a ticket may hang off it. So the old app's later word arrives
+     * as a line for a person, and what they do depends on which way it moved.
+     * The two that involve money are settled against Stripe, which is where
+     * the money is, and legacy:reconcile already knows how.
+     */
+    public static function changedOrderAdvice(string $statusHere, string $statusThere): string
+    {
+        return match (true) {
+            $statusHere === $statusThere => 'status agrees; compare basket, buyer and total by hand',
+            $statusThere === 'refunded' => 'refunded in the old app: legacy:reconcile --apply records the refund Stripe made',
+            $statusThere === 'paid' => 'paid in the old app since: legacy:reconcile lists it as paid_in_stripe_only',
+            $statusHere === 'paid' => 'no longer paid in the old app: check the payment with legacy:reconcile',
+            default => 'compare it with the old app by hand',
+        };
+    }
+
+    /**
      * Whether a legacy password hash can be carried over.
      *
      * The table holds two generations: 34 accounts on bcrypt, from after the

@@ -70,3 +70,7 @@ coverage/
 *.sql
 *.sql.gz
 *.dump
+
+# --- A deploy checkout's own record: the previous release, the history and
+# the logs ops/deploy/*.sh keep beside it. The host's, never the repository's.
+/.deploy/

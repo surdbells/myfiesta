@@ -1,0 +1,146 @@
+# One VPS with everything on it — Postgres and Redis beside the application,
+# aaPanel's nginx in front — read on top of compose.prod.yml, never alone:
+#
+#   docker compose --env-file .env.production --env-file .env.release \
+#     -f ops/docker/compose.prod.yml -f ops/docker/compose.contabo.yml up -d
+#
+# ops/deploy/*.sh spell that out so nobody has to, and
+# docs/RUNBOOK-CONTABO-AAPANEL.md is the whole arrangement, step by step.
+#
+# compose.prod.yml leaves the database out because a managed one with backups
+# somebody else tests is better than a container. On one VPS there is no
+# managed one to point at, and aaPanel's App Store versions are the wrong
+# thing to point at instead: the schema needs Postgres 17 and nothing older
+# (the ledger's trigger, generated columns, the tax-rate exclusion constraint;
+# DEPLOYMENT.md), the nightly backup's pg_dump is 17 and refuses a newer
+# server, and the App Store installs whichever major it offers that month and
+# listens wherever it likes. Here the major is pinned, the database answers
+# only on this project's network, and backup:run takes it off the box every
+# night like any other Postgres (OPERATIONS.md, "Backups").
+#
+# Nothing here publishes a port.
+
+# What the API's containers wait for before they start.
+x-data: &data
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  postgres:
+    # The major pinned, the minor moving with each pull: that is how security
+    # fixes and the database's own time-zone rules arrive (OPERATIONS.md,
+    # "Time zones" — app:time-zones says when they have not).
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?set DB_DATABASE in .env.production}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env.production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.production}
+      # A checksum on every page, so a disk that hands back the wrong bytes is
+      # an error the day it happens rather than a backup that restores them.
+      # Read only when the volume is first set up.
+      POSTGRES_INITDB_ARGS: --data-checksums
+    # Postgres' own default of 128MB is for a machine that is mostly something
+    # else. Docker's 64MB of shared memory is less than a parallel query asks for.
+    command: ["postgres", "-c", "shared_buffers=512MB"]
+    shm_size: 256mb
+    # Long enough to write a checkpoint on the way down, rather than be killed
+    # at ten seconds and replay the log on the way back up.
+    stop_grace_period: 60s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # The queue lives here. appendonly, so a restart keeps the emails still to
+    # be sent; and no eviction, Redis' default, so a full memory refuses a
+    # write rather than quietly dropping somebody's tickets. A password even
+    # on a private network: nothing that needs Redis is without it, and
+    # anything that reaches it without one should be refused. It is on the
+    # command line, which only somebody who can run docker — and so can read
+    # .env.production — can see.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.production}", "--appendonly", "yes"]
+    environment:
+      # redis-cli reads this, so the healthcheck needs no password of its own.
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.production}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Everything that talks to the database waits for it. Added to what
+  # compose.prod.yml already has them wait for.
+  api-migrate:
+    depends_on: *data
+  api:
+    depends_on: *data
+  worker:
+    depends_on: *data
+  scheduler:
+    depends_on: *data
+
+  # The import from the old platform (docs/CUTOVER.md). Run by
+  # ops/deploy/legacy-sync.sh, never started by `up`: it is behind a profile.
+  #
+  # The release's own image with a MySQL driver added (api.Dockerfile, the
+  # `legacy` stage), so the import is the same code as the release it writes
+  # into, and the image that serves the internet carries no driver for a
+  # database it never uses.
+  legacy:
+    profiles: [legacy]
+    build:
+      context: ../..
+      dockerfile: ops/docker/api.Dockerfile
+      target: legacy
+      args:
+        RELEASE: ${TAG:?set TAG in .env.release to the release to run}
+    image: myfiesta/api-legacy:${TAG:?set TAG in .env.release to the release to run}
+    env_file: [../../.env.production]
+    restart: "no"
+    # The old app's MySQL, when aaPanel runs it on this host: from in here the
+    # host is host.docker.internal (LEGACY_DB_HOST). This service alone can
+    # reach it, and only while it runs; MySQL's port stays shut to the
+    # internet (the runbook, "The old database, read-only").
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Posters are written to the pictures volume, and legacy:reconcile's
+    # reports to the private one — the same volumes the API reads them from.
+    volumes:
+      - api-storage:/var/www/api/storage/app
+      - api-media:/var/www/api/storage/app/public
+    depends_on: *data
+    command: ["php", "artisan", "legacy:import", "--dry-run"]
+
+# Numbered here rather than by Docker, so two things written down elsewhere
+# stay true. aaPanel's nginx reaches the containers through Docker's proxy and
+# arrives from this network's gateway, which is what TRUSTED_PROXIES names;
+# and the legacy import reaches the old MySQL from this range, which is what
+# its read-only account is allowed from. A network Docker numbers for itself
+# can come back numbered differently when it is recreated, and then every
+# visitor looks like one address and shares one rate limit.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.30.57.0/24}
+          gateway: ${NETWORK_GATEWAY:-172.30.57.1}
+
+volumes:
+  # The database. Backed up nightly off the box by backup:run, and by nothing
+  # else: a copy of this volume taken while Postgres runs is not a backup.
+  postgres-data:
+  # The queue and the cache. Losing it loses queued emails, not records.
+  redis-data:

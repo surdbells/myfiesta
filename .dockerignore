@@ -41,3 +41,8 @@ apps/mobile/ios
 .github
 **/.DS_Store
 **/*.log
+
+# What ops/deploy/*.sh keep on the host: the release history, and the logs of
+# every legacy import, which list the old database's rows by id. No image
+# has any use for either.
+.deploy

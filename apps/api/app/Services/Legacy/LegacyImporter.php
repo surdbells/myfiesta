@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Services\Events\EventReviews;
 use App\Services\Payments\GatewayFee;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -47,6 +48,13 @@ use Illuminate\Support\Str;
  *   and the run reports the count at the end rather than leaving somebody to
  *   discover it from a support ticket.
  *
+ * And, because a cutover with a parallel run imports the same database again
+ * and again while the old app is still selling, honest about what moved since:
+ * a row that came across is never changed here, but a run says which of them
+ * the old app has changed or deleted since (legacy_map.source_hash), and
+ * leaves a checkout that may still be paid for a later run. With $dryRun it
+ * reads everything, writes nothing, and says what a run would do.
+ *
  * What is deliberately not imported: the `transactions` table (19 rows of
  * hand-written narration that is not a ledger), `blogs`, `newsletter`,
  * `featured`, `notes`, and the various lookup tables whose values are already
@@ -54,8 +62,68 @@ use Illuminate\Support\Str;
  */
 class LegacyImporter
 {
+    /**
+     * The columns the import reads from each source table, and so the ones a
+     * row's fingerprint covers (LegacyRules::fingerprint). A change to any
+     * other column changes nothing that came across.
+     */
+    private const READ = [
+        'user_accounts' => [
+            'id', 'first_name', 'last_name', 'email_address', 'phone_number', 'password', '_registered',
+        ],
+        'events' => [
+            'id', '_organizer', '_title', '_category', '_location', '_timezone',
+            '_province', '_venue', '_description', '_start_date', '_start_time',
+            '_slug', '_dress_code', '_identity_req', '_status', 'is_featured',
+            'created',
+        ],
+        'event_tickets' => [
+            'id', '_event', 'ticket_title', 'ticket_description', 'ticket_price', 'admits',
+            'ticket_available', 'max_ticket_per_person', '_ticket_status', '_ticket_added',
+        ],
+        'tickets_sales' => [
+            'sales_id', '_event', '_ticket', '_guest', '_cost', '_checkout', '_payment_status', '_pdate',
+        ],
+        'ticket_issued' => [
+            'ticket_id', 'event', 'ticket', '_type', '_sale', '_custom_name', '_date', 'is_checkedin',
+        ],
+        'settlements' => ['id', 'event', 'organizer', 'amount', 'note', 'date'],
+    ];
+
     /** @var array<string, int> */
     private array $counts = [];
+
+    /**
+     * What became of each source row this run, per table: already here, new,
+     * tried again, failed, waiting for a parent, or left for a later run.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private array $plan = [];
+
+    /**
+     * Rows that came across on an earlier run and say something else now.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $changed = [];
+
+    /**
+     * Every id read from each source table this run, to find the ones that
+     * came across and are no longer there.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $seen = [];
+
+    /**
+     * Sales left for a later run because their checkout may still be paid.
+     *
+     * @var list<string>
+     */
+    private array $deferred = [];
+
+    private readonly CarbonImmutable $now;
 
     /** @var list<string> */
     private array $notes = [];
@@ -92,7 +160,13 @@ class LegacyImporter
     public function __construct(
         private readonly LegacyMap $map,
         private readonly ?\Closure $progress = null,
-    ) {}
+        private readonly bool $dryRun = false,
+        // The old app has stopped taking orders, so a checkout it left open
+        // will never be settled there: brought now as it stands, not left.
+        private readonly bool $frozen = false,
+    ) {
+        $this->now = CarbonImmutable::now();
+    }
 
     private function legacy(): ConnectionInterface
     {
@@ -100,7 +174,16 @@ class LegacyImporter
     }
 
     /**
-     * @return array{counts: array<string, int>, notes: list<string>, failures: list<array{table: string, id: string, reason: string}>}
+     * @return array{
+     *     counts: array<string, int>,
+     *     notes: list<string>,
+     *     failures: list<array{table: string, id: string, reason: string}>,
+     *     plan: array<string, array<string, int>>,
+     *     changed: array<string, list<string>>,
+     *     gone: array<string, list<string>>,
+     *     deferred: list<string>,
+     *     orders: list<array{legacy_id: string, reference: string, here: string, there: string, advice: string}>,
+     * }
      */
     public function run(): array
     {
@@ -111,12 +194,184 @@ class LegacyImporter
         $this->importOrganizers();
         $this->importEvents();
         $this->importTicketTypes();
-        $this->approveImportedOnSale();
+
+        if (! $this->dryRun) {
+            $this->approveImportedOnSale();
+        }
+
         $this->importOrders();
         $this->importTickets();
         $this->importSettlements();
 
-        return ['counts' => $this->counts, 'notes' => $this->notes, 'failures' => $this->failures];
+        // Before the plan is handed over: it counts them too.
+        $gone = $this->gone();
+
+        return [
+            'counts' => $this->counts,
+            'notes' => $this->notes,
+            'failures' => $this->failures,
+            'plan' => $this->plan,
+            'changed' => $this->changed,
+            'gone' => $gone,
+            'deferred' => $this->deferred,
+            'orders' => $this->changedOrders(),
+        ];
+    }
+
+    /**
+     * Whether a source row came across on an earlier run, counted either way.
+     *
+     * One that did is passed over, and never changed here: a ledger entry, a
+     * refund or a ticket may hang off it by now. But it is compared with what
+     * it said when it came across, and listed if the old app has changed it
+     * since. A row that came across before fingerprints were kept has none to
+     * compare with, and is not guessed at.
+     */
+    private function across(string $table, int|string $id, object $row): bool
+    {
+        $this->tick($table);
+        $this->seen[$table][(string) $id] = true;
+
+        if ($this->map->find($table, $id) === null) {
+            return false;
+        }
+
+        $this->outcome($table, 'across');
+
+        $then = $this->map->fingerprint($table, $id);
+
+        if ($then !== null && $then !== $this->fingerprintOf($table, $row)) {
+            $this->outcome($table, 'changed');
+            $this->changed[$table][] = (string) $id;
+        }
+
+        return true;
+    }
+
+    /**
+     * A row still to come across: brought now, or in a dry run, counted.
+     *
+     * A dry run remembers it in memory as if it had come, so the rows that
+     * hang off it are counted the way a real run would bring them rather than
+     * as waiting. $alsoMakes is a row derived from it that later rows look up
+     * (an account's organization). Whether a row would fail cannot be known
+     * without writing it; a dry run counts it as tried.
+     *
+     * A real run counts it once it has committed. One that fails is counted
+     * as failed by unit() and nowhere else, so each row read is in one column
+     * of the summary, and `new` is what did come across.
+     */
+    private function bring(string $table, int|string $id, \Closure $work, ?string $alsoMakes = null): void
+    {
+        // Asked first: coming across clears the failure it is asking about.
+        $outcome = $this->map->hasFailed($table, $id) ? 'retried' : 'new';
+
+        if (! $this->dryRun) {
+            if ($this->unit($table, $id, $work)) {
+                $this->outcome($table, $outcome);
+            }
+
+            return;
+        }
+
+        $this->outcome($table, $outcome);
+        $this->map->pretend($table, $id);
+
+        if ($alsoMakes !== null) {
+            $this->map->pretend($alsoMakes, $id);
+        }
+    }
+
+    /**
+     * A row passed over because something it needs is not here.
+     */
+    private function waiting(string $table, string $note): void
+    {
+        $this->outcome($table, 'waiting');
+        $this->note($note);
+    }
+
+    private function outcome(string $table, string $what): void
+    {
+        $this->plan[$table][$what] = ($this->plan[$table][$what] ?? 0) + 1;
+    }
+
+    private function fingerprintOf(string $table, object $row): string
+    {
+        return LegacyRules::fingerprint($row, self::READ[$table]);
+    }
+
+    /**
+     * Rows that came across and are no longer in the old database, per table.
+     *
+     * Kept here: an order the old app deleted after it came across may still
+     * be somebody's ticket, and a person decides that, not a run.
+     *
+     * @return array<string, list<string>>
+     */
+    private function gone(): array
+    {
+        $gone = [];
+
+        foreach (array_keys(self::READ) as $table) {
+            $ids = array_values(array_diff(
+                $this->map->idsFrom($table),
+                array_map('strval', array_keys($this->seen[$table] ?? [])),
+            ));
+
+            if ($ids !== []) {
+                $gone[$table] = $ids;
+                $this->plan[$table]['gone'] = count($ids);
+            }
+        }
+
+        return $gone;
+    }
+
+    /**
+     * The orders the old app changed after they came across, each with what
+     * this database says, what the old one says now, and what to do.
+     *
+     * The old statuses are read again here, in one query, rather than kept for
+     * every row read on the chance that one of them changed.
+     *
+     * @return list<array{legacy_id: string, reference: string, here: string, there: string, advice: string}>
+     */
+    private function changedOrders(): array
+    {
+        $legacyIds = $this->changed['tickets_sales'] ?? [];
+
+        if ($legacyIds === []) {
+            return [];
+        }
+
+        $there = $this->legacy()->table('tickets_sales')
+            ->whereIn('sales_id', $legacyIds)
+            ->pluck('_payment_status', 'sales_id')
+            ->mapWithKeys(fn ($status, $id) => [(string) $id => LegacyRules::orderStatus($status)]);
+
+        $orders = Order::query()
+            ->whereIn('id', array_map(fn (string $id) => $this->map->find('tickets_sales', $id), $legacyIds))
+            ->get(['id', 'reference', 'status'])
+            ->keyBy('id');
+
+        $rows = [];
+
+        foreach ($legacyIds as $legacyId) {
+            $order = $orders[$this->map->find('tickets_sales', $legacyId)] ?? null;
+            $here = (string) ($order->status ?? '');
+            $now = (string) ($there[$legacyId] ?? '');
+
+            $rows[] = [
+                'legacy_id' => $legacyId,
+                'reference' => (string) ($order->reference ?? ''),
+                'here' => $here,
+                'there' => $now,
+                'advice' => LegacyRules::changedOrderAdvice($here, $now),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -129,8 +384,10 @@ class LegacyImporter
      * the run moves on. Rows that depend on it are skipped as missing, or fail
      * in turn waiting for it (waitFor), and are never written without it; all
      * of them are tried again on the next run.
+     *
+     * True when the row committed, false when it was rolled back.
      */
-    private function unit(string $sourceTable, int|string $sourceId, \Closure $work): void
+    private function unit(string $sourceTable, int|string $sourceId, \Closure $work): bool
     {
         $this->inUnit = true;
         $this->pendingNotes = $this->pendingTicks = $this->pendingFiles = [];
@@ -152,12 +409,14 @@ class LegacyImporter
                 Storage::disk('public')->delete($this->pendingFiles);
             }
 
+            $this->outcome($sourceTable, 'failed');
+
             $reason = LegacyRules::failureReason($e);
 
             $this->map->failed($sourceTable, $sourceId, $reason);
             $this->failures[] = ['table' => $sourceTable, 'id' => (string) $sourceId, 'reason' => $reason];
 
-            return;
+            return false;
         } finally {
             $this->inUnit = false;
         }
@@ -167,6 +426,8 @@ class LegacyImporter
         foreach ($this->pendingTicks as $key) {
             $this->counts[$key] = ($this->counts[$key] ?? 0) + 1;
         }
+
+        return true;
     }
 
     /**
@@ -186,9 +447,7 @@ class LegacyImporter
         $rows = $this->legacy()->table('user_accounts')->orderBy('id')->get();
 
         foreach ($rows as $row) {
-            $this->tick('user_accounts');
-
-            if ($this->map->find('user_accounts', $row->id)) {
+            if ($this->across('user_accounts', $row->id, $row)) {
                 continue;
             }
 
@@ -196,7 +455,7 @@ class LegacyImporter
             // an account whose organization failed was marked done, the next
             // run skipped it, and every event it ran was skipped after it for
             // want of an organizer.
-            $this->unit('user_accounts', $row->id, fn () => $this->importOrganizer($row));
+            $this->bring('user_accounts', $row->id, fn () => $this->importOrganizer($row), 'organization_for_account');
         }
     }
 
@@ -277,7 +536,7 @@ class LegacyImporter
             'accepted_at' => $row->_registered ?? now(),
         ]);
 
-        $this->map->record('user_accounts', $row->id, 'user', $user->id, $inferred);
+        $this->map->record('user_accounts', $row->id, 'user', $user->id, $inferred, $this->fingerprintOf('user_accounts', $row));
 
         // Keyed by the same legacy id: events name their organizer by the
         // account id, and this is what turns that into an organization.
@@ -406,19 +665,12 @@ class LegacyImporter
         // pulls a megabyte per row through the connection for a column this
         // method has no use for.
         $rows = $this->legacy()->table('events')
-            ->select([
-                'id', '_organizer', '_title', '_category', '_location', '_timezone',
-                '_province', '_venue', '_description', '_start_date', '_start_time',
-                '_slug', '_dress_code', '_identity_req', '_status', 'is_featured',
-                'created',
-            ])
+            ->select(self::READ['events'])
             ->orderBy('id')
             ->get();
 
         foreach ($rows as $row) {
-            $this->tick('events');
-
-            if ($this->map->find('events', $row->id)) {
+            if ($this->across('events', $row->id, $row)) {
                 continue;
             }
 
@@ -428,12 +680,12 @@ class LegacyImporter
                 // An event whose organizer account is gone. Skipped rather than
                 // attached to somebody: an event under the wrong organization
                 // is an event whose takings go to the wrong person.
-                $this->note("event {$row->id} skipped: organizer {$row->_organizer} not found");
+                $this->waiting('events', "event {$row->id} skipped: organizer {$row->_organizer} not found");
 
                 continue;
             }
 
-            $this->unit('events', $row->id, fn () => $this->importEvent($row, $organizationId));
+            $this->bring('events', $row->id, fn () => $this->importEvent($row, $organizationId));
         }
     }
 
@@ -495,7 +747,7 @@ class LegacyImporter
             'created_at' => $row->created ?? now(),
         ]);
 
-        $this->map->record('events', $row->id, 'event', $event->id, $inferred);
+        $this->map->record('events', $row->id, 'event', $event->id, $inferred, $this->fingerprintOf('events', $row));
     }
 
     /**
@@ -540,21 +792,19 @@ class LegacyImporter
         $rows = $this->legacy()->table('event_tickets')->orderBy('id')->get();
 
         foreach ($rows as $row) {
-            $this->tick('event_tickets');
-
-            if ($this->map->find('event_tickets', $row->id)) {
+            if ($this->across('event_tickets', $row->id, $row)) {
                 continue;
             }
 
             $eventId = $this->map->find('events', $row->_event);
 
             if (! $eventId) {
-                $this->note("ticket type {$row->id} skipped: event {$row->_event} not imported");
+                $this->waiting('event_tickets', "ticket type {$row->id} skipped: event {$row->_event} not imported");
 
                 continue;
             }
 
-            $this->unit('event_tickets', $row->id, fn () => $this->importTicketType($row, $eventId));
+            $this->bring('event_tickets', $row->id, fn () => $this->importTicketType($row, $eventId));
         }
     }
 
@@ -578,7 +828,7 @@ class LegacyImporter
             'created_at' => $row->_ticket_added ?? now(),
         ]);
 
-        $this->map->record('event_tickets', $row->id, 'ticket_type', $type->id);
+        $this->map->record('event_tickets', $row->id, 'ticket_type', $type->id, [], $this->fingerprintOf('event_tickets', $row));
     }
 
     /**
@@ -607,16 +857,28 @@ class LegacyImporter
         $rows = $this->legacy()->table('tickets_sales')->orderBy('sales_id')->get();
 
         foreach ($rows as $row) {
-            $this->tick('tickets_sales');
+            if ($this->across('tickets_sales', $row->sales_id, $row)) {
+                continue;
+            }
 
-            if ($this->map->find('tickets_sales', $row->sales_id)) {
+            // A basket somebody may be paying for right now, in the old app.
+            // Brought across now it arrives cancelled, and the payment a
+            // minute later reaches only the old app. A later run brings it
+            // once the old app knows (LegacyRules::checkoutMayStillBePaid).
+            // Not once it is frozen: then it never will, and waiting only
+            // keeps the sale out of legacy:reconcile, which is what finds a
+            // payment that landed after the freeze (docs/CUTOVER.md).
+            if (! $this->frozen && LegacyRules::checkoutMayStillBePaid($row->_payment_status, $row->_pdate, $this->now)) {
+                $this->outcome('tickets_sales', 'deferred');
+                $this->deferred[] = (string) $row->sales_id;
+
                 continue;
             }
 
             $eventId = $this->map->find('events', $row->_event);
 
             if (! $eventId) {
-                $this->note("order {$row->sales_id} skipped: event {$row->_event} not imported");
+                $this->waiting('tickets_sales', "order {$row->sales_id} skipped: event {$row->_event} not imported");
 
                 continue;
             }
@@ -626,7 +888,7 @@ class LegacyImporter
             // without its lines cannot be refunded, one written without its
             // ledger entry is money the organizer is never credited, and
             // either of them marked done in the map stays that way.
-            $this->unit('tickets_sales', $row->sales_id, fn () => $this->importOrder($row, $eventId));
+            $this->bring('tickets_sales', $row->sales_id, fn () => $this->importOrder($row, $eventId));
         }
     }
 
@@ -692,7 +954,7 @@ class LegacyImporter
 
         // Last, and in the same transaction as everything above it: the map
         // says done only once there is nothing left to do.
-        $this->map->record('tickets_sales', $row->sales_id, 'order', $order->id);
+        $this->map->record('tickets_sales', $row->sales_id, 'order', $order->id, [], $this->fingerprintOf('tickets_sales', $row));
     }
 
     /**
@@ -798,9 +1060,7 @@ class LegacyImporter
         $rows = $this->legacy()->table('ticket_issued')->orderBy('ticket_id')->get();
 
         foreach ($rows as $row) {
-            $this->tick('ticket_issued');
-
-            if ($this->map->find('ticket_issued', $row->ticket_id)) {
+            if ($this->across('ticket_issued', $row->ticket_id, $row)) {
                 continue;
             }
 
@@ -808,12 +1068,12 @@ class LegacyImporter
             $eventId = $this->map->find('events', $row->event);
 
             if (! $orderId || ! $eventId) {
-                $this->note("ticket {$row->ticket_id} skipped: order or event not imported");
+                $this->waiting('ticket_issued', "ticket {$row->ticket_id} skipped: order or event not imported");
 
                 continue;
             }
 
-            $this->unit('ticket_issued', $row->ticket_id, fn () => $this->importTicket($row, $orderId, $eventId));
+            $this->bring('ticket_issued', $row->ticket_id, fn () => $this->importTicket($row, $orderId, $eventId));
         }
     }
 
@@ -846,7 +1106,7 @@ class LegacyImporter
 
         $this->map->record('ticket_issued', $row->ticket_id, 'ticket', $ticket->id, [
             'checked_in_at' => 'not recorded by the source',
-        ]);
+        ], $this->fingerprintOf('ticket_issued', $row));
     }
 
     /**
@@ -861,21 +1121,19 @@ class LegacyImporter
         $rows = $this->legacy()->table('settlements')->orderBy('id')->get();
 
         foreach ($rows as $row) {
-            $this->tick('settlements');
-
-            if ($this->map->find('settlements', $row->id)) {
+            if ($this->across('settlements', $row->id, $row)) {
                 continue;
             }
 
             $organizationId = $this->map->find('organization_for_account', $row->organizer);
 
             if (! $organizationId) {
-                $this->note("settlement {$row->id} skipped: organizer {$row->organizer} not found");
+                $this->waiting('settlements', "settlement {$row->id} skipped: organizer {$row->organizer} not found");
 
                 continue;
             }
 
-            $this->unit('settlements', $row->id, fn () => $this->importSettlement($row, $organizationId));
+            $this->bring('settlements', $row->id, fn () => $this->importSettlement($row, $organizationId));
         }
     }
 
@@ -908,7 +1166,7 @@ class LegacyImporter
 
         $this->map->record('settlements', $row->id, 'ledger_entry', $entry->id, [
             'amount' => 'source held this as a floating point double',
-        ]);
+        ], $this->fingerprintOf('settlements', $row));
     }
 
     /**

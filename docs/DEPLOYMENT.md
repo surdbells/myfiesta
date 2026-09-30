@@ -8,6 +8,12 @@ not the only one — this reads as a statement of what any arrangement has to
 provide, and a platform-as-a-service or Kubernetes deployment needs the same
 list.
 
+On one VPS with aaPanel in front — Postgres and Redis beside the application
+(`ops/docker/compose.contabo.yml`), aaPanel's nginx terminating TLS, perhaps
+the old app on the same box — [RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md)
+is the whole of it, step by step, with `ops/deploy/` for releases, rollbacks
+and the import from the old app.
+
 ## The two nobody remembers
 
 **The queue worker.** Nearly every email this platform sends is queued:
@@ -127,10 +133,10 @@ make.
 `TRUSTED_PROXIES` is the addresses the load balancer connects from — addresses
 or CIDR ranges, comma-separated, as `api-web` sees them.
 
-| Load balancer | `TRUSTED_PROXIES` | `API_BIND` |
-| ------------- | ----------------- | ---------- |
+| Load balancer | `TRUSTED_PROXIES` | `API_BIND`, `SITE_BIND`, `CONSOLE_BIND` |
+| ------------- | ----------------- | --------------------------------------- |
 | on the same host as the containers | the compose network's gateway (`docker network inspect myfiesta_default`) | `127.0.0.1`, the default |
-| on another machine | that machine's addresses | `0.0.0.0` |
+| on another machine | that machine's addresses | `0.0.0.0`, all three |
 
 The two go together. A balancer on the same host reaches `api-web` through
 Docker's proxy, and so arrives from the gateway — but so does anything else
@@ -139,6 +145,16 @@ only IPv4 among them. With the port public and the gateway trusted, that
 visitor could name its own address and claim https. So the compose file
 publishes the API on loopback unless told otherwise, and the gateway is never
 trusted on a public port.
+
+The site (4000) and the console (4310) are published on loopback the same way,
+because Docker's published ports go around the host's firewall: on every
+interface, each was a plain-http copy open to the internet whatever `ufw`
+said. They used to be on every interface by default, so a balancer on another
+machine that reached them before needs `SITE_BIND=0.0.0.0` and
+`CONSOLE_BIND=0.0.0.0` as well as `API_BIND`, or it gets connection refused
+and answers 502 for the site and the console. With any of them on `0.0.0.0`,
+keep those ports to the balancer with the provider's firewall or a private
+network, since the host's own firewall does not.
 
 Only those addresses may say who the client is (`X-Forwarded-For`) or that it
 came over https (`X-Forwarded-Proto`). From anybody else both are ignored. The
@@ -395,10 +411,11 @@ follows from those two.
 
 ## Moving off the old platform
 
-Once, on the day the old app is switched off: `legacy:import` brings its
-database across and `legacy:reconcile` checks the imported money against
-Stripe. The order, how to re-run either safely, and what to do with each line
-of the report are in [CUTOVER.md](CUTOVER.md).
+On the day the old app is switched off — and, with a parallel run, again and
+again in the days before it: `legacy:import` brings its database across and
+`legacy:reconcile` checks the imported money against Stripe. The order, how to
+re-run either safely, and what to do with each line of the report are in
+[CUTOVER.md](CUTOVER.md).
 
 ## When something is wrong
 

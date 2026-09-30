@@ -22,8 +22,30 @@ use Throwable;
  */
 class LegacyMap
 {
+    /**
+     * What find() answers for a row a dry run would bring across. Not an id:
+     * nothing is written in a dry run, so nothing may be looked up by it.
+     */
+    public const PRETENDED = 'dry-run';
+
     /** @var array<string, string|null> */
     private array $cache = [];
+
+    /**
+     * What each source row said when it came across (LegacyRules::fingerprint),
+     * for the rows that have one.
+     *
+     * @var array<string, string>
+     */
+    private array $fingerprints = [];
+
+    /**
+     * Rows a dry run would bring across, so the rows that need them are
+     * counted the way a real run would count them rather than as waiting.
+     *
+     * @var array<string, true>
+     */
+    private array $pretended = [];
 
     /**
      * Keys recorded by the unit of work in progress, forgotten if it fails.
@@ -48,14 +70,23 @@ class LegacyMap
      * and whose answer was lost with the connection. Nothing would ever try
      * that row again, so nothing else would ever clear it, and every run
      * after would end listing it and exit non-zero.
+     *
+     * A dry run passes $write false: it clears nothing, and the failure stays
+     * listed until a real run clears it.
      */
-    public function warm(): void
+    public function warm(bool $write = true): void
     {
         DB::table('legacy_map')
-            ->select(['source_table', 'source_id', 'target_id'])
+            ->select(['source_table', 'source_id', 'target_id', 'source_hash'])
             ->orderBy('id')
             ->each(function (object $row): void {
-                $this->cache[$row->source_table.':'.$row->source_id] = $row->target_id;
+                $key = $row->source_table.':'.$row->source_id;
+
+                $this->cache[$key] = $row->target_id;
+
+                if ($row->source_hash !== null) {
+                    $this->fingerprints[$key] = $row->source_hash;
+                }
             });
 
         $across = [];
@@ -76,7 +107,7 @@ class LegacyMap
                 $this->toClear[$key] = true;
             });
 
-        if ($across !== []) {
+        if ($across !== [] && $write) {
             $this->clear(DB::table('legacy_import_failures')->whereIn('id', $across));
         }
     }
@@ -87,11 +118,59 @@ class LegacyMap
             return null;
         }
 
-        return $this->cache[$sourceTable.':'.$sourceId] ?? null;
+        $key = $sourceTable.':'.$sourceId;
+
+        return $this->cache[$key] ?? (isset($this->pretended[$key]) ? self::PRETENDED : null);
+    }
+
+    /**
+     * What the source row said when it came across, or null when it came
+     * across before this was kept (or is a row derived from another).
+     */
+    public function fingerprint(string $sourceTable, int|string $sourceId): ?string
+    {
+        return $this->fingerprints[$sourceTable.':'.$sourceId] ?? null;
+    }
+
+    /**
+     * Whether this row failed on an earlier run and is still to come across,
+     * or was left behind and is still tried.
+     */
+    public function hasFailed(string $sourceTable, int|string $sourceId): bool
+    {
+        return isset($this->toClear[$sourceTable.':'.$sourceId]);
+    }
+
+    /**
+     * A row a dry run would bring across, remembered in memory only.
+     */
+    public function pretend(string $sourceTable, int|string $sourceId): void
+    {
+        $this->pretended[$sourceTable.':'.$sourceId] = true;
+    }
+
+    /**
+     * The ids of every row of one source table that has come across.
+     *
+     * @return list<string>
+     */
+    public function idsFrom(string $sourceTable): array
+    {
+        $prefix = $sourceTable.':';
+        $ids = [];
+
+        foreach (array_keys($this->cache) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                $ids[] = substr($key, strlen($prefix));
+            }
+        }
+
+        return $ids;
     }
 
     /**
      * @param  array<string, string>  $inferred  anything guessed rather than read
+     * @param  string|null  $fingerprint  what the source row said (LegacyRules::fingerprint)
      */
     public function record(
         string $sourceTable,
@@ -99,12 +178,14 @@ class LegacyMap
         string $targetType,
         string $targetId,
         array $inferred = [],
+        ?string $fingerprint = null,
     ): void {
         DB::table('legacy_map')->insert([
             'source_table' => $sourceTable,
             'source_id' => (string) $sourceId,
             'target_type' => $targetType,
             'target_id' => $targetId,
+            'source_hash' => $fingerprint,
             'inferred' => $inferred === [] ? null : json_encode($inferred),
             'created_at' => now(),
         ]);
@@ -112,6 +193,10 @@ class LegacyMap
         $key = $sourceTable.':'.$sourceId;
 
         $this->cache[$key] = $targetId;
+
+        if ($fingerprint !== null) {
+            $this->fingerprints[$key] = $fingerprint;
+        }
 
         if ($this->pending !== null) {
             $this->pending[] = $key;
@@ -144,7 +229,7 @@ class LegacyMap
             return DB::transaction($work);
         } catch (Throwable $e) {
             foreach ($this->pending as $key) {
-                unset($this->cache[$key]);
+                unset($this->cache[$key], $this->fingerprints[$key]);
             }
 
             throw $e;

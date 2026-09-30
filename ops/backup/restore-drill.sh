@@ -27,7 +27,16 @@ for file in .env.production .env.release; do
     fi
 done
 
-COMPOSE="docker compose --env-file .env.production --env-file .env.release -f ops/docker/compose.prod.yml"
+# The compose files the platform runs from, as ops/deploy/*.sh read them:
+# COMPOSE_FILES, space-separated. On one box with compose.contabo.yml that is
+# both files (docs/RUNBOOK-CONTABO-AAPANEL.md); read with the first alone,
+# compose would find the project's network set up other than it expects.
+FILES=""
+for file in ${COMPOSE_FILES:-ops/docker/compose.prod.yml}; do
+    FILES="$FILES -f $file"
+done
+
+COMPOSE="docker compose --env-file .env.production --env-file .env.release$FILES"
 INTO="myfiesta_drill_$(date -u +%Y%m%d_%H%M)"
 
 echo "restore-drill: the backups there are"

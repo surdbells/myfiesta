@@ -634,6 +634,274 @@ class LegacyImportTest extends TestCase
         $this->assertNotNull(DB::table('legacy_import_failures')->where('source_id', '17')->value('resolved_at'));
     }
 
+    // --- a parallel run: the same database, imported again and again -------
+
+    public function test_a_second_run_brings_only_the_rows_that_are_new(): void
+    {
+        $this->import();
+
+        // The old app kept selling after the first run: one more sale, and
+        // the ticket it issued.
+        $this->legacySale(19, 1000, 'cs_live_new19');
+        DB::connection('legacy')->table('ticket_issued')->insert([
+            'ticket_id' => 902, 'event' => '176', 'ticket' => 'MFST-7Q4M2ZPX',
+            '_type' => '58', '_sale' => '19', '_guest' => 'buyer19@example.test',
+            '_custom_name' => '', '_date' => '2024-05-11 19:00:01', 'is_checkedin' => false,
+        ]);
+
+        $before = $this->everythingCounted();
+        $result = $this->import();
+
+        $this->assertSame(['across' => 2, 'new' => 1], $result['plan']['tickets_sales']);
+        $this->assertSame(['across' => 2, 'new' => 1], $result['plan']['ticket_issued']);
+        $this->assertSame(['across' => 2], $result['plan']['user_accounts']);
+        $this->assertSame(['across' => 1], $result['plan']['settlements']);
+
+        // One order, its line, its ledger entry, its ticket and their two map
+        // rows. Nothing else, and nothing twice.
+        [$users, $organizations, $events, $venues, $types, $orders, $lines, $tickets, $ledger, $map] = $before;
+        $this->assertSame(
+            [$users, $organizations, $events, $venues, $types, $orders + 1, $lines + 1, $tickets + 1, $ledger + 1, $map + 2],
+            $this->everythingCounted(),
+        );
+        $this->assertSame(1, Order::where('gateway_reference', 'cs_live_new19')->count());
+        $this->assertSame([], $result['changed']);
+    }
+
+    public function test_a_dry_run_writes_nothing_and_says_what_a_run_would_do(): void
+    {
+        // A duplicate account, so there is a failure for the dry run to count.
+        DB::connection('legacy')->table('user_accounts')->insert([
+            'id' => 32, 'first_name' => 'Ada', 'last_name' => 'Again',
+            'email_address' => 'ADA@lagosnights.test', 'phone_number' => null,
+            'password' => password_hash('other', PASSWORD_BCRYPT),
+            '_registered' => '2024-02-01 10:00:00',
+        ]);
+
+        $map = new LegacyMap;
+        $map->warm(write: false);
+        $first = (new LegacyImporter($map, dryRun: true))->run();
+
+        // Every row counted as one a run would bring, the ones hanging off new
+        // parents included, and nothing written anywhere.
+        $this->assertSame(['new' => 3], $first['plan']['user_accounts']);
+        $this->assertSame(['new' => 2], $first['plan']['events']);
+        $this->assertSame(['new' => 1], $first['plan']['event_tickets']);
+        $this->assertSame(['new' => 2], $first['plan']['tickets_sales']);
+        $this->assertSame(['new' => 2], $first['plan']['ticket_issued']);
+        $this->assertSame(['new' => 1], $first['plan']['settlements']);
+        $this->assertSame([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], $this->everythingCounted());
+        $this->assertSame(0, DB::table('legacy_import_failures')->count());
+        $this->assertSame(0, EventReview::count());
+
+        // The real run, which fails the duplicate, then a new sale.
+        $this->import();
+        $this->legacySale(19, 1000, 'cs_live_new19');
+
+        $before = $this->everythingCounted();
+        $failure = DB::table('legacy_import_failures')->where('source_id', '32')->first();
+
+        $this->artisan('legacy:import', ['--dry-run' => true])
+            ->expectsOutputToContain('Dry run')
+            ->expectsOutputToContain('would retry')
+            ->assertSuccessful();
+
+        $map = new LegacyMap;
+        $map->warm(write: false);
+        $second = (new LegacyImporter($map, dryRun: true))->run();
+
+        $this->assertSame(['across' => 2, 'retried' => 1], $second['plan']['user_accounts']);
+        $this->assertSame(['across' => 2, 'new' => 1], $second['plan']['tickets_sales']);
+        $this->assertSame(['across' => 2], $second['plan']['ticket_issued']);
+
+        // Still nothing written: not the sale, not another attempt at the
+        // failure, not the failure cleared.
+        $this->assertSame($before, $this->everythingCounted());
+        $this->assertEquals($failure, DB::table('legacy_import_failures')->where('source_id', '32')->first());
+    }
+
+    public function test_a_real_run_counts_each_row_once_whatever_became_of_it(): void
+    {
+        // The duplicate account again. It used to be counted as new and as
+        // failed both, so the summary said three new accounts and one failure
+        // for three read, of which two came across.
+        DB::connection('legacy')->table('user_accounts')->insert([
+            'id' => 32, 'first_name' => 'Ada', 'last_name' => 'Again',
+            'email_address' => 'ADA@lagosnights.test', 'phone_number' => null,
+            'password' => password_hash('other', PASSWORD_BCRYPT),
+            '_registered' => '2024-02-01 10:00:00',
+        ]);
+
+        $first = $this->import();
+
+        $this->assertSame(['new' => 2, 'failed' => 1], $first['plan']['user_accounts']);
+        $this->assertSame(3, $first['counts']['user_accounts']);
+        $this->assertSame(2, User::count());
+
+        // Tried again and failed again: a failure, not a row tried again.
+        $second = $this->import();
+
+        $this->assertSame(['across' => 2, 'failed' => 1], $second['plan']['user_accounts']);
+
+        // Fixed in the old app: it comes across, as a row tried again.
+        DB::connection('legacy')->table('user_accounts')->where('id', 32)->update(['email_address' => 'ada.again@example.test']);
+
+        $third = $this->import();
+
+        $this->assertSame(['across' => 2, 'retried' => 1], $third['plan']['user_accounts']);
+        $this->assertSame([], $third['failures']);
+
+        // Every row read is in exactly one column, in every table, on every
+        // run: `changed` is a part of `across`, and `gone` was not read.
+        foreach ([$first, $second, $third] as $run) {
+            foreach ($run['plan'] as $table => $outcomes) {
+                unset($outcomes['changed'], $outcomes['gone']);
+
+                $this->assertSame($run['counts'][$table] ?? 0, array_sum($outcomes), $table);
+            }
+        }
+    }
+
+    public function test_a_second_import_is_refused_while_one_is_running(): void
+    {
+        // Another run, as another session holding the lock: the legacy
+        // fixture's connection is a second session on this same database.
+        DB::connection('legacy')->select("select pg_advisory_lock(hashtext('myfiesta:legacy:import'))");
+
+        try {
+            $this->artisan('legacy:import')
+                ->expectsOutputToContain('Another legacy:import is running')
+                ->assertFailed();
+            $this->artisan('legacy:import', ['--dry-run' => true])->assertFailed();
+
+            $this->assertSame(0, Order::count());
+            $this->assertSame(0, DB::table('legacy_map')->count());
+        } finally {
+            DB::connection('legacy')->select("select pg_advisory_unlock(hashtext('myfiesta:legacy:import'))");
+        }
+
+        // The other run finished. This one goes ahead, and lets go when done.
+        $this->artisan('legacy:import')->assertSuccessful();
+
+        $this->assertSame(2, Order::count());
+        $this->assertTrue((bool) DB::connection('legacy')
+            ->selectOne("select pg_try_advisory_lock(hashtext('myfiesta:legacy:import')) as locked")->locked);
+        DB::connection('legacy')->select("select pg_advisory_unlock(hashtext('myfiesta:legacy:import'))");
+    }
+
+    public function test_a_row_the_old_app_changed_after_it_came_across_is_reported_and_not_overwritten(): void
+    {
+        $this->import();
+
+        // The parallel run's week: the paid sale refunded in the old app, the
+        // abandoned one paid after all, an event renamed, a ticket scanned.
+        $legacy = DB::connection('legacy');
+        $legacy->table('tickets_sales')->where('sales_id', 17)->update(['_payment_status' => 'refunded']);
+        $legacy->table('tickets_sales')->where('sales_id', 18)->update(['_payment_status' => 'paid']);
+        $legacy->table('events')->where('id', 176)->update(['_title' => 'Standard Night (moved)']);
+        $legacy->table('ticket_issued')->where('ticket_id', 901)->update(['is_checkedin' => true]);
+
+        $result = $this->import();
+
+        $this->assertSame(['17', '18'], $result['changed']['tickets_sales']);
+        $this->assertSame(['176'], $result['changed']['events']);
+        $this->assertSame(['901'], $result['changed']['ticket_issued']);
+        $this->assertArrayNotHasKey('user_accounts', $result['changed']);
+        $this->assertSame(['across' => 2, 'changed' => 2], $result['plan']['tickets_sales']);
+
+        // Each order beside what the old app says now, and what to do.
+        $orders = collect($result['orders'])->keyBy('legacy_id');
+        $this->assertSame(['paid', 'refunded'], [$orders['17']['here'], $orders['17']['there']]);
+        $this->assertStringContainsString('legacy:reconcile --apply', $orders['17']['advice']);
+        $this->assertSame(['cancelled', 'paid'], [$orders['18']['here'], $orders['18']['there']]);
+        $this->assertStringContainsString('paid_in_stripe_only', $orders['18']['advice']);
+        $this->assertSame(Order::where('status', 'paid')->sole()->reference, $orders['17']['reference']);
+
+        // Nothing here was touched.
+        $this->assertSame('paid', Order::where('buyer_email', 'buyer@example.test')->sole()->status);
+        $this->assertSame('Standard Night', Event::find(DB::table('legacy_map')->where('source_table', 'events')->where('source_id', '176')->value('target_id'))->title);
+        $this->assertSame('valid', Ticket::where('code', 'MFST-3H8N2VRD')->sole()->status);
+
+        // Said by the command too, with ids and statuses and nothing a buyer
+        // could be known by.
+        $this->artisan('legacy:import')
+            ->expectsOutputToContain('Nothing here was changed')
+            ->expectsOutputToContain('legacy:reconcile --apply records the refund Stripe made')
+            ->doesntExpectOutputToContain('buyer@example.test')
+            ->doesntExpectOutputToContain('MFST-3H8N2VRD')
+            ->assertSuccessful();
+
+        // A row that came across before fingerprints were kept has nothing to
+        // be compared with, and is not reported on a guess.
+        DB::table('legacy_map')->where('source_table', 'events')->update(['source_hash' => null]);
+        $this->assertArrayNotHasKey('events', $this->import()['changed']);
+    }
+
+    public function test_a_checkout_that_may_still_be_paid_is_left_for_a_later_run(): void
+    {
+        // Somebody at the old app's checkout as the run reads the table.
+        DB::connection('legacy')->table('tickets_sales')->insert([
+            'sales_id' => 20, '_event' => '176', '_ticket' => '58|1|5',
+            '_guest' => 'Now|Paying|paying@example.test', '_quantity' => '58|1|5',
+            '_cost' => 500, '_ticket_status' => 'PENDING', '_checkout' => 'cs_live_open20',
+            '_payment_status' => 'PENDING', '_pdate' => now()->subHour()->format('Y-m-d H:i:s'),
+        ]);
+
+        $result = $this->import();
+
+        $this->assertSame(['20'], $result['deferred']);
+        $this->assertSame(['new' => 2, 'deferred' => 1], $result['plan']['tickets_sales']);
+        $this->assertFalse(Order::where('gateway_reference', 'cs_live_open20')->exists());
+        $this->assertSame([], $result['failures']);
+
+        // Two days on, the old app knows. Paid, it comes across paid.
+        $this->travel(2)->days();
+        DB::connection('legacy')->table('tickets_sales')->where('sales_id', 20)->update(['_payment_status' => 'paid']);
+
+        $later = $this->import();
+
+        $this->assertSame([], $later['deferred']);
+        $this->assertSame('paid', Order::where('gateway_reference', 'cs_live_open20')->sole()->status);
+    }
+
+    public function test_once_the_old_app_is_frozen_an_open_checkout_comes_across_as_it_stands(): void
+    {
+        // The same basket, read by the last run after the freeze. The old app
+        // will never learn whether it was paid, so waiting gains nothing and
+        // keeps it out of legacy:reconcile, which is what would find out.
+        DB::connection('legacy')->table('tickets_sales')->insert([
+            'sales_id' => 20, '_event' => '176', '_ticket' => '58|1|5',
+            '_guest' => 'Now|Paying|paying@example.test', '_quantity' => '58|1|5',
+            '_cost' => 500, '_ticket_status' => 'PENDING', '_checkout' => 'cs_live_open20',
+            '_payment_status' => 'PENDING', '_pdate' => now()->subHour()->format('Y-m-d H:i:s'),
+        ]);
+
+        $map = new LegacyMap;
+        $map->warm();
+        $result = (new LegacyImporter($map, frozen: true))->run();
+
+        $this->assertSame([], $result['deferred']);
+        $this->assertSame(['new' => 3], $result['plan']['tickets_sales']);
+        $this->assertSame('cancelled', Order::where('gateway_reference', 'cs_live_open20')->sole()->status);
+
+        $this->artisan('legacy:import', ['--frozen' => true])
+            ->doesntExpectOutputToContain('left for a later run')
+            ->assertSuccessful();
+    }
+
+    public function test_a_row_deleted_in_the_old_app_is_reported_and_kept(): void
+    {
+        $this->import();
+
+        DB::connection('legacy')->table('ticket_issued')->where('ticket_id', 901)->delete();
+
+        $result = $this->import();
+
+        $this->assertSame(['ticket_issued' => ['901']], $result['gone']);
+        $this->assertSame(1, $result['plan']['ticket_issued']['gone']);
+        $this->assertTrue(Ticket::where('code', 'MFST-3H8N2VRD')->exists(), 'Somebody may be holding it.');
+    }
+
     /**
      * @return list<int>
      */

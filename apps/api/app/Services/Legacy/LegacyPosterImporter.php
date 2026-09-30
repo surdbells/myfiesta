@@ -36,6 +36,20 @@ class LegacyPosterImporter
     ) {}
 
     /**
+     * How many events a run would look at for a poster, for a dry run.
+     *
+     * Counted without reading a single poster: that is the quarter of a
+     * gigabyte a dry run is there to avoid. Some of them hold nothing, which
+     * only reading them would tell.
+     */
+    public function toMove(): int
+    {
+        return DB::connection('legacy')->table('events')->orderBy('id')->pluck('id')
+            ->filter(fn ($id) => $this->map->find('events', $id) && ! $this->map->find('event_poster', $id))
+            ->count();
+    }
+
+    /**
      * @return array{moved: int, empty: int, failed: int, bytes: int}
      */
     public function run(?int $limit = null): array

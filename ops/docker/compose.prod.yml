@@ -17,7 +17,14 @@
 #
 # Postgres and Redis are deliberately not here. A managed database with
 # backups somebody else tests is worth more than a container on the same host
-# as the application; point DB_HOST and REDIS_HOST at it.
+# as the application; point DB_HOST and REDIS_HOST at it. Where there is none
+# to point at — one VPS, behind aaPanel's nginx — compose.contabo.yml adds
+# both beside the application (docs/RUNBOOK-CONTABO-AAPANEL.md).
+#
+# Every port is published on this host's loopback unless told otherwise:
+# Docker's published ports go around the host's firewall (ufw included), so a
+# port on 0.0.0.0 is open to the internet whatever the firewall says. Whatever
+# terminates TLS on this host reaches them on 127.0.0.1.
 
 name: myfiesta
 
@@ -185,8 +192,12 @@ services:
       # Where browser errors are reported. Empty reports nothing.
       SENTRY_DSN: ${SITE_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    # Loopback, like the API: the TLS in front of it is on this host. It used
+    # to be every interface, which put an http copy of the site on port 4000
+    # of the public address, past the firewall. SITE_BIND=0.0.0.0 only for a
+    # load balancer on another machine.
     ports:
-      - "${SITE_PORT:-4000}:4000"
+      - "${SITE_BIND:-127.0.0.1}:${SITE_PORT:-4000}:4000"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/robots.txt || exit 1"]
       interval: 30s
@@ -212,8 +223,10 @@ services:
       # written into the policy. Empty reports nothing.
       SENTRY_DSN: ${CONSOLE_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    # Loopback for the same reason as the site. CONSOLE_BIND=0.0.0.0 only for
+    # a load balancer on another machine.
     ports:
-      - "${CONSOLE_PORT:-4310}:80"
+      - "${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-4310}:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
       interval: 30s

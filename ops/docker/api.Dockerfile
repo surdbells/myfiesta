@@ -116,3 +116,29 @@ EXPOSE 9000
 
 ENTRYPOINT ["myfiesta-entrypoint"]
 CMD ["php-fpm"]
+
+# --- the move from the old platform, and nothing else --------------------------
+#
+# legacy:import reads the old app's MySQL, and the image above has no MySQL
+# driver on purpose: it serves the internet, and after the cutover a driver
+# for a database nothing here uses is only something more to patch. So the
+# driver is added in an image of its own, built only when asked for
+# (`--target legacy`; the `legacy` service in compose.contabo.yml) and run
+# only for the import (docs/CUTOVER.md). Everything else is the release's own
+# image, so the import runs the same code and the same schema as the release.
+FROM runtime AS legacy
+
+USER root
+
+RUN apk add --no-cache --virtual .pdo-mysql-build $PHPIZE_DEPS \
+    && docker-php-ext-install -j"$(nproc)" pdo_mysql \
+    && apk del .pdo-mysql-build
+
+USER www-data
+
+# --- the default: the image that ships -----------------------------------------
+#
+# Last, because a build with no --target builds the last stage, and that has
+# to be the image above rather than the one with the MySQL driver. It adds
+# nothing to it.
+FROM runtime

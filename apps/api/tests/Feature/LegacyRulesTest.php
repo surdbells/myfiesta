@@ -168,4 +168,62 @@ class LegacyRulesTest extends TestCase
             LegacyRules::failureReason(new \RuntimeException("server closed the connection unexpectedly\nsecond line")),
         );
     }
+
+    // --- a row that changed after it came across ------------------------------
+
+    public function test_a_fingerprint_moves_with_what_was_read_and_nothing_else(): void
+    {
+        $columns = ['sales_id', '_payment_status', '_pdate'];
+        $row = (object) ['sales_id' => 17, '_payment_status' => 'paid', '_pdate' => '2024-05-11 18:00:00', '_ticket_status' => 'PAID'];
+
+        $then = LegacyRules::fingerprint($row, $columns);
+
+        // The same row as another driver hands it over: the id a string, the
+        // columns in another order. Not a change.
+        $this->assertSame($then, LegacyRules::fingerprint(
+            ['_pdate' => '2024-05-11 18:00:00', '_payment_status' => 'paid', 'sales_id' => '17'],
+            $columns,
+        ));
+
+        // A column the import does not read is not a change to anything that
+        // came across. One it does read is.
+        $this->assertSame($then, LegacyRules::fingerprint((object) [...(array) $row, '_ticket_status' => 'REFUNDED'], $columns));
+        $this->assertNotSame($then, LegacyRules::fingerprint((object) [...(array) $row, '_payment_status' => 'refunded'], $columns));
+        $this->assertNotSame($then, LegacyRules::fingerprint((object) [...(array) $row, '_pdate' => null], $columns));
+
+        // A boolean as MySQL hands it over (1) and as Postgres does (true).
+        $this->assertSame(
+            LegacyRules::fingerprint(['is_checkedin' => 1], ['is_checkedin']),
+            LegacyRules::fingerprint(['is_checkedin' => true], ['is_checkedin']),
+        );
+
+        // A digest, and nothing of the row in it.
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $then);
+    }
+
+    public function test_a_checkout_may_still_be_paid_only_while_it_is_young_and_unpaid(): void
+    {
+        $now = CarbonImmutable::parse('2026-09-30 12:00:00', 'UTC');
+
+        $this->assertTrue(LegacyRules::checkoutMayStillBePaid('PENDING', '2026-09-30 11:00:00', $now));
+        // Read as UTC while perhaps written on Toronto's clock: still young.
+        $this->assertTrue(LegacyRules::checkoutMayStillBePaid('AWAITING', '2026-09-29 07:00:00', $now));
+
+        // Decided: paid or refunded, or older than any checkout stays open.
+        $this->assertFalse(LegacyRules::checkoutMayStillBePaid('paid', '2026-09-30 11:00:00', $now));
+        $this->assertFalse(LegacyRules::checkoutMayStillBePaid('refunded', '2026-09-30 11:00:00', $now));
+        $this->assertFalse(LegacyRules::checkoutMayStillBePaid('PENDING', '2026-09-28 11:00:00', $now));
+
+        // No date, or one that cannot be read: nobody can say, so not held.
+        $this->assertFalse(LegacyRules::checkoutMayStillBePaid('PENDING', null, $now));
+        $this->assertFalse(LegacyRules::checkoutMayStillBePaid('PENDING', 'not a date', $now));
+    }
+
+    public function test_a_changed_order_says_what_to_do_by_which_way_it_moved(): void
+    {
+        $this->assertStringContainsString('legacy:reconcile --apply', LegacyRules::changedOrderAdvice('paid', 'refunded'));
+        $this->assertStringContainsString('paid_in_stripe_only', LegacyRules::changedOrderAdvice('cancelled', 'paid'));
+        $this->assertStringContainsString('check the payment', LegacyRules::changedOrderAdvice('paid', 'cancelled'));
+        $this->assertStringContainsString('status agrees', LegacyRules::changedOrderAdvice('refunded', 'refunded'));
+    }
 }

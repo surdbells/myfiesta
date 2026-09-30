@@ -158,10 +158,17 @@ All in [CUTOVER.md](CUTOVER.md):
   the import has to be redone before anything else.
 - A manual comparison of the payouts the old platform already made against the
   imported settlements, before the first payout here.
+- On one server with aaPanel: the old database's read-only account, and whether
+  to import in one go or with a parallel run
+  ([RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md#12-moving-off-the-old-app-on-this-server)).
 
 ## Running it
 
-All in [OPERATIONS.md](OPERATIONS.md):
+On a Contabo VPS with aaPanel, putting it up in the first place — the server,
+the panel's security, Docker, the sites, the first deploy — is
+[RUNBOOK-CONTABO-AAPANEL.md](RUNBOOK-CONTABO-AAPANEL.md), and it names which of
+the values below go where. Keeping it running is all in
+[OPERATIONS.md](OPERATIONS.md):
 
 - Sentry projects and their DSNs (`SENTRY_LARAVEL_DSN`, `SITE_SENTRY_DSN`,
   `CONSOLE_SENTRY_DSN`, `MOBILE_SENTRY_DSN`), with alert rules, including a

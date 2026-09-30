@@ -226,15 +226,22 @@ jobs:
       # Every variable compose.prod.yml refuses to start without, given a
       # dummy, with the example standing in for .env.production so a line in
       # it that compose cannot read fails here as well. Nothing in either file
-      # is a secret, and nothing here needs one.
+      # is a secret, and nothing here needs one. Then the one-box override
+      # (compose.contabo.yml) on top of it, the import's profile included,
+      # with dummies for the database and Redis passwords it will not start
+      # without.
       - name: compose.prod.yml
         run: |
           cp .env.production.example .env.production
           printf '%s\n' TAG=ci TRUSTED_PROXIES=10.0.0.1 SITE_HOSTS=example.test \
             API_BASE_URL=https://api.example.test CONSOLE_URL=https://console.example.test \
-            PUBLIC_URL=https://example.test > "$RUNNER_TEMP/ci.env"
+            PUBLIC_URL=https://example.test DB_USERNAME=ci DB_PASSWORD=ci REDIS_PASSWORD=ci \
+            > "$RUNNER_TEMP/ci.env"
           docker compose --env-file .env.production --env-file "$RUNNER_TEMP/ci.env" \
             -f ops/docker/compose.prod.yml config --quiet
+          docker compose --env-file .env.production --env-file "$RUNNER_TEMP/ci.env" \
+            -f ops/docker/compose.prod.yml -f ops/docker/compose.contabo.yml \
+            --profile legacy config --quiet
       # Each image's layers are kept in the Actions cache under its own name,
       # so the three a change did not touch come back from the cache rather
       # than being built again.
@@ -248,6 +255,20 @@ jobs:
           load: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
+      # The same image with the MySQL driver legacy:import needs, which is
+      # built only on the day of a cutover — the worst day to find it broken.
+      - name: api (legacy import)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/api.Dockerfile
+          target: legacy
+          push: false
+          load: false
+          cache-from: |
+            type=gha,scope=api
+            type=gha,scope=api-legacy
+          cache-to: type=gha,scope=api-legacy,mode=max
       - name: api-web
         uses: docker/build-push-action@v7
         with:
