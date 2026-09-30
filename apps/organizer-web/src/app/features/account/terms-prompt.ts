@@ -1,5 +1,8 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { ToastStore, UiAlert, UiButton } from '@myfiesta/ui';
+// Drawn by the shell: the kit a file at a time, as app.ts explains.
+import { UiAlert } from '@myfiesta/ui/alert';
+import { UiButton } from '@myfiesta/ui/button';
+import { ToastStore } from '@myfiesta/ui/toast';
 import { Api } from '../../core/api';
 import type { TermsStanding } from '../../core/api.types';
 import { messageFor } from '../../core/errors';

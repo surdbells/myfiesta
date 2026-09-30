@@ -1,5 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ConfirmDialog, UiIcon, UiSelect, UiThemeToggle, UiToasts, type LucideIconData, type SelectOption } from '@myfiesta/ui';
+// The shell takes the kit a file at a time, never through @myfiesta/ui:
+// whatever it imports is in the first download, and the index names the
+// whole kit (packages/ui/package.json).
+import { ConfirmDialog } from '@myfiesta/ui/confirm';
+import { UiIcon, type LucideIconData } from '@myfiesta/ui/icon';
+import { UiThemeToggle } from '@myfiesta/ui/theme';
+import { UiToasts } from '@myfiesta/ui/toast';
+// Used only inside the switcher's @defer block, so it loads after the shell:
+// the dropdown brings all of @angular/forms with it, and most people belong to
+// one organization and never see it. Name UiSelect anywhere else in this file
+// and the compiler loads it up front again.
+import { UiSelect, type SelectOption } from '@myfiesta/ui/select';
 import { CalendarDays, LayoutDashboard, LogOut, Mail, Menu, Plug, PanelLeftClose, PanelLeftOpen, ReceiptText, Store, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';

@@ -452,6 +452,76 @@ these are worth doing once the projects exist.
 `database-backup` cron monitor's alert (it is created by the first run); and
 a spike alert on the API project.
 
+## Time zones
+
+An event's start is stored in UTC with the event's zone, and turned into a
+clock time in four places: the API's PHP (the admin, emails, tickets), the
+database (which day an event or an order falls on), the site's Node (every
+page it renders, and the preview a shared link unfurls into), and the
+visitor's browser. Each carries its own copy of IANA's time-zone database, in
+the edition that was current when it was released. When a province changes
+its clocks, a copy from before the change and one from after it put the same
+night an hour apart. In 2026 British Columbia
+stopped falling back, and a Vancouver night after 1 November came out at
+8 p.m. from PHP (2026a) and 9 p.m. from the site's server (2026b). The code
+was right both times; the copies disagreed.
+
+So the images read one edition, the one named in `ops/docker/tzdata-edition`,
+whichever PHP or Node they run:
+
+- **API** (and the worker and the scheduler, which run its image): the
+  timezonedb extension for that edition, in place of the copy compiled into
+  PHP.
+- **Site**: ICU's zone files for that edition, in `ICU_TIMEZONE_FILES_DIR`,
+  which Node reads in place of its own copy. Alpine's `tzdata` package does
+  nothing here: Node never reads it. The files come from one commit of ICU's
+  icu-data repository and must match the hashes in `ops/docker/icu-timezones`.
+- **Console**: nothing. Its image works out no times; the browser does.
+
+Each build stops if its runtime then reads any other edition.
+
+**The database is the fourth copy, and no image sets it.** Postgres works out
+local days itself: the site's today, this weekend, later and this month, the
+sales report's days, and the dashboards' days, weeks and months. An event it
+puts on the other side of midnight is on the wrong shelf, and a night's orders
+are counted on the wrong day. A managed Postgres takes its copy from the
+provider's minor release. The pgdg packages read the host's `tzdata`. Postgres
+cannot say which edition it has, so the API's check asks it for the same
+Vancouver night and fails if its answer differs from PHP's. One night only
+tells apart editions that differ on it; the provider's release notes say
+which edition a minor release carries. If the answers differ, the fix is on
+the database side: the provider's newest minor release, or the host's `tzdata`
+package, then a restart.
+
+**After a deploy**, ask both, from the release's checkout. They name the same
+edition, the one in its `ops/docker/tzdata-edition`, and print the same
+Vancouver line. The API's check adds the database's line:
+
+```sh
+edition=$(grep -v '^#' ops/docker/tzdata-edition | tr -d '[:space:]')
+fiesta exec api php artisan app:time-zones --expect="$edition"
+fiesta exec site node tz-version.mjs "$edition"
+```
+
+Either fails on any other edition. A mismatch means a container is running
+an image built before this, or from another release: check `.env.release`
+and `docker compose ps`. The API's check also fails when the database puts
+the night elsewhere or does not answer.
+
+**When IANA publishes an edition** (the tz-announce list), change the file
+once PECL's timezonedb and ICU's icu-data have both published it. PECL numbers
+the editions, so 2026e is timezonedb 2026.5. In `ops/docker/icu-timezones`,
+name the icu-data commit that added the edition's folder and the four files'
+new hashes (the file says where they come from). Then build and deploy as
+usual, and check the database's line. Until PECL and ICU both have it, or
+while the hashes are the old edition's, the build stops. That is better than
+the API and the site disagreeing.
+
+Browsers carry their own copies and update with the browser. The site draws a
+page on the server and the browser then works the same times out again, so a
+visitor on an out-of-date browser sees the time their browser works out.
+Nothing on the server can change that.
+
 ## Deploys and rolling back
 
 ### Before a deploy
@@ -497,7 +567,9 @@ fiesta exec worker php artisan queue:restart
 ```
 
 After it: `/api/health/ready` is 200, Sentry shows the new release with no new
-issues, and one real page on the site and the console loads.
+issues, one real page on the site and the console loads, and the API and the
+site read the same time-zone edition, with the database agreeing
+([Time zones](#time-zones)).
 
 ### Rolling back
 

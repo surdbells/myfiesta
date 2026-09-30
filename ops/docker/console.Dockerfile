@@ -2,6 +2,12 @@
 #
 # No server rendering, because nothing here is ever shared or crawled — every
 # page needs a session and none of them has a link anybody else follows.
+#
+# And so no time-zone data, unlike the site's image and the API's: nothing in
+# this image works out a time. The build prerenders no page, and nginx only
+# serves files. Every time the console shows is worked out in the browser,
+# from the browser's own copy of the zone rules (docs/OPERATIONS.md, "Time
+# zones").
 FROM node:22-alpine AS build
 
 WORKDIR /repo

@@ -1,7 +1,12 @@
 import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ConfirmDialog, ToastStore, UiAlert, UiButton, UiModal } from '@myfiesta/ui';
+// Drawn by the shell: the kit a file at a time, as app.ts explains.
+import { UiAlert } from '@myfiesta/ui/alert';
+import { UiButton } from '@myfiesta/ui/button';
+import { ConfirmDialog } from '@myfiesta/ui/confirm';
+import { UiModal } from '@myfiesta/ui/modal';
+import { ToastStore } from '@myfiesta/ui/toast';
 import { Api } from '../../core/api';
 import { EmailVerification } from '../../core/email-verification';
 import { messageFor } from '../../core/errors';

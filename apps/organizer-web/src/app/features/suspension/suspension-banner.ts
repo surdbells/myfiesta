@@ -1,6 +1,7 @@
 import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
-import { UiAlert } from '@myfiesta/ui';
+// Drawn by the shell: the kit a file at a time, as app.ts explains.
+import { UiAlert } from '@myfiesta/ui/alert';
 import { Api } from '../../core/api';
 import type { OrganizationStanding } from '../../core/api.types';
 import { SessionStore } from '../../core/session';

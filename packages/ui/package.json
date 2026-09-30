@@ -6,7 +6,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./styles/base.css": "./styles/base.css"
+    "./styles/base.css": "./styles/base.css",
+    "./*": "./src/*.ts"
   },
-  "_comment": "No dependencies of its own on purpose. This package is compiled as source by whichever app imports it, against that app's Angular. Declaring peers here made npm resolve a second copy at the root, and two copies of @angular/core in one graph is NG0203 on every component."
+  "sideEffects": false,
+  "_comment": "No dependencies of its own on purpose. This package is compiled as source by whichever app imports it, against that app's Angular. Declaring peers here made npm resolve a second copy at the root, and two copies of @angular/core in one graph is NG0203 on every component.",
+  "_sideEffects": "No module here does anything when it is loaded, so the bundler may leave out any file nothing uses. The flag stays false only while that holds: a module that must run on load (a global registration, a CSS import from TypeScript) would be left out and never run. base.css is reached through each app's styles.css, not from here.",
+  "_files": "Each file is importable on its own, as @myfiesta/ui/icon, @myfiesta/ui/confirm and so on, for the app shells. The bundler files code by the module it lives in, and a shell importing anything through src/index.ts put every file the index names into the first download, next to the shell: the table, saved views, the filters, the date picker, and all of @angular/forms behind the dropdown. That was 50 kB of the console's first load and 70 of the site's. Screens that load with their route keep importing @myfiesta/ui."
 }

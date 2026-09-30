@@ -8,6 +8,9 @@
     // stale-artifact failure mode.
     "paths": {
       "@myfiesta/ui": ["../../packages/ui/src/index.ts"],
+      // One file of the kit, for the shell: through the index, the whole kit
+      // comes with the first download (packages/ui/package.json says why).
+      "@myfiesta/ui/*": ["../../packages/ui/src/*"],
       // How money is written, shared with the console and the phone.
       "@myfiesta/shared/*": ["../../packages/shared/src/*"]
     },

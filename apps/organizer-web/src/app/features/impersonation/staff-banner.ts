@@ -1,6 +1,8 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { ConfirmDialog, UiIcon } from '@myfiesta/ui';
+// Drawn by the shell: the kit a file at a time, as app.ts explains.
+import { ConfirmDialog } from '@myfiesta/ui/confirm';
+import { UiIcon } from '@myfiesta/ui/icon';
 import { Eye } from 'lucide-angular';
 import { Api } from '../../core/api';
 import { SessionStore } from '../../core/session';

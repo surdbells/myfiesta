@@ -33,6 +33,35 @@ ENV SENTRY_RELEASE=${RELEASE}
 
 WORKDIR /app
 
+# The time-zone rules. Every event time on the site is worked out here, by
+# ICU inside Node, from ICU's own copy of IANA's database: not Alpine's tzdata
+# package, which Node never reads, so installing it would change nothing. That
+# copy is whatever edition was current when this Node was released, and the
+# API's PHP reads another. They disagreed about a Vancouver night once British
+# Columbia stopped changing its clocks. ICU reads newer zone files from
+# ICU_TIMEZONE_FILES_DIR in place of its own, so these are ICU's files for the
+# edition in ops/docker/tzdata-edition, the one the API reads too
+# (api.Dockerfile). They come from the icu-data commit named in
+# ops/docker/icu-timezones and must match the hashes there, so every build of
+# a release gets the same bytes. The build stops unless Node then reports that
+# edition: ICU falls back to its own copy, silently, when the files are not
+# usable. The carriage returns go because a checkout on Windows writes them,
+# and one left on the commit or a file name is a URL or a name that is wrong.
+ENV ICU_TIMEZONE_FILES_DIR=/usr/local/share/icu/timezones
+COPY ops/docker/tzdata-edition ops/docker/icu-timezones ops/docker/tz-version.mjs ./
+RUN edition=$(grep -v '^#' tzdata-edition | tr -d '[:space:]') \
+    && sed -i 's/\r$//' icu-timezones \
+    && commit=$(awk '$1 == "commit" { print $2 }' icu-timezones) \
+    && mkdir -p "$ICU_TIMEZONE_FILES_DIR" \
+    && for file in zoneinfo64.res timezoneTypes.res metaZones.res windowsZones.res; do \
+         wget -q -O "$ICU_TIMEZONE_FILES_DIR/$file" \
+           "https://raw.githubusercontent.com/unicode-org/icu-data/$commit/tzdata/icunew/$edition/44/le/$file" \
+         && want=$(awk -v file="$file" '$2 == file { print $1 }' icu-timezones) \
+         && echo "$want  $ICU_TIMEZONE_FILES_DIR/$file" | sha256sum -c - \
+         || { echo "$file for $edition, icu-data $commit: not the file ops/docker/icu-timezones names" >&2; exit 1; }; \
+       done \
+    && node tz-version.mjs "$edition"
+
 COPY --from=build /repo/apps/web/dist/web ./
 
 # Nothing here writes to disk, and nothing should be able to.

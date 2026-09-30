@@ -7,6 +7,20 @@ and type come from `packages/tokens` and nowhere else.
 
 Its specs run with the console's: `apps/organizer-web/src/app/core/ui-*.spec.ts`.
 
+## Importing
+
+Screens import from `@myfiesta/ui`. Each app's shell — `app.ts`, and
+anything it draws on every page — imports a file at a time instead:
+`@myfiesta/ui/confirm`, `@myfiesta/ui/icon`, `@myfiesta/ui/theme`.
+
+The bundler puts code in a download by the file it lives in, so one shell
+import through the index put every file the index names into the first
+download: the table, the filters, saved views, the date picker, and all of
+Angular's forms behind the dropdown. That was 50 kB of the console's first
+load and 70 of the site's. `first-load.spec.ts` in each app fails if it comes
+back. A dropdown the shell only sometimes shows (the console's organization
+switcher) goes in an `@defer` block, so its forms code waits for it.
+
 ## Asking before an action
 
 Every action that changes something asks first, through one dialog: never

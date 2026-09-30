@@ -68,13 +68,26 @@
         @if (session.organizations().length > 1) {
           <div class="switcher grid gap-1 px-4 pb-4">
             <label class="switcher__label text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle" for="org">Organization</label>
-            <ui-select
-              controlId="org"
-              ariaLabel="Organization"
-              [options]="organizationOptions()"
-              [value]="session.current()?.id ?? null"
-              (valueChange)="switchOrganization($event)"
-            />
+            <!--
+              Fetched once the shell is drawn rather than with it: the dropdown
+              carries all of Angular's forms code, and a first screen that
+              waits for it is slower for everybody with one organization. It
+              arrives with the first screen's own code, so the wait is one
+              that happens anyway. Until then, the same box with the same name.
+            -->
+            @defer (on immediate) {
+              <ui-select
+                controlId="org"
+                ariaLabel="Organization"
+                [options]="organizationOptions()"
+                [value]="session.current()?.id ?? null"
+                (valueChange)="switchOrganization($event)"
+              />
+            } @placeholder {
+              <p class="switcher__pending m-0 flex h-11 min-w-0 items-center rounded-(--radius-control) border border-field-border bg-surface-raised px-3 text-sm text-text">
+                <span class="truncate">{{ session.current()?.name }}</span>
+              </p>
+            }
           </div>
         } @else if (session.current(); as org) {
           <div class="switcher grid gap-1 px-4 pb-4">

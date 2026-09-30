@@ -1,0 +1,17 @@
+# ICU's zone files for the edition in tzdata-edition, as web.Dockerfile
+# downloads them: from one commit of unicode-org/icu-data, not from its main
+# branch, and each checked against its hash here before Node reads it.
+#
+# A branch moves. Fetched from main, the same release built twice could get
+# two sets of files, and a build cache would keep whichever it saw first. These
+# are binary files parsed inside the server that renders every page, so they
+# are the ones named here or the build stops.
+#
+# Moving the edition: the commit that added its folder, tzdata/icunew/<edition>
+# (its history on GitHub), and the sha256 of each of the four files in that
+# folder's 44/le. Until all of these match the edition, the build stops.
+commit c5aeb38e05607d094b783f0665bd66219b038ca9
+1407004c74321d5d7c5089f75a63bf70b7fde0da7df96a14dd514716193a12dc  zoneinfo64.res
+5e77ce5afb7374a36cbe3be197d0a6deaa919e6f672c2a372f7a9d91b7f8534f  timezoneTypes.res
+5b484c7f02c99d5164208ce84e18fba67c6314d77cf60503e2b19f708b66c6da  metaZones.res
+b8c3a7adb94fd659f8203ee4af4dc72a4e6b14566baac1855c493096f337184b  windowsZones.res

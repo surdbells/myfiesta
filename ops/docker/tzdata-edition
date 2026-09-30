@@ -1,0 +1,12 @@
+# The edition of IANA's time-zone database every image reads: the API's PHP,
+# through the timezonedb extension (api.Dockerfile), and the site's Node,
+# through ICU's zone files (web.Dockerfile). Read from here by both, so they
+# cannot drift apart. Two editions put one night at two different times.
+#
+# Move it only to an edition both have published, or the build stops:
+#   PHP  https://pecl.php.net/package/timezonedb — numbered, 2026d is 2026.4
+#   Node https://github.com/unicode-org/icu-data/tree/main/tzdata/icunew
+# and move icu-timezones, beside this, with it: the icu-data commit and the
+# hashes of that edition's files. docs/OPERATIONS.md, "Time zones", says how
+# to check a deploy.
+2026d

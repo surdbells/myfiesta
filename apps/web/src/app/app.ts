@@ -1,7 +1,11 @@
 import { Component, DestroyRef, PLATFORM_ID, afterNextRender, inject, signal } from '@angular/core';
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { UiIcon, UiThemeToggle } from '@myfiesta/ui';
+// A file at a time, never through @myfiesta/ui: whatever the shell imports is
+// in every page's first download, and the index names the whole kit — the
+// dropdown and all of Angular's forms with it (packages/ui/package.json).
+import { UiIcon } from '@myfiesta/ui/icon';
+import { UiThemeToggle } from '@myfiesta/ui/theme';
 import { Menu, X } from 'lucide-angular';
 import { CONSOLE_URL } from './core/console-url';
 import { EmbedMode } from './core/embed';

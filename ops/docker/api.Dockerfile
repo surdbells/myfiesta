@@ -22,6 +22,26 @@ RUN apk add --no-cache \
     && docker-php-ext-enable redis \
     && apk del $PHPIZE_DEPS
 
+# The time-zone rules. PHP compiles in the edition of IANA's database that was
+# current when that PHP was released, and it is not the site's: British
+# Columbia stopped changing its clocks in 2026, and a PHP carrying the edition
+# from before that put a Vancouver night after 1 November at 8 p.m. while the
+# site's server said 9. The timezonedb extension replaces the compiled-in copy
+# with the edition in ops/docker/tzdata-edition, the one the site's Node reads
+# too, whatever PHP release this is. PECL numbers the editions — 2026d is
+# timezonedb 2026.4 — and the build stops if PHP then reads anything else.
+COPY ops/docker/tzdata-edition /usr/local/share/myfiesta/tzdata-edition
+RUN edition=$(grep -v '^#' /usr/local/share/myfiesta/tzdata-edition | tr -d '[:space:]') \
+    && release="${edition%?}.$(( $(printf '%d' "'${edition#????}") - 96 ))" \
+    && apk add --no-cache --virtual .timezonedb-build $PHPIZE_DEPS \
+    && pecl install "timezonedb-$release" \
+    && docker-php-ext-enable timezonedb \
+    && apk del .timezonedb-build \
+    && reading=$(php -r 'echo timezone_version_get();') \
+    && if [ "$reading" != "$release" ]; then \
+         echo "PHP reads time zones $reading, not $release ($edition)" >&2; exit 1; \
+       fi
+
 COPY ops/docker/php.ini /usr/local/etc/php/conf.d/myfiesta.ini
 
 # pg_dump and pg_restore, for the nightly backup (backup:run) and the restore

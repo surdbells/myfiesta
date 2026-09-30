@@ -11,7 +11,10 @@
       "@myfiesta/api-types": ["../../packages/api-types/src/index.ts"],
       "@myfiesta/shared": ["../../packages/shared/src/index.ts"],
       "@myfiesta/shared/*": ["../../packages/shared/src/*"],
-      "@myfiesta/ui": ["../../packages/ui/src/index.ts"]
+      "@myfiesta/ui": ["../../packages/ui/src/index.ts"],
+      // One file of the kit, for the shell: through the index, the whole kit
+      // comes with the first download (packages/ui/package.json says why).
+      "@myfiesta/ui/*": ["../../packages/ui/src/*"]
     },
     "strict": true,
     "noImplicitOverride": true,

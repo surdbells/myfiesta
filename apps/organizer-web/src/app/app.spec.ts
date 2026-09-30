@@ -1,6 +1,6 @@
-import { TestBed } from '@angular/core/testing';
+import { DeferBlockState, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
 import { SessionStore } from './core/session';
@@ -79,6 +79,59 @@ describe('App shell', () => {
     // Shown deliberately: a permission error makes far more sense when the
     // role is already on screen.
     expect(side.textContent).toContain('finance');
+  });
+
+  it('lets somebody in several organizations switch, once the dropdown has loaded', async () => {
+    const one = sessionWith('owner');
+    const session = TestBed.inject(SessionStore);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    session.start({
+      ...one,
+      organizations: [
+        ...one.organizations,
+        { id: 'org-2', name: 'Abuja Live', slug: 'abuja-live', role: 'manager', permissions: PERMISSIONS.manager },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const side = fixture.nativeElement.querySelector('.side') as HTMLElement;
+
+    // The dropdown is fetched after the shell draws, with all of Angular's
+    // forms behind it. Until it arrives, the name sits where it will be.
+    // (Whether it really is fetched later is first-load.spec's to say: a
+    // dropdown loaded up front still shows this for a moment.)
+    expect(side.querySelector('.switcher__pending')?.textContent).toContain('Lagos Nights');
+
+    const [switcher] = await fixture.getDeferBlocks();
+    await switcher.render(DeferBlockState.Complete);
+
+    const control = side.querySelector<HTMLButtonElement>('ui-select [role="combobox"]')!;
+
+    // Still reached by its label, and still showing where they are.
+    expect(control.id).toBe('org');
+    expect(control.textContent).toContain('Lagos Nights');
+    expect(side.querySelector('.switcher__pending')).toBeNull();
+
+    control.click();
+    fixture.detectChanges();
+
+    const abuja = [...side.querySelectorAll<HTMLElement>('[role=option]')].find((option) =>
+      option.textContent?.includes('Abuja Live'),
+    );
+
+    expect(abuja).toBeDefined();
+
+    abuja!.click();
+    fixture.detectChanges();
+
+    // Now working as Abuja Live, and back at the top: every screen below is
+    // one organization's, and Lagos Nights' event would be the wrong one.
+    expect(session.current()?.id).toBe('org-2');
+    expect(navigate).toHaveBeenCalledWith(['/']);
+    expect(control.textContent).toContain('Abuja Live');
   });
 
   it('only offers sections that have a route behind them', () => {
