@@ -4,8 +4,8 @@ import type { Availability } from '@myfiesta/shared/availability';
 
 /**
  * Another date of a repeating night, under "More dates" on its event page
- * (`other_dates`, null for a night that does not repeat). Until the feature
- * fills it, the API always sends null.
+ * (`other_dates`, null for a night that does not repeat): on sale, still to
+ * come, soonest first, at most eight.
  */
 export interface OtherDate {
   slug: string;

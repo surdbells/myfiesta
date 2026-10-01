@@ -54,16 +54,25 @@ final class ReviewActions
             ->requiresConfirmation()
             ->modalIcon(Heroicon::OutlinedCheckCircle)
             ->modalHeading(fn (Event $record) => 'Approve '.$record->title.'?')
-            ->modalDescription(fn (Event $record) => 'It goes on sale straight away, at '
-                .rtrim((string) config('app.public_url'), '/').'/'.$record->slug.'. '
-                .($record->organization->name ?? 'The organizer').' is emailed that it is live, and people who follow them hear about it the first time it goes on sale.')
-            ->modalSubmitActionLabel('Approve and put on sale')
+            // The organizer may have set a time for it to go on sale
+            // (events:go-live): approved before then, it waits for it.
+            ->modalDescription(fn (Event $record) => $record->publish_at?->isFuture()
+                ? 'It goes on sale by itself at the time the organizer set, '
+                    .$record->publish_at->timezone($record->timezone)->format('l j F Y, g:ia T').', at '
+                    .rtrim((string) config('app.public_url'), '/').'/'.$record->slug.'. '
+                    .($record->organization->name ?? 'The organizer').' is emailed that it is approved, and people who follow them hear about it when it goes on sale.'
+                : 'It goes on sale straight away, at '
+                    .rtrim((string) config('app.public_url'), '/').'/'.$record->slug.'. '
+                    .($record->organization->name ?? 'The organizer').' is emailed that it is live, and people who follow them hear about it the first time it goes on sale.')
+            ->modalSubmitActionLabel(fn (Event $record) => $record->publish_at?->isFuture() ? 'Approve' : 'Approve and put on sale')
             ->action(fn (Event $record, Action $action) => Outcome::run(
                 $action,
                 'Approved',
-                fn (User $staff) => app(EventReviews::class)->approve($record, $staff, $seen() ?? '') === 'published'
-                    ? 'It is on sale, and the organizer has been emailed.'
-                    : 'The organization is suspended, so it goes on sale when that is lifted. The organizer has been emailed.',
+                fn (User $staff) => match (true) {
+                    app(EventReviews::class)->approve($record, $staff, $seen() ?? '') === 'published' => 'It is on sale, and the organizer has been emailed.',
+                    $record->publish_at?->isFuture() === true => 'It goes on sale at the time the organizer set. The organizer has been emailed.',
+                    default => 'The organization is suspended, so it goes on sale when that is lifted. The organizer has been emailed.',
+                },
             ));
     }
 

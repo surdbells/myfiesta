@@ -2,7 +2,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventReviewState, OrganizerEventDetail } from '@myfiesta/api-types';
 import { API_BASE_URL, authInterceptor } from '../../core/api';
 import { answer, asked, forgetDialogs, settle } from '../../core/confirm-testing';
@@ -228,6 +228,49 @@ describe('EventDetail: the review', () => {
     expect(button(fixture, 'Take off sale')).toBeTruthy();
   });
 
+  describe('set to go on sale at a time', () => {
+    // 10am in Toronto on 9 October, a week after the pinned clock.
+    const setFor = '2026-10-09T14:00:00+00:00';
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-01T16:00:00Z'));
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('offers to put it on sale now, not back on sale, and says that does not wait for the time', async () => {
+      const fixture = await render(event({ publish_at: setFor, review: review({ on_submit: 'publish', approved_at: '2026-10-01T12:00:00Z' }) }));
+
+      expect(text(fixture)).toContain('It is approved and goes on sale by itself at');
+      expect(text(fixture)).not.toContain('Put back on sale');
+
+      button(fixture, 'Put on sale now').click();
+      await settle();
+
+      expect(asked()?.title).toBe('Put Afro Fest on sale now?');
+      // At the venue, saying which zone.
+      expect(asked()?.text).toMatch(/Oct\.? 9, 10:00\s?a\.m\.\s?EDT/);
+      expect(asked()?.text).toContain('does not wait for that time');
+
+      await answer('Cancel');
+      backend.expectNone(`${BASE}/submit`);
+    });
+
+    it('says when sending it for review that it goes on sale at that time once approved', async () => {
+      const fixture = await render(event({ publish_at: setFor }));
+
+      button(fixture, 'Submit for review').click();
+      await settle();
+
+      expect(asked()?.text).toContain('It goes on sale at the time you set');
+      expect(asked()?.text).not.toContain('goes on sale straight away');
+
+      await answer('Cancel');
+      backend.expectNone(`${BASE}/submit`);
+    });
+  });
+
   it('says when it was sent for review once, with the zone, and no double full stop', async () => {
     const fixture = await render(event({ status: 'in_review', review: review({ submitted_at: '2026-09-28T10:58:00Z', on_submit: null }) }));
 
@@ -440,5 +483,147 @@ describe('what a finished night is called', () => {
     // A copy saved before the server said reads as it did.
     expect(eventStandingLabel(event({ status: 'published' }))).toBe('On sale');
     expect(eventStandingLabel(event({ status: 'cancelled', sales_ended: true }))).toBe('Cancelled');
+  });
+});
+
+/**
+ * Orders paid with Klarna or Affirm (pay later): what they cost the
+ * organizer is shown beside what they are owed, and a cancellation says
+ * beforehand which refunds the lender will no longer take back.
+ */
+describe('EventDetail: orders paid later', () => {
+  let backend: HttpTestingController;
+  let session: SessionStore;
+
+  beforeAll(() => {
+    const dialog = HTMLDialogElement.prototype as unknown as Record<string, unknown>;
+    dialog['showModal'] ??= function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    };
+    dialog['close'] ??= function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+    };
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'http://api.test' },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'ev-1' }) }, parent: null },
+        },
+      ],
+    });
+
+    backend = TestBed.inject(HttpTestingController);
+    session = TestBed.inject(SessionStore);
+
+    session.start({
+      token: 'test-token',
+      user: { name: 'Ada Okafor', email: 'ada@example.test' },
+      abilities: ['attendee', 'organizer'],
+      organizations: [
+        {
+          id: 'org-1',
+          name: 'Lagos Nights',
+          slug: 'lagos-nights',
+          role: 'owner',
+          permissions: ['events.view', 'events.edit', 'events.publish', 'events.cancel', 'money.view'],
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    backend.verify();
+    forgetDialogs();
+    session.clear();
+  });
+
+  const cad = (amount: number) => ({ amount, currency: 'CAD' as const });
+
+  async function render(adjustments: number) {
+    const fixture = TestBed.createComponent(EventDetail);
+    fixture.detectChanges();
+
+    backend.expectOne(BASE).flush(event({ status: 'published' }));
+    backend.expectOne(`${BASE}/reminders`).flush({ data: [] });
+    backend.expectOne(`${BASE}/series`).flush({ series: null });
+    backend.expectOne(`${BASE}/summary`).flush({
+      currency: 'CAD',
+      gross: cad(10_000),
+      discounts: cad(0),
+      tax: cad(0),
+      service_charge: cad(800),
+      refunds: cad(0),
+      adjustments: cad(adjustments),
+      net: cad(10_000 + adjustments),
+      orders: 2,
+      tickets_issued: 2,
+      checked_in: 0,
+    });
+    fixture.detectChanges();
+    backend.match(`${BASE}/sales`);
+    await settle();
+
+    return fixture;
+  }
+
+  const text = (fixture: { nativeElement: HTMLElement }) => (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
+
+  it('shows what paying later cost beside what is owed, and nothing when it cost nothing', async () => {
+    const paid = await render(-374);
+
+    expect(text(paid)).toContain('Adjustments');
+    expect(text(paid)).toContain('Klarna and Affirm fees');
+    expect(paid.nativeElement.querySelector('.adjustments')?.textContent).toContain('3.74');
+
+    paid.destroy();
+    const none = await render(0);
+
+    expect(none.nativeElement.querySelector('.adjustments')).toBeNull();
+  });
+
+  async function askToCancel(elsewhere: number | undefined) {
+    const fixture = await render(0);
+    const page = fixture.componentInstance;
+
+    page.cancelReason.set('The venue flooded and cannot open.');
+    page.openCancel();
+    backend.expectOne(`${BASE}/cancellation`).flush({
+      ticket_holders: 2,
+      orders_to_refund: 2,
+      refund_total: cad(10_800),
+      ...(elsewhere === undefined ? {} : { orders_to_refund_elsewhere: elsewhere }),
+    });
+    await settle();
+
+    void page.confirmCancel();
+    await settle();
+
+    return fixture;
+  }
+
+  it('says before cancelling which orders the lender will not take back, and to write to support', async () => {
+    await askToCancel(1);
+
+    expect(asked()?.text).toContain('1 of those was paid with Klarna or Affirm too long ago to go back that way');
+    expect(asked()?.text).toContain('Write to myFiesta support afterwards');
+
+    await answer('Keep it running');
+  });
+
+  it('says nothing about lenders when every order can go back the way it came', async () => {
+    await askToCancel(0);
+
+    expect(asked()?.text).not.toContain('Klarna');
+
+    await answer('Keep it running');
   });
 });

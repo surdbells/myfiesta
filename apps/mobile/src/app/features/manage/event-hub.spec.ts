@@ -235,6 +235,30 @@ describe('the event screen and the review', () => {
     expect(organizer.submitForReview).toHaveBeenCalledWith('ev-1');
   });
 
+  it('offers to put an approved night waiting for its time on sale now, not back, and says it skips the wait', async () => {
+    // A week before the time set: 10am in Toronto on 9 October.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-01T16:00:00Z'));
+
+    try {
+      shown = night({ publish_at: '2026-10-09T14:00:00+00:00', review: review({ on_submit: 'publish', approved_at: '2026-10-01T12:00:00Z' }) });
+      yes = false;
+      const fixture = await open();
+
+      expect(text(fixture)).toContain('It is approved and goes on sale by itself at');
+      expect(text(fixture)).not.toContain('Put back on sale');
+
+      press(fixture, 'Put on sale now');
+      await settle(fixture);
+
+      expect(asked[0].title).toBe('Put Afro Fest on sale now?');
+      expect(asked[0].body).toContain('does not wait for that time');
+      expect(organizer.submitForReview).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('takes a waiting night back after asking, so it can be changed', async () => {
     shown = night({ status: 'in_review', review: review({ submitted_at: '2026-09-28T12:00:00Z', on_submit: null }) });
     const fixture = await open();

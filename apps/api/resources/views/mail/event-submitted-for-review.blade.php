@@ -6,7 +6,11 @@ We have received **{{ $event->title }}**. Before an event goes on sale on {{ con
 **What happens next**
 
 - Most events are looked at within {{ $wait }}.
+@if ($event->publish_at?->isFuture())
+- If it is approved, it goes on sale by itself at the time you set, {{ $event->publish_at->timezone($event->timezone)->format('l j F Y, g:ia T') }}, and we email you when it does.
+@else
 - If it is approved, it goes on sale straight away and we email you the link.
+@endif
 - If something needs changing, we send it back to you with the reason, and you can change it and send it again.
 
 While it is waiting, the event cannot be changed. If you need to change something, open it in the console and withdraw it from review, then send it again when you are ready.

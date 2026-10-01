@@ -233,15 +233,31 @@ final class EventReviews
      * Send a draft for review — or, where an approval still stands for it as
      * it is, straight back on sale.
      *
+     * `$onSchedule` is events:go-live sending it at the time the organizer
+     * set, as the member who set it (ScheduledGoLive). It does what pressing
+     * the button would, except that the organizers are not sent the email a
+     * press sends: ScheduledGoLive tells them what became of it instead
+     * (EventScheduledSale).
+     *
+     * `$still` is asked of the event as it stands under the lock, before
+     * anything is done. False leaves it exactly as it is ('left'): the job
+     * read the time a while before it got to this night, and an organizer
+     * who cleared or moved it in between has decided otherwise.
+     *
+     * @param  (\Closure(Event): bool)|null  $still
      * @return array{status: string, outcome: string, message: string}
      *
      * @throws ReviewRefused
      */
-    public function submit(Event $event, User $by): array
+    public function submit(Event $event, User $by, bool $onSchedule = false, ?\Closure $still = null): array
     {
-        $done = DB::transaction(function () use ($event, $by) {
+        $done = DB::transaction(function () use ($event, $by, $still) {
             $locked = $this->lock($event);
             $status = EventStatus::from($locked->status);
+
+            if ($still !== null && ! $still($locked)) {
+                return ['outcome' => 'left', 'event' => $locked];
+            }
 
             if ($status === EventStatus::InReview) {
                 return ['outcome' => 'already', 'event' => $locked];
@@ -283,9 +299,13 @@ final class EventReviews
             }
 
             if ($standing) {
+                // Approved to wait for its time and never on sale, it is not
+                // "back" on sale (approvedToWait).
+                $first = $locked->published_at === null;
+
                 $this->goOnSale($locked);
 
-                return ['outcome' => 'republished', 'event' => $locked];
+                return ['outcome' => 'republished', 'event' => $locked, 'first' => $first];
             }
 
             if ($source !== null) {
@@ -312,6 +332,11 @@ final class EventReviews
         $event->setRawAttributes($locked->getAttributes(), true);
 
         return match ($done['outcome']) {
+            'left' => [
+                'status' => $locked->status,
+                'outcome' => 'left',
+                'message' => 'Nothing was sent: the time to send it changed in the meantime.',
+            ],
             'already' => [
                 'status' => $locked->status,
                 'outcome' => 'already',
@@ -319,9 +344,14 @@ final class EventReviews
                     ? 'This event is already waiting for review.'
                     : 'This event is already on sale.',
             ],
-            'republished' => $this->afterGoingOnSale($locked, $by, ['unchanged_since_approval' => true]),
-            'series' => $this->afterGoingOnSale($locked, $by, ['series_source_event_id' => $done['source']->id]),
-            default => $this->afterSubmitting($locked, $by),
+            'republished' => $this->afterGoingOnSale(
+                $locked,
+                $by,
+                ['unchanged_since_approval' => true] + ($done['first'] ? ['first_time' => true] : []),
+                $onSchedule,
+            ),
+            'series' => $this->afterGoingOnSale($locked, $by, ['series_source_event_id' => $done['source']->id], $onSchedule),
+            default => $this->afterSubmitting($locked, $by, $onSchedule),
         };
     }
 
@@ -347,14 +377,21 @@ final class EventReviews
                 throw new ReviewRefused('This event is not waiting for review.');
             }
 
+            // A time set for it to go on sale that has already come is
+            // dropped: a draft with a time gone by is what events:go-live
+            // sends, and it would put the night straight back in review a
+            // minute after the organizer took it back to change it. A time
+            // still to come stays, as it may while the night waits for review.
+            $spent = $locked->publish_at !== null && ! $locked->publish_at->isFuture() ? $locked->publish_at : null;
+
             $locked->forceFill([
                 'status' => EventStatus::Draft->value,
                 'submitted_at' => null,
-            ])->save();
+            ] + ($spent !== null ? ['publish_at' => null, 'publish_scheduled_by' => null] : []))->save();
 
             $this->remember($locked, EventReview::WITHDRAWN, $by);
 
-            return ['outcome' => 'withdrawn', 'event' => $locked];
+            return ['outcome' => 'withdrawn', 'event' => $locked, 'sale_time' => $spent];
         });
 
         /** @var Event $locked */
@@ -365,14 +402,17 @@ final class EventReviews
             return ['status' => $locked->status, 'outcome' => 'already', 'message' => 'This event is a draft. You can change it.'];
         }
 
-        $this->auditor->record('event.withdrawn_from_review', $locked, $by);
+        $this->auditor->record('event.withdrawn_from_review', $locked, $by, metadata: array_filter([
+            'sale_time_dropped' => $done['sale_time']?->toIso8601String(),
+        ]));
 
         $this->tellOrganizers($locked, fn () => new EventWithdrawnFromReview($locked));
 
         return [
             'status' => EventStatus::Draft->value,
             'outcome' => 'withdrawn',
-            'message' => 'Taken back from review. Make your changes, then send it again.',
+            'message' => 'Taken back from review. Make your changes, then send it again.'
+                .($done['sale_time'] !== null ? ' The time you set for it to go on sale has passed, so it goes on sale once it is sent and approved.' : ''),
         ];
     }
 
@@ -393,6 +433,14 @@ final class EventReviews
      * events the suspension took off sale, and goes on sale with them when it
      * is lifted (Suspension::unsuspend) — as it was approved, and not if it
      * changed while it waited.
+     *
+     * When the organizer set a time for it to go on sale that has not come
+     * yet, it waits for that, a draft with its approval standing, and
+     * events:go-live puts it on sale then (ScheduledGoLive) — as approved, or
+     * through review again if it changed meanwhile. That wait comes first:
+     * marked for a suspension as well, lifting it would put the night on sale
+     * before its time. Still suspended when the time comes, it is not sent
+     * until the suspension is lifted.
      *
      * @param  string|null  $seen  the fingerprint (EventSnapshot) of the event as the
      *                             reviewer was shown it
@@ -438,8 +486,14 @@ final class EventReviews
             $this->approveWith($locked, $staff, self::VIA_REVIEW, $snapshot);
 
             $held = Suspension::inForce($locked->organization_id);
+            $waitsForTime = $locked->publish_at?->isFuture() === true;
 
-            if ($held) {
+            if ($waitsForTime) {
+                $locked->forceFill([
+                    'status' => EventStatus::Draft->value,
+                    'submitted_at' => null,
+                ])->save();
+            } elseif ($held) {
                 $locked->forceFill([
                     'status' => EventStatus::Draft->value,
                     'submitted_at' => null,
@@ -452,7 +506,13 @@ final class EventReviews
                 $this->goOnSale($locked);
             }
 
-            return ['outcome' => 'approved', 'event' => $locked, 'held' => $held, 'waited' => $waited];
+            return [
+                'outcome' => 'approved',
+                'event' => $locked,
+                'held' => $held,
+                'waits_for_time' => $waitsForTime,
+                'waited' => $waited,
+            ];
         });
 
         /** @var Event $locked */
@@ -466,16 +526,20 @@ final class EventReviews
         self::scheduleDefaultReminders($locked);
 
         // Its followers hear about it the first time it goes on sale, never
-        // when it is sent for review.
-        $told = $done['held'] ? 0 : $this->announcements->announce($locked);
+        // when it is sent for review — nor when it is approved to wait for
+        // its time, when going on sale then tells them (afterGoingOnSale).
+        $waiting = $done['held'] || $done['waits_for_time'];
+        $told = $waiting ? 0 : $this->announcements->announce($locked);
+        $goesOnSaleAt = $done['waits_for_time'] ? $locked->publish_at : null;
 
         $this->auditor->record('event.approved', $locked, $staff, metadata: array_filter([
             'followers_told' => $told ?: null,
-            'waits_for_suspension' => $done['held'] ?: null,
+            'waits_for_suspension' => $done['held'] && ! $done['waits_for_time'] ? true : null,
+            'goes_on_sale_at' => $goesOnSaleAt?->toIso8601String(),
             'waited_minutes' => $done['waited'] ?? null,
         ], fn ($value) => $value !== null));
 
-        $this->tellOrganizers($locked, fn () => new EventApproved($locked, $done['held']));
+        $this->tellOrganizers($locked, fn () => new EventApproved($locked, $done['held'], $goesOnSaleAt));
 
         return $locked->status;
     }
@@ -529,15 +593,22 @@ final class EventReviews
             }
 
             $waited = $this->waited($locked);
+            $saleTime = $locked->publish_at;
 
+            // A time set for it to go on sale is dropped with it: sent back,
+            // it waits for the organizer to change it, and events:go-live
+            // sending it again unchanged at that time would only put the
+            // same thing back in front of staff.
             $locked->forceFill([
                 'status' => EventStatus::Draft->value,
                 'submitted_at' => null,
+                'publish_at' => null,
+                'publish_scheduled_by' => null,
             ])->save();
 
             $this->remember($locked, EventReview::REJECTED, $staff, $reason);
 
-            return ['outcome' => 'rejected', 'event' => $locked, 'waited' => $waited];
+            return ['outcome' => 'rejected', 'event' => $locked, 'waited' => $waited, 'sale_time' => $saleTime];
         });
 
         /** @var Event $locked */
@@ -551,6 +622,7 @@ final class EventReviews
         $this->auditor->record('event.rejected', $locked, $staff, metadata: array_filter([
             'reason' => $reason,
             'waited_minutes' => $done['waited'] ?? null,
+            'sale_time_dropped' => $done['sale_time']?->toIso8601String(),
         ], fn ($value) => $value !== null));
 
         $this->tellOrganizers($locked, fn () => new EventRejected($locked, $reason));
@@ -797,9 +869,22 @@ final class EventReviews
     private function standingApproval(Event $event, array $snapshot): bool
     {
         return $event->approved_fingerprint !== null
-            && $event->published_at !== null
+            && ($event->published_at !== null || $this->approvedToWait($event))
             && hash_equals($event->approved_fingerprint, EventSnapshot::fingerprint($snapshot))
             && ! $this->rejectedSinceApproval($event);
+    }
+
+    /**
+     * Approved, and held back from sale since with nothing else done to it:
+     * approved to go on sale at the time the organizer set (approve()), or
+     * while the organization was suspended. Never on sale, but approved as
+     * surely as a night that was — so at its time, or when the organizer
+     * stops waiting for it, it goes on sale as approved. What changed since
+     * is the fingerprint's to answer.
+     */
+    private function approvedToWait(Event $event): bool
+    {
+        return $this->lastStep($event)?->action === EventReview::APPROVED;
     }
 
     /**
@@ -885,13 +970,20 @@ final class EventReviews
         $this->remember($event, EventReview::APPROVED, $by, null, $snapshot, $via);
     }
 
-    /** On sale, keeping the first publish date so an old event does not look newly announced. */
+    /**
+     * On sale, keeping the first publish date so an old event does not look
+     * newly announced. A time set for it to go on sale is spent: whether it
+     * came then or the organizer did not wait, a night taken off sale later
+     * must not be put back by a time already gone (events:go-live).
+     */
     private function goOnSale(Event $event): void
     {
         $event->forceFill([
             'status' => EventStatus::Published->value,
             'submitted_at' => null,
             'published_at' => $event->published_at ?? now(),
+            'publish_at' => null,
+            'publish_scheduled_by' => null,
         ])->save();
     }
 
@@ -899,7 +991,7 @@ final class EventReviews
      * @param  array<string, mixed>  $metadata
      * @return array{status: string, outcome: string, message: string}
      */
-    private function afterGoingOnSale(Event $event, User $by, array $metadata): array
+    private function afterGoingOnSale(Event $event, User $by, array $metadata, bool $onSchedule = false): array
     {
         self::scheduleDefaultReminders($event);
 
@@ -907,33 +999,51 @@ final class EventReviews
         // unchanged was announced when it was approved.
         $told = $this->announcements->announce($event);
 
-        $this->auditor->record('event.published', $event, $by, metadata: $metadata + ($told > 0 ? ['followers_told' => $told] : []));
+        // Sent at its time, the organizers hear from ScheduledGoLive, which
+        // tells them about every date of a series that went at once in one
+        // email rather than one each.
+        $this->auditor->record('event.published', $event, $by, metadata: $metadata
+            + ($told > 0 ? ['followers_told' => $told] : [])
+            + ($onSchedule ? ['on_schedule' => true] : []));
 
         return [
             'status' => EventStatus::Published->value,
             'outcome' => 'published',
-            'message' => isset($metadata['series_source_event_id'])
-                ? 'On sale. It is the approved night on a new date, so it did not need another review.'
-                : 'Back on sale. Nothing has changed since it was approved, so it did not need another review.',
+            'message' => match (true) {
+                isset($metadata['series_source_event_id']) => 'On sale. It is the approved night on a new date, so it did not need another review.',
+                isset($metadata['first_time']) => 'On sale. Nothing has changed since it was approved, so it did not need another review.',
+                default => 'Back on sale. Nothing has changed since it was approved, so it did not need another review.',
+            },
         ];
     }
 
     /** @return array{status: string, outcome: string, message: string} */
-    private function afterSubmitting(Event $event, User $by): array
+    private function afterSubmitting(Event $event, User $by, bool $onSchedule = false): array
     {
-        $this->auditor->record('event.submitted', $event, $by);
+        $this->auditor->record('event.submitted', $event, $by, metadata: $onSchedule ? ['on_schedule' => true] : []);
 
-        $this->tellOrganizers($event, fn () => new EventSubmittedForReview($event));
+        // Sent at its time rather than by a press, the organizers are told
+        // why it went to review instead of on sale, rather than that it was
+        // received — by ScheduledGoLive (EventScheduledSale).
+        if (! $onSchedule) {
+            $this->tellOrganizers($event, fn () => new EventSubmittedForReview($event));
+        }
 
         foreach ($this->reviewers() as $email) {
             Mail::to($email)->queue(new EventAwaitingReview($event));
         }
 
+        $wait = config('events.review.typical_wait', 'one working day');
+
         return [
             'status' => EventStatus::InReview->value,
             'outcome' => 'in_review',
-            'message' => 'Sent for review. We will email you when it has been looked at — usually within '
-                .config('events.review.typical_wait', 'one working day').'.',
+            // Approved before its time, it waits for it (approve()).
+            'message' => $event->publish_at?->isFuture() === true
+                ? 'Sent for review. Once it is approved it goes on sale at the time you set, '
+                    .$event->publish_at->timezone($event->timezone)->format('l j F, g:ia T')
+                    .'. We will email you when it has been looked at — usually within '.$wait.'.'
+                : 'Sent for review. We will email you when it has been looked at — usually within '.$wait.'.',
         ];
     }
 

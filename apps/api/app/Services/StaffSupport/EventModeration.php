@@ -68,7 +68,7 @@ class EventModeration
             throw StaffActionRefused::because('Give the organizer a reason they can act on. It is emailed to them.');
         }
 
-        [$from, $heldBySuspension] = DB::transaction(function () use ($event, $staff, $reason) {
+        [$from, $heldBySuspension, $saleTime] = DB::transaction(function () use ($event, $staff, $reason) {
             $locked = $this->lock($event);
 
             if ($locked->taken_down_at !== null) {
@@ -86,6 +86,7 @@ class EventModeration
             // A draft only because its organization is suspended: it was on
             // sale until then, and lifting this takedown should treat it so.
             $heldBySuspension = $locked->unpublished_by_suspension_at !== null;
+            $saleTime = $locked->publish_at;
 
             $locked->forceFill([
                 'status' => 'draft',
@@ -93,13 +94,18 @@ class EventModeration
                 // approve while it is down. The organizer sends it again once
                 // the takedown is lifted.
                 'submitted_at' => null,
+                // So is a time set for it to go on sale, or lifting the
+                // takedown would have events:go-live put it on sale on a time
+                // that may be long gone, with nobody deciding to.
+                'publish_at' => null,
+                'publish_scheduled_by' => null,
                 'is_featured' => false,
                 'taken_down_at' => now(),
                 'taken_down_reason' => mb_substr($reason, 0, 1000),
                 'taken_down_by' => $staff->id,
             ])->save();
 
-            return [$from, $heldBySuspension];
+            return [$from, $heldBySuspension, $saleTime];
         });
 
         $event->refresh();
@@ -110,6 +116,7 @@ class EventModeration
             'reason' => $reason,
             'from' => $from,
             'off_sale_for_suspension' => $heldBySuspension ?: null,
+            'sale_time_dropped' => $saleTime?->toIso8601String(),
             'organizers_told' => $told->count(),
         ], fn ($value) => $value !== null));
 

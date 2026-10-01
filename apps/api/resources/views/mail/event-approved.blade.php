@@ -1,5 +1,19 @@
 <x-mail::message>
+@if ($onSaleAt)
+# {{ $event->title }} is approved
+
+We have approved **{{ $event->title }}**. It goes on sale by itself on **{{ $onSaleAt }}**, the time you set — there is nothing you need to do. Until then it stays a draft, and its link does not open.
+
 @if ($waitsForSuspension)
+Your organization's sales are suspended at the moment. If they still are at that time, it goes on sale when the suspension is lifted, as long as it has not started by then.
+@endif
+
+You can change the time, or put it on sale now, from the event in the console. If you change anything a buyer sees before then, it comes back to us for review when the time comes, and goes on sale once it is approved.
+
+<x-mail::button :url="$url">
+Open the event
+</x-mail::button>
+@elseif ($waitsForSuspension)
 # {{ $event->title }} is approved
 
 We have approved **{{ $event->title }}**. Your organization's sales are suspended at the moment, so it is not on sale yet. It goes on sale by itself when the suspension is lifted, as long as it has not started by then — there is nothing you need to do.

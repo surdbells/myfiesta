@@ -31,6 +31,10 @@ use Throwable;
  * occurrences in sync with the series" would undo all of that on a schedule,
  * and the organizer would never work out what was doing it.
  *
+ * A new date is a draft, like any copy. When the series puts its dates on
+ * sale by itself (auto_publish), it is given the time to go on sale as well,
+ * and goes then, through review unless it is the approved night unchanged.
+ *
  * Running twice changes nothing. Slots already materialised are skipped by
  * their scheduled instant, not by their actual start — so an occurrence moved
  * to a different night is still recognised as done, and its Friday slot does
@@ -196,6 +200,13 @@ class SeriesGenerator
             $occurrence->update([
                 'series_id' => $series->id,
                 'series_occurs_at' => $slot,
+                // When the series puts its dates on sale by itself: so many
+                // days before the night, sent then by events:go-live as
+                // whoever turned that on (ScheduledGoLive). Nobody of its own
+                // set it, which is how the series knows the time is its to
+                // move or take back (SeriesController::update).
+                'publish_at' => $series->onSaleAt($slot),
+                'publish_scheduled_by' => null,
             ]);
 
             return $occurrence->refresh();

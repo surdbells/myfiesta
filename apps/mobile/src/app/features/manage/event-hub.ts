@@ -177,13 +177,17 @@ import {
                     <li>{{ reason }}</li>
                   }
                 </ul>
+              } @else if (ev.review.on_submit === 'publish' && onSaleAt()) {
+                <p class="muted">It is approved and goes on sale by itself at {{ onSaleAt() }}. Put it on sale now if you do not want to wait.</p>
               } @else if (ev.review.on_submit === 'publish') {
                 <p class="muted">Nothing a buyer sees has changed since it was approved, so it goes straight back on sale.</p>
+              } @else if (onSaleAt()) {
+                <p class="muted">Set to go on sale at {{ onSaleAt() }}. myFiesta looks at it first, usually within a working day.</p>
               } @else {
                 <p class="muted">myFiesta looks at every event before it goes on sale, usually within a working day.</p>
               }
               <button mfButton block [loading]="working()" [disabled]="ev.review.not_ready.length > 0" (click)="submit()">
-                {{ ev.review.on_submit === 'publish' ? 'Put back on sale' : 'Submit for review' }}
+                {{ ev.review.on_submit === 'publish' ? (onSaleAt() ? 'Put on sale now' : 'Put back on sale') : 'Submit for review' }}
               </button>
             </mf-card>
           }
@@ -591,6 +595,18 @@ export class EventHub implements OnInit {
     return ev ? longEventTime(ev.starts_at, ev.timezone) : '';
   });
 
+  /**
+   * When it is set to go on sale by itself, in the venue's zone, while that
+   * is still to come (set in the console). Approved before then, it waits
+   * for it, so the button says "on sale now" rather than "back on sale".
+   */
+  protected readonly onSaleAt = computed(() => {
+    const ev = this.event();
+    const at = ev?.publish_at;
+
+    return ev && at && new Date(at).getTime() > Date.now() ? shortEventTime(at, ev.timezone) : null;
+  });
+
   protected readonly countdown = computed(() => {
     const ev = this.event();
     return ev ? until(ev.starts_at) : '';
@@ -758,7 +774,9 @@ export class EventHub implements OnInit {
     if (this.session.can('events.edit') && !cancelled) items.push({ key: 'edit', label: 'Edit details', icon: Pencil });
     if (this.session.can('events.publish') && ev.status === 'draft' && !ev.review.suspended && ev.review.not_ready.length === 0) {
       items.push(
-        ev.review.on_submit === 'publish'
+        ev.review.on_submit === 'publish' && this.onSaleAt()
+          ? { key: 'publish', label: 'Put on sale now', icon: Eye, hint: `Approved, and set for ${this.onSaleAt()}` }
+          : ev.review.on_submit === 'publish'
           ? { key: 'publish', label: 'Put back on sale', icon: Eye, hint: 'Unchanged since it was approved' }
           : { key: 'publish', label: 'Submit for review', icon: Send, hint: 'myFiesta looks at it before it goes on sale' },
       );
@@ -845,10 +863,21 @@ export class EventHub implements OnInit {
     if (!ev) return;
 
     const straightBack = ev.review.on_submit === 'publish';
+    // Set to go on sale by itself later: pressing now does not wait for that.
+    const setFor = this.onSaleAt();
     let message = '';
 
     const done = await this.dialogs.confirm(
-      straightBack
+      straightBack && setFor
+        ? {
+            title: `Put ${ev.title} on sale now?`,
+            body: `It is approved and set to go on sale by itself at ${setFor}. Putting it on sale now does not wait for that time, and the time you set is cleared.`,
+            confirmLabel: 'Put on sale now',
+            busyLabel: 'Putting it on sale…',
+            tone: 'default',
+            run: async () => (message = (await this.organizer.submitForReview(ev.id)).message),
+          }
+        : straightBack
         ? {
             title: `Put ${ev.title} back on sale?`,
             body: 'Nothing a buyer sees has changed since myFiesta approved it, so it goes back on sale straight away, without another review.',
@@ -862,7 +891,9 @@ export class EventHub implements OnInit {
             body: 'Somebody at myFiesta looks at every event before it goes on sale, usually within a working day. We email you when it is approved or if something needs changing.',
             consequences: [
               'While it is being reviewed you cannot change it: its details, tickets, extras, questions, pictures and codes are locked.',
-              'Once it is approved it goes on sale straight away, and the people who follow you are told.',
+              setFor
+                ? `It goes on sale at the time you set, ${setFor}, if it is approved by then, or as soon as it is approved after that. The people who follow you are told when it goes on sale.`
+                : 'Once it is approved it goes on sale straight away, and the people who follow you are told.',
               'You can withdraw it from review at any time to make a change.',
             ],
             confirmLabel: 'Submit for review',
