@@ -395,6 +395,91 @@ Visa as the account the order was placed on.
   (`api-storage`), as it already is for exports.
 - The audit trail, for good, without the words or the files.
 
+## Paying later (Klarna and Affirm)
+
+Buyers can pay with Klarna or Affirm on Stripe's page for a night when three
+things are true: it is switched on in **Configuration → Platform settings →
+Pay later**, the organizer turned on "Pay over time" in the event's Settings,
+and the night is in Canadian dollars and starts within the number of days set
+there (110 unless changed, and at most 110: Affirm takes a refund back for
+only 120 days, and the ten between leave room for a late cancellation or a
+refund after the night). Afterpay is left off on purpose: its terms rule out
+selling alcohol.
+
+### Setting it up in Stripe
+
+The checkout names one of two payment method configurations, so Klarna and
+Affirm appear only where they are offered. Make both in Stripe's dashboard,
+in live mode and again in test mode:
+
+1. **Settings → Payments → Payment methods.** Add a configuration (the
+   configuration menu at the top of the page) called `myFiesta standard`:
+   cards, Apple Pay, Google Pay and Link on, everything else off.
+2. Add a second one called `myFiesta pay later`: the same, plus **Klarna**
+   and **Affirm** on. Leave Afterpay / Clearpay off.
+3. Copy each configuration's id (it starts `pmc_`) into the API's environment:
+   `STRIPE_PMC_STANDARD` and `STRIPE_PMC_PAY_LATER`. Then run
+   `php artisan config:cache` (the Docker containers do it when they
+   restart).
+4. On the webhook endpoint, add `checkout.session.async_payment_succeeded`
+   and `checkout.session.async_payment_failed` to the events it sends. A
+   payment that clears after the page closes completes the session unpaid
+   and then sends one of these. Without them the money arrives and no
+   tickets are issued.
+5. Turn on **Offer Klarna and Affirm** in Platform settings.
+
+With both ids blank, a checkout names no configuration and Stripe offers
+whatever the account's default has on, which is how it worked before. With
+only `STRIPE_PMC_STANDARD` set, nobody is offered paying later, and nothing
+says they can: the event page, the checkout and the console's opt-in all
+read `STRIPE_PMC_PAY_LATER` as well as the switch.
+
+### What it costs, and who pays
+
+The lenders charge about twice what a card does (Klarna 5.99% + $0.30,
+Affirm 6% + $0.30, against 2.9% + $0.30). Once `disputes:collect-evidence`
+has asked Stripe about the payment:
+
+- the admin order page shows **Paid with** (Card, Klarna (paid later), and so on);
+- the order's processor fee becomes what Stripe actually took;
+- for an order paid later on a night the organizer opted in, the difference
+  over a card is taken off their balance as an adjustment, "Paid later with
+  Klarna on order …", and the order's processor fee is only the platform's
+  part (a card's worth). The order page says what the lender took in all and
+  how much of it the organizer paid. The organizer was shown these rates
+  before turning it on, and the console's money summary shows the total as
+  **Adjustments**.
+
+The organizer keeps paying that difference if the money goes back later,
+by a refund or by a lost chargeback: Stripe keeps its fee either way.
+
+### Refunds after the lender's window
+
+Affirm takes money back for 120 days after the payment and Klarna for 180.
+After that a refund through Stripe is refused before it is tried, and
+nothing moves. Orders get there when a night is moved later after it sold,
+or refunded long after it. Tickets paid this way cannot be handed back for
+resale once the lender's window closes before the night.
+
+Each refused refund is written on the order's audit trail as
+`refund.left_for_support` (who asked, when, and the method), and logged as
+an alert. The organizer is told to write to support with the order's
+reference; cancelling an event says how many orders were left this way, and
+its preview says so beforehand.
+
+To give the money back:
+
+1. Send it to the buyer another way (an Interac e-Transfer, for example).
+2. In the admin, open the order. **Refund** is not offered on it; use
+   **Record a refund made outside Stripe** instead (Admin and Finance). Enter
+   the amount sent (everything left is filled in), the e-Transfer or bank
+   reference, and a note, and tick that the money has been sent.
+3. That records the refund on the order, takes it off the organizer's
+   balance, emails the organizer, and, when it covers everything left, stops
+   the order's tickets working. Recording part of it leaves the tickets
+   working; the organizer is asked which tickets it was for, as with a
+   partial refund made in Stripe's dashboard.
+
 ## Errors
 
 Each app reports to its own Sentry project, and only when its DSN is set:
@@ -521,6 +606,297 @@ Browsers carry their own copies and update with the browser. The site draws a
 page on the server and the browser then works the same times out again, so a
 visitor on an out-of-date browser sees the time their browser works out.
 Nothing on the server can change that.
+
+## Going on sale at a set time
+
+An organizer can set the time a night goes on sale (`events.publish_at`, the
+venue's time in the console). A repeating night can also put each of its
+dates on sale by itself, a set number of days before the night. That setting
+is under **How it repeats** on the event. `events:go-live` runs every minute.
+It sends each draft whose time has come the way the Submit button would, as
+the member who set the time. For a series date, that is the member who turned
+the setting on for the series.
+
+- **Approved and unchanged:** it goes on sale. This also covers a series
+  date that is the approved night on a new date. An event approved before its
+  time stays a draft until that time.
+- **Changed since approval, or never approved:** it goes to the review queue,
+  and goes on sale once a reviewer approves it.
+- **Not sent:** the member who set the time no longer has the right to put
+  events on sale, has left the team, or has not confirmed their email. The
+  time is dropped. For a series, the series stops putting its dates on sale
+  until somebody turns that on again.
+
+Three checks are made again when the time comes, not when it was set:
+- **A suspended organization:** its nights wait, with their time kept, and go
+  when the suspension is lifted.
+- **A night taken down by staff:** it is never sent.
+- **The member's permission:** asked again, as above.
+
+Whatever the outcome, everyone at the organization who can put events on sale
+gets one email about it (`EventScheduledSale`). When several dates of one
+series go in the same run, that is one email that lists every date. The audit
+log records who set or cleared each time (`event.sale_time_set`,
+`event.sale_time_cleared`), each night sent on time (`on_schedule` on
+`event.published` or `event.submitted`) and each night not sent
+(`event.scheduled_sale_not_sent`, with the reasons).
+
+**When a time is dropped.** A time is dropped, so that nobody's earlier
+decision puts the night on sale later, in three cases. The audit entry for
+each keeps the time that was dropped (`sale_time_dropped`).
+- **Staff send it back.** Rejecting a night drops its time, so it cannot go
+  straight back into the queue unchanged (`event.rejected`).
+- **Staff take it down.** Lifting the takedown later leaves the night a
+  draft for the organizer to send, and never puts it on sale on an old time
+  (`event.taken_down`).
+- **The organizer takes it back from review after its time.** It stays a
+  draft to change and send again (`event.withdrawn_from_review`). Taken back
+  before its time, it keeps the time.
+
+**Staff acting as an organization.** They cannot set a time, turn on a
+series' dates going on sale by themselves, or change a series' end, which
+can remove dates. At the time, the night goes on sale as the member who set
+it, and a staff session is not a member. They can clear a time and turn the
+series setting off.
+
+**Running twice.** A second run, or two runs at once, sends nothing twice.
+Each night is locked while it is sent, and its time is read again under the
+lock, so a time the organizer cleared or moved after the run started is
+honoured. A time is cleared once it is used.
+If the scheduler stops, nights pile up as drafts past their times. The first
+run after it starts sends them all, in the order they were due, 200 at a
+time.
+
+**A series.** Shortening a series (its end, a count or a last day) removes
+the future dates past the new end that nobody holds a ticket for, counting
+tickets listed for resale. Dates people hold tickets for are kept. How often
+a series repeats cannot be changed. The organizer stops the series and starts
+a new one. Turning on dates going on sale by themselves gives a time only to
+dates never on sale and not sent back by staff. A date the organizer took off
+sale, or one staff rejected, stays for the organizer to send. The days before
+are counted on the venue's calendar, so the time keeps its wall clock across
+a clock change.
+
+## Tickets sent on to somebody else
+
+A holder can send a ticket on from the phone ("Send to somebody else") or
+from the link in their email ("Send to someone"). Support moves one from the
+admin panel ("Reissue to another email"). All three go through the same
+handover (`TicketHandover`), so they all behave the same way:
+
+- **The ticket gets a new code.** The old one is refused at the door
+  straight away. Support may keep the old code when reissuing, for a holder
+  who has it and cannot receive email. The new holder is emailed the ticket with a link of their
+  own. That link opens that one ticket and nothing else of the order: no
+  receipt, no add-ons, no order reference.
+- **The buyer's link stops showing it.** The order's page lists only the
+  tickets still at the buyer's address. When a ticket is sent on again, the
+  last holder's link stops opening it.
+- **Some tickets cannot go.** A used ticket, a table some of whose people are
+  already in, or a ticket given back for resale cannot be sent on. Neither
+  can a ticket going to the address that already holds it.
+- **Holders can send tickets until the event starts.** Support can still
+  reissue after that, because someone at the front of the queue with the
+  wrong address on their ticket is who reissuing is for.
+
+**One window to know about, with two sides.** A door phone working with no
+signal checks codes against the list it last downloaded. If a ticket was sent
+on after that download:
+
+- **The person it was sent to is turned away.** The phone has no record of
+  the new code, and says "Not on this phone's list". Ask door staff to
+  refresh their lists just before the doors open. When somebody at the door
+  says a ticket was sent to them, scan it again on a phone with signal; it
+  goes through there.
+- **The old code can get somebody in once at that door.** The scan is
+  flagged as a conflict when the phone syncs. If a holder says their ticket
+  was used before they arrived, look in the ticket's history for a transfer,
+  and in that door's sync for a conflict around the same time.
+
+Closing transfers at the start of the night keeps both to the time before
+the doors open.
+
+Each handover is in the audit log as `ticket.transferred` (by a holder, with
+`via` set to `app` or `link`) or `ticket.reissued` (by support). Each is also
+in the ticket's history as a transfer from one address to the other. Neither
+record contains a code. In the admin panel, a ticket's Transfers list names
+who sent it: the account, a member of staff, or "The holder, from their
+ticket link" for a send from the email link, which has no account behind it.
+
+## Surveys after an event
+
+The morning after a night, the people who came are emailed a few questions.
+`surveys:send-due` runs hourly and sends a night's survey when all of these
+hold:
+
+- **The door has been written down.** The night has an `event_completions`
+  row, which waits for the last offline door phones to send their scans:
+  `disputes:record-completions` writes it on the first hourly run 15 hours
+  after the night ends (the door's 3-hour grace plus
+  `disputes.completion.after_door_closes_hours`, 12).
+- **Its delay has passed.** The delay is 18 hours after the night ends by
+  default (or after it starts plus 12 hours, when it lists no end). The
+  organizer can set 16 hours to a week on the event's Feedback tab. 16 is
+  the shortest because it is an hour past the door's final count, so the run
+  that writes the count down always comes before the one that sends. The
+  time the Feedback tab shows is the hourly run that really sends it.
+- **It is less than a week past that time.** Older nights are left alone, so
+  the first run after a deploy does not survey the last year and a half. The
+  Feedback tab says so, and "Send it now" is refused for them too.
+- **Nothing has switched it off.** Surveys are on unless the organization
+  switched them off (Surveys in the console) or the event did (its Feedback
+  tab). A cancelled or taken-down event is never surveyed.
+
+**Who is asked.** Every address holding a ticket the door let somebody in on,
+leaving out refunded and voided tickets. If the door scanned nobody (a night
+run from a printed list), every live holder is asked instead. An address that
+turned off marketing emails is never asked. Every survey email has a link to
+stop them, and the `List-Unsubscribe` headers mail apps use for their own
+button. Stopping these emails does not stop ticket or order emails.
+
+**Each person is asked once.** One invitation per address per night is
+enforced by a unique index. Each invitation is claimed before its email is
+queued. A run that died halfway is finished by the next run within a day. It
+is always safe to run `php artisan surveys:send-due` by hand. An organizer
+can also send a night's survey early ("Send it now", which asks first), but
+only once the door's final count is in, since before then it would ask the
+people who never came. It still goes only once. Staff acting as an
+organization cannot send it. Switching a finished night's survey back on, for
+the event or the whole organization, sends it on the next hourly run, so the
+console asks first there too.
+
+**The questions.** myFiesta's own survey (recommend 0–10, sound, venue,
+door, value, and "What should we change?") is installed by a migration
+(`…_080200_myfiestas_own_survey`). It is the default for every night.
+Organizations can write their own, of up to 12 questions. When a survey goes
+out, the night keeps the questions it was sent with, so editing or removing a
+survey later changes nothing that was asked.
+
+**What organizers see.** Counts, scores, how answers spread, and what was
+written. They never see who answered or whose address it was. Below 5
+answers, nothing is broken down, and no question with fewer than 5 answers
+shows its figures: the organizer knows who came and could tell whose answer
+was whose. The insights are rules, not guesses: the lowest-rated question,
+what moved since the last night sent the same survey, and words at least 3
+people used, one for each thing they said.
+
+**Personal data.** An export includes a person's invitations and answers,
+never the link's token. An erasure deletes both, and the night's results are
+worked out again without them.
+
+**When an organizer says nobody was asked**, check in this order:
+1. The event's Feedback tab: its first line says when the survey goes, or why
+   it will not (switched off, too long ago, waiting for the door's final
+   count, nobody held a ticket).
+2. The night has an `event_completions` row.
+3. `organizations.surveys_enabled` is true for the organization.
+4. The night's `event_surveys` row, if it has one, has `enabled` true. Its
+   `sent_at` says when the survey went, if it did.
+5. The queue worker is running: invitations with `sent_at` set and no email
+   received mean the mail is stuck in the queue.
+
+The audit log has `survey.updated`, `survey.sent`, `surveys.switched_on` and
+`surveys.switched_off`, and `survey_template.created`, `.updated` and
+`.archived`.
+
+## How-to videos
+
+The site's help/videos page shows short videos for buyers ("Buying tickets")
+and organizers ("Running your events"). The help page links to it, and so
+does Settings in the phone app. Admins and support manage them in
+**Configuration → How-to videos**:
+
+1. Upload the video to the myFiesta YouTube channel. Public or unlisted both
+   work; private does not play.
+2. **Add a video**: a title, the address from YouTube's Share button (or the
+   11-character id; only the id is kept), a sentence or two, who it is for,
+   and a number for its place (lower comes first).
+3. It is saved as a draft. Check it, then press **Publish**. It is on the
+   page straight away. **Take down** turns it back into a draft.
+
+Publishing, taking down and deleting each ask first, and each is in the audit
+log (`help_video.created`, `.edited`, `.published`, `.unpublished`,
+`.deleted`). Finance can see the list but not change it.
+
+The page shows each video's YouTube thumbnail and loads the player only when
+somebody presses play, from youtube-nocookie.com. The site's
+Content-Security-Policy allows frames from that domain on `/help/videos`
+only (`apps/web/src/security-headers.ts`); every other page frames nothing.
+The sitemap lists the page once at least one video is published.
+
+## Where else to find an organizer
+
+An organizer page links to the organizer's Instagram, TikTok, X, Facebook
+page and website. Owners set these under **How you appear** in the console or
+the phone. Each is kept as the account name (a website, and a Facebook page
+with no username, as an https address), and the API builds the link itself.
+A Facebook page named with accents is kept with them encoded, as a browser
+copies it. The legacy import left Instagram, Facebook
+and X as whatever the old platform held. Those are read the same way, and a
+value that cannot be read as an account on that network is left off the page
+rather than shown as a broken link. The organizer sees an empty box for it.
+
+## Friend discounts ("friend buys, both save")
+
+An organizer can offer a friend discount on a night, from the event's
+Overview in the console. It needs the codes permission. Each buyer gets a
+link of their own: in the tickets email, on the tickets page, and on the
+phone's ticket screen. Somebody a ticket was passed on to can ask for theirs
+on the phone. The link is the event page with `?ref=`.
+
+- **The friend saves.** A friend who buys through the link gets the night's
+  percentage off. It works through a hidden code of the event's own
+  (`codes.purpose = share_friend`) that nobody can type. A code the buyer
+  types replaces it, because an order takes one code. Somebody using their
+  own link is refused at checkout; the site then takes the link off their
+  basket and shows the full price, so they can pay.
+- **The buyer saves.** Once the friend has paid, the buyer is emailed a
+  single-use code for the percentage the friend's order was priced at, off
+  any of the organizer's nights (`purpose = share_reward`). It is good for
+  12 months. Each link earns up to the night's limit of rewards (5 unless the
+  organizer changes it). Friends still save after that. A replayed payment
+  webhook rewards once. A free ticket taken through a link saves nobody
+  anything, so it earns no reward.
+- **When a link stops.** A link works only while its holder still has a
+  ticket to the night that gets them in. Refunded, or passed on, and the
+  link takes nothing off. Nobody is asked to share once the night's online
+  sales are over.
+- **Refunds.** A friend's order refunded in full takes back its reward if the
+  code has not been spent, even when it is part-way through a checkout at
+  that moment (that checkout keeps its price). A spent one stands.
+- **Who pays.** The organizer pays for both discounts out of the night's
+  proceeds, the same as any code. The console asks them to confirm this
+  before an offer starts or changes. The sales report shows a "Friend's
+  discount" row and a "Friend rewards" row.
+
+**The cap.** **Configuration → Platform settings → Friend discounts →
+Largest friend discount** is the most any night may offer (20% by
+default). If you lower it, offers already running above it are held to the
+new figure from the next sale. Set
+to 0, it switches every friend discount off. Links then take nothing off,
+and rewards already sent keep working.
+
+**Finding them.** The organizer's codes list hides friend codes and rewards
+unless the "Friend's discount" or "Friend rewards" kind is chosen. The hidden
+code can only be changed through the offer. Links are in `share_links`, and
+rewards are in `share_rewards`, one per friend's order. The audit log has
+`share_offer.set` and `share_offer.ended`. An erasure takes the person's
+address and account off their links rather than deleting them, so the
+rewards they earned can still be taken back by a refund; the links stop
+working. Their orders keep the discount they were given. In the console's
+Insights, orders through a friend's link are counted as "Friends' links",
+not as promoter links.
+
+**Promoter slugs.** A friend's link rides `?ref=` like a promoter's, and
+looks like `f` and ten letters or numbers. The console refuses new promoter
+slugs of that shape. Older ones keep working, but the event page asks the
+API before greeting anybody, so they are never greeted with a discount. To
+list them:
+
+```sql
+select organization_id, code, ref_slug from codes
+where purpose = 'promo' and ref_slug ~* '^f[a-z2-7]{10}$';
+```
 
 ## Deploys and rolling back
 

@@ -94,10 +94,15 @@ Set in the admin's Platform settings or in `.env.production`
 - Stripe and Paystack live keys and webhook secrets. Production will not start
   with any of them blank.
 - The Stripe webhook endpoint subscribed to `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`,
   `checkout.session.expired`, `payment_intent.payment_failed`,
   `charge.refunded`, `refund.created`, `refund.updated`, `refund.failed`,
   `charge.refund.updated`, `charge.dispute.created` and
   `charge.dispute.closed`.
+- Before Pay later is switched on: the two Stripe payment method
+  configurations and their ids in `STRIPE_PMC_STANDARD` and
+  `STRIPE_PMC_PAY_LATER` (docs/OPERATIONS.md, Paying later).
 - A test-mode run of a refund and a dispute on both processors before going
   live. The Stripe refund reason and the Paystack refund and dispute payloads
   follow the processors' documentation and have not been tried against live

@@ -511,6 +511,12 @@ paths:
         Refunded tickets are omitted rather than shown as void — a QR that will
         be turned away is worse than no QR, because its holder finds out at the
         front of the queue.
+
+        The same path opens a ticket somebody was sent, by the token in the
+        email that came with it (`sent` is true): that ticket and nothing
+        else of the order's — no receipt, no add-ons, no buyer's name, no
+        reference. That link closes when the ticket is sent on again, or
+        leaves the address it was sent to.
       tags: [Tickets]
       security: []
       parameters:
@@ -759,6 +765,15 @@ paths:
         Authenticated, and only by the holder. The endpoint this replaces took a
         ticket id and an email from anyone at all, with ids being sequential
         integers.
+
+        The same handover as the ticket link's (transferTicketFromLink): the
+        ticket gets a new code, so the one on this phone stops opening the
+        door; the new holder is emailed it with a link of their own. Refused
+        for a ticket somebody has come in on (a table with any of its people
+        inside included), one given back for resale, one at the address
+        already holding it, and once the event has started. The answer says
+        what was done and carries no ticket: the ticket as it now is holds
+        the new holder's code.
       tags: [Tickets]
       security:
         - bearerAuth: [attendee]
@@ -771,25 +786,28 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [to_email, to_name]
-              properties:
-                to_email: { type: string, format: email }
-                to_name: { type: string }
+            schema: { $ref: '#/components/schemas/TicketTransferRequest' }
       responses:
         '200':
-          description: Transferred.
+          description: Sent.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Ticket' }
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
         '403':
           $ref: '#/components/responses/Forbidden'
-        '409':
-          description: Already checked in, or no longer valid.
+        '422':
+          description: The ticket cannot be sent on, with the reason to show its holder; or the name or address is missing.
           content:
-            application/problem+json:
-              schema: { $ref: '#/components/schemas/Problem' }
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
 
   /api/events/{event}/scan:
     post:
@@ -1842,13 +1860,1115 @@ paths:
   # Each feature added since writes its paths under its own anchor, so two
   # features never edit the same lines of this file.
   # --- track: pay ---
+  /api/organizer/events/{event}/pay-later:
+    get:
+      operationId: getEventPayLater
+      summary: Whether buyers can pay for a night later, and what it costs the organizer
+      description: |
+        The organizer's opt-in to Klarna and Affirm on Stripe's payment page,
+        with what each lender charges beside a card's fee, so the console can
+        name the difference before the organizer turns it on. Offered to a
+        buyer only while myFiesta has it switched on (`available`), for nights
+        priced in Canadian dollars, and from `max_days_before_event` days
+        before the night (`offered_now`).
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The opt-in as it stands.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayLaterSetting' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: setEventPayLater
+      summary: Let buyers pay for a night later, or stop
+      description: |
+        The organizer pays what the lender charges over a card's fee on every
+        order paid this way, taken off their balance as an adjustment once
+        Stripe has said what it charged. Needs the permission to edit the
+        event. Turning it on is refused when myFiesta has paying later
+        switched off or the night is not in Canadian dollars; turning it off
+        is always taken.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: The opt-in as it now stands.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayLaterSetting' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
   # --- track: transfer ---
+  /api/tickets/{token}/transfer/{ticket}:
+    post:
+      operationId: transferTicketFromLink
+      summary: Send a ticket to someone else, from a ticket link
+      description: |
+        "Send to someone" on the tickets page, on the same credential as the
+        tickets themselves: an order's link, where the ticket must be on the
+        order and still the buyer's, or the link a ticket was sent with,
+        which names that ticket. A wrong token, a closed one and a ticket
+        that is not the link's all answer 404, so none can be told apart.
+
+        Through the same handover as the phone (transferTicket): a new code,
+        the old one refused at the door; an email to the new holder with the
+        ticket and a link that opens it and nothing else of the order; the
+        link the last holder was sent stops opening it. Refused for a ticket
+        somebody has come in on, one given back for resale, one at the
+        address already holding it, and once the event has started.
+      tags: [Tickets]
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+        - name: ticket
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TicketTransferRequest' }
+      responses:
+        '200':
+          description: Sent. The page as it now is, without the ticket.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketTransferAnswer' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The ticket cannot be sent on, with the reason to show; or the name or address is missing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+
   # --- track: profile ---
+  /api/auth/me:
+    get:
+      operationId: me
+      summary: The signed-in account
+      description: |
+        Who is signed in, and the organizations they belong to with what they
+        may do in each, as the server resolves it. The phone asks again when it
+        opens, so a photo or a time zone changed on another device turns up.
+        A door pass is refused: Sanctum sees it as the account that issued it.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/auth/avatar:
+    post:
+      operationId: uploadAvatar
+      summary: Put a photo on the signed-in account
+      description: |
+        A JPEG, PNG or WebP up to 12 MB. The bytes are read for what they are,
+        cropped to 256 pixels square and re-encoded as JPEG, which drops where
+        the photo was taken. It replaces the photo the account had, and the
+        old file is deleted. Seen only by the person it belongs to.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Kept. The address is new for every photo, so no cache shows the old one.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountPhoto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429': { description: 'Too many uploads. Twenty a minute.' }
+    delete:
+      operationId: removeAvatar
+      summary: Take the photo off the signed-in account
+      description: The file is deleted, and initials take its place.
+      tags: [Account]
+      security:
+        - bearerAuth: [attendee]
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: Gone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountPhoto' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   # --- track: public ---
+  /api/organizers/{slug}/events:
+    get:
+      operationId: listOrganizerEvents
+      summary: An organizer's nights, twelve at a time
+      description: |
+        What "Show more past events" asks for. With `when=past`, page 1 is the
+        same twelve the organizer page carries in `past`, and page 2 on are
+        the older ones, newest first. With `when=upcoming`, the nights still
+        to come, soonest first, twelve at a time (the organizer page carries
+        all of those in `upcoming`, unpaged). Nights on the same evening keep
+        their order, so no page repeats or skips one. Only the nights a
+        stranger may see: an invitation event is never listed.
+
+        A slug with no published ticketed event answers 404, as the page does.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: when
+          in: query
+          required: true
+          schema: { type: string, enum: [past, upcoming] }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        '200':
+          description: One page of their nights.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizerEvents' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          description: Asked more than 60 times in a minute from one address.
+
+  /api/help/videos:
+    get:
+      operationId: listHelpVideos
+      summary: The how-to videos on help/videos
+      description: |
+        Published videos only, in the order staff set. Each is named by its
+        YouTube id alone; the page builds the thumbnail and the player's
+        address itself, the player on youtube-nocookie.com and only once a
+        reader presses play. An empty list when there are none. Cached for
+        five minutes.
+      tags: [Discovery]
+      security: []
+      responses:
+        '200':
+          description: The videos, buyers' and organizers' together.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/HelpVideo' }
+        '429':
+          description: Asked more than 60 times in a minute from one address.
+
   # --- track: sched ---
+  /api/organizer/events/{event}/series:
+    patch:
+      operationId: updateSeries
+      summary: Change how a repeating night ends, and whether its dates go on sale by themselves
+      description: |
+        Only what is sent changes. `count` or `until` moves the end either
+        way: dates still to come past a new, earlier end that nobody holds a
+        ticket for (valid, used or listed for resale) are removed, the rest
+        are kept, and dates newly inside a longer run are made at once.
+        `frequency` can only be sent as it already is; a different one is
+        refused with "Stop this series and start a new one."
+
+        `auto_publish` and `on_sale_days_before` need the permission to put
+        events on sale and a confirmed email address. Each date then goes on
+        sale by itself `on_sale_days_before` days before its night (as soon
+        as it is made when null), sent by events:go-live as the member who
+        turned it on, asked again at that time: straight on sale as the
+        approved night on a new date, through review otherwise. The days are
+        counted on the venue's calendar. Only draft dates never on sale and
+        not sent back by staff are given a time. Turned off, the times the
+        series gave its draft dates are taken back.
+
+        A staff session acting as the organization is refused (403) a change
+        to the end, turning `auto_publish` on and `on_sale_days_before`;
+        turning `auto_publish` off stays open.
+
+        The time a single night goes on sale is `publish_at` on
+        PATCH /api/organizer/events/{event}.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          description: Any date of the series.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                frequency:
+                  type: string
+                  enum: [weekly, fortnightly, monthly]
+                  description: Accepted only as it already is.
+                count:
+                  type: [integer, 'null']
+                  minimum: 2
+                  maximum: 104
+                  description: Every date in all, the first included. Not with `until`.
+                until:
+                  type: [string, 'null']
+                  format: date
+                  description: The last day, in the venue's zone; that day's night is kept.
+                auto_publish: { type: boolean }
+                on_sale_days_before:
+                  type: [integer, 'null']
+                  minimum: 1
+                  maximum: 365
+      responses:
+        '200':
+          description: The series as it now stands, and what changing it did.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [series, removed, kept, created, message]
+                properties:
+                  series: { $ref: '#/components/schemas/OrganizerSeries' }
+                  removed: { type: integer, description: 'Dates past the new end that nobody had bought into, now gone.' }
+                  kept: { type: integer, description: 'Dates past the new end kept because somebody holds a ticket for them.' }
+                  created: { type: integer, description: 'Dates newly inside a longer run, made now.' }
+                  message: { type: string, description: 'What changed, written for the organizer.' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '423':
+          description: The night is waiting for review, and cannot change until it is decided.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+                  code: { type: string }
+
   # --- track: clone ---
+  /api/organizer/events/{event}/duplicate:
+    post:
+      operationId: duplicateEvent
+      summary: Copy an event into a new draft, with changes
+      description: |
+        The copy is always a draft, so it goes through review. It carries the
+        details, tiers and prices, price ladders, extras, questions, reminder
+        times and the poster; never sales, codes or the gallery. Everything in
+        the body is optional: what is not given is copied as it is. A tier not
+        listed comes across unchanged; on a listed tier, a field not given is
+        left as it is, and a quantity of null is unlimited. Sales windows move
+        with the start. Refused (422) for an event myFiesta has taken off sale.
+        Needs permission to create events in the event's organization.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CopyAdjustments' }
+      responses:
+        '201':
+          description: The new draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventCopy' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/templates:
+    get:
+      operationId: listEventTemplates
+      summary: The organization's event templates
+      description: |
+        Events kept as a starting point, by name. Needs permission to create
+        events in the organization.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The templates, by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventTemplate' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: saveEventTemplate
+      summary: Keep an event as a template
+      description: |
+        The template is the event as it is now, kept apart from it: changing
+        the event later does not change the template. The poster is copied
+        into files of the template's own. Names are unique in an organization,
+        whatever their capitals; at most 50 templates each. Refused (422) for
+        an event myFiesta has taken off sale.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_event_id, name]
+              properties:
+                from_event_id: { type: string, format: uuid }
+                name: { type: string, minLength: 2, maxLength: 80 }
+      responses:
+        '201':
+          description: The template, kept.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/EventTemplate' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/templates/{template}:
+    delete:
+      operationId: deleteEventTemplate
+      summary: Delete a template
+      description: |
+        The template and its poster's files go. Events made from it keep
+        theirs. Another organization's template is not found.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Gone.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/organizer/templates/{template}/events:
+    post:
+      operationId: createEventFromTemplate
+      summary: Make a new draft event from a template
+      description: |
+        A start is required; the rest of the body changes the new event on the
+        way, as when copying an event. The new event is a draft that goes
+        through review: a template is never approved itself. A venue the
+        organization has since removed is left off. Refused (422) while the
+        event the template was kept from is taken off sale by myFiesta.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: template
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CopyAdjustments'
+                - type: object
+                  required: [starts_at]
+      responses:
+        '201':
+          description: The new draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventCopy' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   # --- track: share ---
+  /api/events/{slug}/share-link:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: getShareLink
+      summary: My friend-discount link to a night
+      description: |
+        For somebody signed in who holds a ticket to the night that will
+        still get them in. A buyer is given theirs when they pay; this is for
+        anybody else holding one. Asking twice gets the same link.
+      tags: [Tickets]
+      security:
+        - bearerAuth: [attendee]
+      responses:
+        '200':
+          description: The link.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ShareLink' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: This account holds no live ticket to the night.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The night has no friend discount, or its online sales are over.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+
+  /api/events/{slug}/friend-discount:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: checkFriendDiscount
+      summary: Whether a ref is a friend's link that takes money off a night
+      description: |
+        For the event page to greet somebody who arrived by a friend's link.
+        The page is the same for everybody, and a ref's shape alone cannot
+        say: a promoter's slug can look like one, and a link stops working
+        once its holder no longer has a ticket that gets them in. One 404
+        for every kind of no.
+      tags: [Discovery]
+      security: []
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The discount the link takes off.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ShareOffer' }
+        '404':
+          description: No such night, no offer, or not a working friend's link to it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+
+  /api/organizer/events/{event}/share-offer:
+    put:
+      operationId: setShareOffer
+      summary: Start, change or end a night's friend discount
+      description: |
+        A friend who buys through a buyer's link saves `discount_bps`, and the
+        buyer is sent a single-use code worth the same off their next tickets
+        from the organizer, for up to `max_rewards` friends. The organizer
+        pays for both discounts out of the night's proceeds. Null
+        `discount_bps` ends the offer; links and rewards already out keep
+        what they were given. Needs the codes permission, and is refused
+        while the night waits for review.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: event
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [discount_bps, max_rewards]
+              properties:
+                discount_bps:
+                  type: [integer, 'null']
+                  description: Basis points (1500 is 15%), from 100 to the platform's cap. Null ends the offer.
+                max_rewards:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        '200':
+          description: The offer as it now stands; `discount_bps` is null once it has ended.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [share_offer]
+                properties:
+                  share_offer: { $ref: '#/components/schemas/OrganizerShareOffer' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '423':
+          description: The night is waiting for review, and its discounts cannot change until it is decided.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+                  code: { type: string }
+
   # --- track: survey ---
+  /api/surveys/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        description: The link's whole credential, from the survey email.
+        schema: { type: string, maxLength: 64 }
+    get:
+      operationId: getSurvey
+      summary: The survey somebody was emailed after a night
+      description: |
+        No sign-in: the token is the whole credential, as on a ticket link.
+        Answers with the night and the questions it was sent with, and
+        whether this link has been answered — never with whose link it is.
+        Sixty a minute.
+      tags: [Tickets]
+      responses:
+        '200':
+          description: The survey.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicSurvey' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429': { description: 'Too many requests.' }
+    post:
+      operationId: answerSurvey
+      summary: Answer the survey, once
+      description: |
+        Each answer is checked against the questions the night was sent with:
+        `nps` takes a whole number from 0 to 10, `rating5` from 1 to 5,
+        `single` one of the options, `multi` a list of them, and `text` up to
+        2,000 characters. An empty answer to an optional question is no
+        answer. One answer per link, never edited. Ten a minute.
+      tags: [Tickets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: object
+                  description: Keyed by question id.
+                  additionalProperties:
+                    oneOf:
+                      - type: integer
+                      - type: string
+                      - type: array
+                        items: { type: string }
+                      - type: 'null'
+      responses:
+        '201':
+          description: Kept.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, survey]
+                properties:
+                  message: { type: string }
+                  survey: { $ref: '#/components/schemas/PublicSurvey' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: This link has already been answered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429': { description: 'Too many requests.' }
+
+  /api/organizer/surveys:
+    get:
+      operationId: getSurveyOverview
+      summary: Whether surveys go, and how the organization's recent nights answered
+      description: |
+        For the console's Surveys screen. Needs `messages.send`: a survey is an
+        email to the people who came. The recommend score of a night is null
+        until five people have answered it.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          description: Which of the member's organizations. Their first when left out.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The organization's switch and its last twenty surveyed nights.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SurveyOverview' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/organizer/surveys/settings:
+    put:
+      operationId: setSurveysEnabled
+      summary: Surveys on or off for every night of the organization
+      description: On by default. Off stops every night's survey until it is switched back on.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [surveys_enabled]
+              properties:
+                surveys_enabled: { type: boolean }
+      responses:
+        '200':
+          description: Switched.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [surveys_enabled, nights_due_now, message]
+                properties:
+                  surveys_enabled: { type: boolean }
+                  nights_due_now:
+                    type: integer
+                    description: Finished nights the next hourly run asks about with surveys on.
+                  message: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/survey-templates:
+    get:
+      operationId: listSurveyTemplates
+      summary: The surveys a night can send
+      description: myFiesta's own first, then the organization's, archived ones left out.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The surveys.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SurveyTemplateList' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createSurveyTemplate
+      summary: Write a survey of the organization's own
+      description: Twelve questions at most. A `single` or `multi` question needs two different options.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      parameters:
+        - name: X-Organization
+          in: header
+          required: false
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SurveyTemplateInput' }
+      responses:
+        '201':
+          description: Written.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SurveyTemplate' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/survey-templates/{template}:
+    parameters:
+      - name: template
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: X-Organization
+        in: header
+        required: false
+        schema: { type: string, format: uuid }
+    put:
+      operationId: updateSurveyTemplate
+      summary: Change one of the organization's surveys
+      description: |
+        Nights already sent keep the questions they were sent with; nights
+        still to go send these. myFiesta's own and another organization's
+        answer 404.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SurveyTemplateInput' }
+      responses:
+        '200':
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/SurveyTemplate' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: archiveSurveyTemplate
+      summary: Remove one of the organization's surveys
+      description: |
+        Archived rather than deleted, so a night sent with it can still be
+        compared with the next. A night that was going to send it sends
+        myFiesta's instead, and the message says how many.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: Removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/organizer/events/{event}/survey:
+    parameters:
+      - name: event
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getEventSurvey
+      summary: One night's survey
+      description: Whether it goes, which questions, when, and why not when it will not.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: The survey.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventSurvey' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      operationId: updateEventSurvey
+      summary: Switch one night's survey, choose its questions, or change its delay
+      description: |
+        Any of the three, each left as it is when left out. `template_id`
+        null is myFiesta's own. Refused with 409 once the survey has gone.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                template_id: { type: [string, 'null'], format: uuid }
+                send_delay_hours: { type: integer, minimum: 1, maximum: 168 }
+      responses:
+        '200':
+          description: The survey as it now stands.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventSurvey' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Already sent.
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/organizer/events/{event}/survey/results:
+    parameters:
+      - name: event
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getEventSurveyResults
+      summary: What the people who came said about one night
+      description: |
+        Counts, scores and what was written, never who said it. Nothing is
+        broken down until `minimum` people have answered, and no question
+        until that many have answered it.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: The results.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SurveyResults' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/organizer/events/{event}/survey/send:
+    parameters:
+      - name: event
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: sendEventSurvey
+      summary: Send one night's survey now
+      description: |
+        Rather than when the hourly run gets to it. Only once the night is
+        over, and once: each person is asked one time. The console confirms
+        first, because an email cannot be called back.
+      tags: [Organizer]
+      security:
+        - bearerAuth: [organizer]
+      responses:
+        '200':
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, invited, survey]
+                properties:
+                  message: { type: string }
+                  invited: { type: integer }
+                  survey: { $ref: '#/components/schemas/EventSurvey' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Already sent.
+        '422':
+          description: The night is not over, or the survey is switched off.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+
   # --- track: points ---
   # --- track: pass ---
   # --- track: wait ---
@@ -2205,9 +3325,18 @@ components:
             properties:
               name: { type: string }
               quantity: { type: integer }
-        reference: { type: string }
-        status: { type: string }
+        reference:
+          type: [string, 'null']
+          description: The order's reference. Null on a ticket somebody was sent, where it would look up what the buyer paid.
+        status:
+          type: [string, 'null']
+          description: The order's status. Null on a ticket somebody was sent.
         buyer_name: { type: [string, 'null'] }
+        sent:
+          type: boolean
+          description: |
+            Whether this is one ticket somebody was sent, opened by the link
+            that came with it, rather than an order's own page.
         event:
           type: object
           required: [slug, title, starts_at, timezone, organizer]
@@ -2225,7 +3354,11 @@ components:
         tickets:
           type: array
           items: { $ref: '#/components/schemas/HeldTicket' }
-        receipt: { $ref: '#/components/schemas/Receipt' }
+        receipt:
+          description: The order's receipt. Null on a ticket somebody was sent, who did not pay for it.
+          oneOf:
+            - $ref: '#/components/schemas/Receipt'
+            - type: 'null'
 
     Receipt:
       type: object
@@ -2360,7 +3493,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/OrganizerBrand'
         - type: object
-          required: [upcoming, past]
+          required: [upcoming, past, past_has_more, socials]
           properties:
             upcoming:
               type: array
@@ -2371,9 +3504,21 @@ components:
               type: array
               description: |
                 The most recent nights that have already happened, newest
-                first and bounded. What a stranger deciding whether to trust a
-                name actually reads.
+                first, twelve at most. What a stranger deciding whether to
+                trust a name actually reads.
               items: { $ref: '#/components/schemas/EventSummary' }
+            past_has_more:
+              type: boolean
+              description: |
+                Whether there are older nights than `past`, from
+                GET /api/organizers/{slug}/events?when=past&page=2 on.
+            socials:
+              type: array
+              description: |
+                Where else to find them, in the order a page shows them, with
+                anything that cannot be read as an account left off. Empty
+                when there is none.
+              items: { $ref: '#/components/schemas/SocialLink' }
 
     Venue:
       type: object
@@ -2902,6 +4047,17 @@ components:
           properties:
             name: { type: string }
             email: { type: string, format: email }
+            avatar_url:
+              type: [string, 'null']
+              format: uri
+              description: |
+                The account's photo, 256 pixels square, or null for initials.
+                Sent by signing in; an account just made by invitation has none.
+            timezone:
+              type: [string, 'null']
+              description: |
+                The IANA zone the account chose, or null to use the device's
+                own. Sent by signing in.
         abilities:
           type: array
           description: Decided by the server from what the account is. The phone opens its attendee or organizer half from these.
@@ -3255,17 +4411,186 @@ components:
     # --- track: pay ---
     PayLater:
       type: object
-      description: How a night can be paid for later. Filled in by the pay-later feature.
+      description: |
+        Who a buyer can pay a night later with, on Stripe's payment page. Never
+        an instalment amount: the lender quotes those on its own page.
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/PayLaterProvider' }
     PayLaterQuote:
       type: object
-      description: Whether a basket can be paid for later, and with whom. Filled in by the pay-later feature.
+      description: |
+        Whether this basket can be paid for later, and with whom. Not
+        eligible, naming nobody, when the night offers it but no lender takes
+        an order this size (Klarna C$1-1,500, Affirm C$50-30,000).
+      required: [eligible, providers]
+      properties:
+        eligible: { type: boolean }
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/PayLaterProvider' }
+    PayLaterProvider:
+      type: string
+      enum: [klarna, affirm]
+    PayLaterRate:
+      type: object
+      description: A processor's published rate, in basis points of the order plus a flat amount in minor units.
+      required: [bps, flat]
+      properties:
+        bps: { type: integer }
+        flat: { type: integer }
+    PayLaterSetting:
+      type: object
+      required: [enabled, available, offered_now, max_days_before_event, currency, fees]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the organizer has opted the night in.
+        available:
+          type: boolean
+          description: Whether myFiesta offers paying later on this night at all (switched on, priced in CAD).
+        offered_now:
+          type: boolean
+          description: Whether a buyer would be offered it today, which also needs the night to be near enough.
+        max_days_before_event:
+          type: integer
+          description: How many days before the night buyers start being offered it.
+        currency: { type: string }
+        fees:
+          type: object
+          description: What a card costs and what each lender does; the organizer pays the difference.
+          required: [card, klarna, affirm]
+          properties:
+            card: { $ref: '#/components/schemas/PayLaterRate' }
+            klarna: { $ref: '#/components/schemas/PayLaterRate' }
+            affirm: { $ref: '#/components/schemas/PayLaterRate' }
     # --- track: transfer ---
+    TicketTransferRequest:
+      type: object
+      description: Who a ticket is going to. The address finds their account however it is typed.
+      required: [email, name]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        name: { type: string, maxLength: 120 }
+    TicketTransferAnswer:
+      type: object
+      required: [message, access]
+      properties:
+        message:
+          type: string
+          description: What was done, to show the person who did it.
+        access:
+          $ref: '#/components/schemas/TicketAccess'
+          description: |
+            The link's page as it now is: without the ticket that went. On
+            the link a ticket was sent with, that is a page with no tickets
+            left on it, the link having closed.
     # --- track: profile ---
+    Account:
+      type: object
+      description: The signed-in person, as GET /api/auth/me has them now.
+      required: [name, email, email_verified, phone, timezone, avatar_url, organizations]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        email_verified:
+          type: boolean
+          description: |
+            Whether the address is proved. Until it is, putting an event on
+            sale, asking to be paid and changing where payouts go are refused.
+        phone: { type: [string, 'null'] }
+        timezone:
+          type: [string, 'null']
+          description: |
+            The IANA zone the account chose, or null to use the device's own.
+            Saved through PATCH /api/auth/profile, never guessed by the server.
+        avatar_url:
+          type: [string, 'null']
+          format: uri
+          description: The account's photo, 256 pixels square, or null for initials.
+        organizations:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Membership'
+              - type: object
+                required: [verified]
+                properties:
+                  verified: { type: boolean }
+
+    AccountPhoto:
+      type: object
+      description: What uploading or removing the account's photo answers with.
+      required: [avatar_url]
+      properties:
+        avatar_url:
+          type: [string, 'null']
+          format: uri
+          description: Where the new photo is served from, or null once it is removed.
+
     # --- track: public ---
+    SocialLink:
+      type: object
+      description: |
+        One place an organizer can be found besides here. The address is
+        built by the API from the part that names the account, never passed
+        through as typed, and a website is https only. Open it with
+        rel="noopener noreferrer nofollow".
+      required: [network, label, url]
+      properties:
+        network: { type: string, enum: [instagram, tiktok, x, facebook, website] }
+        label:
+          type: string
+          description: |
+            What the link says — @username, a Facebook page's name, or a
+            website's host. A Facebook page kept by its address (one with no
+            username) goes by the organizer's name. Shown after the network's
+            name, never in place of it.
+        url: { type: string, format: uri }
+
+    OrganizerEvents:
+      type: object
+      description: One page of an organizer's nights, twelve at a time.
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/EventSummary' }
+        meta:
+          type: object
+          required: [page, per_page, has_more]
+          properties:
+            page: { type: integer }
+            per_page: { type: integer }
+            has_more:
+              type: boolean
+              description: Whether the next page has anything on it.
+
+    HelpVideo:
+      type: object
+      description: |
+        A how-to video. Only YouTube's id for it is given; the thumbnail is
+        https://i.ytimg.com/vi/{youtube_id}/hqdefault.jpg and the player
+        https://www.youtube-nocookie.com/embed/{youtube_id}.
+      required: [id, title, youtube_id, description, audience]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        youtube_id: { type: string, pattern: '^[A-Za-z0-9_-]{11}$' }
+        description: { type: [string, 'null'] }
+        audience:
+          type: string
+          enum: [buyers, organizers]
+          description: Who it is for — somebody buying a ticket, or somebody running events.
+
     # --- track: sched ---
     OtherDate:
       type: object
-      description: Another date of a repeating night. Filled in by the scheduling feature.
+      description: |
+        Another date of a repeating night: on sale and still to come. An
+        event page lists at most eight, soonest first.
       required: [slug, starts_at, availability]
       properties:
         slug: { type: string }
@@ -3274,18 +4599,495 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Availability'
             - type: 'null'
+    OrganizerSeries:
+      type: object
+      description: A repeating night as the console sees it, with its dates still to come.
+      required: [id, rrule, status, timezone, source_event_id, frequency, count, until, auto_publish, on_sale_days_before, past_count, occurrences, skipped]
+      properties:
+        id: { type: string, format: uuid }
+        rrule: { type: string, description: 'The rule in iCalendar (RFC 5545) form.' }
+        status: { type: string, enum: [active, paused, ended] }
+        timezone: { type: string }
+        generated_through: { type: [string, 'null'], format: date-time }
+        source_event_id: { type: string, format: uuid }
+        frequency:
+          type: [string, 'null']
+          enum: [weekly, fortnightly, monthly, null]
+          description: The choice that made the rule; null for a rule written some other way.
+        count: { type: [integer, 'null'], description: 'Every date it runs for, the first included.' }
+        until: { type: [string, 'null'], format: date, description: "Its last day, in the venue's zone." }
+        auto_publish: { type: boolean, description: 'Whether each date goes on sale by itself.' }
+        on_sale_days_before:
+          type: [integer, 'null']
+          description: How many days before its night each date goes on sale; null is as soon as it is made.
+        past_count: { type: integer }
+        occurrences:
+          type: array
+          items:
+            type: object
+            required: [id, slug, title, starts_at, series_occurs_at, status, moved, is_source, publish_at]
+            properties:
+              id: { type: string, format: uuid }
+              slug: { type: string }
+              title: { type: string }
+              starts_at: { type: string, format: date-time }
+              series_occurs_at: { type: string, format: date-time }
+              status: { type: string }
+              moved: { type: boolean }
+              is_source: { type: boolean }
+              publish_at:
+                type: [string, 'null']
+                format: date-time
+                description: When a draft date goes on sale by itself.
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [occurs_at, reason]
+            properties:
+              occurs_at: { type: string, format: date-time }
+              reason: { type: [string, 'null'] }
     # --- track: clone ---
+    CopyAdjustments:
+      type: object
+      description: |
+        What to change on the way to a new event made from an old one, or from
+        a template. Everything left out is copied as it is.
+      additionalProperties: false
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+          description: In the future. Copying an event without one keeps its own start.
+        ends_at:
+          type: string
+          format: date-time
+          description: After the start. Without one the new event is as long as the old.
+        title: { type: string, maxLength: 160 }
+        description:
+          type: [string, 'null']
+          maxLength: 20000
+          description: Replaces the description when given, even as null or empty.
+        ticket_types:
+          type: array
+          maxItems: 100
+          description: Changes to tiers, each named by the id it has in the event or the template. A tier not listed comes across as it is.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+              id: { type: string }
+              include:
+                type: boolean
+                default: true
+                description: False leaves the tier out. A tier that waited for it in a price ladder opens like any other.
+              name: { type: [string, 'null'], maxLength: 80 }
+              price_amount:
+                type: [integer, 'null']
+                minimum: 0
+                maximum: 100000000
+                description: Minor units.
+              quantity_available:
+                type: [integer, 'null']
+                minimum: 0
+                maximum: 2147483647
+                description: Null is unlimited. Not given is unchanged.
+        include:
+          type: object
+          additionalProperties: false
+          properties:
+            add_ons: { type: boolean, default: true }
+            questions: { type: boolean, default: true }
+            reminders: { type: boolean, default: true }
+    EventCopy:
+      type: object
+      description: |
+        A new draft event, made by copying or from a template: the public
+        event's fields, with its id and status for the console to open it.
+      required: [id, slug, title, starts_at, status]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        starts_at: { type: string, format: date-time }
+        status: { type: string, enum: [draft] }
+    EventTemplate:
+      type: object
+      description: |
+        An event kept as a starting point. What it keeps is fixed when it is
+        kept; the event it came from can change or go without touching it.
+      required: [id, name, title, description, currency, timezone, city, original_starts_at, length_minutes, poster_url, ticket_types, add_ons, questions, reminders, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        title:
+          type: string
+          description: The title a new event starts with.
+        description: { type: [string, 'null'] }
+        currency: { type: string, enum: [CAD, NGN] }
+        timezone: { type: string }
+        city: { type: string }
+        original_starts_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the night it was kept from started. A new event takes a date of its own.
+        length_minutes:
+          type: [integer, 'null']
+          description: How long that night ran, or null when it had no end.
+        poster_url: { type: [string, 'null'], format: uri }
+        ticket_types:
+          type: array
+          items:
+            type: object
+            required: [id, name, price, quantity_available]
+            properties:
+              id:
+                type: string
+                description: How to name this tier when making an event from the template.
+              name: { type: string }
+              price: { $ref: '#/components/schemas/Money' }
+              quantity_available: { type: [integer, 'null'] }
+        add_ons:
+          type: integer
+          description: How many extras it keeps.
+        questions:
+          type: integer
+          description: How many questions it keeps.
+        reminders:
+          type: integer
+          description: How many reminder times it keeps.
+        created_by:
+          type: [string, 'null']
+          description: The name of whoever kept it, while their account exists.
+        created_at: { type: string, format: date-time }
     # --- track: share ---
     ShareOffer:
       type: object
-      description: A night's friend discount. Filled in by the friend-discount feature.
+      description: |
+        A night's friend discount: what somebody arriving through a buyer's
+        link saves on their tickets. Says nothing about who sent it.
+      required: [discount_bps]
+      properties:
+        discount_bps:
+          type: integer
+          description: Basis points off each ticket (1500 is 15%).
     ShareLink:
       type: object
-      description: A holder's own friend-discount link. Filled in by the friend-discount feature.
+      description: |
+        A holder's own friend-discount link to a night. A friend who buys
+        through it saves `discount_bps`; once they have paid, the holder is
+        emailed a single-use code worth the same off their next tickets from
+        the organizer.
+      required: [url, discount_bps, rewards_earned, rewards_left, organizer]
+      properties:
+        url:
+          type: [string, 'null']
+          description: |
+            The link to send: the event page with `?ref=`. Null for a ticket
+            somebody passed on, until its holder asks for theirs
+            (POST /api/events/{slug}/share-link).
+        discount_bps:
+          type: integer
+          description: What the friend saves, and the holder's reward, in basis points.
+        rewards_earned:
+          type: integer
+          description: Rewards this link has earned and that still stand.
+        rewards_left:
+          type: integer
+          description: How many more friends can earn the holder a reward.
+        organizer:
+          type: [string, 'null']
+          description: Whose next tickets the reward is good for.
     FriendDiscount:
       type: object
-      description: What a friend's link took off a basket. Filled in by the friend-discount feature.
+      description: |
+        What a friend's link took off a basket, shown as its own line rather
+        than as a code the buyer typed. A code the buyer types replaces it.
+      required: [discount_bps, amount]
+      properties:
+        discount_bps:
+          type: integer
+          description: Basis points off each ticket.
+        amount: { $ref: '#/components/schemas/Money' }
+    OrganizerShareOffer:
+      type: object
+      description: |
+        A night's friend discount as its organizer set it, with what it has
+        done so far. Always present on the organizer's event, so the console
+        knows the platform's cap before an offer starts and still shows what
+        an ended one did.
+      required: [discount_bps, max_rewards, max_bps, links, friend_orders, rewards]
+      properties:
+        discount_bps:
+          type: [integer, 'null']
+          description: What a friend saves, and a buyer's reward, in basis points. Null while the night offers nothing.
+        max_rewards:
+          type: integer
+          description: How many friends' orders one link earns its holder a reward for.
+        max_bps:
+          type: integer
+          description: The most any night may offer, as myFiesta has it set.
+        links:
+          type: integer
+          description: Links handed out for this night.
+        friend_orders:
+          type: integer
+          description: Paid orders that came through a friend's link.
+        rewards:
+          type: integer
+          description: Rewards standing (issued, not taken back).
     # --- track: survey ---
+    SurveyQuestion:
+      type: object
+      description: |
+        One question. `nps` is 0 to 10 ("how likely are you to recommend"),
+        `rating5` 1 to 5, `single` one of `options`, `multi` any of them,
+        `text` up to 2,000 characters. `options` is empty except for `single`
+        and `multi`.
+      required: [id, type, label, options, required]
+      properties:
+        id:
+          type: string
+          description: Fixed for the question's life, so its answers stay attached to it.
+        type:
+          type: string
+          enum: [nps, rating5, single, multi, text]
+        label: { type: string }
+        options:
+          type: array
+          items: { type: string }
+        required: { type: boolean }
+    PublicSurvey:
+      type: object
+      description: |
+        The survey behind an emailed link: the night, the questions it was sent
+        with, and whether the link has been answered. Never whose link it is.
+      required: [event, questions, answered]
+      properties:
+        event:
+          type: object
+          required: [title, organizer, starts_at, timezone]
+          properties:
+            title: { type: string }
+            organizer: { type: string }
+            starts_at: { type: string, format: date-time }
+            timezone: { type: string, description: The night's own zone (IANA). }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/SurveyQuestion' }
+        answered:
+          type: boolean
+          description: True once this link has been answered. It cannot be answered again.
+    SurveyTemplate:
+      type: object
+      description: A list of questions a night can send. `platform` is myFiesta's own, which nobody edits.
+      required: [id, name, platform, questions, nights_waiting, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        platform: { type: boolean }
+        questions:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/SurveyQuestion' }
+        nights_waiting:
+          type: integer
+          description: Nights still to be sent with it, so removing it can say what it touches.
+        updated_at: { type: [string, 'null'], format: date-time }
+    SurveyTemplateInput:
+      type: object
+      required: [name, questions]
+      properties:
+        name: { type: string, maxLength: 80 }
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: object
+            required: [type, label]
+            properties:
+              id:
+                type: [string, 'null']
+                description: Kept from the question being edited. Left out, a new question is given one.
+              type:
+                type: string
+                enum: [nps, rating5, single, multi, text]
+              label: { type: string, maxLength: 200 }
+              options:
+                type: array
+                maxItems: 10
+                items: { type: string, maxLength: 80 }
+              required: { type: boolean }
+    SurveyTemplateList:
+      type: object
+      required: [data, max_questions, types]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/SurveyTemplate' }
+        max_questions: { type: integer }
+        types:
+          type: array
+          items: { type: string }
+    SurveyTemplateChoice:
+      type: object
+      required: [id, name, platform]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        platform: { type: boolean }
+    EventSurvey:
+      type: object
+      description: |
+        One night's survey as it stands. `stopped_because` says, in the
+        organizer's words, why it will not go; null when it will or has.
+      required: [enabled, organization_enabled, template_id, template, send_delay_hours, timezone, ends_at, final_count_at, sends_at, sent_at, stopped_because, due_now, can_send_now, questions, templates]
+      properties:
+        enabled: { type: boolean }
+        organization_enabled: { type: boolean }
+        template_id:
+          type: [string, 'null']
+          format: uuid
+          description: The survey chosen for this night. Null is myFiesta's own.
+        template:
+          oneOf:
+            - $ref: '#/components/schemas/SurveyTemplateChoice'
+            - type: 'null'
+        send_delay_hours: { type: integer }
+        timezone: { type: string, description: The night's own zone (IANA). }
+        ends_at:
+          type: string
+          format: date-time
+          description: The night's end, or twelve hours after it starts when it lists none.
+        final_count_at:
+          type: string
+          format: date-time
+          description: When the door's last scans are in, the earliest the survey can be sent.
+        sends_at:
+          type: string
+          format: date-time
+          description: The hourly run that sends it, if nothing stops it.
+        sent_at: { type: [string, 'null'], format: date-time }
+        stopped_because: { type: [string, 'null'] }
+        due_now:
+          type: boolean
+          description: Switched on, the next hourly run sends it.
+        can_send_now: { type: boolean }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/SurveyQuestion' }
+        templates:
+          type: array
+          description: What can be chosen instead, myFiesta's own first.
+          items: { $ref: '#/components/schemas/SurveyTemplateChoice' }
+    SurveyOverview:
+      type: object
+      required: [surveys_enabled, nights_due_now, minimum, recent]
+      properties:
+        surveys_enabled: { type: boolean }
+        nights_due_now:
+          type: integer
+          description: Finished nights the next hourly run asks about with surveys on.
+        minimum:
+          type: integer
+          description: Answers a night needs before its figures are shown.
+        recent:
+          type: array
+          items:
+            type: object
+            required: [event_id, title, starts_at, timezone, sent_at, invited, responded, response_rate, nps]
+            properties:
+              event_id: { type: string, format: uuid }
+              title: { type: string }
+              starts_at: { type: string, format: date-time }
+              timezone: { type: string }
+              sent_at: { type: [string, 'null'], format: date-time }
+              invited: { type: integer }
+              responded: { type: integer }
+              response_rate:
+                type: [integer, 'null']
+                description: Percent of those asked who answered.
+              nps:
+                type: [integer, 'null']
+                description: The recommend score, -100 to 100. Null under `minimum` answers.
+    SurveyQuestionResult:
+      type: object
+      description: |
+        One question's figures. `shown` is false until enough people answered
+        it, and then `average`, `distribution` and `texts` stay null.
+      required: [id, type, label, answered, shown, average, distribution, texts]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [nps, rating5, single, multi, text]
+        label: { type: string }
+        answered: { type: integer }
+        shown: { type: boolean }
+        average:
+          type: [number, 'null']
+          description: For `nps` and `rating5`, to one decimal.
+        distribution:
+          type: [array, 'null']
+          description: Every possible answer with how many gave it, zeros included. Not for `text`.
+          items:
+            type: object
+            required: [label, count]
+            properties:
+              label: { type: string }
+              count: { type: integer }
+        texts:
+          type: [array, 'null']
+          description: What was written, newest first, with nothing about who wrote it.
+          items: { type: string }
+    SurveyInsight:
+      type: object
+      description: Something the answers suggest doing, by a rule an organizer can check against the figures.
+      required: [kind, tone, title, action, tab, word]
+      properties:
+        kind:
+          type: string
+          enum: [lowest, change, words]
+        tone:
+          type: string
+          enum: [good, warning, neutral]
+        title: { type: string }
+        action: { type: string }
+        tab:
+          type: [string, 'null']
+          description: The event tab where the action is taken, when there is one.
+        word: { type: [string, 'null'] }
+    SurveyResults:
+      type: object
+      required: [sent_at, invited, responded, response_rate, minimum, enough, nps, questions, insights]
+      properties:
+        sent_at: { type: [string, 'null'], format: date-time }
+        invited: { type: integer }
+        responded: { type: integer }
+        response_rate: { type: [integer, 'null'] }
+        minimum: { type: integer }
+        enough:
+          type: boolean
+          description: Whether `minimum` people have answered. Below it, only the counts are shown.
+        nps:
+          oneOf:
+            - type: object
+              required: [score, promoters, passives, detractors, answered]
+              properties:
+                score: { type: integer, minimum: -100, maximum: 100 }
+                promoters: { type: integer }
+                passives: { type: integer }
+                detractors: { type: integer }
+                answered: { type: integer }
+            - type: 'null'
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/SurveyQuestionResult' }
+        insights:
+          type: array
+          items: { $ref: '#/components/schemas/SurveyInsight' }
     # --- track: points ---
     Perk:
       type: object

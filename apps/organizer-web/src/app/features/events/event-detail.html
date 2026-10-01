@@ -62,7 +62,9 @@
           [attr.aria-describedby]="notReady().length > 0 ? 'not-ready' : 'on-submit'"
           (click)="submit()"
         >
-          @if (event.review.on_submit === 'publish') {
+          @if (event.review.on_submit === 'publish' && onSaleAt()) {
+            Put on sale now
+          } @else if (event.review.on_submit === 'publish') {
             Put back on sale
           } @else {
             Submit for review
@@ -80,7 +82,9 @@
           </div>
         } @else {
           <p id="on-submit" class="actions__blocked m-0 max-w-[52ch] text-pretty text-sm text-text-muted">
-            @if (event.review.on_submit === 'publish') {
+            @if (event.review.on_submit === 'publish' && onSaleAt(); as at) {
+              It is approved and goes on sale by itself at {{ sendTime(at) }}. Put it on sale now if you do not want to wait.
+            } @else if (event.review.on_submit === 'publish') {
               Nothing a buyer sees has changed since it was approved, so it goes straight back on sale.
             } @else {
               myFiesta looks at it before it goes on sale. It cannot be changed while it waits.
@@ -129,6 +133,14 @@
       <div class="flex flex-col gap-1 bg-surface-raised p-4">
         <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Tax</span><span class="figure text-lg">{{ money(totals.tax) }}</span>
       </div>
+      @if (totals.adjustments && totals.adjustments.amount !== 0) {
+        <!-- Taken off what is owed, so named beside it: mostly what Klarna and Affirm cost over a card (pay later). -->
+        <div class="adjustments flex flex-col gap-1 bg-surface-raised p-4">
+          <span class="label text-xs uppercase tracking-[0.06em] text-text-muted">Adjustments</span
+          ><span class="figure text-lg">{{ money(totals.adjustments) }}</span>
+          <span class="text-xs text-text-muted">Klarna and Affirm fees over a card's, and any correction by myFiesta</span>
+        </div>
+      }
       <div class="aside flex flex-col gap-1 border-l border-dashed border-border-strong bg-surface-raised p-4 text-text-muted">
         <!--
           Outside the running total on purpose. This is what buyers paid us on
@@ -258,7 +270,8 @@
           <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-primary" type="button" (click)="copying.set(false)">Cancel</button>
         </div>
         <p class="help mt-2 text-xs text-text-muted">
-          Tickets, prices, capacity and the banner come across. Sales and the
+          Tickets, prices and price steps, capacity, extras, checkout questions,
+          reminder times and the banner come across. Sales, codes and the
           gallery do not, and the copy starts as a draft to submit for review.
         </p>
       }

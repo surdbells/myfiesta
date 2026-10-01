@@ -148,11 +148,32 @@ return [
 
         // --- track: pay ---
         // --- track: transfer ---
+        // A ticket somebody was sent, by the account it went to: their
+        // address on the record of it, and the link it came with, which opens
+        // a page with their name on it. The sender's side is found by their
+        // address, under by_email; each person's erasure clears only their own.
+        'ticket_transfers' => [
+            'strategy' => 'anonymise',
+            'key' => 'to_user_id',
+            'columns' => ['to_email', 'access_token'],
+            'reason' => 'The record that a ticket was sent to you is kept with the ticket; your address on it is cleared and its link stops opening.',
+        ],
         // --- track: profile ---
         // --- track: public ---
         // --- track: sched ---
         // --- track: clone ---
         // --- track: share ---
+        // A friend-discount link made under an account. Kept, with nobody's
+        // name on it, because the rewards it earned hang off it: deleting it
+        // would take them too, while their codes stayed spendable, and a
+        // friend's refund could then no longer take back the reward it paid
+        // for. A link whose holder is gone stops working (ShareLinks::live).
+        'share_links' => [
+            'strategy' => 'anonymise',
+            'key' => 'user_id',
+            'columns' => ['user_id'],
+            'reason' => 'The rewards a link earned are kept so a refund can still take one back; the account is detached.',
+        ],
         // --- track: survey ---
         // --- track: points ---
         // --- track: pass ---
@@ -249,10 +270,12 @@ return [
             'reason' => 'Admission record for a real event. Identity is cleared, the ticket remains.',
         ],
 
+        // Only the sender's address: the one it went to is the recipient's, and
+        // is cleared when they ask (by_user, track: transfer).
         'ticket_transfers' => [
             'strategy' => 'anonymise',
             'key' => 'from_email',
-            'columns' => ['from_email', 'to_email'],
+            'columns' => ['from_email'],
         ],
 
         /*
@@ -360,7 +383,38 @@ return [
         // --- track: sched ---
         // --- track: clone ---
         // --- track: share ---
+        // The same links, found by the address they were issued to, which is
+        // how most are held: buyers seldom have an account. Kept for the same
+        // reason, with the address replaced.
+        'share_links' => [
+            'strategy' => 'anonymise',
+            'key' => 'owner_email',
+            'columns' => ['owner_email'],
+            'reason' => 'The rewards a link earned are kept so a refund can still take one back; the address is cleared.',
+        ],
         // --- track: survey ---
+        /*
+         * Being asked about a night, and what was answered.
+         *
+         * The invitation is the only place the address sits; the answers
+         * hold none, and are reached through it — found and erased first,
+         * while it still says whose they are. Both go: what somebody wrote
+         * can say anything about them, and a score given in confidence is
+         * not the organizer's to keep once they have asked to be forgotten.
+         * The night's totals are worked out from what is left.
+         */
+        'survey_invitations' => [
+            'strategy' => 'delete',
+            'key' => 'email',
+            'reason' => 'An invitation to say how a night went. No transaction and no retention duty.',
+        ],
+
+        'survey_responses' => [
+            'strategy' => 'delete',
+            'key' => 'invitation_id',
+            'via' => ['table' => 'survey_invitations', 'column' => 'id', 'key' => 'email'],
+            'reason' => 'What you answered about a night. Deleted, and no longer counted in the organizer\'s results.',
+        ],
         // --- track: points ---
         // --- track: pass ---
         // --- track: wait ---

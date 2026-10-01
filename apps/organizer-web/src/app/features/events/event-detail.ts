@@ -77,6 +77,19 @@ export class EventDetail {
   readonly review = computed(() => this.event()?.review ?? null);
   readonly notReady = computed(() => this.review()?.not_ready ?? []);
   readonly history = computed(() => this.review()?.history ?? []);
+
+  /**
+   * The time it is set to go on sale by itself (the Schedule part), while
+   * that is still to come. Approved before then, it waits for it as a draft,
+   * usually one never on sale, so the button says "on sale now" rather than
+   * "back on sale", and the dialog says pressing it does not wait.
+   */
+  readonly onSaleAt = computed(() => {
+    const at = this.event()?.publish_at;
+
+    return at && new Date(at).getTime() > Date.now() ? at : null;
+  });
+
   readonly statusLabel = eventStatusLabel;
   readonly stepLabel = reviewStepLabel;
 
@@ -392,6 +405,8 @@ export class EventDetail {
     if (!event || this.publishing()) return;
 
     const straightBack = event.review.on_submit === 'publish';
+    // Set to go on sale by itself later: pressing now does not wait for that.
+    const setFor = this.onSaleAt();
     let result: EventReviewResult | null = null;
 
     this.error.set(null);
@@ -399,7 +414,18 @@ export class EventDetail {
     this.publishing.set(true);
 
     const done = await this.confirmDialog.confirm(
-      straightBack
+      straightBack && setFor
+        ? {
+            title: `Put ${event.title} on sale now?`,
+            body: `It is approved and set to go on sale by itself at ${this.sendTime(setFor)}. Putting it on sale now does not wait for that time.`,
+            consequences: ['Its page goes live and tickets can be bought straight away.', 'The time you set is cleared.'],
+            confirmLabel: 'Put on sale now',
+            busyLabel: 'Putting it on sale…',
+            tone: 'default',
+            run: () => this.api.submitForReview(this.eventId).pipe(tap((answer) => (result = answer))),
+            failure: (response) => messageFor(response, 'It could not be put on sale.'),
+          }
+        : straightBack
         ? {
             title: `Put ${event.title} back on sale?`,
             body: 'Nothing a buyer sees has changed since myFiesta approved it, so it goes back on sale straight away, without another review.',
@@ -415,7 +441,9 @@ export class EventDetail {
             body: 'Somebody at myFiesta looks at every event before it goes on sale, usually within a working day. We email you when it is approved or if something needs changing.',
             consequences: [
               'While it is being reviewed you cannot change it: its details, tickets, extras, questions, pictures and codes are locked.',
-              'Once it is approved it goes on sale straight away, and the people who follow you are told.',
+              setFor
+                ? `It goes on sale at the time you set, ${this.sendTime(setFor)}, if it is approved by then, or as soon as it is approved after that. The people who follow you are told when it goes on sale.`
+                : 'Once it is approved it goes on sale straight away, and the people who follow you are told.',
               'You can withdraw it from review at any time to make a change.',
             ],
             confirmLabel: 'Submit for review',
@@ -570,12 +598,18 @@ export class EventDetail {
         ? `${this.money(preview.refund_total)} goes back across ${preview.orders_to_refund} ${preview.orders_to_refund === 1 ? 'order' : 'orders'}, to the cards they paid with.`
         : 'Every paid order is refunded to the card it was paid with.';
 
+    // Paid with Klarna or Affirm longer ago than the lender takes money back for (pay later).
+    const late = refund ? (preview?.orders_to_refund_elsewhere ?? 0) : 0;
+    const elsewhere = late > 0
+      ? [`${late} of those ${late === 1 ? 'was' : 'were'} paid with Klarna or Affirm too long ago to go back that way. Write to myFiesta support afterwards, who will return ${late === 1 ? 'it' : 'them'} another way.`]
+      : [];
+
     this.cancelBusy.set(true);
 
     const done = await this.confirmDialog.confirm({
       title: `Cancel ${event.title}?`,
       body: told,
-      consequences: [returned, 'Sales stop and the reminders still to come are not sent.', 'It cannot be undone.'],
+      consequences: [returned, ...elsewhere, 'Sales stop and the reminders still to come are not sent.', 'It cannot be undone.'],
       confirmLabel: 'Cancel the event',
       cancelLabel: 'Keep it running',
       busyLabel: 'Cancelling…',
@@ -614,8 +648,8 @@ export class EventDetail {
 
     const done = await this.confirmDialog.confirm({
       title: `Copy ${event.title} to ${this.occurrenceDate(startsAt)}?`,
-      body: 'A new draft is made with the same tickets, prices, capacity and banner.',
-      consequences: ['Sales and the gallery stay with this one.', 'The copy goes on sale only after you submit it for review.'],
+      body: 'A new draft is made with the same tickets, prices and price steps, capacity, extras, checkout questions, reminder times and banner.',
+      consequences: ['Sales, codes and the gallery stay with this one.', 'The copy goes on sale only after you submit it for review.'],
       confirmLabel: 'Make a copy',
       busyLabel: 'Copying…',
       tone: 'default',

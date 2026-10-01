@@ -119,6 +119,10 @@ describe('Event screens: asking first', () => {
   });
 
   afterEach(() => {
+    // The event's Settings carry the pay-later panel, which asks for its own
+    // state once the event is drawn. None of these screens are about it, so
+    // it is answered "not available" wherever it was asked.
+    backend.match(`${BASE}/pay-later`).forEach((request) => request.flush({ enabled: false, available: false, offered_now: false }));
     backend.verify();
     forgetDialogs();
   });

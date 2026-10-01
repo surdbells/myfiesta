@@ -368,8 +368,10 @@ export interface HeldTicket {
 }
 
 export interface TicketAccess {
-  reference: string;
-  status: string;
+  /** The order's reference. Null on a ticket somebody was sent, where it would look up what the buyer paid. */
+  reference: string | null;
+  /** The order's status. Null on a ticket somebody was sent. */
+  status: string | null;
   buyer_name: string | null;
   event: {
     slug: string;
@@ -392,8 +394,11 @@ export interface TicketAccess {
    * evidence its buyer holds of it.
    */
   extras: { name: string; quantity: number }[];
-  /** What was paid, to whom, and each tax on it — the same receipt the email carries. */
-  receipt: Receipt;
+  /**
+   * What was paid, to whom, and each tax on it — the same receipt the email
+   * carries. Null on a ticket somebody was sent, who did not pay for it.
+   */
+  receipt: Receipt | null;
 }
 
 /**

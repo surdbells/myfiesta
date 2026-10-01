@@ -485,11 +485,16 @@ export class Api {
   }
 
   /**
-   * A name and a phone number. Null takes the number off. Not the email:
-   * changing the address an account is reached at has to be confirmed at the
-   * new address first — requestEmailChange() is that.
+   * A name, a phone number and a time zone. Null takes the number off, and
+   * puts the zone back to the phone's own. Not the email: changing the
+   * address an account is reached at has to be confirmed at the new address
+   * first — requestEmailChange() is that.
    */
-  updateProfile(body: { name?: string; phone?: string | null }): Promise<{ name: string; email: string; phone: string | null }> {
+  updateProfile(body: {
+    name?: string;
+    phone?: string | null;
+    timezone?: string | null;
+  }): Promise<{ name: string; email: string; phone: string | null; timezone: string | null }> {
     return this.send('PATCH', '/api/auth/profile', { body });
   }
 

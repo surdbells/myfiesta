@@ -21,9 +21,11 @@ use App\Http\Controllers\Api\Organizer\IntegrationController;
 use App\Http\Controllers\Api\Organizer\IssuedTicketController;
 use App\Http\Controllers\Api\Organizer\MessageController;
 use App\Http\Controllers\Api\Organizer\OrderController;
+use App\Http\Controllers\Api\Organizer\PayLaterController;
 use App\Http\Controllers\Api\Organizer\PayoutController;
 use App\Http\Controllers\Api\Organizer\RefundController;
 use App\Http\Controllers\Api\Organizer\SeriesController;
+use App\Http\Controllers\Api\Organizer\SurveyController as OrganizerSurveyController;
 use App\Http\Controllers\Api\Organizer\TeamController;
 use App\Http\Controllers\Api\Organizer\WaitlistController;
 use App\Http\Controllers\Api\TermsController;
@@ -122,6 +124,21 @@ final class WhileImpersonating
     public const OWN_ACCOUNT = 'Your own account is out of reach while you act as an organization. End the staff session to return to it.';
 
     /**
+     * Opting a night in to Klarna and Affirm agrees to pay what they charge
+     * over a card on every order paid that way, out of the organization's
+     * payouts. Turning it off costs them nothing and stays open.
+     */
+    public const PAY_LATER = 'Agreeing to pay what Klarna and Affirm charge over a card comes out of the organization’s payouts, so it is the organization’s decision. You can turn paying later off, but not on, while acting as the organization.';
+
+    /**
+     * A time to go on sale is kept with whoever set it, and at that time the
+     * night goes on sale as them, their right to asked again
+     * (ScheduledGoLive). A staff session is nobody on the team, so a time it
+     * set could never be kept. Clearing one stays open.
+     */
+    public const SCHEDULES = 'A night goes on sale at its set time as the team member who set it, so the organization sets that time itself. You can clear a time, but not set one, while acting as the organization.';
+
+    /**
      * Endpoints refused outright, by controller action.
      *
      * @var array<string, Permission|string>
@@ -184,11 +201,14 @@ final class WhileImpersonating
         CampaignController::class.'@store' => self::SENDS,
         CampaignController::class.'@update' => self::SENDS,
         WaitlistController::class.'@notify' => self::SENDS,
+        OrganizerSurveyController::class.'@send' => self::SENDS,
 
         // The staff member's own account. Signing out is not here: it ends
         // the session, see ImpersonationBoundary.
         AuthController::class.'@me' => self::OWN_ACCOUNT,
         AccountController::class.'@updateProfile' => self::OWN_ACCOUNT,
+        AccountController::class.'@storeAvatar' => self::OWN_ACCOUNT,
+        AccountController::class.'@destroyAvatar' => self::OWN_ACCOUNT,
         AccountController::class.'@changePassword' => self::OWN_ACCOUNT,
         AccountController::class.'@requestEmailChange' => self::OWN_ACCOUNT,
         // Invokable: the router names it by the class alone.
@@ -224,6 +244,13 @@ final class WhileImpersonating
         EventController::class.'@submit',
         // When the tickets would be emailed.
         IssuedTicketController::class.'@store',
+        // When it turns paying later on, which the organization pays for.
+        PayLaterController::class.'@update',
+        // When it sets a time for the night to go on sale.
+        EventController::class.'@update',
+        // When it moves a series' end, which can remove dates, or has its
+        // dates go on sale by themselves.
+        SeriesController::class.'@update',
     ];
 
     /**
@@ -288,6 +315,13 @@ final class WhileImpersonating
             EventController::class.'@publish' => self::wouldAnnounce($request) ? self::ANNOUNCES : null,
             EventController::class.'@submit' => self::wouldAnnounce($request, submitting: true) ? self::ANNOUNCES : null,
             IssuedTicketController::class.'@store' => $request->boolean('send_email') ? self::SENDS : null,
+            PayLaterController::class.'@update' => $request->boolean('enabled') ? self::PAY_LATER : null,
+            EventController::class.'@update' => $request->filled('publish_at') ? self::SCHEDULES : null,
+            SeriesController::class.'@update' => match (true) {
+                $request->has('count') || $request->has('until') => self::reasonFor(Permission::EventsDelete),
+                $request->boolean('auto_publish') || $request->has('on_sale_days_before') => self::SCHEDULES,
+                default => null,
+            },
             default => null,
         };
     }

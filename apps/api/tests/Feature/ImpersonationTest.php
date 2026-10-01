@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\EventReview;
+use App\Models\EventSeries;
 use App\Models\ImpersonationSession;
 use App\Models\Order;
 use App\Models\Organization;
@@ -15,6 +16,7 @@ use App\Models\OrganizationInvitation;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\Events\EventReviews;
+use App\Services\Events\SeriesGenerator;
 use App\Services\Impersonation\Impersonation;
 use App\Services\Impersonation\ImpersonationRefused;
 use App\Services\Impersonation\WhileImpersonating;
@@ -313,6 +315,8 @@ class ImpersonationTest extends TestCase
             ['POST', "/api/organizer/events/{$this->event->id}/waitlist/notify", 'cannot be called back'],
             ['GET', '/api/auth/me', 'Your own account'],
             ['PATCH', '/api/auth/profile', 'Your own account'],
+            ['POST', '/api/auth/avatar', 'Your own account'],
+            ['DELETE', '/api/auth/avatar', 'Your own account'],
             ['POST', '/api/auth/password', 'Your own account'],
             ['POST', '/api/auth/email', 'Your own account'],
             ['POST', '/api/auth/email/verification', 'Your own account'],
@@ -449,6 +453,57 @@ class ImpersonationTest extends TestCase
         $this->assertSame(1, $type->tickets()->count());
 
         Mail::assertNothingOutgoing();
+    }
+
+    public function test_a_series_end_and_a_time_to_go_on_sale_are_left_to_the_organization(): void
+    {
+        $series = EventSeries::create([
+            'organization_id' => $this->org->id,
+            'source_event_id' => $this->event->id,
+            'rrule' => 'FREQ=WEEKLY;COUNT=6',
+            'timezone' => $this->event->timezone,
+            'starts_at' => $this->event->starts_at,
+            'status' => 'active',
+        ]);
+        $this->event->update(['series_id' => $series->id, 'series_occurs_at' => $this->event->starts_at]);
+        app(SeriesGenerator::class)->generate($series->refresh(), now()->addMonths(3));
+        $this->assertSame(6, $series->occurrences()->count());
+
+        $token = $this->tokenFor();
+        $uri = "/api/organizer/events/{$this->event->id}/series";
+
+        // A shorter run removes dates, which cannot be walked back.
+        $this->as($token)->patchJson($uri, ['count' => 2])
+            ->assertForbidden()
+            ->assertJsonPath('message', WhileImpersonating::reasonFor(Permission::EventsDelete));
+        $this->as($token)->patchJson($uri, ['until' => now()->addWeeks(2)->toDateString()])->assertForbidden();
+        $this->assertSame(6, Event::where('series_id', $series->id)->count(), 'None of them removed.');
+
+        // A time to go on sale is kept with the member who set it, and a
+        // staff session is none.
+        $this->as($token)->patchJson($uri, ['auto_publish' => true])
+            ->assertForbidden()
+            ->assertJsonPath('message', WhileImpersonating::SCHEDULES);
+        $this->as($token)->patchJson($uri, ['on_sale_days_before' => 7])->assertForbidden();
+        $this->assertFalse($series->fresh()->auto_publish);
+
+        $draft = $this->eventFor($this->org, 'afro-fest-again');
+        $draft->forceFill(['status' => 'draft', 'published_at' => null])->save();
+
+        $this->as($token)->patchJson("/api/organizer/events/{$draft->id}", ['publish_at' => now()->addDays(2)->toIso8601String()])
+            ->assertForbidden()
+            ->assertJsonPath('message', WhileImpersonating::SCHEDULES);
+        $this->assertNull($draft->fresh()->publish_at);
+
+        // Clearing a time, and stopping dates going on sale by themselves,
+        // stay open.
+        $draft->forceFill(['publish_at' => now()->addDays(2), 'publish_scheduled_by' => $this->owner->id])->save();
+        $this->as($token)->patchJson("/api/organizer/events/{$draft->id}", ['publish_at' => null])->assertOk();
+        $this->assertNull($draft->fresh()->publish_at);
+
+        $series->update(['auto_publish' => true, 'auto_publish_by' => $this->owner->id]);
+        $this->as($token)->patchJson($uri, ['auto_publish' => false])->assertOk();
+        $this->assertFalse($series->fresh()->auto_publish);
     }
 
     public function test_the_permission_layer_refuses_without_the_route_list(): void

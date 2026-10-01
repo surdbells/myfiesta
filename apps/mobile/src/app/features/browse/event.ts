@@ -29,6 +29,7 @@ import { type Availability, MfAvailability } from './availability';
 import { MfEventPerks } from './event-perks';
 import { MfNotifyOnSale } from './notify-on-sale';
 import { MfOtherDates } from './other-dates';
+import { MfFriendDiscount } from './friend-discount';
 
 /**
  * One event: the poster, the night, what it costs, and the way in.
@@ -62,6 +63,7 @@ import { MfOtherDates } from './other-dates';
     MfNotifyOnSale,
     MfEventPerks,
     MfOtherDates,
+    MfFriendDiscount,
   ],
   template: `
     <mf-screen [title]="event()?.title ?? 'Event'" back flush backTo="/">
@@ -142,6 +144,8 @@ import { MfOtherDates } from './other-dates';
               </p>
             </mf-card>
           } @else {
+            <mf-friend-discount [event]="night" [ref]="ref()" />
+
             <section class="tickets">
               <h2 class="section">Tickets</h2>
 

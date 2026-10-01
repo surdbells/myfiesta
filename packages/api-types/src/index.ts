@@ -591,7 +591,7 @@ export interface InsightSummary {
   started: boolean;
 }
 
-export type InsightSource = 'direct' | 'link' | 'campaign' | 'embed' | 'door';
+export type InsightSource = 'direct' | 'link' | 'friend' | 'campaign' | 'embed' | 'door';
 
 export interface SalesInsights {
   summary: InsightSummary;

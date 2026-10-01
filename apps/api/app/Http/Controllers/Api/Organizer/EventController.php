@@ -10,6 +10,7 @@ use App\Http\Resources\Extensions\OrganizerEventExtras;
 use App\Models\Event;
 use App\Models\LedgerEntry;
 use App\Models\Organization;
+use App\Services\Accounts\EmailVerification;
 use App\Services\Audit\Auditor;
 use App\Services\Checkout\TurnedAway;
 use App\Services\Events\EventCanceller;
@@ -21,12 +22,14 @@ use App\Support\Listing;
 use App\Support\Paging;
 use App\Support\Search;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * An organizer's own events.
@@ -611,6 +614,13 @@ class EventController extends Controller
             $parts[] = "{$outcome['failed']} refunds could not be sent — refund those by hand";
         }
 
+        if (($outcome['left_for_support'] ?? 0) > 0) {
+            // Paid with Klarna or Affirm too long ago to go back that way,
+            // which a refund by hand here would be refused for too
+            // (PayLater::refundRefusal).
+            $parts[] = "{$outcome['left_for_support']} paid with Klarna or Affirm too long ago to refund through them — write to myFiesta support, who will return those another way";
+        }
+
         return 'Event cancelled. '.implode(', ', $parts).'.';
     }
 
@@ -618,13 +628,20 @@ class EventController extends Controller
     {
         $this->authorize('update', $event);
 
+        // When it goes on sale is not something a buyer sees, so that alone
+        // may be moved while it waits for review: staff approve what it says,
+        // and an approval before its time waits for it (EventReviews::approve).
+        $onlyTheTime = array_keys($request->all()) === ['publish_at'];
+
         // What staff are looking at has to be what goes on sale.
-        EventReviews::refuseWhileInReview($event);
+        if (! $onlyTheTime) {
+            EventReviews::refuseWhileInReview($event);
+        }
 
         // A cancelled event is a historical record. People bought tickets to
         // what it said and some were refunded on that basis; editing it
         // afterwards rewrites what they were told.
-        if (! EventStatus::from($event->status)->isEditable()) {
+        if ($event->status === EventStatus::Cancelled->value || ! ($onlyTheTime || EventStatus::from($event->status)->isEditable())) {
             return response()->json([
                 'message' => 'A cancelled event cannot be edited. Copy it to a new date instead.',
             ], 422);
@@ -648,7 +665,24 @@ class EventController extends Controller
             // it changes who is in the room, which is the organizer's call.
             'resale_enabled' => ['sometimes', 'boolean'],
             'resale_closes_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
+            // When it goes on sale by itself (events:go-live), or null to stop
+            // waiting for a time. In the venue's zone when it carries no
+            // offset, as every time the organizer types here is.
+            'publish_at' => ['sometimes', 'nullable', 'date'],
         ]);
+
+        $scheduled = array_key_exists('publish_at', $data) || array_key_exists('starts_at', $data)
+            ? $this->goesOnSaleAt($request, $event, $data)
+            : null;
+
+        if ($scheduled instanceof JsonResponse) {
+            return $scheduled;
+        }
+
+        if (array_key_exists('publish_at', $data)) {
+            $data['publish_at'] = $scheduled;
+            $data['publish_scheduled_by'] = $scheduled === null ? null : $request->user()->id;
+        }
 
         $before = $event->only(array_keys($data));
 
@@ -677,9 +711,100 @@ class EventController extends Controller
             ]);
         }
 
+        // Who set it to go on sale, and when for, is what somebody asks when
+        // a night went on sale they did not expect.
+        if (in_array('publish_at', $changed, true)) {
+            $this->auditor->record(
+                $event->publish_at === null ? 'event.sale_time_cleared' : 'event.sale_time_set',
+                $event,
+                $request->user(),
+                metadata: [
+                    'before' => ($before['publish_at'] ?? null) instanceof \DateTimeInterface
+                        ? Carbon::instance($before['publish_at'])->toIso8601String()
+                        : null,
+                    'after' => $event->publish_at?->toIso8601String(),
+                ],
+            );
+        }
+
         return response()->json(
             new EventResource($event->fresh()->load(['organization', 'ticketTypes'])),
         );
+    }
+
+    /**
+     * When the event is to go on sale by itself, checked against what it is
+     * becoming: a time to come, before it starts, set by somebody who could
+     * put it on sale now — the permission and the proved address that
+     * sending it needs (the submit route), since at that time it is sent as
+     * them (ScheduledGoLive). Null clears it. A changed start is checked
+     * against a time already set, so a night never waits for a time after
+     * its own start.
+     *
+     * @param  array<string, mixed>  $data  the validated changes
+     */
+    private function goesOnSaleAt(Request $request, Event $event, array $data): CarbonImmutable|JsonResponse|null
+    {
+        $startsAt = array_key_exists('starts_at', $data) && $data['starts_at'] !== null
+            ? CarbonImmutable::parse($data['starts_at'])
+            : $event->starts_at;
+
+        if (! array_key_exists('publish_at', $data)) {
+            if ($event->publish_at !== null && $startsAt !== null && ! $event->publish_at->lessThan($startsAt)) {
+                throw ValidationException::withMessages([
+                    'starts_at' => 'It is set to go on sale after that. Move the time it goes on sale first.',
+                ]);
+            }
+
+            return null;
+        }
+
+        $this->authorize('publish', $event);
+
+        if ($data['publish_at'] === null) {
+            return null;
+        }
+
+        if ($event->status === EventStatus::Published->value) {
+            return response()->json(['message' => 'This event is already on sale.'], 422);
+        }
+
+        if ($event->taken_down_at !== null) {
+            return response()->json([
+                'message' => 'myFiesta has taken this event off sale, so it cannot be set to go on sale.',
+            ], 422);
+        }
+
+        $user = $request->user();
+
+        if ($user->email_verified_at === null) {
+            $sent = app(EmailVerification::class)->send($user);
+
+            return response()->json([
+                'message' => $sent
+                    ? "Confirm your email address first. We have sent a link to {$user->email} — open it, then try again."
+                    : "Confirm your email address first. Open the link we sent to {$user->email}, then try again.",
+                'code' => 'email_unverified',
+            ], 403);
+        }
+
+        $value = trim((string) $data['publish_at']);
+
+        // A wall clock with no offset is the venue's, as the console sends
+        // every other time the organizer types.
+        $at = preg_match('/(z|[+-]\d{2}(:?\d{2})?)$/i', $value) === 1
+            ? CarbonImmutable::parse($value)
+            : CarbonImmutable::parse($value, $event->timezone);
+
+        if (! $at->isFuture()) {
+            throw ValidationException::withMessages(['publish_at' => 'Choose a time that has not passed yet.']);
+        }
+
+        if ($startsAt !== null && ! $at->lessThan($startsAt)) {
+            throw ValidationException::withMessages(['publish_at' => 'Choose a time before the event starts.']);
+        }
+
+        return $at->utc();
     }
 
     /**
@@ -820,6 +945,10 @@ class EventController extends Controller
                 (int) $event->orders()->where('status', 'paid')->sum('service_charge_amount')
             ),
             'refunds' => $money(abs($sum('refund'))),
+            // Signed, as the ledger has it: what the organizer paid for buyers
+            // paying with Klarna or Affirm (ProcessorEvidence), and any
+            // correction by myFiesta. In the net below, so shown beside it.
+            'adjustments' => $money($sum('adjustment')),
             // What the organizer is actually owed, and the only figure here
             // that should ever be described as theirs.
             'net' => $money((int) $entries->sum('amount')),

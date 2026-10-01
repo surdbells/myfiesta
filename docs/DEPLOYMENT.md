@@ -39,6 +39,8 @@ not. So the API itself has to reach the mail server, not only the worker.
 | `webhooks:retry` | a delivery that failed once is never tried again |
 | `webhooks:prune` | copies of what was sent to organizers' systems, buyers' names inside, pile up past their thirty days |
 | `campaigns:send` | a scheduled campaign never goes out |
+| `events:go-live` | a night set to go on sale at a time, or a repeating night's date, stays a draft and nobody is told — see [OPERATIONS.md](OPERATIONS.md#going-on-sale-at-a-set-time) |
+| `surveys:send-due` | nobody is asked how a night went; a night more than a week past its send time is never asked — see [OPERATIONS.md](OPERATIONS.md#surveys-after-an-event) |
 | `series:extend` | a repeating event stops appearing on new dates |
 | `privacy:prune` | data exports sit on disk past the week they are allowed |
 | `app:heartbeat` | the readiness check reports the scheduler and the worker as stopped, whether they are or not |
@@ -223,7 +225,8 @@ all.
 
 ## Uploaded pictures
 
-Posters, organizer logos and gallery pictures go on the API's `public` disk.
+Posters, organizer logos, gallery pictures and account photos
+(`avatars/{user}/…`, 256 pixels square) go on the API's `public` disk.
 `MEDIA_DISK` chooses where that is; nothing else changes between the two,
 because the database holds paths and every address is asked of the disk.
 

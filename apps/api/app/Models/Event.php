@@ -74,6 +74,8 @@ class Event extends Model
             // The review now waiting, and the last approval (EventReviews).
             'submitted_at' => UtcDateTime::class,
             'approved_at' => UtcDateTime::class,
+            // When it goes on sale by itself (events:go-live).
+            'publish_at' => UtcDateTime::class,
             'id_required' => 'boolean',
             'is_featured' => 'boolean',
         ];
