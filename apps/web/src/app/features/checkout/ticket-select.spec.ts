@@ -172,6 +172,8 @@ describe("TicketSelect, a promoter's ref", () => {
     const harness = await open('/afro/tickets?ref=dj-kay');
 
     expect(store.ref()).toBe('dj-kay');
+    // With the basket, so a reload on the way to paying keeps it.
+    expect(JSON.parse(sessionStorage.getItem('myfiesta.basket.afro') ?? '{}').ref).toBe('dj-kay');
 
     (harness.routeDebugElement!.componentInstance as TicketSelect).adjust(GENERAL, 1);
 
@@ -181,7 +183,8 @@ describe("TicketSelect, a promoter's ref", () => {
   });
 
   it('keeps the ref the event page kept when this address carries none', async () => {
-    store.ref.set('spring-mail');
+    // As the event page keeps it: with the basket, so it outlives a reload.
+    store.setRef('afro', 'spring-mail');
 
     await open('/afro/tickets');
 

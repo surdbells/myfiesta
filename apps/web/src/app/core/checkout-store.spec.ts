@@ -61,4 +61,53 @@ describe('CheckoutStore', () => {
     expect(store.count()).toBe(0);
     expect(store.code()).toBe('');
   });
+
+  /*
+   * The ref a link arrived with — a promoter's, or a friend's that takes
+   * money off — rode in memory only, so a reload between the event page and
+   * paying dropped it: the promoter lost the sale, and a friend's discount
+   * vanished, a price that went up between two pages.
+   */
+  it('keeps the ref a link arrived with through a reload', () => {
+    TestBed.inject(CheckoutStore).setRef('afrobeats-rooftop', 'fabcdefghij');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const again = TestBed.inject(CheckoutStore);
+    again.loadFor('afrobeats-rooftop');
+
+    expect(again.ref()).toBe('fabcdefghij');
+  });
+
+  it('keeps the ref when the basket changes after it', () => {
+    const store = TestBed.inject(CheckoutStore);
+
+    store.setRef('afrobeats-rooftop', 'promo-ada');
+    store.setQuantity('afrobeats-rooftop', 'general', 2);
+    store.setCode('afrobeats-rooftop', 'EARLYBIRD');
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const again = TestBed.inject(CheckoutStore);
+    again.loadFor('afrobeats-rooftop');
+
+    expect(again.ref()).toBe('promo-ada');
+    expect(again.count()).toBe(2);
+  });
+
+  it('keeps one event’s ref out of another’s, and forgets it once the order is placed', () => {
+    const store = TestBed.inject(CheckoutStore);
+
+    store.setRef('afrobeats-rooftop', 'fabcdefghij');
+    store.loadFor('amapiano-sundays');
+    expect(store.ref()).toBeNull();
+
+    store.loadFor('afrobeats-rooftop');
+    expect(store.ref()).toBe('fabcdefghij');
+
+    store.clear('afrobeats-rooftop');
+    expect(store.ref()).toBeNull();
+    store.loadFor('afrobeats-rooftop');
+    expect(store.ref()).toBeNull();
+  });
 });

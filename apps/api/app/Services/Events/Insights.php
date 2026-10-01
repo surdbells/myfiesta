@@ -101,9 +101,10 @@ class Insights
      * Where the orders came from, each counted once.
      *
      * In order of how deliberately somebody brought them: the door, then an
-     * email this organizer sent, then a promoter's link, then the widget on
-     * the organizer's own site, and everything else is somebody who found the
-     * page themselves.
+     * email this organizer sent, then a buyer's friend's link (whose ref is
+     * on the order like a promoter's, but which nobody here gave out), then
+     * a promoter's link, then the widget on the organizer's own site, and
+     * everything else is somebody who found the page themselves.
      *
      * @return list<array<string, mixed>>
      */
@@ -117,6 +118,9 @@ class Insights
                 case
                     when orders.channel = 'door' then 'door'
                     when campaigns.id is not null then 'campaign'
+                    when orders.share_link_id is not null or exists (
+                        select 1 from codes where codes.id = orders.code_id and codes.purpose = 'share_friend'
+                    ) then 'friend'
                     when orders.ref_slug is not null or orders.code_id is not null and exists (
                         select 1 from codes where codes.id = orders.code_id and codes.ref_slug is not null
                     ) then 'link'
@@ -140,6 +144,9 @@ class Insights
                 case
                     when orders.channel = 'door' then 'door'
                     when campaigns.id is not null then 'campaign'
+                    when orders.share_link_id is not null or exists (
+                        select 1 from codes where codes.id = orders.code_id and codes.purpose = 'share_friend'
+                    ) then 'friend'
                     when orders.ref_slug is not null or orders.code_id is not null and exists (
                         select 1 from codes where codes.id = orders.code_id and codes.ref_slug is not null
                     ) then 'link'
@@ -151,7 +158,7 @@ class Insights
             ->groupBy('source')
             ->pluck('tickets', 'source');
 
-        return collect(['direct', 'link', 'campaign', 'embed', 'door'])
+        return collect(['direct', 'link', 'friend', 'campaign', 'embed', 'door'])
             ->filter(fn (string $source) => $rows->has($source))
             ->map(fn (string $source) => [
                 'source' => $source,

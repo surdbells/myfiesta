@@ -131,7 +131,9 @@ class OrganizerEventInsightsTest extends TestCase
         // anything (OrganizerEventExtras).
         $this->assertNull($one['publish_at']);
         $this->assertFalse($one['pay_later_enabled']);
-        $this->assertNull($one['share_offer']);
+        // Always an object, with no figure while there is no offer: the
+        // console needs the platform's cap to start one.
+        $this->assertNull($one['share_offer']['discount_bps']);
     }
 
     public function test_what_a_night_earned_is_withheld_from_members_who_may_not_see_money(): void

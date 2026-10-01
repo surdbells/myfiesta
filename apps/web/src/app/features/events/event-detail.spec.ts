@@ -6,6 +6,7 @@ import { Meta } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { API_BASE_URL } from '../../core/api-base';
+import { CheckoutStore } from '../../core/checkout-store';
 import { EventDetail } from './event-detail';
 
 /**
@@ -341,5 +342,72 @@ describe('EventDetail, the rail', () => {
     const { rail } = await open();
 
     expect(rail.classList).not.toContain('sticks');
+  });
+});
+
+/**
+ * The ref a link arrived with — a promoter's, or a friend's that takes money
+ * off — kept with the basket for checkout.
+ *
+ * The page set it from the address every time, so coming back to it without
+ * one (from checkout, a bookmark, the organizer's page) wiped the one the
+ * buyer came in on: the promoter lost the sale, the friend their discount.
+ * It is set only when there is one now.
+ */
+describe('EventDetail, the ref a link arrived with', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+
+    TestBed.configureTestingModule({
+      providers: [
+        // Another page between visits (checkout, say): a different route, so the
+        // event page is made afresh when it is come back to, as it is in the app.
+        provideRouter([
+          { path: ':slug', component: EventDetail },
+          { path: 'away/:slug', component: EventDetail },
+        ]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  async function visit(harness: RouterTestingHarness, url: string): Promise<void> {
+    await harness.navigateByUrl(url, EventDetail);
+    http.match(() => true).forEach((request) => request.flush({ message: 'Event not found.' }, { status: 404, statusText: 'Not Found' }));
+    harness.detectChanges();
+  }
+
+  it('keeps it for checkout, and through a reload', async () => {
+    const harness = await RouterTestingHarness.create();
+    await visit(harness, '/afro-fest?ref=fabcdefghij');
+
+    expect(TestBed.inject(CheckoutStore).ref()).toBe('fabcdefghij');
+    expect(JSON.parse(sessionStorage.getItem('myfiesta.basket.afro-fest') ?? '{}').ref).toBe('fabcdefghij');
+  });
+
+  it('does not drop it when the page is opened again without one', async () => {
+    const harness = await RouterTestingHarness.create();
+    await visit(harness, '/afro-fest?ref=fabcdefghij');
+    await visit(harness, '/away/somewhere-else');
+    await visit(harness, '/afro-fest');
+
+    const store = TestBed.inject(CheckoutStore);
+    store.loadFor('afro-fest');
+    expect(store.ref()).toBe('fabcdefghij');
+  });
+
+  it('takes a newer link’s ref over an older one', async () => {
+    const harness = await RouterTestingHarness.create();
+    await visit(harness, '/afro-fest?ref=fabcdefghij');
+    await visit(harness, '/away/somewhere-else');
+    await visit(harness, '/afro-fest?ref=promo-ada');
+
+    expect(TestBed.inject(CheckoutStore).ref()).toBe('promo-ada');
   });
 });

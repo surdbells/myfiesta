@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Code;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Models\ShareLink;
 use App\Services\Audit\Auditor;
 use App\Services\Events\EventReviews;
 use App\Support\Listing;
@@ -67,11 +68,15 @@ class CodeController extends Controller
         }
 
         $states = Listing::many($request, 'state', self::STATES);
-        $kinds = Listing::many($request, 'kind', ['discount', 'promoter', 'presale']);
+        $kinds = Listing::many($request, 'kind', ['discount', 'promoter', 'presale', 'friend', 'reward']);
 
         $codes = Code::query()
             ->where('organization_id', $organization->id)
             ->whereNull('batch_id')
+            // The organizer's own codes, unless the friend-discount ones are
+            // asked for by name: the hidden one behind a night's offer and
+            // each buyer's reward would otherwise bury the codes they made.
+            ->whereIn('purpose', self::purposesShown($kinds))
             ->when($events !== [], fn ($query) => $query->where(function ($inner) use ($everywhere, $eventIds) {
                 if ($everywhere) {
                     $inner->orWhereNull('event_id');
@@ -94,6 +99,8 @@ class CodeController extends Controller
                         'discount' => $inner->orWhereNotNull('discount_type'),
                         'promoter' => $inner->orWhereNotNull('ref_slug'),
                         'presale' => $inner->orWhere('unlocks_tickets', true),
+                        'friend' => $inner->orWhere('purpose', Code::SHARE_FRIEND),
+                        'reward' => $inner->orWhere('purpose', Code::SHARE_REWARD),
                         // Listing::many refused anything else before this.
                         default => throw new LogicException("Unknown kind of code: {$kind}"),
                     };
@@ -137,6 +144,29 @@ class CodeController extends Controller
 
     /** Where a code can stand, as the console names it. */
     private const STATES = ['usable', 'paused', 'used_up', 'expired', 'scheduled'];
+
+    /**
+     * Which purposes of code a list shows: the organizer's own always, and a
+     * friend discount's or its rewards only when that kind was chosen.
+     *
+     * @param  list<string>  $kinds
+     * @return list<string>
+     */
+    private static function purposesShown(array $kinds): array
+    {
+        return array_values(array_filter([
+            Code::PROMO,
+            in_array('friend', $kinds, true) ? Code::SHARE_FRIEND : null,
+            in_array('reward', $kinds, true) ? Code::SHARE_REWARD : null,
+        ]));
+    }
+
+    /**
+     * A refusal for changing the hidden code behind a night's friend
+     * discount by hand: its percentage is the offer's, set on the event, and
+     * turning it off here would leave the offer showing with nothing behind it.
+     */
+    private const FRIEND_CODE_REFUSAL = 'This code is the night’s friend discount. Change or end it from the event’s Overview.';
 
     /**
      * Where a code stands, as SQL: the same answers the console gives.
@@ -195,6 +225,12 @@ class CodeController extends Controller
         $skipped = [];
 
         foreach ($codes as $code) {
+            if ($code->isFriendDiscount()) {
+                $skipped[] = ['id' => $code->id, 'code' => $code->code, 'reason' => self::FRIEND_CODE_REFUSAL];
+
+                continue;
+            }
+
             if ($code->event !== null && $code->event->status === EventStatus::InReview->value) {
                 $skipped[] = ['id' => $code->id, 'code' => $code->code, 'reason' => 'Its event is waiting for review.'];
 
@@ -235,6 +271,9 @@ class CodeController extends Controller
             ->where(fn ($q) => $q->whereNull('event_id')->orWhere('event_id', $event->id))
             // Single-use batch codes are listed as their batch, not one by one.
             ->whereNull('batch_id')
+            // The organizer's own. A friend discount is set on the Overview,
+            // and its rewards belong to the people they were sent to.
+            ->where('purpose', Code::PROMO)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(Paging::perPage($request, 50));
@@ -276,7 +315,7 @@ class CodeController extends Controller
             // returned a 500 to every buyer who typed it.
             'discount_value' => ['nullable', 'integer', 'min:1', 'required_with:discount_type'],
             'promoter_name' => ['nullable', 'string', 'max:120'],
-            'ref_slug' => ['nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug')],
+            'ref_slug' => ['nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug'), $this->notAFriendLink()],
             'max_redemptions' => ['nullable', 'integer', 'min:1'],
             'max_per_customer' => ['nullable', 'integer', 'min:1'],
             'min_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -380,12 +419,16 @@ class CodeController extends Controller
         abort_unless($code->organization_id === $event->organization_id, 404);
         abort_unless($this->belongsHere($code, $event), 404);
 
+        if ($code->isFriendDiscount()) {
+            return response()->json(['message' => self::FRIEND_CODE_REFUSAL], 422);
+        }
+
         $data = $request->validate([
             'label' => ['sometimes', 'nullable', 'string', 'max:120'],
             'discount_type' => ['sometimes', 'nullable', 'in:percentage,fixed'],
             'discount_value' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'promoter_name' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'ref_slug' => ['sometimes', 'nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug', $code)],
+            'ref_slug' => ['sometimes', 'nullable', 'string', 'max:64', 'alpha_dash', $this->uniqueWithin($event, 'ref_slug', $code), $this->notAFriendLink($code)],
             'max_redemptions' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'max_per_customer' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'min_quantity' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100'],
@@ -508,6 +551,10 @@ class CodeController extends Controller
         abort_unless($code->organization_id === $event->organization_id, 404);
         abort_unless($this->belongsHere($code, $event), 404);
 
+        if ($code->isFriendDiscount()) {
+            return response()->json(['message' => self::FRIEND_CODE_REFUSAL], 422);
+        }
+
         $code->update(['is_active' => false]);
 
         return response()->json([
@@ -551,6 +598,29 @@ class CodeController extends Controller
                 $fail($column === 'code'
                     ? 'You already have a code with that name.'
                     : 'Another code already tracks that link. Each link needs its own slug, or sales could be credited to the wrong promoter.');
+            }
+        };
+    }
+
+    /**
+     * A rule that a promoter's slug does not look like a buyer's friend link
+     * ('f' and ten letters or numbers, ShareLink::SLUG_PATTERN).
+     *
+     * Both ride ?ref=, and the event page greets a friend's link with the
+     * discount it carries; a promoter's slug of the same shape would read to
+     * a visitor like a discount checkout then does not give. Kept apart from
+     * now on: a slug a code already has is left alone, so editing the rest of
+     * an older code is never refused over it.
+     */
+    private function notAFriendLink(?Code $except = null): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($except) {
+            if (blank($value) || ($except !== null && mb_strtolower(trim((string) $value)) === mb_strtolower((string) $except->ref_slug))) {
+                return;
+            }
+
+            if (ShareLink::looksLikeOne((string) $value)) {
+                $fail('That looks like a buyer’s friend link (an f and ten letters or numbers). Add a hyphen, or pick another.');
             }
         };
     }
@@ -650,6 +720,9 @@ class CodeController extends Controller
             'starts_at' => $code->starts_at,
             'ends_at' => $code->ends_at,
             'is_active' => $code->is_active,
+            // The organizer's own (promo), or one a friend discount made: the
+            // hidden code behind a night's offer, or a buyer's reward.
+            'purpose' => $code->purpose ?? Code::PROMO,
             'event_scoped' => $code->event_id !== null,
             // Whether it would actually work right now, which is the question
             // an organizer is really asking when they look at this list.

@@ -36,7 +36,14 @@ export class CheckoutStore {
    */
   readonly access = signal<AccessUnlock | null>(null);
 
-  /** A promoter's ref, captured on the event page and carried to the order. */
+  /**
+   * The ref a link arrived with — a promoter's, or a friend's link that takes
+   * money off — captured on the event page and carried to the order.
+   *
+   * Kept with the basket, so a reload on the way to paying still carries it:
+   * a friend's discount that vanished on refresh would be a price that went
+   * up between two pages.
+   */
   readonly ref = signal<string | null>(null);
 
   /**
@@ -75,6 +82,29 @@ export class CheckoutStore {
     this.code.set(this.read(slug)?.code ?? '');
     this.access.set(this.read(slug)?.access ?? null);
     this.unpaid.set(this.read(slug)?.unpaid ?? null);
+    this.ref.set(this.read(slug)?.ref ?? null);
+  }
+
+  /**
+   * The ref a link to this event arrived with. Set only by a page that has
+   * one, never cleared by one that has not: arriving again without it (back
+   * from checkout, a bookmark) must not drop the one the buyer came in on.
+   */
+  setRef(slug: string, ref: string): void {
+    this.loadFor(slug);
+    this.ref.set(ref);
+    this.persist(slug);
+  }
+
+  /**
+   * Drop the ref this basket carries. For checkout, when the friend's link
+   * it carries turns out to be the buyer's own: the order is refused over
+   * it, and kept, it would be refused again on every try and every reload.
+   */
+  clearRef(slug: string): void {
+    this.loadFor(slug);
+    this.ref.set(null);
+    this.persist(slug);
   }
 
   setAccess(slug: string, access: AccessUnlock | null): void {
@@ -126,6 +156,7 @@ export class CheckoutStore {
     this.code.set('');
     this.access.set(null);
     this.unpaid.set(null);
+    this.ref.set(null);
     try {
       sessionStorage.removeItem(this.key(slug));
     } catch {
@@ -143,6 +174,7 @@ export class CheckoutStore {
     code: string;
     access?: AccessUnlock | null;
     unpaid?: string | null;
+    ref?: string | null;
   } | null {
     try {
       const raw = sessionStorage.getItem(this.key(slug));
@@ -162,6 +194,7 @@ export class CheckoutStore {
           code: this.code(),
           access: this.access(),
           unpaid: this.unpaid(),
+          ref: this.ref(),
         }),
       );
     } catch {

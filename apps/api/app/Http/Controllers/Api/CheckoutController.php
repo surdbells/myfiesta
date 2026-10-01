@@ -128,7 +128,7 @@ class CheckoutController extends Controller
                 retryOf: $request->input('retry_of'),
             );
         } catch (CheckoutException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->status);
+            return response()->json(['message' => $e->getMessage(), ...($e->reason === null ? [] : ['reason' => $e->reason])], $e->status);
         }
 
         // Which terms the buyer agreed to, and when, kept on the order the way

@@ -101,11 +101,14 @@ export class EventDetail {
       });
     });
 
-    // A promoter's ref rides the shared link; kept for the order so the
-    // promoter gets credit even though checkout is two pages away.
-    this.store.ref.set(this.route.snapshot.queryParamMap.get('ref'));
-
     const slug = this.route.snapshot.paramMap.get('slug')!;
+
+    // A promoter's ref, or a friend's link, rides the shared link; kept with
+    // the basket so the promoter gets credit, or the friend their discount,
+    // even though checkout is two pages away. Only when there is one: coming
+    // back to this page without it must not drop the one already kept.
+    const ref = this.route.snapshot.queryParamMap.get('ref');
+    if (ref) this.store.setRef(slug, ref);
 
     this.api.event(slug).subscribe({
       next: ({ data }) => {

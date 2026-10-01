@@ -12,7 +12,12 @@ use RuntimeException;
  */
 class CheckoutException extends RuntimeException
 {
-    public function __construct(string $message, public readonly int $status = 422)
+    /**
+     * @param  string|null  $reason  A word a checkout can act on where the
+     *                               message alone would leave it guessing, sent
+     *                               beside the message (CheckoutController).
+     */
+    public function __construct(string $message, public readonly int $status = 422, public readonly ?string $reason = null)
     {
         parent::__construct($message);
     }

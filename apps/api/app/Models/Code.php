@@ -25,6 +25,23 @@ class Code extends Model
     /** Orders that count as a use of this code. A fully refunded one gives its use back. */
     public const PAID_STATUSES = ['paid', 'partially_refunded'];
 
+    /*
+     * What a code is for.
+     *
+     * An organizer's own (promo) is typed by buyers or rides a promoter's
+     * link. The two friend-discount ones are made by the platform, never in
+     * the codes screen: the one behind a night's offer (share_friend) is
+     * reached only through a friend's link and can never be typed, and a
+     * reward (share_reward) is one person's, sent to them by email.
+     */
+    public const PROMO = 'promo';
+
+    public const SHARE_FRIEND = 'share_friend';
+
+    public const SHARE_REWARD = 'share_reward';
+
+    public const PURPOSES = [self::PROMO, self::SHARE_FRIEND, self::SHARE_REWARD];
+
     protected $guarded = ['id'];
 
     protected function casts(): array
@@ -131,6 +148,22 @@ class Code extends Model
             ->where(fn (Builder $q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', $now))
             ->where(fn (Builder $q) => $q->whereNull('max_redemptions')
                 ->orWhereColumn('redemption_count', '<', 'max_redemptions'));
+    }
+
+    /**
+     * Codes a buyer can type: anything but the one behind a friend's link,
+     * which would otherwise be a discount anybody could pass round without
+     * the link, and with nobody's reward attached.
+     */
+    public function scopeTypeable(Builder $query): Builder
+    {
+        return $query->where('purpose', '!=', self::SHARE_FRIEND);
+    }
+
+    /** Whether this is the hidden code a friend's link applies. */
+    public function isFriendDiscount(): bool
+    {
+        return $this->purpose === self::SHARE_FRIEND;
     }
 
     public function discounts(): bool

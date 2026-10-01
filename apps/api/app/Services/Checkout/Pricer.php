@@ -10,6 +10,7 @@ use App\Models\TaxRate;
 use App\Models\TicketType;
 use App\Services\Settings\PlatformSettings;
 use App\Services\Settings\SellerOfRecord;
+use App\Services\Sharing\ShareLinks;
 use App\Support\Allocation;
 use App\Support\Money;
 
@@ -24,7 +25,10 @@ use App\Support\Money;
  */
 class Pricer
 {
-    public function __construct(private readonly PlatformSettings $settings) {}
+    public function __construct(
+        private readonly PlatformSettings $settings,
+        private readonly ShareLinks $shareLinks,
+    ) {}
 
     /**
      * The service charge, in basis points, for a sale in this currency.
@@ -405,6 +409,13 @@ class Pricer
      * A code the buyer typed that does not work is an error they can act on. A
      * ref slug that does not resolve is silently ignored — the link may be old,
      * and refusing the sale over a stale tracking parameter would be absurd.
+     *
+     * In this order, one code to an order:
+     *   1. a code the buyer typed — they chose it, so it wins, even over a
+     *      friend's link they arrived on;
+     *   2. a friend's link to this night, while it has an offer: the night's
+     *      hidden friend-discount code (ShareOffers), which nobody can type;
+     *   3. a promoter's link, as it always was.
      */
     private function resolveCode(Event $event, ?string $codeInput, ?string $refSlug): ?Code
     {
@@ -420,6 +431,7 @@ class Pricer
              */
             $code = Code::query()
                 ->usable()
+                ->typeable()
                 ->where('organization_id', $event->organization_id)
                 ->whereRaw('upper(code) = ?', [strtoupper(trim($codeInput))])
                 ->get()
@@ -434,6 +446,10 @@ class Pricer
             return $code;
         }
 
+        if (filled($refSlug) && ($friend = $this->friendCode($event, $refSlug)) !== null) {
+            return $friend;
+        }
+
         if (filled($refSlug)) {
             return Code::query()
                 ->usable()
@@ -444,6 +460,38 @@ class Pricer
         }
 
         return null;
+    }
+
+    /**
+     * The night's friend-discount code, when a ref is a friend's link to it.
+     *
+     * Null when the ref is not one, names another night's link, or the night
+     * has since ended its offer — and the ref is then tried as a promoter's.
+     */
+    private function friendCode(Event $event, string $refSlug): ?Code
+    {
+        if ($this->shareLinks->live($event, $refSlug) === null) {
+            return null;
+        }
+
+        $code = Code::query()
+            ->usable()
+            ->where('event_id', $event->id)
+            ->where('purpose', Code::SHARE_FRIEND)
+            ->get()
+            ->first(fn (Code $c) => $c->appliesTo($event));
+
+        // Held to the platform's largest friend discount, which staff may
+        // have lowered under this offer since it was set. On this copy only,
+        // for this quote: nothing saves a quote's code, and the organizer's
+        // own figure stays theirs to see and change.
+        $bps = $this->shareLinks->bpsFor($event);
+
+        if ($code !== null && $bps !== null && (int) $code->discount_value > $bps) {
+            $code->discount_value = $bps;
+        }
+
+        return $code;
     }
 
     /**

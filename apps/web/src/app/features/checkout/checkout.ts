@@ -10,6 +10,7 @@ import { EmbedMode, rememberPayment } from '../../core/embed';
 import { formatMoney, formatPrice } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
+import { OWN_LINK_REFUSED, refusedOwnLink } from '../share/share';
 import { AboutYouPart } from './parts/about-you-part';
 import { FriendDiscountPart } from './parts/friend-discount-part';
 import { PayLaterPart } from './parts/pay-later-part';
@@ -338,6 +339,17 @@ export class Checkout {
           // press names it (retry_of) and inherits its hold.
           const reference = response?.error?.reference;
           if (typeof reference === 'string' && reference !== '') this.store.setUnpaid(this.slug, reference);
+
+          // The friend's link this basket came by is the buyer's own: taken
+          // off and priced again, so the next press is at the full price
+          // rather than refused the same way.
+          if (refusedOwnLink(response)) {
+            this.store.clearRef(this.slug);
+            this.refreshQuote();
+            this.orderError.set(OWN_LINK_REFUSED);
+
+            return;
+          }
 
           this.orderError.set(
             response?.error?.message ??

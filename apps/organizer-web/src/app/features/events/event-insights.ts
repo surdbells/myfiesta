@@ -12,6 +12,7 @@ interface Line {
 const SOURCE_LABELS: Record<InsightSource, { label: string; hint: string }> = {
   direct: { label: 'Found it themselves', hint: 'Search, a shared link, your socials' },
   link: { label: 'Promoter links', hint: 'Links and codes you gave out' },
+  friend: { label: 'Friends’ links', hint: 'Buyers passing on your friend discount' },
   campaign: { label: 'Your emails', hint: 'Campaigns sent from here' },
   embed: { label: 'Your website', hint: 'The tickets on your own site' },
   door: { label: 'At the door', hint: 'Sold on the night' },

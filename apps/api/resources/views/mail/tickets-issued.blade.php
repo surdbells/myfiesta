@@ -20,6 +20,26 @@ View your tickets
 Show the QR code at the door. This link is unique to you — treat it like the
 tickets themselves. The date is attached as a calendar file.
 
+@php
+    // The buyer's friend's link, when the night offers one: made here if the
+    // queued listener has not got to it yet (ShareLinks::forOrder). A link
+    // that cannot be made leaves the block out; it never stops the tickets.
+    $shareLinks = app(\App\Services\Sharing\ShareLinks::class);
+    $share = $order->exists ? rescue(fn () => $shareLinks->forOrder($order), null) : null;
+    $sharePercent = $share ? $shareLinks::percent((int) $shareLinks->bpsFor($event)) : null;
+@endphp
+@if ($share)
+## Bring a friend, and you both save
+
+Send a friend this link. They get {{ $sharePercent }}% off their tickets, and once
+they have paid you get {{ $sharePercent }}% off your next tickets from {{ $event->organization?->name }}.
+It is a different link from the one to your tickets, so it is safe to pass on.
+
+<x-mail::panel>
+{{ $shareLinks->url($share, $event) }}
+</x-mail::panel>
+@endif
+
 @if ($receipt)
 ## Receipt
 

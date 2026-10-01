@@ -5,6 +5,7 @@ namespace App\Services\Events;
 use App\Models\AddOn;
 use App\Models\Code;
 use App\Models\Event;
+use App\Models\ShareLink;
 use App\Services\Door\DoorSales;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
@@ -36,6 +37,9 @@ class SalesReport
     public const MAX_DAYS = 120;
 
     private const GOOD = ['valid', 'checked_in'];
+
+    /** The one row the friend-discount rewards are counted under. */
+    private const REWARDS = 'share:rewards';
 
     /** @return array<string, mixed> */
     public function for(Event $event): array
@@ -231,13 +235,71 @@ class SalesReport
 
         $codes = Code::withTrashed()->whereIn('id', $rows->pluck('code_id')->filter())->get()->keyBy('id');
 
+        /*
+         * A friend discount, said as one. Its hidden code is one row named for
+         * what it is, not for a code nobody ever typed; a friend's link that
+         * came after the offer ended (so took nothing off) is counted there
+         * too, not as a stray ?ref=; and the buyers' rewards, one single-use
+         * code each, are one row between them.
+         */
+        $friendCode = Code::withTrashed()->where('event_id', $event->id)->where('purpose', Code::SHARE_FRIEND)->first();
+        $friendLinks = $friendCode === null ? collect() : ShareLink::query()
+            ->where('event_id', $event->id)
+            ->whereIn('slug', $rows->pluck('ref_slug')->filter()->map(fn ($slug) => strtolower((string) $slug))->unique()->values())
+            ->pluck('slug')
+            ->flip();
+
+        if ($friendCode !== null) {
+            $codes->put($friendCode->id, $friendCode);
+        }
+
+        $keyOf = function ($row) use ($codes, $friendCode, $friendLinks) {
+            $code = $row->code_id ? $codes->get($row->code_id) : null;
+
+            if ($code?->purpose === Code::SHARE_REWARD) {
+                return self::REWARDS;
+            }
+
+            if ($code === null && $friendCode !== null && $row->ref_slug !== null && $friendLinks->has(strtolower((string) $row->ref_slug))) {
+                return $friendCode->id;
+            }
+
+            return $row->code_id ?? 'ref:'.$row->ref_slug;
+        };
+
         return $rows
             // One row per code, even when some of its orders carried the slug
             // and some did not.
-            ->groupBy(fn ($row) => $row->code_id ?? 'ref:'.$row->ref_slug)
-            ->map(function ($group) use ($codes, $event) {
+            ->groupBy($keyOf)
+            ->map(function ($group, $key) use ($codes, $event) {
                 $first = $group->first();
-                $code = $first->code_id ? $codes->get($first->code_id) : null;
+                $code = $key === self::REWARDS ? null : $codes->get((string) $key);
+
+                $shared = match (true) {
+                    $key === self::REWARDS => [
+                        'code_id' => null,
+                        'code' => 'Friend rewards',
+                        'label' => 'Codes buyers earned when a friend bought through their link',
+                    ],
+                    $code?->purpose === Code::SHARE_FRIEND => [
+                        'code_id' => $code->id,
+                        'code' => 'Friend’s discount',
+                        'label' => 'Friends who bought through a buyer’s link',
+                    ],
+                    default => null,
+                };
+
+                if ($shared !== null) {
+                    return $shared + [
+                        'promoter' => null,
+                        'ref_slug' => null,
+                        'deleted' => false,
+                        'orders' => (int) $group->sum('orders'),
+                        'tickets' => (int) $group->sum('tickets'),
+                        'discount' => ['amount' => (int) $group->sum('discount'), 'currency' => $event->currency],
+                        'revenue' => ['amount' => (int) $group->sum('revenue'), 'currency' => $event->currency],
+                    ];
+                }
 
                 return [
                     'code_id' => $first->code_id,

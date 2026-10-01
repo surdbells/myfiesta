@@ -51,6 +51,9 @@ const KINDS: SelectOption[] = [
   { value: 'discount', label: 'Money off' },
   { value: 'promoter', label: 'Promoter link' },
   { value: 'presale', label: 'Presale access' },
+  // Made by a friend discount, not by hand: listed only when asked for.
+  { value: 'friend', label: 'Friend’s discount' },
+  { value: 'reward', label: 'Friend rewards' },
 ];
 
 /**

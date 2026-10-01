@@ -9,10 +9,12 @@ use App\Models\Event;
 use App\Models\InventoryHold;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\ShareLink;
 use App\Models\TicketType;
 use App\Models\User;
 use App\Services\Organizations\Suspension;
 use App\Services\Payments\StripeGateway;
+use App\Services\Sharing\ShareLinks;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -52,10 +54,17 @@ class CheckoutService
      */
     public const HOLD_MINUTES = StripeGateway::SESSION_MINUTES + 10;
 
+    /** Why an order through the buyer's own friend's link is refused, for a checkout to act on. */
+    public const OWN_SHARE_LINK = 'own_share_link';
+
+    /** Where an order through a friend's link keeps the discount it was priced at (pricing_snapshot). */
+    public const FRIEND_DISCOUNT_BPS = 'friend_discount_bps';
+
     public function __construct(
         private readonly Pricer $pricer,
         private readonly Answers $answers,
         private readonly Stock $stock,
+        private readonly ShareLinks $shareLinks,
     ) {}
 
     /**
@@ -183,6 +192,18 @@ class CheckoutService
             // against stock or a code that changes before the hold is taken.
             $quote = $this->pricer->quote($event, $quantities, $codeInput, $refSlug, $accessInput, $addOns, $channel);
 
+            // The friend's link the discount came through, kept on the order
+            // so its holder can be rewarded once this is paid. Not for its
+            // own holder: "both save" is a friend and the person who sent it.
+            $shareLink = $this->friendLink($event, $quote);
+
+            if ($shareLink !== null && (
+                (filled($buyerEmail) && Str::lower(trim($buyerEmail)) === $shareLink->owner_email)
+                || ($user !== null && $user->id === $shareLink->user_id)
+            )) {
+                throw new CheckoutException('That’s your own link. Send it to a friend.', reason: self::OWN_SHARE_LINK);
+            }
+
             $holds = [];
 
             foreach ($quote->lines as $line) {
@@ -225,10 +246,16 @@ class CheckoutService
                 'service_charge_tax_amount' => $quote->serviceChargeTax?->amount ?? 0,
                 'tax_lines' => $quote->taxLinesForStorage(),
                 'seller_of_record' => $quote->sellerOfRecord?->value,
-                'pricing_snapshot' => $quote->snapshot,
+                // With the friend's discount as it was priced, which is what
+                // the link's holder is given back (ShareRewards): an offer
+                // changed before this is paid changes neither side of it.
+                'pricing_snapshot' => $shareLink === null
+                    ? $quote->snapshot
+                    : [...$quote->snapshot, self::FRIEND_DISCOUNT_BPS => (int) $quote->code?->discount_value],
                 'code_id' => $quote->code?->id,
                 'access_code_id' => $quote->accessCode?->id,
                 'ref_slug' => $quote->refSlug,
+                'share_link_id' => $shareLink?->id,
                 'idempotency_key' => (string) Str::uuid(),
                 'status' => 'pending',
                 'channel' => $channel,
@@ -374,6 +401,25 @@ class CheckoutService
             'quantity' => $quantity,
             'expires_at' => now()->addMinutes(self::HOLD_MINUTES),
         ]);
+    }
+
+    /**
+     * The friend's link a quote was discounted through: only when the code it
+     * applied is the night's friend discount, which a ref alone can apply. A
+     * code the buyer typed instead was their choice, and earns nobody a
+     * reward.
+     *
+     * Only when it took something off. A free ticket through a link saved
+     * nobody anything, so there is nobody's saving to give back, and nothing
+     * to refuse its own holder either.
+     */
+    private function friendLink(Event $event, Quote $quote): ?ShareLink
+    {
+        if ($quote->code === null || ! $quote->code->isFriendDiscount() || $quote->discount->amount <= 0) {
+            return null;
+        }
+
+        return $this->shareLinks->live($event, $quote->refSlug);
     }
 
     /**

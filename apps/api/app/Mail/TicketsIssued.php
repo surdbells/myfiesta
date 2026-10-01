@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\Order;
 use App\Services\Events\CalendarFile;
 use App\Services\Receipts\Receipt;
+use App\Services\Tickets\BuyersTickets;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -42,7 +43,10 @@ class TicketsIssued extends Mailable implements ShouldQueue
             with: [
                 'order' => $this->order,
                 'event' => $this->order->event,
-                'tickets' => $this->order->tickets,
+                // Read again when the queue sends it, by which time the buyer
+                // may have sent one on: that one has a new code now, which
+                // is for its new holder's email only (BuyersTickets).
+                'tickets' => BuyersTickets::of($this->order, $this->order->tickets),
                 /*
                  * The ticket page on the public site, carrying the order's own
                  * token.
