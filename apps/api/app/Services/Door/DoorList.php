@@ -67,7 +67,7 @@ class DoorList
             ->where('event_id', $event->id)
             ->with('ticketType:id,name')
             ->orderBy('id')
-            ->get(['id', 'code', 'status', 'admits', 'admitted_count', 'holder_name', 'ticket_type_id']);
+            ->get(['id', 'event_id', 'code', 'status', 'admits', 'admitted_count', 'holder_name', 'ticket_type_id']);
 
         return [
             'event_id' => $event->id,
@@ -91,16 +91,37 @@ class DoorList
     }
 
     /**
-     * A ticket's code never changes — a transfer keeps it — so its hash is
-     * worked out once. Without this, a 2,000-ticket event costs nearly two
-     * seconds of hashing every time any door phone refreshes.
+     * Each code's hash is worked out once. Without this, a 2,000-ticket event
+     * costs nearly two seconds of hashing every time any door phone
+     * refreshes.
+     *
+     * Keyed by a digest of the code as well as the ticket, because a code
+     * does change: sending a ticket on, or support reissuing it, gives it a
+     * new one (TicketHandover). Keyed by the ticket alone, the list went on
+     * carrying the old code's hash for a fortnight — the new holder turned
+     * away at an offline door, and the old code let in.
+     *
+     * The digest is keyed with a secret that never leaves the server. Not
+     * the event's salt: every door phone is given that with its list, and a
+     * cache store is readable by more than the app, so a digest anybody with
+     * a list could work out would test a guessed code a thousand times faster
+     * than the slow hash stored under it.
      */
     private function cachedHash(Ticket $ticket, string $salt): string
     {
         return Cache::remember(
-            'door-hash:'.self::VERSION.':'.$ticket->id,
+            self::cacheKey($ticket),
             now()->addDays(14),
             fn () => $this->hash($ticket->code, $salt),
         );
+    }
+
+    /** door-hash:{version}:{event}:{ticket}:{first 12 of the code's digest, keyed from the app key}. */
+    public static function cacheKey(Ticket $ticket): string
+    {
+        $secret = hash_hmac('sha256', 'door-hash-key:'.self::VERSION.':'.$ticket->event_id, (string) config('app.key'));
+        $digest = substr(hash_hmac('sha256', (string) $ticket->code, $secret), 0, 12);
+
+        return 'door-hash:'.self::VERSION.':'.$ticket->event_id.':'.$ticket->id.':'.$digest;
     }
 }

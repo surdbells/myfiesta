@@ -6,10 +6,11 @@ use App\Mail\TicketsResent;
 use App\Mail\YourTicket;
 use App\Models\Order;
 use App\Models\Ticket;
-use App\Models\TicketTransfer;
 use App\Models\User;
 use App\Services\Audit\Auditor;
 use App\Services\Tickets\BuyersTickets;
+use App\Services\Tickets\TicketHandover;
+use App\Services\Tickets\TicketHandoverRefused;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
@@ -23,7 +24,10 @@ use Illuminate\Support\Str;
  */
 class TicketActions
 {
-    public function __construct(private readonly Auditor $auditor) {}
+    public function __construct(
+        private readonly Auditor $auditor,
+        private readonly TicketHandover $handover,
+    ) {}
 
     /**
      * The buyer's confirmation, again.
@@ -140,10 +144,12 @@ class TicketActions
     /**
      * Move a ticket to somebody else's address.
      *
-     * The same mechanics as an attendee's own transfer — a transfer row, the
-     * new owner's account found or made unclaimed — done for them. With a new
-     * code by default, so the email that went to the old address stops
-     * opening the door.
+     * The same handover as an attendee's own transfer (TicketHandover) — the
+     * lock, the transfer row with the new holder's own link, the account
+     * found or made unclaimed, the audit and the email — done for them. With
+     * a new code by default, so the email that went to the old address stops
+     * opening the door. Unlike a holder's, not closed once the night starts:
+     * support moving a ticket at the door is what this is for.
      */
     public function reissue(Ticket $ticket, User $staff, string $email, string $name, bool $newCode = true, ?string $reason = null): Ticket
     {
@@ -160,63 +166,20 @@ class TicketActions
             throw StaffActionRefused::because('Give the name of the person it is going to.');
         }
 
-        $transfer = DB::transaction(function () use ($ticket, $staff, $email, $name, $newCode) {
-            /** @var Ticket $locked */
-            $locked = Ticket::query()->whereKey($ticket->id)->lockForUpdate()->firstOrFail();
+        try {
+            $this->handover->reissue($ticket, $email, $name, $staff, $newCode, $reason);
+        } catch (TicketHandoverRefused $refused) {
+            // The same refusals, in the words the panel has always used.
+            throw StaffActionRefused::because(match ($refused->reason) {
+                TicketHandoverRefused::USED => 'This ticket has already been used at the door.',
+                TicketHandoverRefused::LISTED => 'This ticket is listed for resale and cannot be moved until the listing ends.',
+                TicketHandoverRefused::PARTLY_USED => 'Somebody has already come in on this ticket.',
+                TicketHandoverRefused::SAME_ADDRESS => 'This ticket is already held by that address. Resend it instead.',
+                default => 'This ticket no longer admits anybody.',
+            });
+        }
 
-            if ($locked->status !== 'valid' || $locked->admitted_count > 0) {
-                throw StaffActionRefused::because(match ($locked->status) {
-                    'checked_in' => 'This ticket has already been used at the door.',
-                    'listed' => 'This ticket is listed for resale and cannot be moved until the listing ends.',
-                    default => $locked->admitted_count > 0
-                        ? 'Somebody has already come in on this ticket.'
-                        : 'This ticket no longer admits anybody.',
-                });
-            }
-
-            if (Str::lower((string) $locked->owner_email) === $email) {
-                throw StaffActionRefused::because('This ticket is already held by that address. Resend it instead.');
-            }
-
-            // Including a deactivated account: the ticket goes to the address,
-            // and a closed account at that address is still the one it is.
-            $recipient = User::withTrashed()->whereRaw('lower(email) = ?', [$email])->first()
-                ?? User::create(['name' => $name, 'email' => $email, 'password' => null]);
-
-            $transfer = TicketTransfer::create([
-                'ticket_id' => $locked->id,
-                'from_email' => $locked->owner_email ?? $locked->order?->buyer_email ?? '',
-                'to_email' => $email,
-                'initiated_by' => $staff->id,
-                'transferred_at' => now(),
-            ]);
-
-            $changes = [
-                'owner_user_id' => $recipient->id,
-                'owner_email' => $email,
-                'holder_name' => $name,
-            ];
-
-            if ($newCode) {
-                $changes['code'] = $this->freshCode();
-            }
-
-            $locked->update($changes);
-
-            return $transfer;
-        });
-
-        $ticket->refresh();
-
-        $this->auditor->record('ticket.reissued', $ticket, $staff, metadata: array_filter([
-            'transfer_id' => $transfer->id,
-            'new_code' => $newCode,
-            'reason' => $reason ? trim($reason) : null,
-        ], fn ($value) => $value !== null));
-
-        Mail::to($email)->send(new YourTicket($ticket->loadMissing(['event.venue', 'event.organization', 'ticketType']), reissued: true, newCode: $newCode));
-
-        return $ticket;
+        return $ticket->refresh();
     }
 
     /**
@@ -240,14 +203,5 @@ class TicketActions
             'note' => Str::limit($note, 2000, ''),
             'channel' => $order->channel,
         ]);
-    }
-
-    private function freshCode(): string
-    {
-        do {
-            $code = Ticket::generateCode();
-        } while (Ticket::where('code', $code)->exists());
-
-        return $code;
     }
 }

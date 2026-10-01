@@ -150,14 +150,6 @@ export class Tickets {
   }
 
   /**
-   * The QR arrives as SVG markup and has to be trusted to render.
-   *
-   * Safe because of where it comes from, not because of what it looks like:
-   * the server builds it from a ticket code that the platform generated itself
-   * out of a fixed alphabet, and the code is escaped into the label. Nothing a
-   * buyer or organizer ever typed reaches this string.
-   */
-  /**
    * The start time in the venue's zone.
    *
    * Never the reader's. Somebody who bought a Toronto ticket while in Lagos
@@ -172,6 +164,14 @@ export class Tickets {
     }).format(new Date(starts));
   }
 
+  /**
+   * The QR arrives as SVG markup and has to be trusted to render.
+   *
+   * Safe because of where it comes from, not because of what it looks like:
+   * the server builds it from a ticket code that the platform generated itself
+   * out of a fixed alphabet, and the code is escaped into the label. Nothing a
+   * buyer or organizer ever typed reaches this string.
+   */
   qr(svg: string): SafeHtml {
     return this.sanitizer.bypassSecurityTrustHtml(svg);
   }

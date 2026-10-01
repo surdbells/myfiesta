@@ -13,6 +13,9 @@ class TicketTransfer extends Model
 
     protected $guarded = ['id'];
 
+    /** The new holder's link to the ticket is the whole credential (TicketLink). */
+    protected $hidden = ['access_token'];
+
     /**
      * Every transfer goes into the ticket's history, however it was made —
      * by its holder, or by support moving it — pointing at this row rather

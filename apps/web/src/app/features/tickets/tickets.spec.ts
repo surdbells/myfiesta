@@ -1,10 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { ConfirmDialog, type ConfirmRequest } from '@myfiesta/ui';
 import { API_BASE_URL } from '../../core/api-base';
 import type { TicketAccess } from '../../core/api.types';
+import { TransferPart } from './parts/transfer-part';
 import { Tickets } from './tickets';
 
 const BASE = 'https://api.myfiesta.test/api/tickets/tok-1';
@@ -14,6 +16,7 @@ function access(listed = false): TicketAccess {
     reference: 'MF-7Q2K',
     status: 'paid',
     buyer_name: 'Ada Okafor',
+    sent: false,
     event: {
       slug: 'afro',
       title: 'Afro Night',
@@ -148,5 +151,137 @@ describe('Tickets: giving one back', () => {
     expect(request.request.method).toBe('DELETE');
     request.flush({ message: 'Kept. It works at the door again.', access: access() });
     expect(page.busy()).toBe(false);
+  });
+});
+
+/**
+ * A ticket somebody was sent, on the link that came with it: that ticket and
+ * nothing else of the order's.
+ */
+describe('Tickets: one somebody was sent', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ token: 'tok-1' }) } } },
+        { provide: ConfirmDialog, useValue: { confirm: async () => false } },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  function sent(tickets = true): TicketAccess {
+    const page = access();
+
+    return {
+      ...page,
+      reference: null,
+      status: null,
+      buyer_name: null,
+      sent: true,
+      receipt: null,
+      tickets: tickets ? page.tickets.map((ticket) => ({ ...ticket, transferable: true })) : [],
+    };
+  }
+
+  function draw(page: TicketAccess): string {
+    const fixture = TestBed.createComponent(Tickets);
+    http.expectOne(BASE).flush(page);
+    fixture.detectChanges();
+
+    return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+  }
+
+  it('shows the ticket with no receipt and no order number, and says it was sent', () => {
+    const text = draw(sent());
+
+    expect(text).toContain('This ticket was sent to you.');
+    expect(text).toContain('Send to someone');
+    expect(text).not.toContain('Order');
+    expect(text).not.toContain('Receipt');
+  });
+
+  it('says the link no longer opens a ticket once it has gone on', () => {
+    const text = draw(sent(false));
+
+    expect(text).toContain('This link no longer opens a ticket.');
+    expect(text).not.toContain('There are no live tickets on this order.');
+  });
+
+  it('keeps the order number on the order page', () => {
+    expect(draw(access())).toContain('MF-7Q2K');
+  });
+});
+
+/**
+ * Sending a ticket on, as the page takes the answer: said where the page
+ * says everything, and drawn again without the ticket that went. A page that
+ * kept showing it would keep showing a code that no longer opens the door.
+ */
+describe('Tickets: sending one on', () => {
+  let http: HttpTestingController;
+  let asked: ConfirmRequest[];
+
+  beforeEach(() => {
+    asked = [];
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.myfiesta.test' },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ token: 'tok-1' }) } } },
+        { provide: ConfirmDialog, useValue: { confirm: async (request: ConfirmRequest) => (asked.push(request), true) } },
+      ],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  function text(element: HTMLElement): string {
+    return (element.textContent ?? '').replace(/\s+/g, ' ');
+  }
+
+  it('says it was sent and stops showing the ticket and its code', async () => {
+    const page = access();
+    page.tickets = page.tickets.map((ticket) => ({ ...ticket, code: 'K7Q2-M4XP', transferable: true }));
+
+    const fixture = TestBed.createComponent(Tickets);
+    http.expectOne(BASE).flush(page);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(text(element)).toContain('K7Q2-M4XP');
+
+    (element.querySelector('button.send') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const part = fixture.debugElement.query(By.directive(TransferPart)).componentInstance as TransferPart;
+    part.name.set('Chioma Eze');
+    part.email.set('chioma@example.com');
+    await part.send();
+
+    expect(asked.length).toBe(1);
+    const request = http.expectOne(`${BASE}/transfer/t-1`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'chioma@example.com', name: 'Chioma Eze' });
+    request.flush({
+      message: 'Sent to chioma@example.com. They have an email with the ticket and a link to it.',
+      access: { ...access(), tickets: [] },
+    });
+    fixture.detectChanges();
+
+    expect(element.querySelector('.notice')?.textContent).toContain('Sent to chioma@example.com.');
+    expect(text(element)).not.toContain('K7Q2-M4XP');
+    expect(fixture.componentInstance.order()?.tickets.some((ticket) => ticket.id === 't-1')).toBe(false);
   });
 });

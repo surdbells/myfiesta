@@ -747,12 +747,6 @@ parameters:
 			path: app/Services/StaffSupport/TaxRateChanges.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>buyer_email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/StaffSupport/TicketActions.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

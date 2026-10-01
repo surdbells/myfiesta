@@ -93,9 +93,11 @@ class TicketInfolist
                                 'when' => $transfer->transferred_at?->format('j M Y, H:i'),
                                 'from' => $transfer->from_email ?: '—',
                                 'to' => $transfer->to_email,
+                                // A send from a ticket link has no account
+                                // behind it, only whoever held the link.
                                 'by' => $transfer->initiator
                                     ? $transfer->initiator->name.($transfer->initiator->platform_role ? ' (myFiesta staff)' : '')
-                                    : '—',
+                                    : ($transfer->via === 'link' ? 'The holder, from their ticket link' : '—'),
                             ])
                             ->all())
                         ->placeholder('Never transferred.')

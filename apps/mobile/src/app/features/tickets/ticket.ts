@@ -1,20 +1,16 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HeldTicketStore } from '../../core/held-tickets';
-import { Api, ApiError, Ticket } from '../../core/api';
+import { ApiError, Ticket } from '../../core/api';
 import { SessionStore } from '../../core/session';
 import { longEventTime } from '../../core/event-time';
 import {
-  Dialogs,
   MfBadge,
   MfButton,
   MfCard,
   MfEmpty,
-  MfField,
   MfQr,
   MfScreen,
-  MfSheet,
   MfSkeleton,
   ToastStore,
 } from '../../ui';
@@ -36,14 +32,11 @@ import { MfTicketTransfer } from './ticket-transfer';
 @Component({
   selector: 'mf-ticket',
   imports: [
-    FormsModule,
     MfScreen,
     MfCard,
     MfBadge,
     MfButton,
     MfQr,
-    MfSheet,
-    MfField,
     MfEmpty,
     MfSkeleton,
     MfReceipt,
@@ -113,10 +106,7 @@ import { MfTicketTransfer } from './ticket-transfer';
         <div class="actions">
           <button mfButton variant="secondary" block (click)="viewEvent(held)">See the event</button>
 
-          @if (held.status !== 'checked_in') {
-            <button mfButton variant="ghost" block (click)="transferring.set(true)">Send to somebody else</button>
-          }
-
+          <!-- Sending it on, where the server says it can go, with its own sheet. -->
           <mf-ticket-transfer [ticket]="held" />
         </div>
 
@@ -127,37 +117,6 @@ import { MfTicketTransfer } from './ticket-transfer';
         }
       }
     </mf-screen>
-
-    <mf-sheet
-      [open]="transferring()"
-      heading="Send this ticket"
-      subheading="It leaves your account and lands in theirs. You cannot take it back."
-      (closed)="transferring.set(false)"
-    >
-      <form class="transfer" (ngSubmit)="transfer()">
-        <mf-field label="Their name">
-          <input #control name="name" autocomplete="name" [ngModel]="name()" (ngModelChange)="name.set($event)" />
-        </mf-field>
-
-        <mf-field label="Their email" [error]="error()">
-          <input
-            #control
-            name="email"
-            type="email"
-            inputmode="email"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            [ngModel]="email()"
-            (ngModelChange)="email.set($event)"
-          />
-        </mf-field>
-
-        <button mfButton type="submit" block label="Sending…" [loading]="sending()" [disabled]="!name().trim() || !email().trim()">
-          Send the ticket
-        </button>
-      </form>
-    </mf-sheet>
   `,
   styles: `
     .code {
@@ -222,21 +181,13 @@ import { MfTicketTransfer } from './ticket-transfer';
       gap: var(--space-2);
       margin-top: var(--space-4);
     }
-
-    .transfer {
-      display: grid;
-      gap: var(--space-4);
-      padding-top: var(--space-2);
-    }
   `,
 })
 export class TicketDetail {
   private readonly nav = inject(Navigation);
-  private readonly api = inject(Api);
   private readonly held = inject(HeldTicketStore);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastStore);
-  private readonly dialogs = inject(Dialogs);
   readonly session = inject(SessionStore);
 
   /** From the route. */
@@ -245,12 +196,6 @@ export class TicketDetail {
   readonly tickets = signal<Ticket[]>([]);
   readonly loading = signal(true);
   readonly stale = signal(false);
-
-  readonly transferring = signal(false);
-  readonly sending = signal(false);
-  readonly name = signal('');
-  readonly email = signal('');
-  readonly error = signal<string | null>(null);
 
   readonly ticket = computed(() => this.tickets().find((held) => held.id === this.id()) ?? null);
 
@@ -280,41 +225,6 @@ export class TicketDetail {
 
   when(held: Ticket): string {
     return longEventTime(held.event.starts_at, held.event.timezone);
-  }
-
-  async transfer(): Promise<void> {
-    const held = this.ticket();
-    if (!held || this.sending()) return;
-
-    const name = this.name().trim();
-    const email = this.email().trim();
-
-    // Said back with the address in it: a ticket sent to a typo is a ticket
-    // gone, and this one cannot be taken back.
-    const sure = await this.dialogs.confirm({
-      title: `Send your ${held.type ?? ''} ticket to ${name}?`.replace(/\s+/g, ' '),
-      body: `Your ticket for ${held.event.title} goes to ${email}, and stops working on this phone straight away.`,
-      consequences: ['You cannot take it back.'],
-      confirmLabel: 'Send the ticket',
-      tone: 'danger',
-    });
-
-    if (!sure || this.sending()) return;
-
-    this.sending.set(true);
-    this.error.set(null);
-
-    try {
-      await this.api.transfer(held.id, email, name);
-
-      this.transferring.set(false);
-      this.toasts.show(`Sent to ${this.email().trim()}.`, 'success');
-      await this.router.navigate(['/tickets'], { replaceUrl: true });
-    } catch (error) {
-      this.error.set(error instanceof ApiError ? error.message : 'That could not be sent.');
-    } finally {
-      this.sending.set(false);
-    }
   }
 
   viewEvent(held: Ticket): void {

@@ -6,12 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Extensions\TicketExtras;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
-use App\Models\TicketTransfer;
-use App\Models\User;
 use App\Services\Disputes\ActivityLog;
+use App\Services\Tickets\TicketHandover;
+use App\Services\Tickets\TicketHandoverRefused;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * An attendee's own tickets.
@@ -55,8 +54,12 @@ class TicketController extends Controller
      * with no proof of ownership, and ticket ids were sequential integers — so
      * reassigning a stranger's ticket was a matter of counting. Ownership is
      * now checked, and the transfer is recorded.
+     *
+     * Through the same handover as the link in the buyer's email
+     * (TicketHandover): a new code, so the one on this phone stops opening
+     * the door, and an email to the new holder with a link of their own.
      */
-    public function transfer(Request $request, Ticket $ticket): JsonResponse
+    public function transfer(Request $request, Ticket $ticket, TicketHandover $handover): JsonResponse
     {
         $validated = $request->validate([
             'email' => ['required', 'email:rfc', 'max:255'],
@@ -67,41 +70,16 @@ class TicketController extends Controller
             return response()->json(['message' => 'That is not your ticket.'], 403);
         }
 
-        if ($ticket->status !== 'valid') {
-            // A checked-in ticket has already been used; transferring it would
-            // be handing over an empty envelope.
-            return response()->json([
-                'message' => $ticket->status === 'checked_in'
-                    ? 'This ticket has already been used.'
-                    : 'This ticket can no longer be transferred.',
-            ], 422);
+        try {
+            $transfer = $handover->send($ticket, $validated['email'], $validated['name'], $request->user());
+        } catch (TicketHandoverRefused $refused) {
+            return response()->json(['message' => $refused->getMessage()], $refused->status);
         }
 
-        $recipient = DB::transaction(function () use ($ticket, $validated, $request) {
-            // However the address was typed, deactivated accounts included:
-            // one person is one account (User::forAddress).
-            $recipient = User::forAddress($validated['email'], $validated['name']);
-
-            TicketTransfer::create([
-                'ticket_id' => $ticket->id,
-                'from_email' => $ticket->owner_email,
-                'to_email' => $recipient->email,
-                'initiated_by' => $request->user()->id,
-                'transferred_at' => now(),
-            ]);
-
-            $ticket->update([
-                'owner_user_id' => $recipient->id,
-                'owner_email' => $recipient->email,
-                'holder_name' => $validated['name'],
-            ]);
-
-            return $recipient;
-        });
-
+        // Only what was done. The ticket as it now is carries the new
+        // holder's code, which this phone must never be handed.
         return response()->json([
-            'message' => "Sent to {$recipient->email}.",
-            'ticket' => new TicketResource($ticket->fresh()->load(['event.venue', 'ticketType'])),
+            'message' => "Sent to {$transfer->to_email}. The code on this phone no longer gets anybody in.",
         ]);
     }
 }

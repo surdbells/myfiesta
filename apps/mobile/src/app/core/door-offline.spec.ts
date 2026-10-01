@@ -592,4 +592,46 @@ describe('DoorOffline, sending what was scanned without signal', () => {
       expect((await queued()).map((scan) => scan.party)).toEqual([3, 1]);
     });
   });
+
+  /*
+   * It let them in. A ticket given back for its money still opened this door
+   * wherever the signal was down, while its place went on sale again; the
+   * server has always turned it away.
+   */
+  describe('a ticket handed back for resale', () => {
+    const LISTED = 'LSTD-ACDEFHJK';
+
+    beforeEach(async () => {
+      const salt = 'salt-for-evt_1';
+
+      await offline.save({
+        event_id: 'evt_1',
+        salt,
+        iterations: 1,
+        generated_at: '2026-09-26T21:05:00Z',
+        tickets: [
+          {
+            hash: await hashCode(LISTED, salt, 1),
+            status: 'listed',
+            admits: 4,
+            admitted_count: 0,
+            holder_name: 'Chidi Nwosu',
+            type: 'Table of 4',
+          },
+        ],
+      });
+    });
+
+    it('is turned away with no signal, as the server turns it away, and the refusal goes with the next sync', async () => {
+      const outcome = await offline.decideAndQueue('evt_1', LISTED, 2, good.client_id);
+
+      expect(outcome).toMatchObject({
+        result: 'void',
+        accepted: false,
+        admitted: 0,
+        message: 'This ticket was handed back and is waiting to be resold.',
+      });
+      expect(await queued()).toMatchObject([{ client_id: good.client_id, code: LISTED, offline_result: 'void' }]);
+    });
+  });
 });

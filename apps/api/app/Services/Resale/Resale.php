@@ -8,6 +8,7 @@ use App\Models\ResaleListing;
 use App\Models\Ticket;
 use App\Services\Audit\Auditor;
 use App\Services\Organizations\Suspension;
+use App\Services\Payments\PayLater;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,13 @@ class Resale
                 : 'This ticket cannot be given back.';
         }
 
+        // A table with some of its people inside is still `valid`. Given
+        // back, its places would go on sale whole — the ones already in
+        // sold a second time — and the holder repaid for all of them.
+        if ($ticket->admitted_count > 0) {
+            return 'Somebody has already come in on this ticket, so it cannot be given back.';
+        }
+
         if ($event->starts_at === null || $event->starts_at->isPast()) {
             return 'This event has already happened.';
         }
@@ -81,7 +89,10 @@ class Resale
             return 'This ticket was free, so there is nothing to return.';
         }
 
-        return null;
+        // Paid with Klarna or Affirm, whose window for taking money back
+        // shuts before the night: a resale could be refused paying them back
+        // after the ticket had stopped working (payBack).
+        return app(PayLater::class)->resaleRefusal($ticket->order, $event);
     }
 
     /**
@@ -103,7 +114,9 @@ class Resale
             // and the partial unique index would refuse the second anyway.
             $locked = Ticket::query()->whereKey($ticket->id)->lockForUpdate()->first();
 
-            if ($locked->status !== 'valid') {
+            // Asked again under the lock: the door may have let somebody in
+            // on it since the page was drawn.
+            if ($locked->status !== 'valid' || $locked->admitted_count > 0) {
                 throw new ResaleRefused('This ticket cannot be given back.');
             }
 

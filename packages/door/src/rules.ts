@@ -18,9 +18,9 @@ export const CHOOSE_PARTY = 'choose_party';
  * it was to run a browser.
  *
  * It follows CheckInService on the API line for line: refunded or void is
- * cancelled, nothing left is a duplicate, no number with more than one place
- * left is a question, more people than places is refused rather than quietly
- * rounded down.
+ * cancelled, handed back for resale is refused, nothing left is a duplicate,
+ * no number with more than one place left is a question, more people than
+ * places is refused rather than quietly rounded down.
  */
 export function decideOffline(ticket: DoorListTicket | null, party: number | null): ScanResult {
   if (!ticket) {
@@ -39,6 +39,15 @@ export function decideOffline(ticket: DoorListTicket | null, party: number | nul
 
   if (ticket.status === 'refunded' || ticket.status === 'void') {
     return refusal('void', 'This ticket was cancelled.', about);
+  }
+
+  // Given back and waiting for somebody else to take the place. The server
+  // has always turned it away; this door let it in, so a ticket handed back
+  // for its money still opened the door wherever the signal was down. Named
+  // rather than called cancelled, as the server names it: the person holding
+  // it may have given it back by mistake and can keep it from their email.
+  if (ticket.status === 'listed') {
+    return refusal('void', 'This ticket was handed back and is waiting to be resold.', about);
   }
 
   const remaining = ticket.admits - ticket.admitted_count;

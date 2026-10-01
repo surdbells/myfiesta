@@ -86,3 +86,54 @@ describe('TicketDetail, where', () => {
     expect(await where()).toEqual(['Toronto']);
   });
 });
+
+/**
+ * Sending it on, placed on the ticket screen: offered where the server says
+ * the ticket can go, and said in words where it still works but cannot.
+ */
+describe('TicketDetail, sending it on', () => {
+  let tickets: Ticket[];
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: HeldTicketStore, useValue: { list: async () => ({ tickets, stale: false }) } },
+        { provide: SessionStore, useValue: { session: signal({ name: 'Ada Okafor' }), clear: async () => undefined } },
+      ],
+    });
+  });
+
+  async function screen(): Promise<string> {
+    const fixture = TestBed.createComponent(TicketDetail);
+    fixture.componentRef.setInput('id', 'tk-1');
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+  }
+
+  it('offers to send a ticket the server says can go', async () => {
+    tickets = [{ ...held(), transferable: true }];
+
+    expect(await screen()).toContain('Send to somebody else');
+  });
+
+  it('says so for a working ticket that cannot go, rather than leaving the button out', async () => {
+    tickets = [{ ...held(), transferable: false }];
+
+    const text = await screen();
+    expect(text).not.toContain('Send to somebody else');
+    expect(text).toContain('This ticket can no longer be sent to somebody else.');
+  });
+});

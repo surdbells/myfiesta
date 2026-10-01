@@ -60,6 +60,22 @@ describe('deciding at a door with no signal', () => {
     }
   });
 
+  it('refuses a ticket handed back for resale, as the server does', () => {
+    // It let them in. A ticket given back for its money still opened any
+    // door whose signal was down, while its place went on sale again.
+    for (const over of [{}, { admits: 4 }]) {
+      const outcome = decideOffline(ticket({ status: 'listed', ...over }), null);
+
+      expect(outcome.result).toBe('void');
+      expect(outcome.accepted).toBe(false);
+      expect(outcome.admitted).toBe(0);
+      expect(outcome.message).toBe('This ticket was handed back and is waiting to be resold.');
+    }
+
+    // Nor with a number given for a table.
+    expect(decideOffline(ticket({ status: 'listed', admits: 4 }), 2).accepted).toBe(false);
+  });
+
   it('calls a second scan of a single ticket a duplicate', () => {
     const outcome = decideOffline(ticket({ admitted_count: 1 }), null);
 

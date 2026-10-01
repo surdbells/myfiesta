@@ -8,6 +8,7 @@ use App\Models\TicketActivity;
 use App\Services\Disputes\ActivityLog;
 use App\Services\Events\CalendarFile;
 use App\Services\Tickets\TicketAccessPayload;
+use App\Services\Tickets\TicketLink;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,6 +27,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * Each opening goes into the order's ticket history (ActivityLog): "I never
  * got my tickets" is answered by the link in the email having been opened.
+ *
+ * The same address also opens a ticket somebody was sent, by the link that
+ * came with it (TicketLink): that one ticket, with no receipt or anything
+ * else of the order's.
  */
 class TicketAccessController extends Controller
 {
@@ -33,7 +38,17 @@ class TicketAccessController extends Controller
 
     public function __invoke(Request $request, string $token): JsonResponse
     {
-        $order = $this->order($token);
+        $link = TicketLink::find($token);
+
+        // One ticket somebody was sent, on the link that came with it: that
+        // ticket and nothing else of the order's. Not written into the
+        // order's history, which is the buyer's — the new holder's address
+        // and browser are not evidence about what the buyer received.
+        if ($link?->transfer !== null) {
+            return response()->json($this->payload->forTransfer($link->transfer));
+        }
+
+        $order = $link->order ?? throw new NotFoundHttpException('No tickets found for that link.');
 
         app(ActivityLog::class)->opened($order, TicketActivity::TICKET_PAGE, $request);
 
