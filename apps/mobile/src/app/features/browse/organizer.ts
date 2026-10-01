@@ -1,5 +1,7 @@
-import { Component, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Browser } from '@capacitor/browser';
+import type { SocialLink } from '@myfiesta/api-types';
 import { Discover, EventCard, OrganizerPage } from '../../core/discovery';
 import { shortEventTime } from '../../core/event-time';
 import { formatMoney } from '../../core/money';
@@ -15,6 +17,7 @@ import {
   ToastStore,
 } from '../../ui';
 import { MfAvailability, offSale } from './availability';
+import { NETWORK_NAMES, OrganizerApi } from './organizer-api';
 
 /**
  * An organizer, and everything of theirs.
@@ -61,6 +64,20 @@ import { MfAvailability, offSale } from './availability';
 
           @if (org.description) {
             <p class="subtle">{{ org.description }}</p>
+          }
+
+          @if (socials().length > 0) {
+            <!-- Where else to find them, opened in the phone's own browser.
+                 The addresses are the API's, built from the account's name. -->
+            <ul class="socials" aria-label="Elsewhere">
+              @for (link of socials(); track link.network) {
+                <li>
+                  <button type="button" class="social" (click)="openLink(link)">
+                    <span class="subtle">{{ networkNames[link.network] }}</span> {{ link.label }}
+                  </button>
+                </li>
+              }
+            </ul>
           }
 
           <button
@@ -119,7 +136,7 @@ import { MfAvailability, offSale } from './availability';
           <h2 class="section">Previously</h2>
 
           <ul class="stack">
-            @for (event of org.past; track event.slug) {
+            @for (event of past(); track event.slug) {
               <li>
                 <mf-card quiet tappable (click)="open(event)">
                   <div class="row">
@@ -134,6 +151,15 @@ import { MfAvailability, offSale } from './availability';
               </li>
             }
           </ul>
+
+          @if (pastHasMore() || pastFailed()) {
+            @if (pastFailed()) {
+              <p class="subtle more-note" role="status">Older events did not load. Try again.</p>
+            }
+            <button mfButton class="mt" block variant="secondary" [loading]="loadingPast()" (click)="showMorePast(org)">
+              Show more past events
+            </button>
+          }
         }
       }
     </mf-screen>
@@ -257,6 +283,44 @@ import { MfAvailability, offSale } from './availability';
     .mt {
       margin-top: var(--space-3);
     }
+
+    .socials {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-4);
+      margin: var(--space-3) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .socials li {
+      min-width: 0;
+    }
+
+    /* A link's look on a button, so the tap opens the phone's own browser. */
+    .social {
+      min-height: 2.75rem;
+      padding: 0;
+      border: 0;
+      background: none;
+      font: inherit;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      color: var(--primary-text);
+      text-align: start;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+
+    .social .subtle {
+      font-weight: var(--font-weight-regular);
+    }
+
+    .more-note {
+      margin: var(--space-4) 0 0;
+      font-size: var(--font-size-sm);
+      text-align: center;
+    }
   `,
 })
 export class Organizer {
@@ -276,6 +340,22 @@ export class Organizer {
   readonly following = signal(false);
   readonly busy = signal(false);
 
+  protected readonly networkNames = NETWORK_NAMES;
+  private readonly organizers = inject(OrganizerApi);
+
+  /** Where else to find them; none from an API that does not send them. */
+  readonly socials = computed(() => this.organizer()?.socials ?? []);
+
+  /** Older nights, asked for twelve at a time below the twelve the page came with. */
+  private readonly olderPast = signal<EventCard[]>([]);
+  private pastPage = 1;
+  readonly pastHasMore = signal(false);
+  readonly loadingPast = signal(false);
+  readonly pastFailed = signal(false);
+
+  /** Every night shown under Previously, newest first. */
+  readonly past = computed(() => [...(this.organizer()?.past ?? []), ...this.olderPast()]);
+
   constructor() {
     queueMicrotask(() => void this.load());
   }
@@ -289,6 +369,10 @@ export class Organizer {
 
       this.organizer.set(organizer);
       this.following.set(organizer.following === true);
+      this.olderPast.set([]);
+      this.pastPage = 1;
+      this.pastHasMore.set(organizer.past_has_more === true);
+      this.pastFailed.set(false);
     } catch (error) {
       this.failed.set(error instanceof Error ? error.message : 'Something went wrong.');
     } finally {
@@ -353,5 +437,36 @@ export class Organizer {
 
   open(event: EventCard): void {
     void this.router.navigate(['/e', event.slug]);
+  }
+
+  /** Their account elsewhere, in the phone's own browser, as every outside page is. */
+  openLink(link: SocialLink): void {
+    void Browser.open({ url: link.url }).catch(() => undefined);
+  }
+
+  /**
+   * The next twelve nights under Previously.
+   *
+   * A night already listed here is not listed twice, should one have ended
+   * and moved across since the screen loaded.
+   */
+  async showMorePast(organizer: OrganizerPage): Promise<void> {
+    if (this.loadingPast()) return;
+
+    this.loadingPast.set(true);
+    this.pastFailed.set(false);
+
+    try {
+      const { data, meta } = await this.organizers.past(organizer.slug, this.pastPage + 1);
+      const seen = new Set(this.past().map((event) => event.slug));
+
+      this.pastPage = meta.page;
+      this.olderPast.update((older) => [...older, ...data.filter((event) => !seen.has(event.slug))]);
+      this.pastHasMore.set(meta.has_more);
+    } catch {
+      this.pastFailed.set(true);
+    } finally {
+      this.loadingPast.set(false);
+    }
   }
 }

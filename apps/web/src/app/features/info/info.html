@@ -51,6 +51,15 @@
     @case ('help') {
       <h1>Help</h1>
 
+      <!-- A plain link, not routerLink: the videos page is loaded as a page
+           of its own, so the browser takes the policy that lets the player in
+           (security-headers.ts) rather than keeping this page's. -->
+      <p>
+        Rather watch than read? The <a href="/help/videos">how-to videos</a>
+        show buying a ticket, getting in at the door, and running your events,
+        a minute or two each.
+      </p>
+
       <h2>I bought a ticket and nothing arrived</h2>
       <p>
         Tickets are emailed within a minute of payment clearing. If it is not

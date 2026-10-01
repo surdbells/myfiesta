@@ -1,7 +1,19 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const browsed = vi.hoisted(() => [] as string[]);
+
+vi.mock('@capacitor/browser', () => ({
+  Browser: {
+    open: async ({ url }: { url: string }) => {
+      browsed.push(url);
+    },
+  },
+}));
+
 import { Organizer } from './organizer';
+import { OrganizerApi, type OrganizerNights } from './organizer-api';
 import { Discover, EventCard, OrganizerPage } from '../../core/discovery';
 import { SessionStore } from '../../core/session';
 
@@ -49,12 +61,17 @@ describe('Organizer page', () => {
   let followAnswer: () => Promise<{ following: boolean }>;
   let signedIn: boolean;
   let router: Router;
+  let pagesAsked: { slug: string; page: number }[];
+  let nextPage: () => Promise<OrganizerNights>;
 
   beforeEach(() => {
     follows = [];
     followAnswer = async () => ({ following: true });
     signedIn = true;
     load = async () => showing;
+    pagesAsked = [];
+    nextPage = async () => ({ data: [], meta: { page: 2, per_page: 12, has_more: false } });
+    browsed.length = 0;
 
     TestBed.configureTestingModule({
       providers: [
@@ -78,6 +95,16 @@ describe('Organizer page', () => {
           useValue: {
             session: () => (signedIn ? { scope: 'attendee', token: 't' } : null),
             signedIn: () => signedIn,
+          },
+        },
+        {
+          provide: OrganizerApi,
+          useValue: {
+            past: async (slug: string, page: number) => {
+              pagesAsked.push({ slug, page });
+
+              return nextPage();
+            },
           },
         },
       ],
@@ -195,5 +222,69 @@ describe('Organizer page', () => {
     // no time, because when somebody should have arrived is no use now.
     expect(was).toContain('2025');
     expect(was).not.toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it('lists where else to find them, and opens one in the phone’s own browser', async () => {
+    const fixture = await open(
+      organizer({
+        socials: [
+          { network: 'instagram', label: '@lagosnights', url: 'https://www.instagram.com/lagosnights/' },
+          { network: 'website', label: 'lagosnights.com', url: 'https://lagosnights.com' },
+        ],
+      }),
+    );
+
+    const links = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.socials button')];
+    expect(links.map((link) => link.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Instagram @lagosnights',
+      'Website lagosnights.com',
+    ]);
+
+    links[0].click();
+    await fixture.whenStable();
+
+    expect(browsed).toEqual(['https://www.instagram.com/lagosnights/']);
+  });
+
+  it('shows no list when there is nowhere else, or the server does not say', async () => {
+    const fixture = await open(organizer());
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('.socials')).toBeNull();
+  });
+
+  it('brings older nights twelve at a time, never listing one twice, until there are no more', async () => {
+    const past = Array.from({ length: 12 }, (_, i) => card({ slug: `night-${i + 1}` }));
+    const fixture = await open(organizer({ past, past_has_more: true }));
+    const more = () =>
+      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find((b) => b.textContent?.includes('Show more past events'));
+
+    expect(more()).toBeDefined();
+
+    nextPage = async () => ({ data: [card({ slug: 'night-12' }), card({ slug: 'night-13' })], meta: { page: 2, per_page: 12, has_more: false } });
+    await page.showMorePast(showing);
+    await fixture.whenStable();
+
+    expect(pagesAsked).toEqual([{ slug: 'lagos-nights', page: 2 }]);
+    expect(page.past().map((event) => event.slug)).toHaveLength(13);
+    expect(more()).toBeUndefined();
+  });
+
+  it('says so when older nights do not load, and asks for the same page again', async () => {
+    await open(organizer({ past: [card({ slug: 'night-1' })], past_has_more: true }));
+
+    nextPage = async () => {
+      throw new Error('Could not reach the server.');
+    };
+    await page.showMorePast(showing);
+
+    expect(page.pastFailed()).toBe(true);
+    expect(page.pastHasMore()).toBe(true);
+
+    nextPage = async () => ({ data: [card({ slug: 'night-2' })], meta: { page: 2, per_page: 12, has_more: false } });
+    await page.showMorePast(showing);
+
+    expect(pagesAsked.map((asked) => asked.page)).toEqual([2, 2]);
+    expect(page.pastFailed()).toBe(false);
+    expect(page.past().map((event) => event.slug)).toEqual(['night-1', 'night-2']);
   });
 });

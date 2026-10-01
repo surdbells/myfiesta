@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Organization;
+use App\Services\Organizations\Socials;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -25,8 +26,9 @@ class OrganizerResource extends JsonResource
     /**
      * @param  Collection  $upcoming
      * @param  Collection  $past
+     * @param  bool  $morePast  Whether there are older nights than $past to page on to.
      */
-    public function __construct($resource, private $upcoming, private $past)
+    public function __construct($resource, private $upcoming, private $past, private bool $morePast = false)
     {
         parent::__construct($resource);
     }
@@ -71,6 +73,14 @@ class OrganizerResource extends JsonResource
             // happened is worth more than anything the organizer writes about
             // themselves.
             'past' => EventSummaryResource::collection($this->past),
+            // Whether "Show more past events" has anything to show, from
+            // GET /organizers/{slug}/events?when=past&page=2 on.
+            'past_has_more' => $this->morePast,
+            // Where else to find them, as links built here from the part that
+            // names the account (Socials), so a value in the database never
+            // decides on its own where a reader is sent. Whatever cannot be
+            // read is left off.
+            'socials' => Socials::links($this->resource),
         ];
     }
 }

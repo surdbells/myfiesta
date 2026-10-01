@@ -164,5 +164,53 @@
         </div>
       }
     </form>
+
+    <!--
+      Where else to find them, with a Save of its own. Each box takes the
+      username, @username or the address from the browser; what comes back is
+      what was kept, which is exactly what the page links to.
+    -->
+    <form
+      class="grid gap-4 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)"
+      aria-labelledby="brand-socials-heading"
+      (ngSubmit)="saveSocials()"
+    >
+      <div>
+        <h2 id="brand-socials-heading" class="text-base font-semibold">Where else to find you</h2>
+        <p class="mt-1 text-sm text-text-muted">
+          Linked under your name on your organizer page. Leave a box empty to show nothing for it.
+        </p>
+      </div>
+
+      @for (field of socialFields; track field.network) {
+        <ui-field [label]="field.label" [hint]="field.hint" [error]="socialErrors()[field.network] ?? null">
+          <input
+            [id]="'brand-social-' + field.network"
+            [name]="'brand-social-' + field.network"
+            maxlength="255"
+            autocapitalize="off"
+            autocomplete="off"
+            spellcheck="false"
+            [attr.inputmode]="field.network === 'website' ? 'url' : null"
+            [placeholder]="field.placeholder"
+            [disabled]="!mayEdit()"
+            [ngModel]="socials()[field.network] ?? ''"
+            (ngModelChange)="setSocial(field.network, $event)"
+          />
+        </ui-field>
+      }
+
+      @if (socialsError(); as message) {
+        <ui-alert tone="danger">{{ message }}</ui-alert>
+      }
+
+      @if (mayEdit()) {
+        <div>
+          <button uiButton type="submit" [loading]="savingSocials()" [disabled]="savingSocials() || !socialsChanged()">
+            Save links
+          </button>
+        </div>
+      }
+    </form>
   </div>
 }

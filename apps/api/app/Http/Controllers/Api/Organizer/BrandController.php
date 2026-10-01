@@ -8,6 +8,8 @@ use App\Models\Organization;
 use App\Services\Audit\Auditor;
 use App\Services\Images\ImageRejected;
 use App\Services\Images\ImageStore;
+use App\Services\Organizations\Socials;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +22,11 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  * could only be set by the legacy importer, so every organizer who signed up
  * after the migration had a blank card on every event page they published,
  * with no way to fill it in.
+ *
+ * Where else to find them — Instagram, TikTok, X, Facebook and a website — is
+ * set here too, and shown on their organizer page. Each is checked and kept
+ * the way Socials reads it, so the page never links to something an
+ * organizer did not mean.
  *
  * The slug is not here and never will be. It is in links organizers have
  * already handed out, and a display name somebody wants to tidy up should not
@@ -47,9 +54,31 @@ class BrandController extends Controller
             // name, not rendered as markup — an organizer who pastes HTML here
             // should see what they pasted, not a broken page.
             'description' => ['sometimes', 'nullable', 'string', 'max:600'],
+            // Where else to find them. Each one may be the username, the
+            // username with its @, or the address copied from the browser —
+            // whichever an organizer has to hand — and is kept as the part
+            // that names the account (Socials). Null or empty takes it off.
+            'socials' => ['sometimes', 'array:'.implode(',', Socials::NETWORKS)],
+            'socials.instagram' => ['nullable', 'string', 'max:255', $this->readableAs('instagram',
+                'That is not an Instagram username. It is up to 30 letters, numbers, full stops and underscores — the part after instagram.com/.')],
+            'socials.tiktok' => ['nullable', 'string', 'max:255', $this->readableAs('tiktok',
+                'That is not a TikTok username. It is 2 to 24 letters, numbers, full stops and underscores — the part after tiktok.com/@.')],
+            'socials.x' => ['nullable', 'string', 'max:255', $this->readableAs('x',
+                'That is not an X username. It is up to 15 letters, numbers and underscores — the part after x.com/.')],
+            'socials.facebook' => ['nullable', 'string', 'max:255', $this->readableAs('facebook',
+                'That is not a Facebook page. Paste the page’s address, or the name after facebook.com/.')],
+            'socials.website' => ['nullable', 'string', 'max:255', $this->readableAs('website',
+                'That is not a website address we can link to. It has to be an https:// address, like https://lagosnights.com.')],
         ]);
 
-        $before = $organization->only(['name', 'description']);
+        $tracked = ['name', 'description', ...array_values(Socials::COLUMNS)];
+        $before = $organization->only($tracked);
+
+        foreach ($data['socials'] ?? [] as $network => $value) {
+            $organization->setAttribute(Socials::COLUMNS[$network], Socials::normalise($network, $value));
+        }
+
+        unset($data['socials']);
 
         $organization->fill($data)->save();
 
@@ -68,7 +97,7 @@ class BrandController extends Controller
             'organization.brand_updated',
             $organization,
             $request->user(),
-            metadata: ['changed' => array_keys(array_diff_assoc($organization->only(['name', 'description']), $before))],
+            metadata: ['changed' => array_keys(array_diff_assoc($organization->only($tracked), $before))],
         );
 
         return response()->json($this->present($organization));
@@ -149,6 +178,24 @@ class BrandController extends Controller
             // claim. Said here so the screen can explain rather than leave
             // somebody wondering where their tick went.
             'verification_pending_name' => $organization->awaitsRenameCheck(),
+            // As the form should start from: each one made sense of, or null
+            // where nothing is kept or what is kept cannot be read.
+            'socials' => Socials::of($organization),
         ];
+    }
+
+    /**
+     * A rule that the value names an account on that network.
+     *
+     * Checked by reading it the way it will be kept, so whatever passes here
+     * is exactly what the page links to.
+     */
+    private function readableAs(string $network, string $message): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($network, $message): void {
+            if (is_string($value) && trim($value) !== '' && Socials::normalise($network, $value) === null) {
+                $fail($message);
+            }
+        };
     }
 }

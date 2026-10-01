@@ -4,9 +4,19 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { UiIcon } from '@myfiesta/ui';
 import { BadgeCheck, Share2 } from 'lucide-angular';
 import { Api } from '../../core/api';
-import { OrganizerPage } from '../../core/api.types';
+import { EventSummary, OrganizerPage, SocialNetwork } from '../../core/api.types';
 import { Seo } from '../../core/seo';
 import { EventCard } from '../../shared/event-card';
+import { OrganizersApi } from './organizers-api';
+
+/** What each link is called beside the account it names. */
+export const NETWORK_NAMES: Record<SocialNetwork, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  x: 'X',
+  facebook: 'Facebook',
+  website: 'Website',
+};
 
 /**
  * An organizer's own page.
@@ -46,10 +56,27 @@ export class Organizer {
   readonly unavailable = signal(false);
   readonly shared = signal(false);
 
+  protected readonly networkNames = NETWORK_NAMES;
+
+  /** Older nights, asked for twelve at a time below the twelve the page came with. */
+  private readonly olderPast = signal<EventSummary[]>([]);
+  private pastPage = 1;
+  readonly pastHasMore = signal(false);
+  readonly loadingPast = signal(false);
+  readonly pastFailed = signal(false);
+
+  /** Every night shown under Previously, newest first. */
+  readonly past = computed(() => [...(this.organizer()?.past ?? []), ...this.olderPast()]);
+
+  /** Where else to find them; none on a page cached before the API sent them. */
+  readonly socials = computed(() => this.organizer()?.socials ?? []);
+
   /** Their mark when they have uploaded one; their initial when they have not. */
   readonly initial = computed(
     () => this.organizer()?.name.trim().charAt(0).toUpperCase() || '?',
   );
+
+  private readonly organizers = inject(OrganizersApi);
 
   constructor() {
     const slug = this.route.snapshot.paramMap.get('slug')!;
@@ -57,6 +84,7 @@ export class Organizer {
     this.api.organizer(slug).subscribe({
       next: ({ data }) => {
         this.organizer.set(data);
+        this.pastHasMore.set(data.past_has_more === true);
         this.seo.forOrganizer(data, `https://myfiesta.ca/o/${data.slug}`);
       },
       error: (error: HttpErrorResponse) => {
@@ -72,6 +100,36 @@ export class Organizer {
           this.unavailable.set(true);
           this.seo.unavailable('Organizer unavailable');
         }
+      },
+    });
+  }
+
+  /**
+   * The next twelve nights under Previously.
+   *
+   * Asked for by page, after the twelve the page arrived with; a night that
+   * somebody has already seen here is never listed twice, should one have
+   * ended and moved across since the page loaded.
+   */
+  showMorePast(): void {
+    const organizer = this.organizer();
+    if (!organizer || this.loadingPast()) return;
+
+    this.loadingPast.set(true);
+    this.pastFailed.set(false);
+
+    this.organizers.events(organizer.slug, 'past', this.pastPage + 1).subscribe({
+      next: ({ data, meta }) => {
+        const seen = new Set(this.past().map((event) => event.slug));
+
+        this.pastPage = meta.page;
+        this.olderPast.update((older) => [...older, ...data.filter((event) => !seen.has(event.slug))]);
+        this.pastHasMore.set(meta.has_more);
+        this.loadingPast.set(false);
+      },
+      error: () => {
+        this.pastFailed.set(true);
+        this.loadingPast.set(false);
       },
     });
   }

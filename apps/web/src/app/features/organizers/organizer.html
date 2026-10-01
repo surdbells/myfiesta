@@ -62,6 +62,25 @@
           <p class="mt-2 max-w-[66ch] text-lg leading-snug text-text-muted">{{ org.description }}</p>
         }
 
+        @if (socials().length > 0) {
+          <!-- Where else to find them. The addresses are the API's, built
+               from the account's name rather than passed on as typed; nofollow
+               because they are the organizer's word, not ours. -->
+          <ul class="socials m-0 mt-3 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-sm" aria-label="Elsewhere">
+            @for (link of socials(); track link.network) {
+              <li class="min-w-0">
+                <a
+                  class="font-semibold text-primary-text [overflow-wrap:anywhere]"
+                  [href]="link.url"
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  ><span class="font-normal text-text-muted">{{ networkNames[link.network] }}</span> {{ link.label }}</a
+                >
+              </li>
+            }
+          </ul>
+        }
+
         <button
           class="mt-4 inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-transparent px-4 text-sm font-semibold text-text [font-family:inherit] hover:border-border-strong"
           type="button"
@@ -101,12 +120,28 @@
            anybody: a name with a history behind it is the thing a stranger
            deciding whether to hand over forty dollars is actually reading. -->
       <ul class="m-0 mt-6 grid list-none grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-6 p-0 max-sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:gap-4">
-        @for (event of org.past; track event.slug) {
+        @for (event of past(); track event.slug) {
           <li class="min-w-0">
             <app-event-card [event]="event" [past]="true" />
           </li>
         }
       </ul>
+
+      @if (pastHasMore() || pastFailed()) {
+        <div class="mt-8 flex flex-col items-center gap-2">
+          @if (pastFailed()) {
+            <p class="m-0 text-sm text-text-muted" role="status">Older events did not load. Try again.</p>
+          }
+          <button
+            class="inline-flex h-10 cursor-pointer items-center rounded-md border border-border bg-transparent px-5 text-sm font-semibold text-text [font-family:inherit] hover:border-border-strong disabled:cursor-default disabled:opacity-60"
+            type="button"
+            [disabled]="loadingPast()"
+            (click)="showMorePast()"
+          >
+            {{ loadingPast() ? 'Loading…' : 'Show more past events' }}
+          </button>
+        </div>
+      }
     }
   </section>
 }

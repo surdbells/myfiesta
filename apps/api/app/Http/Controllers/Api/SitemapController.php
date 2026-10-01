@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\HelpVideo;
 use App\Models\Organization;
 use App\Services\Discovery\Places;
 use Illuminate\Http\Response;
@@ -31,7 +32,7 @@ class SitemapController extends Controller
     public const LIMIT = 50000;
 
     /** Fixed pages that are worth a crawler's time. */
-    private const PAGES = ['', 'events', 'help', 'contact', 'terms', 'privacy', 'refunds'];
+    private const PAGES = ['', 'events', 'help', 'help/videos', 'contact', 'terms', 'privacy', 'refunds'];
 
     public function __invoke(): Response
     {
@@ -46,7 +47,14 @@ class SitemapController extends Controller
             ->limit(self::LIMIT - count(self::PAGES))
             ->get(['slug', 'updated_at']);
 
-        $urls = array_map(fn (string $path) => $this->url($base.'/'.$path), self::PAGES);
+        // The how-to videos page once there is a video on it, and not before:
+        // until then it is an empty list, and a crawler sent there is told
+        // to index nothing.
+        $pages = HelpVideo::query()->where('published', true)->exists()
+            ? self::PAGES
+            : array_values(array_diff(self::PAGES, ['help/videos']));
+
+        $urls = array_map(fn (string $path) => $this->url($base.'/'.$path), $pages);
 
         foreach ($events as $event) {
             $urls[] = $this->url($base.'/'.$event->slug, $event->updated_at->toAtomString());

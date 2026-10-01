@@ -1,13 +1,24 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import type { Brand } from '@myfiesta/api-types';
+import type { Brand, BrandSocials, SocialNetwork } from '@myfiesta/api-types';
+import { ApiError } from '../../core/api';
 import { Organizer } from '../../core/organizer';
 import { SessionStore } from '../../core/session';
 import { Discover } from '../../core/discovery';
 import { messageOf } from '../../core/errors';
 import { Dialogs, MfBadge, MfButton, MfCard, MfEmpty, MfField, MfImagePick, MfScreen, MfSkeleton, ToastStore } from '../../ui';
+import { BrandChanges, OrgBrandApi, SOCIAL_FIELDS } from './org-brand-api';
+
+/** Nothing in any box. */
+const NO_SOCIALS: BrandSocials = { instagram: null, tiktok: null, x: null, facebook: null, website: null };
 
 /**
- * How the organization appears to buyers: its name, its logo, a line about it.
+ * How the organization appears to buyers: its name, its logo, a line about it,
+ * and where else to find it.
+ *
+ * Each of Instagram, TikTok, X, Facebook and a website takes whatever is to
+ * hand — the username, @username, or the address copied from the browser —
+ * and comes back as what was kept, which is exactly what the organizer page
+ * links to. A box the server refuses says why under itself.
  *
  * A verified organization renaming itself keeps the old name on show until
  * the new one is checked — that is the point of the mark — so the screen says
@@ -50,9 +61,28 @@ import { Dialogs, MfBadge, MfButton, MfCard, MfEmpty, MfField, MfImagePick, MfSc
           <mf-field label="Name" [limit]="120" [count]="name().length">
             <input [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" />
           </mf-field>
-          <mf-field label="About you" optional [limit]="1000" [count]="about().length" hint="On your page and under every event.">
-            <textarea class="tall" [value]="about()" (input)="about.set($any($event.target).value)" maxlength="1000" placeholder="Lagos-born, Toronto-based. Afrobeats nights since 2016."></textarea>
+          <mf-field label="About you" optional [limit]="600" [count]="about().length" hint="On your page and under every event.">
+            <textarea class="tall" [value]="about()" (input)="about.set($any($event.target).value)" maxlength="600" placeholder="Lagos-born, Toronto-based. Afrobeats nights since 2016."></textarea>
           </mf-field>
+
+          <h2 class="section">Where else to find you</h2>
+          <p class="lead">Linked under your name on your organizer page. Leave a box empty to show nothing for it.</p>
+
+          @for (field of socialFields; track field.network) {
+            <mf-field [label]="field.label" optional [hint]="field.hint" [error]="socialErrors()[field.network] ?? null">
+              <input
+                [attr.data-network]="field.network"
+                [type]="field.type"
+                [value]="socials()[field.network] ?? ''"
+                (input)="setSocial(field.network, $any($event.target).value)"
+                maxlength="255"
+                autocapitalize="off"
+                autocomplete="off"
+                spellcheck="false"
+                [placeholder]="field.placeholder"
+              />
+            </mf-field>
+          }
         </div>
       } @else {
         <mf-card><mf-skeleton height="12rem" /></mf-card>
@@ -99,6 +129,21 @@ import { Dialogs, MfBadge, MfButton, MfCard, MfEmpty, MfField, MfImagePick, MfSc
       min-height: 8rem;
     }
 
+    .section {
+      margin: var(--space-4) 0 0;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-subtle);
+    }
+
+    .lead {
+      margin: calc(var(--space-2) * -1) 0 0;
+      font-size: var(--font-size-sm);
+      color: var(--text-muted);
+    }
+
     .footer {
       display: grid;
     }
@@ -110,6 +155,26 @@ export class OrgBrand implements OnInit {
   private readonly discover = inject(Discover);
   private readonly dialogs = inject(Dialogs);
   private readonly toasts = inject(ToastStore);
+  private readonly brandApi = inject(OrgBrandApi);
+
+  protected readonly socialFields = SOCIAL_FIELDS;
+  protected readonly socials = signal<BrandSocials>({ ...NO_SOCIALS });
+  /** The server's word on each box it refused, by network. */
+  protected readonly socialErrors = signal<Partial<Record<SocialNetwork, string>>>({});
+
+  /** The boxes that differ from what is kept, as they will be sent. */
+  protected readonly socialChanges = computed(() => {
+    const kept = this.brand()?.socials ?? NO_SOCIALS;
+    const changes: Partial<BrandSocials> = {};
+
+    for (const { network } of SOCIAL_FIELDS) {
+      const typed = (this.socials()[network] ?? '').trim();
+
+      if (typed !== (kept[network] ?? '')) changes[network] = typed || null;
+    }
+
+    return changes;
+  });
 
   protected readonly brand = signal<Brand | null>(null);
   protected readonly error = signal<string | null>(null);
@@ -119,10 +184,13 @@ export class OrgBrand implements OnInit {
   protected readonly uploading = signal(false);
   protected readonly progress = signal<number | null>(null);
 
-  protected readonly changed = computed(() => {
+  /** The name or the line about them differs from what is kept. */
+  protected readonly detailsChanged = computed(() => {
     const b = this.brand();
     return !!b && (this.name().trim() !== b.name || (this.about().trim() || null) !== (b.description ?? null));
   });
+
+  protected readonly changed = computed(() => this.detailsChanged() || Object.keys(this.socialChanges()).length > 0);
 
   ngOnInit(): void {
     void this.load();
@@ -142,6 +210,18 @@ export class OrgBrand implements OnInit {
     this.brand.set(brand);
     this.name.set(brand.name);
     this.about.set(brand.description ?? '');
+    this.socials.set({ ...NO_SOCIALS, ...brand.socials });
+    this.socialErrors.set({});
+  }
+
+  protected setSocial(network: SocialNetwork, value: string): void {
+    this.socials.update((socials) => ({ ...socials, [network]: value }));
+    this.socialErrors.update((errors) => {
+      const rest = { ...errors };
+      delete rest[network];
+
+      return rest;
+    });
   }
 
   protected pageUrl(b: Brand): string {
@@ -153,13 +233,35 @@ export class OrgBrand implements OnInit {
 
     const name = this.name().trim();
     const renamed = name !== this.brand()?.name;
-    const consequences = ['Every event page, your organizer page and the emails buyers get show it straight away.'];
+    const details = this.detailsChanged();
+    const socials = this.socialChanges();
+    const links = Object.keys(socials).length > 0;
+    const consequences: string[] = [];
 
+    if (details) consequences.push('Every event page, your organizer page and the emails buyers get show it straight away.');
     if (renamed && this.brand()?.is_verified) consequences.push('The verified tick is hidden until myFiesta has looked at the new name.');
+
+    if (links) {
+      const changed = SOCIAL_FIELDS.filter(({ network }) => network in socials);
+      const removed = changed.filter(({ network }) => socials[network] === null).map((f) => f.label);
+
+      // Only promised when something is being linked: taking a link off
+      // should not be described as linking to it.
+      if (changed.length > removed.length) {
+        consequences.push('Your organizer page links to where else to find you straight away, for anybody to follow.');
+      }
+      if (removed.length > 0) consequences.push(`${removed.join(' and ')} ${removed.length === 1 ? 'comes' : 'come'} off your page.`);
+    }
 
     // How the organization appears everywhere it sells, said back first.
     const sure = await this.dialogs.confirm({
-      title: renamed ? `Rename the organization to ${name}?` : 'Save the new description?',
+      title: renamed
+        ? `Rename the organization to ${name}?`
+        : details && links
+          ? 'Save your changes?'
+          : details
+            ? 'Save the new description?'
+            : 'Save where else to find you?',
       body: 'This is how the organization appears on the pages it sells from.',
       consequences,
       confirmLabel: 'Save changes',
@@ -170,13 +272,31 @@ export class OrgBrand implements OnInit {
 
     this.saving.set(true);
 
+    const changes: BrandChanges = {
+      ...(details ? { name, description: this.about().trim() || null } : {}),
+      ...(links ? { socials } : {}),
+    };
+
     try {
-      const saved = await this.organizer.saveBrand({ name, description: this.about().trim() || null });
+      const saved = await this.brandApi.save(changes);
       this.adopt(saved);
       this.toasts.show(saved.verification_pending_name ? 'Saved. The new name shows once it is checked.' : 'Saved.', 'success');
-      await this.session.sync();
+      if (details) await this.session.sync();
     } catch (error) {
-      this.toasts.show(messageOf(error, 'That could not be saved.'), 'danger');
+      // A refused link says so under its own box.
+      const fields = error instanceof ApiError ? (error.fields ?? {}) : {};
+      const byNetwork: Partial<Record<SocialNetwork, string>> = {};
+
+      for (const { network } of SOCIAL_FIELDS) {
+        const message = fields[`socials.${network}`]?.[0];
+        if (message) byNetwork[network] = message;
+      }
+
+      this.socialErrors.set(byNetwork);
+      this.toasts.show(
+        Object.keys(byNetwork).length > 0 ? 'Check the links marked below.' : messageOf(error, 'That could not be saved.'),
+        'danger',
+      );
     } finally {
       this.saving.set(false);
     }

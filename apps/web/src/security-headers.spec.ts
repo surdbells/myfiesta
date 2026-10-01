@@ -71,4 +71,23 @@ describe('securityHeaders', () => {
     expect(securityHeaders('/tickets/abc', context)['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
     expect(securityHeaders('/', context)['X-Content-Type-Options']).toBe('nosniff');
   });
+
+  it('lets in YouTube’s no-cookie player on the how-to videos page, and nothing else there', () => {
+    for (const path of ['/help/videos', '/help/videos/']) {
+      expect(directive(securityHeaders(path, context)['Content-Security-Policy'], 'frame-src')).toBe(
+        'frame-src https://www.youtube-nocookie.com',
+      );
+    }
+
+    // Still framed by nobody else, and still running only its own scripts.
+    const policy = securityHeaders('/help/videos', context)['Content-Security-Policy'];
+    expect(directive(policy, 'frame-ancestors')).toBe("frame-ancestors 'self'");
+    expect(directive(policy, 'script-src')).toBe("script-src 'self' 'nonce-abc123=='");
+  });
+
+  it('frames nothing on every other page, the help page and lookalikes of the videos page included', () => {
+    for (const path of ['/', '/help', '/help/videos/extra', '/help/videosx', '/afro-fest', '/embed/afro-fest', '/o/lagos-nights']) {
+      expect(directive(securityHeaders(path, context)['Content-Security-Policy'], 'frame-src')).toBe("frame-src 'none'");
+    }
+  });
 });

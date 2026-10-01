@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Event;
+use App\Models\HelpVideo;
 use App\Models\Organization;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -108,6 +109,19 @@ class SitemapTest extends TestCase
         // pointing at 404s is worse than one that is short.
         $this->assertNotContains('https://myfiesta.test/o/signed-up-yesterday', $locations);
         $this->assertNotContains('https://myfiesta.test/o/caterer', $locations);
+    }
+
+    public function test_the_how_to_videos_are_listed_once_there_is_one_to_watch(): void
+    {
+        // An empty list is a page a crawler is told to index for nothing.
+        HelpVideo::create(['title' => 'Draft', 'youtube_id' => 'abcDEF12345', 'audience' => 'buyers', 'published' => false]);
+
+        $this->assertNotContains('https://myfiesta.test/help/videos', $this->locations());
+        $this->assertContains('https://myfiesta.test/help', $this->locations());
+
+        HelpVideo::create(['title' => 'Buying a ticket', 'youtube_id' => 'abcDEF12346', 'audience' => 'buyers', 'published' => true]);
+
+        $this->assertContains('https://myfiesta.test/help/videos', $this->locations());
     }
 
     /** @return list<string> */

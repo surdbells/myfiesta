@@ -34,6 +34,11 @@ export interface PolicyContext {
   https?: boolean;
 }
 
+/** help/videos, with or without a slash after it (features/help/player-frame.ts). */
+function isVideosPage(path: string): boolean {
+  return path === '/help/videos' || path === '/help/videos/';
+}
+
 export function securityHeaders(path: string, context: PolicyContext): Record<string, string> {
   const framing = framingHeaders(path);
 
@@ -61,8 +66,12 @@ export function securityHeaders(path: string, context: PolicyContext): Record<st
       ...(context.devServerHost ? [`ws://${context.devServerHost}`] : []),
     ].join(' '),
     // Nothing here puts another page inside itself. Paying happens on the
-    // processor's own page, in this tab or a new one, never in a frame.
-    "frame-src 'none'",
+    // processor's own page, in this tab or a new one, never in a frame. The
+    // one exception is the how-to videos page, whose players come from
+    // YouTube's no-cookie domain once somebody presses play: that page and
+    // that domain only, so a frame slipped into an event's description
+    // anywhere else still loads nothing.
+    isVideosPage(path) ? 'frame-src https://www.youtube-nocookie.com' : "frame-src 'none'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
