@@ -1,0 +1,139 @@
+<ui-modal [open]="open()" [heading]="heading()" [description]="intro()" [dismissible]="!busy()" (dismissed)="dismissed.emit()">
+  @if (error(); as message) {
+    <p class="mb-4 rounded-md border border-[color-mix(in_srgb,var(--danger)_26%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] px-4 py-3 text-sm text-danger-text" role="alert">{{ message }}</p>
+  }
+
+  <div class="grid gap-4">
+    <ui-field label="Title" [error]="tried() && draftTitle().trim() === '' ? 'Give the new event a title.' : null" required>
+      <input name="copyTitle" maxlength="160" [ngModel]="draftTitle()" (ngModelChange)="draftTitle.set($event)" />
+    </ui-field>
+
+    <div class="grid grid-cols-2 gap-4 max-[560px]:grid-cols-1">
+      <ui-field label="Starts" [hint]="zoneHint()" [error]="tried() ? startProblem() : null" required>
+        <input name="copyStarts" type="datetime-local" [ngModel]="starts()" (ngModelChange)="starts.set($event)" />
+      </ui-field>
+
+      <ui-field label="Ends" [hint]="endHint()" [error]="endProblem()" optionalMark>
+        <input name="copyEnds" type="datetime-local" [ngModel]="ends()" (ngModelChange)="ends.set($event)" />
+      </ui-field>
+    </div>
+
+    <div class="grid gap-3">
+      <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+        <input type="checkbox" class="check" name="copyRewrite" [ngModel]="rewrite()" (ngModelChange)="rewrite.set($event)" />
+        Write a new description
+      </label>
+
+      @if (rewrite()) {
+        <!-- Starts from the old one, so changing a line is not retyping the page. -->
+        <app-rich-text-editor
+          inputId="copyDescription"
+          label="Description"
+          [value]="draftDescription()"
+          (valueChange)="draftDescription.set($event)"
+        />
+      } @else {
+        <p class="m-0 text-xs text-text-muted">The new event keeps the description as it is.</p>
+      }
+    </div>
+
+    @if (rows().length > 0) {
+      <fieldset class="m-0 grid gap-3 border-0 p-0">
+        <legend class="mb-1 text-sm font-medium">Tickets</legend>
+        <p class="m-0 text-xs text-text-muted">
+          Sales windows move with the new date. Change a name, price or size here, or untick a tier to leave it
+          out. A tier that waited for one left out goes on sale like the others.
+        </p>
+
+        @for (row of rows(); track row.tier.id) {
+          <!-- A group per tier, so "Name" and "Price" are read out as this tier's. -->
+          <fieldset class="m-0 grid min-w-0 gap-3 rounded-md border border-border-subtle p-3">
+            <legend class="sr-only">{{ row.tier.name }}</legend>
+            <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+              <input
+                type="checkbox"
+                class="check"
+                [name]="'copyInclude-' + row.tier.id"
+                [ngModel]="row.include"
+                (ngModelChange)="updateRow(row.tier.id, { include: $event })"
+              />
+              <span>
+                <span class="font-medium">{{ row.tier.name }}</span>
+                <span class="text-text-muted">
+                  · {{ formatMoney(row.tier.price) }}
+                  · {{ row.tier.quantity_available === null ? 'unlimited' : row.tier.quantity_available + ' available' }}
+                </span>
+              </span>
+            </label>
+
+            @if (row.include) {
+              <div class="grid grid-cols-[2fr_1fr_1fr] gap-3 max-[560px]:grid-cols-1">
+                <ui-field label="Name" [error]="tierProblems().get(row.tier.id)?.name ?? null">
+                  <input
+                    [name]="'copyName-' + row.tier.id"
+                    maxlength="80"
+                    [ngModel]="row.name"
+                    (ngModelChange)="updateRow(row.tier.id, { name: $event })"
+                  />
+                </ui-field>
+
+                <ui-field
+                  [label]="'Price (' + row.tier.price.currency + ')'"
+                  [error]="tierProblems().get(row.tier.id)?.price ?? null"
+                >
+                  <input
+                    [name]="'copyPrice-' + row.tier.id"
+                    inputmode="decimal"
+                    placeholder="25.00"
+                    [ngModel]="row.price"
+                    (ngModelChange)="updateRow(row.tier.id, { price: $event })"
+                  />
+                </ui-field>
+
+                <ui-field
+                  label="How many"
+                  hint="Empty for unlimited."
+                  [error]="tierProblems().get(row.tier.id)?.quantity ?? null"
+                >
+                  <input
+                    [name]="'copyQuantity-' + row.tier.id"
+                    type="number"
+                    min="0"
+                    [ngModel]="row.quantity"
+                    (ngModelChange)="updateRow(row.tier.id, { quantity: $event })"
+                  />
+                </ui-field>
+              </div>
+            }
+          </fieldset>
+        }
+      </fieldset>
+    }
+
+    <fieldset class="m-0 grid gap-1 border-0 p-0">
+      <legend class="mb-1 text-sm font-medium">Also bring across</legend>
+
+      <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+        <input type="checkbox" class="check" name="copyAddOns" [ngModel]="addOns()" (ngModelChange)="addOns.set($event)" />
+        Extras @if (counts(); as known) { <span class="text-text-muted">({{ known.add_ons }})</span> }
+      </label>
+      <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+        <input type="checkbox" class="check" name="copyQuestions" [ngModel]="questions()" (ngModelChange)="questions.set($event)" />
+        Questions at checkout @if (counts(); as known) { <span class="text-text-muted">({{ known.questions }})</span> }
+      </label>
+      <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal">
+        <input type="checkbox" class="check" name="copyReminders" [ngModel]="reminders()" (ngModelChange)="reminders.set($event)" />
+        Reminder emails @if (counts(); as known) { <span class="text-text-muted">({{ known.reminders }})</span> }
+      </label>
+
+      <p class="m-0 text-xs text-text-muted">
+        Sales, codes and the gallery never come across, and the new event starts as a draft to submit for review.
+      </p>
+    </fieldset>
+  </div>
+
+  <ng-container modalActions>
+    <button uiButton variant="secondary" type="button" [disabled]="busy()" (click)="dismissed.emit()">Cancel</button>
+    <button uiButton type="button" [loading]="busy()" [disabled]="busy()" (click)="submit()">{{ submitLabel() }}</button>
+  </ng-container>
+</ui-modal>

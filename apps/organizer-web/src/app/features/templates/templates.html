@@ -1,0 +1,99 @@
+<ui-page-header
+  title="Templates"
+  subtitle="Events you kept as a starting point. Make the next one from here, with its own date."
+/>
+
+@if (notice(); as message) {
+  <p class="notice mb-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
+}
+
+@if (made(); as event) {
+  <p class="notice mb-4 rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">
+    {{ event.title }} is in your events list as a draft.
+    <a class="font-medium text-primary-text underline underline-offset-2" [routerLink]="['/events', event.id]">Open it</a>
+  </p>
+}
+
+@if (loading() && !templates()) {
+  <div class="grid gap-2">
+    @for (n of [0, 1]; track n) {
+      <div class="card p-4"><ui-skeleton height="3rem" /></div>
+    }
+  </div>
+} @else if (refused()) {
+  <ui-empty title="Your role does not create events" hint="Owners and managers can use templates. Ask one of them." />
+} @else if (failed()) {
+  <ui-error-state title="Could not load your templates" detail="We could not reach the server. It is usually temporary." (retried)="load()" />
+} @else if (templates(); as all) {
+  @if (all.length === 0) {
+    <ui-empty
+      title="No templates yet"
+      hint="Open an event you run often and choose Keep as a template on its Overview. Its tickets, prices, extras, questions and poster are kept for next time."
+    >
+      <a uiButton variant="secondary" size="sm" routerLink="/events">Go to your events</a>
+    </ui-empty>
+  } @else {
+    <ul class="m-0 grid max-w-[52rem] list-none gap-3 p-0">
+      @for (template of all; track template.id) {
+        <li class="card flex flex-wrap items-start gap-4 p-4">
+          @if (template.poster_url) {
+            <img class="h-16 w-28 shrink-0 rounded-md object-cover" [src]="template.poster_url" alt="" loading="lazy" />
+          }
+
+          <div class="grid min-w-0 flex-1 gap-1">
+            <h2 class="m-0 text-base font-semibold [overflow-wrap:anywhere]">{{ template.name }}</h2>
+            @if (template.title !== template.name) {
+              <p class="m-0 text-sm [overflow-wrap:anywhere]">{{ template.title }}</p>
+            }
+            <p class="m-0 text-sm text-text-muted [overflow-wrap:anywhere]">{{ tierLine(template) }}</p>
+            @if (keepsLine(template); as keeps) {
+              <p class="m-0 text-sm text-text-muted">{{ keeps }}</p>
+            }
+            <p class="m-0 text-xs text-text-muted">{{ keptLine(template) }}</p>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <!-- Named, so a list of buttons read out is not fifty "Delete"s. -->
+            <button
+              uiButton
+              size="sm"
+              type="button"
+              [attr.aria-label]="'Make an event from ' + template.name"
+              (click)="startFrom(template)"
+            >
+              Make an event
+            </button>
+            <button
+              uiButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              [attr.aria-label]="'Delete the template ' + template.name"
+              (click)="remove(template)"
+            >
+              Delete
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+}
+
+@if (using(); as template) {
+  <app-copy-dialog
+    [open]="true"
+    [heading]="'New event from ' + template.name"
+    intro="Pick a date. Everything you leave as it is comes from the template."
+    [title]="template.title"
+    [description]="template.description"
+    [timezone]="template.timezone"
+    [lengthMinutes]="template.length_minutes"
+    [tiers]="template.ticket_types"
+    [counts]="{ add_ons: template.add_ons, questions: template.questions, reminders: template.reminders }"
+    [busy]="making()"
+    submitLabel="Make the event"
+    (submitted)="make(template, $event)"
+    (dismissed)="using.set(null)"
+  />
+}

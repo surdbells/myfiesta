@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\Organizer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CopyAdjustments;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Services\Events\EventDuplicator;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,7 +20,12 @@ use Illuminate\Http\Request;
 class EventCopyController extends Controller
 {
     /**
-     * Copy an event into a new draft.
+     * Copy an event into a new draft, with the changes asked for.
+     *
+     * Nothing but a date is needed: the rest of the body — a title, an end, a
+     * description, which tiers and at what price, whether the extras,
+     * questions and reminders come too — is each left as the original has it
+     * when it is not given (CopyAdjustments).
      *
      * Authorised as a create against the same organization, not as an update
      * of the original: this makes a new event, and somebody who may read an
@@ -40,23 +45,30 @@ class EventCopyController extends Controller
             ], 422);
         }
 
-        $data = $request->validate([
-            'starts_at' => ['nullable', 'date', 'after:now'],
-            'title' => ['nullable', 'string', 'max:160'],
-        ], [
-            'starts_at.after' => 'Pick a date in the future for the copy.',
-        ]);
-
-        $copy = $duplicator->duplicate(
-            $event,
-            isset($data['starts_at']) ? Carbon::parse($data['starts_at']) : null,
-            $data['title'] ?? null,
-            $request->user(),
+        [$startsAt, $options] = CopyAdjustments::read(
+            $request,
+            $event->ticketTypes()->pluck('id')->map(fn ($id) => (string) $id)->all(),
+            $event->starts_at,
+            'this event',
         );
 
-        return response()->json(
-            new EventResource($copy->load(['organization', 'ticketTypes'])),
-            201,
-        );
+        $copy = $duplicator->duplicate($event, $startsAt, null, $request->user(), $options);
+
+        return response()->json(self::made($copy, $request), 201);
+    }
+
+    /**
+     * The new draft, as the public page will show it, with what the console
+     * needs to open it: its id, and that it is a draft.
+     *
+     * @return array<string, mixed>
+     */
+    public static function made(Event $copy, Request $request): array
+    {
+        return [
+            ...(new EventResource($copy->load(['organization', 'ticketTypes'])))->resolve($request),
+            'id' => $copy->id,
+            'status' => $copy->status,
+        ];
     }
 }
