@@ -38,7 +38,7 @@ class PlatformSettings
      *
      * Saved outside it is refused (normalise). Set outside it in the
      * environment is held to it (defaults): a deploy that says 180 days of
-     * paying later gets 120, the most Affirm takes a refund back for, rather
+     * paying later gets 110, ten short of Affirm's 120-day refund window, rather
      * than 180 until somebody happens to save the settings page — and pay
      * later trusts what it is told here.
      *
@@ -48,7 +48,7 @@ class PlatformSettings
         'points_per_event' => [0, 10_000],
         'points_daily_cap' => [0, 10],
         'share_max_bps' => [0, 5_000],
-        'bnpl_max_days_before_event' => [1, 120],
+        'bnpl_max_days_before_event' => [1, 110],
     ];
 
     public function __construct(private readonly Auditor $auditor) {}
@@ -377,9 +377,9 @@ class PlatformSettings
             'points_per_event' => $this->whole($value, ...self::RANGES[$key], refusal: 'Points for a night are a whole number from 0 to 10,000.'),
             'points_daily_cap' => $this->whole($value, ...self::RANGES[$key], refusal: 'The nights a day that earn points are a whole number from 0 to 10.'),
             'share_max_bps' => $this->whole($value, ...self::RANGES[$key], refusal: 'A friend discount is at most 50%.'),
-            // Past 120 days a night could be cancelled after Affirm stops
-            // taking the refund back the way the money came.
-            'bnpl_max_days_before_event' => $this->whole($value, ...self::RANGES[$key], refusal: 'Pay later is offered from 1 to 120 days before a night: Affirm takes a refund back for 120 days.'),
+            // Past 110 days a night cancelled late, or refunded after it, could
+            // be past the 120 days Affirm takes a refund back for.
+            'bnpl_max_days_before_event' => $this->whole($value, ...self::RANGES[$key], refusal: 'Pay later is offered from 1 to 110 days before a night: Affirm takes a refund back for 120 days, and the 10 between leave room for refunds after the night.'),
             'seller_of_record' => SellerOfRecord::tryFrom((string) $value)?->value
                 ?? throw StaffActionRefused::because('The seller is either the organizer or the platform.'),
             'tax_on_service_charge', 'qst_enabled', 'bnpl_enabled' => (bool) $value,

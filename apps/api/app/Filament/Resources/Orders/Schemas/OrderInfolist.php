@@ -12,8 +12,11 @@ use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\OrderAnswer;
 use App\Models\OrderLine;
+use App\Models\PaymentEvidence;
 use App\Models\Refund;
 use App\Services\Checkout\TaxLine;
+use App\Services\Payments\PayLater;
+use App\Services\Payments\PaymentMethods;
 use App\Services\Receipts\Receipt;
 use App\Services\Settings\SellerOfRecord;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -111,7 +114,8 @@ class OrderInfolist
                                 ->alignEnd()
                                 ->state(fn (Order $record) => (SellerOfRecord::tryFrom((string) $record->seller_of_record) ?? SellerOfRecord::Organizer)->label())
                                 ->helperText('In law, and so who files the tax on the tickets'),
-                            self::money('gateway_fee_amount', 'Processor fee')->placeholder('Not settled yet'),
+                            self::money('gateway_fee_amount', 'Processor fee')->placeholder('Not settled yet')
+                                ->helperText(fn (Order $record) => self::feeShared($record)),
                             TextEntry::make('refunded_total')
                                 ->label('Refunded so far')
                                 ->state(fn (Order $record) => Listing::format(
@@ -129,6 +133,16 @@ class OrderInfolist
                         ->label('Processor')
                         ->formatStateUsing(fn (?string $state) => $state ? ucfirst($state) : null)
                         ->placeholder('None — free, or paid at the door'),
+                    // How the buyer paid on the processor's page, in its own
+                    // word, read once the processor has been asked
+                    // (ProcessorEvidence). Klarna and Affirm are paying later,
+                    // and say so: a refund after their window is refused.
+                    TextEntry::make('paid_with')
+                        ->label('Paid with')
+                        ->state(fn (Order $record) => PaymentMethods::label(app(PayLater::class)->methodOf($record)))
+                        // A sale with no processor never will be known: the
+                        // Processor entry above already says why.
+                        ->placeholder(fn (Order $record) => $record->gateway === null ? '—' : 'Not known yet'),
                     TextEntry::make('gateway_reference')->label('Processor reference')->copyable()->placeholder('—'),
                     TextEntry::make('gateway_payment_reference')->label('Payment reference')->copyable()->placeholder('—'),
                     TextEntry::make('code.code')->label('Discount code')->placeholder('None'),
@@ -331,6 +345,26 @@ class OrderInfolist
                 .': '.$line->amount->format(),
             array_filter(Receipt::taxes($record), fn (TaxLine $line) => $line->amount->amount > 0),
         ));
+    }
+
+    /**
+     * When the organizer paid part of what the processor took: a buyer paid
+     * with Klarna or Affirm on a night they opted in (ProcessorEvidence).
+     * The order's fee is then the platform's part, and this says the rest.
+     */
+    private static function feeShared(Order $order): ?string
+    {
+        $whole = PaymentEvidence::query()->where('order_id', $order->id)->value('fee_amount');
+
+        if ($whole === null || $order->gateway_fee_amount === null || (int) $whole <= (int) $order->gateway_fee_amount) {
+            return null;
+        }
+
+        $payLater = app(PayLater::class);
+
+        return 'The platform\'s part. '.$payLater->name((string) $payLater->methodOf($order)).' took '
+            .Listing::format((int) $whole, $order->currency).' in all; the organizer paid '
+            .Listing::format((int) $whole - (int) $order->gateway_fee_amount, $order->currency).' of it for offering paying later.';
     }
 
     private static function money(string $name, string $label): TextEntry

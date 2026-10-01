@@ -202,7 +202,7 @@ class PaymentWebhookController extends Controller
     {
         match ($event->type) {
             PaymentEvent::PAID => $this->markPaid($event, $order),
-            PaymentEvent::FAILED => $this->move($order, 'failed', $event),
+            PaymentEvent::FAILED => $this->failed($order, $event),
             PaymentEvent::EXPIRED => $this->expired($order, $event),
             PaymentEvent::REFUNDED => $this->refunds->heard($order, $event),
             PaymentEvent::DISPUTED => $this->disputes->opened($order, $event),
@@ -264,6 +264,21 @@ class PaymentWebhookController extends Controller
     private function expired(Order $order, PaymentEvent $event): void
     {
         $this->move($order, 'cancelled', $event, fn (Order $locked) => $locked->holds()->delete());
+    }
+
+    /**
+     * The payment did not go through, and will not now: a bank debit that
+     * bounced, a lender that said no after the page had closed.
+     *
+     * The order is closed as failed and its places go back on sale at once,
+     * as an expired page's do; nothing leaves failed (Order::mayBecome), so
+     * there is nothing for them to be held for. Only a pending order: one
+     * closed as abandoned already let its places go, and a paid one stays
+     * paid whatever arrives after it.
+     */
+    private function failed(Order $order, PaymentEvent $event): void
+    {
+        $this->move($order, 'failed', $event, fn (Order $locked) => $locked->holds()->delete());
     }
 
     private function markPaid(PaymentEvent $event, Order $order): void

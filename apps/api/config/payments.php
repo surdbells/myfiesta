@@ -44,6 +44,23 @@ return [
          * that the box was ticked, which sits beside ours in a dispute.
          */
         'collect_terms_consent' => (bool) env('STRIPE_COLLECT_TERMS_CONSENT', false),
+
+        /*
+         * Which ways to pay Stripe's page offers, as two payment method
+         * configurations made in Stripe's dashboard (Settings → Payments →
+         * Payment methods; docs/OPERATIONS.md says how).
+         *
+         * `standard` is cards, wallets and Link, for every checkout. `pay_later`
+         * is the same with Klarna and Affirm added, sent only for a night
+         * whose organizer opted in and that can be paid later now (PayLater).
+         * Unset, a checkout names no configuration and Stripe offers whatever
+         * the account's default has on, which is how it worked before these
+         * existed; with only `standard` set, nobody is offered paying later.
+         */
+        'payment_method_configurations' => [
+            'standard' => env('STRIPE_PMC_STANDARD'),
+            'pay_later' => env('STRIPE_PMC_PAY_LATER'),
+        ],
     ],
 
     'paystack' => [
@@ -86,6 +103,12 @@ return [
      */
     'gateway_fees' => [
         'stripe' => ['bps' => 290, 'flat' => 30],
+        // Paying later costs more than a card, and the organizer who opted
+        // in pays the difference (PayLater::premium). Stripe's published
+        // Canadian rates; the fee Stripe reports on the payment replaces
+        // these once it is known (ProcessorEvidence).
+        'stripe:klarna' => ['bps' => 599, 'flat' => 30],
+        'stripe:affirm' => ['bps' => 600, 'flat' => 30],
         'paystack' => ['bps' => 150, 'flat' => 0, 'cap' => 200000],
     ],
 
@@ -103,5 +126,19 @@ return [
     'pay_later' => [
         'enabled' => (bool) env('PAY_LATER_ENABLED', false),
         'max_days_before_event' => (int) env('PAY_LATER_MAX_DAYS_BEFORE_EVENT', 110),
+
+        /*
+         * Who lends, for what size of order, and for how long after the
+         * payment the money can still go back through them. Stripe's terms
+         * for a Canadian account charging dollars; amounts in cents.
+         *
+         * Afterpay is not here on purpose: its terms rule out selling
+         * alcohol, which most of these nights do.
+         */
+        'currency' => 'CAD',
+        'providers' => [
+            'klarna' => ['name' => 'Klarna', 'min' => 100, 'max' => 150000, 'refund_days' => 180],
+            'affirm' => ['name' => 'Affirm', 'min' => 5000, 'max' => 3000000, 'refund_days' => 120],
+        ],
     ],
 ];

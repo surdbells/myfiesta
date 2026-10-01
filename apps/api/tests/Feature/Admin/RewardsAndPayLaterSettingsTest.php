@@ -89,17 +89,17 @@ class RewardsAndPayLaterSettingsTest extends TestCase
     }
 
     /**
-     * Refused by the service as well as the form: past 120 days a night
-     * could be cancelled after Affirm stops taking the refund back.
+     * Refused by the service as well as the form: past 110 days a night
+     * cancelled late, or refunded after it, could be past Affirm's 120 days.
      */
     public function test_pay_later_is_never_offered_further_out_than_a_refund_can_follow(): void
     {
         $admin = $this->staff(PlatformRole::Admin);
 
         $this->expectException(StaffActionRefused::class);
-        $this->expectExceptionMessage('Affirm takes a refund back for 120 days');
+        $this->expectExceptionMessage('from 1 to 110 days before a night');
 
-        app(Settings::class)->update(['bnpl_max_days_before_event' => 121], $admin);
+        app(Settings::class)->update(['bnpl_max_days_before_event' => 111], $admin);
     }
 
     /**
@@ -115,7 +115,7 @@ class RewardsAndPayLaterSettingsTest extends TestCase
         ]);
 
         $settings = app(Settings::class);
-        $this->assertSame(120, $settings->payLaterMaxDaysBeforeEvent());
+        $this->assertSame(110, $settings->payLaterMaxDaysBeforeEvent());
         $this->assertSame(5000, $settings->shareMaxBps());
         $this->assertSame(0, $settings->pointsDailyCap());
     }

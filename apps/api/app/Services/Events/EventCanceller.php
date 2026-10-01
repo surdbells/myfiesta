@@ -8,6 +8,8 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Audit\Auditor;
 use App\Services\Messaging\MessageSender;
+use App\Services\Payments\PaidLaterTooLongAgo;
+use App\Services\Payments\PayLater;
 use App\Services\Refunds\RefundRefused;
 use App\Services\Refunds\RefundService;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +48,7 @@ class EventCanceller
 
     /**
      * @param  bool  $refund  refund every paid order, or leave them to the organizer
-     * @return array{refunded: int, failed: int, notified: int}
+     * @return array{refunded: int, failed: int, left_for_support: int, notified: int}
      */
     public function cancel(Event $event, User $by, string $reason, bool $refund = true): array
     {
@@ -88,7 +90,7 @@ class EventCanceller
 
         $outcome = $refund
             ? $this->refundEverybody($event, $by, $reason)
-            : ['refunded' => 0, 'failed' => 0];
+            : ['refunded' => 0, 'failed' => 0, 'left_for_support' => 0];
 
         // Recorded after the work, so the entry says what actually happened
         // rather than what was intended — including refunds a provider refused.
@@ -136,6 +138,7 @@ class EventCanceller
     {
         $refunded = 0;
         $failed = 0;
+        $leftForSupport = 0;
 
         $orders = $event->orders()
             ->whereIn('status', ['paid', 'partially_refunded'])
@@ -151,6 +154,14 @@ class EventCanceller
                 );
 
                 $refunded++;
+            } catch (PaidLaterTooLongAgo $e) {
+                // Paid with Klarna or Affirm longer ago than the lender takes
+                // money back for. Not "nothing left to refund", as the refusal
+                // below usually is, and not something the organizer can do by
+                // hand either: money support returns another way. Counted on
+                // its own so the organizer is told to send them to support,
+                // and already on the order's trail (RefundService::refund).
+                $leftForSupport++;
             } catch (RefundRefused $e) {
                 // Nothing left to refund on this order, usually. Not a failure
                 // worth alarming anybody about.
@@ -170,7 +181,7 @@ class EventCanceller
             }
         }
 
-        return ['refunded' => $refunded, 'failed' => $failed];
+        return ['refunded' => $refunded, 'failed' => $failed, 'left_for_support' => $leftForSupport];
     }
 
     /**
@@ -206,6 +217,10 @@ class EventCanceller
                 'amount' => (int) $outstanding,
                 'currency' => $event->currency,
             ],
+            // Of those, the ones paid with Klarna or Affirm too long ago for
+            // the money to go back that way: refused here, and returned by
+            // support another way (PayLater::refundRefusal).
+            'orders_to_refund_elsewhere' => app(PayLater::class)->pastRefundWindow($orders),
         ];
     }
 }

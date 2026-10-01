@@ -29,6 +29,10 @@ use Illuminate\Queue\SerializesModels;
  * paid. So it asks the organizer to say, by replying — and warns them that
  * refunding those tickets here as well would send the money a second time.
  *
+ * Also sent when myFiesta support returned the money themselves, outside the
+ * processor, and recorded it: an order paid with Klarna or Affirm longer ago
+ * than the lender takes refunds back for. Then it says that instead.
+ *
  * A reply reaches support (RepliesReachSupport), who can cancel the right
  * tickets. The buyer's name was typed at checkout, so it stays words
  * (KeepsTypedTextPlain).
@@ -42,13 +46,19 @@ class RefundMadeElsewhere extends Mailable implements ShouldQueue
         public readonly Refund $refund,
         public readonly bool $wholeOrder,
         public readonly string $processor,
+        // Said when support returned the money outside the processor, and
+        // recorded it (RefundService::recordMadeElsewhere's $how): then it
+        // was not made in the processor's dashboard, and the email says so.
+        public readonly ?string $how = null,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
             replyTo: $this->supportReplyTo(),
-            subject: "A refund on order {$this->order->reference} was made in {$this->processor}",
+            subject: $this->how !== null
+                ? "myFiesta support returned money on order {$this->order->reference}"
+                : "A refund on order {$this->order->reference} was made in {$this->processor}",
         );
     }
 
@@ -60,6 +70,7 @@ class RefundMadeElsewhere extends Mailable implements ShouldQueue
                 'order' => $this->order,
                 'event' => $this->order->event,
                 'processor' => $this->processor,
+                'how' => $this->how,
                 'whole' => $this->wholeOrder,
                 'amount' => (new Money((int) $this->refund->amount, $this->refund->currency))->format(),
                 'url' => rtrim((string) config('app.console_url'), '/').'/events/'.$this->order->event_id.'/orders',

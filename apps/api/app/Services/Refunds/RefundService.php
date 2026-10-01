@@ -21,6 +21,8 @@ use App\Models\User;
 use App\Services\Audit\Auditor;
 use App\Services\Integrations\Payloads;
 use App\Services\Integrations\Webhooks;
+use App\Services\Payments\PaidLaterTooLongAgo;
+use App\Services\Payments\PayLater;
 use App\Support\Allocation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -86,7 +88,27 @@ class RefundService
         ?User $issuer = null,
         ?string $reason = null,
     ): Refund {
-        $refund = $this->reserve($order, $ticketIds, $issuer, $reason);
+        try {
+            $refund = $this->reserve($order, $ticketIds, $issuer, $reason);
+        } catch (PaidLaterTooLongAgo $e) {
+            // Money still owed, and the lender will not take it back. Written
+            // on the order's trail, outside the transaction that refused it,
+            // so support finds what was asked for and when, whoever asked:
+            // the organizer, a cancellation, a resale (docs/OPERATIONS.md).
+            $this->auditor->record('refund.left_for_support', $order, $issuer, metadata: [
+                'method' => app(PayLater::class)->methodOf($order),
+                'paid_at' => $order->paid_at?->toIso8601String(),
+                'tickets' => $ticketIds === null ? 'all remaining' : count($ticketIds),
+                'reason' => $reason,
+            ]);
+
+            Log::alert('A refund was asked for on an order paid later, past the lender\'s window. Support returns it another way.', [
+                'order' => $order->reference,
+                'reason' => $reason,
+            ]);
+
+            throw $e;
+        }
 
         $result = $this->attempt($order, $refund);
 
@@ -484,14 +506,23 @@ class RefundService
      * and no order.refunded to the organizer's integrations, which never heard
      * of these orders as paid either. Everything else is the same, the audit
      * entry included, and it says the organizer was not told.
+     *
+     * Support records money they returned outside the processor the same way
+     * (OrderActions::recordReturnedOutside): an order paid with Klarna or
+     * Affirm longer ago than the lender takes refunds back for. Then the
+     * staff member is who issued it, and $how says what was done instead of
+     * naming the processor's dashboard, on the refund, in the ledger and in
+     * the organizer's email.
      */
     public function recordMadeElsewhere(
         Order $order,
         int $amount,
         ?string $processorReference = null,
         bool $tellTheOrganizer = true,
+        ?User $recordedBy = null,
+        ?string $how = null,
     ): ?Refund {
-        return DB::transaction(function () use ($order, $amount, $processorReference, $tellTheOrganizer) {
+        return DB::transaction(function () use ($order, $amount, $processorReference, $tellTheOrganizer, $recordedBy, $how) {
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -551,7 +582,7 @@ class RefundService
                 'order_id' => $locked->id,
                 'event_id' => $locked->event_id,
                 'organization_id' => $locked->organization_id,
-                'issued_by' => null,
+                'issued_by' => $recordedBy?->id,
                 'source' => Refund::FROM_PROCESSOR,
                 'currency' => $locked->currency,
                 'amount' => $amount,
@@ -561,7 +592,9 @@ class RefundService
                 'gateway' => $locked->gateway,
                 'gateway_reference' => $processorReference,
                 'status' => 'pending',
-                'reason' => 'Refunded in the '.$this->processorName($locked).' dashboard',
+                'reason' => $how !== null
+                    ? mb_substr($how, 0, 255)
+                    : 'Refunded in the '.$this->processorName($locked).' dashboard',
                 'confirmed_at' => now(),
             ]);
 
@@ -577,7 +610,7 @@ class RefundService
                 ? $this->settle($locked, $refund, $outcome, announce: $tellTheOrganizer)
                 : $this->settleUnfulfilled($locked, $refund, $outcome);
 
-            $this->auditor->record('refund.made_elsewhere', $locked, metadata: [
+            $this->auditor->record('refund.made_elsewhere', $locked, $recordedBy, metadata: [
                 'refund_id' => $settled->id,
                 'amount' => $settled->amount,
                 'currency' => $locked->currency,
@@ -586,12 +619,12 @@ class RefundService
                 'whole_order' => $whole,
                 'tickets' => $tickets->count(),
                 'organizer_told' => $wasASale && $tellTheOrganizer,
-            ]);
+            ] + ($how !== null ? ['how' => $how] : []));
 
             if ($wasASale && $tellTheOrganizer) {
                 // After commit, so an organizer is never told about a refund
                 // that then rolled back.
-                DB::afterCommit(fn () => $this->tellTheOrganizer($locked, $settled, $whole));
+                DB::afterCommit(fn () => $this->tellTheOrganizer($locked, $settled, $whole, $how));
             } elseif (! $wasASale) {
                 Log::warning('A payment that never became a sale was refunded at the processor, and is recorded.', [
                     'order' => $locked->reference,
@@ -611,7 +644,7 @@ class RefundService
      * know it happened somewhere else — and, when it did not cover the whole
      * order, say which tickets it was for.
      */
-    private function tellTheOrganizer(Order $order, Refund $refund, bool $whole): void
+    private function tellTheOrganizer(Order $order, Refund $refund, bool $whole, ?string $how = null): void
     {
         $roles = collect(Role::cases())
             ->filter(fn (Role $role) => in_array(Permission::RefundsProcess, Permission::forRole($role), true))
@@ -635,7 +668,7 @@ class RefundService
         }
 
         $emails->each(fn (string $email) => Mail::to($email)->queue(
-            new RefundMadeElsewhere($order->fresh(), $refund->fresh(), $whole, $this->processorName($order)),
+            new RefundMadeElsewhere($order->fresh(), $refund->fresh(), $whole, $this->processorName($order), $how),
         ));
     }
 
@@ -679,6 +712,15 @@ class RefundService
                 throw RefundRefused::because(
                     'This order was free, so there is nothing to return.'
                 );
+            }
+
+            // Paid with Klarna or Affirm longer ago than the lender takes
+            // money back for. Stripe would refuse it; this says what to do
+            // instead (PayLater::refundRefusal).
+            $tooLate = app(PayLater::class)->refundRefusal($locked);
+
+            if ($tooLate !== null) {
+                throw PaidLaterTooLongAgo::saying($tooLate);
             }
 
             // A ticket already in a refund that has not finished is not
@@ -1249,9 +1291,14 @@ class RefundService
             'occurred_at' => now(),
         ];
 
-        $note = $refund->source === Refund::FROM_PROCESSOR
-            ? "Refund for order {$order->reference}, made in the {$this->processorName($order)} dashboard"
-            : "Refund for order {$order->reference}";
+        // One recorded by staff outside the processor says what they did
+        // (recordMadeElsewhere's $how); one heard from the processor names
+        // its dashboard.
+        $note = match (true) {
+            $refund->source === Refund::FROM_PROCESSOR && $refund->issued_by !== null => mb_substr("Refund for order {$order->reference}: {$refund->reason}", 0, 255),
+            $refund->source === Refund::FROM_PROCESSOR => "Refund for order {$order->reference}, made in the {$this->processorName($order)} dashboard",
+            default => "Refund for order {$order->reference}",
+        };
 
         // The gross ticket side going back, mirroring the sale entry exactly:
         // what the buyer paid less the service charge, which is the platform's

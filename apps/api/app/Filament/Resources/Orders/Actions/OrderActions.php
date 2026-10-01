@@ -8,16 +8,20 @@ use App\Models\Order;
 use App\Models\Refund;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\Payments\PayLater;
 use App\Services\Refunds\RefundService;
 use App\Services\StaffSupport\MaskedCode;
 use App\Services\StaffSupport\StaffAction;
 use App\Services\StaffSupport\StaffActionRefused;
 use App\Services\StaffSupport\TicketActions;
+use App\Support\Money;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
@@ -28,7 +32,9 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * Refunds go through RefundService — the same arithmetic, gateway call, ledger
  * entries and audit record an organizer's refund gets — never around it. The
- * panel only chooses which tickets.
+ * panel only chooses which tickets. The one exception is money support sent
+ * back outside the processor, which goes through RefundService's
+ * made-elsewhere path instead (recordReturnedOutside).
  */
 final class OrderActions
 {
@@ -37,6 +43,7 @@ final class OrderActions
     {
         return [
             self::refund(),
+            self::recordReturnedOutside(),
             self::resendTickets(),
             self::addNote(),
         ];
@@ -49,7 +56,7 @@ final class OrderActions
             ->icon(Heroicon::OutlinedReceiptRefund)
             ->color('danger')
             ->authorize(fn () => StaffAction::current(StaffAction::Refund))
-            ->visible(fn (Order $record) => self::refundable($record))
+            ->visible(fn (Order $record) => self::refundable($record) && ! self::pastLendersWindow($record))
             ->modalHeading(fn (Order $record) => 'Refund order '.$record->reference.' to '.($record->buyer_email ?? 'its buyer').'?')
             ->modalDescription(fn (Order $record) => 'Paid '.$record->total->format().'. The money goes back to the card or account it came from, through '
                 .ucfirst((string) $record->gateway).'. Refunded tickets stop working at the door straight away. '
@@ -121,6 +128,75 @@ final class OrderActions
                     return self::sendRefund($order, $staff, $records->modelKeys(), (string) $data['reason']);
                 });
             });
+    }
+
+    /**
+     * Money support sent back outside Stripe, written down.
+     *
+     * For an order paid with Klarna or Affirm longer ago than the lender
+     * takes refunds back for, where Refund is not offered: Stripe would
+     * refuse it. Support sends the buyer their money another way (an
+     * e-Transfer, say), then records it here through the same made-elsewhere
+     * path as a refund made in Stripe's dashboard. The order shows the
+     * refund, the organizer's balance stops counting the money, they are
+     * emailed, and when it covers everything left the tickets stop working.
+     */
+    public static function recordReturnedOutside(): Action
+    {
+        return Action::make('recordReturnedOutside')
+            ->label('Record a refund made outside Stripe')
+            ->icon(Heroicon::OutlinedReceiptRefund)
+            ->color('danger')
+            ->authorize(fn () => StaffAction::current(StaffAction::Refund))
+            ->visible(fn (Order $record) => self::refundable($record) && self::pastLendersWindow($record))
+            ->modalHeading(fn (Order $record) => 'Record money returned to '.($record->buyer_email ?? 'the buyer').' outside Stripe?')
+            ->modalDescription(fn (Order $record) => self::lenderClosed($record)
+                .' Send the buyer their money another way first, then record it here. '
+                .self::left($record)->format().' is left on order '.$record->reference.'. Recording all of it stops the order\'s tickets working; '
+                .'recording part leaves them working, and the organizer is asked which tickets it was for. '
+                .'Either way it comes off the organizer\'s balance, they are emailed, and it cannot be undone. No money moves from here.')
+            ->modalSubmitActionLabel('Record the refund')
+            ->fillForm(fn (Order $record) => ['amount' => number_format(self::left($record)->amount / 100, 2, '.', '')])
+            ->schema(fn (Order $record) => [
+                TextInput::make('amount')
+                    ->label('Amount sent to the buyer')
+                    ->required()
+                    ->numeric()
+                    ->minValue(0.01)
+                    ->maxValue(self::left($record)->amount / 100)
+                    ->step('0.01')
+                    ->prefix(Listing::prefix($record->currency))
+                    ->helperText('Up to '.self::left($record)->format().', what is left on the order.'),
+
+                TextInput::make('reference')
+                    ->label('Reference')
+                    ->required()
+                    ->maxLength(120)
+                    ->helperText('The e-Transfer or bank reference for the money you sent, so it can be matched to our statement.'),
+
+                Textarea::make('note')
+                    ->label('Note')
+                    ->required()
+                    ->maxLength(500)
+                    ->rows(2)
+                    ->helperText('Who asked and why. Kept with the refund and in the audit trail.'),
+
+                Checkbox::make('sent')
+                    ->label('The money has been sent to the buyer')
+                    ->accepted()
+                    ->validationMessages(['accepted' => 'Record it once the money has been sent.']),
+            ])
+            ->action(fn (Order $record, array $data, Action $action) => Outcome::run(
+                $action,
+                'Refund recorded',
+                fn (User $staff) => self::recordOutside(
+                    $record,
+                    $staff,
+                    (int) round((float) $data['amount'] * 100),
+                    trim((string) $data['reference']),
+                    trim((string) $data['note']),
+                ),
+            ));
     }
 
     public static function resendTickets(): Action
@@ -197,6 +273,67 @@ final class OrderActions
             ->all();
     }
 
+    /**
+     * Paid with Klarna or Affirm longer ago than the lender takes refunds
+     * back for, so a refund through Stripe would be refused.
+     */
+    public static function pastLendersWindow(Order $order): bool
+    {
+        return app(PayLater::class)->refundRefusal($order) !== null;
+    }
+
+    /** What is left on the order to give back: paid less refunds that went through or may have. */
+    private static function left(Order $order): Money
+    {
+        $counted = (int) $order->refunds()->whereIn('status', ['pending', 'succeeded'])->sum('amount');
+
+        return new Money(max(0, $order->total_amount - $counted), $order->currency);
+    }
+
+    /** "Klarna takes money back only within 180 days of a payment, and this one was on 2 March 2026." */
+    private static function lenderClosed(Order $order): string
+    {
+        $payLater = app(PayLater::class);
+        $method = (string) $payLater->methodOf($order);
+        $name = $payLater->name($method);
+        $days = (int) config("payments.pay_later.providers.{$method}.refund_days");
+        $paid = $order->paid_at?->copy()->timezone($order->event->timezone ?? 'UTC')->format('j F Y');
+
+        return "{$name} takes money back only within {$days} days of a payment, and this order was paid with {$name} on {$paid}, so Stripe cannot refund it.";
+    }
+
+    private static function recordOutside(Order $order, User $staff, int $amount, string $reference, string $note): string
+    {
+        StaffAction::Refund->authorize($staff);
+
+        if (! self::pastLendersWindow($order)) {
+            throw StaffActionRefused::because('This order can still be refunded through Stripe. Use Refund instead, so the money goes back the way it came.');
+        }
+
+        $left = self::left($order);
+
+        if ($amount <= 0 || $amount > $left->amount) {
+            throw StaffActionRefused::because('Record between '.(new Money(1, $order->currency))->format().' and '.$left->format().', what is left on the order.');
+        }
+
+        $refund = app(RefundService::class)->recordMadeElsewhere(
+            $order,
+            $amount,
+            tellTheOrganizer: true,
+            recordedBy: $staff,
+            how: "Returned by myFiesta support outside Stripe, ref. {$reference}: {$note}",
+        );
+
+        if ($refund === null) {
+            throw StaffActionRefused::because('Nothing is left to refund on this order, so nothing was recorded.');
+        }
+
+        return Listing::format((int) $refund->amount, $refund->currency).' is recorded as returned to the buyer. '
+            .($order->fresh()?->status === 'refunded'
+                ? 'The order\'s tickets no longer get in.'
+                : 'Its tickets still work: the organizer has been asked which ones it was for.');
+    }
+
     /** @param  list<string>|null  $ticketIds */
     private static function sendRefund(Order $order, User $staff, ?array $ticketIds, string $reason): string|Notification
     {
@@ -204,6 +341,13 @@ final class OrderActions
 
         if ($ticketIds === []) {
             throw StaffActionRefused::because('Choose at least one ticket.');
+        }
+
+        // Said for staff: the console's wording sends the organizer to
+        // support, which is who is reading this.
+        if (self::pastLendersWindow($order)) {
+            throw StaffActionRefused::because(self::lenderClosed($order)
+                .' Send the buyer their money another way, then use "Record a refund made outside Stripe" on the order. Nothing has been refunded and the tickets still work.');
         }
 
         $refund = app(RefundService::class)->refund($order, $ticketIds, $staff, trim($reason));

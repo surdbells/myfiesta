@@ -23,5 +23,17 @@ final readonly class PaymentRecord
 
         /** Where the processor sent its receipt, when it says. */
         public ?string $receiptEmail = null,
+
+        /**
+         * How it was paid, in the processor's word (Stripe's card, klarna,
+         * affirm), when it says.
+         */
+        public ?string $methodType = null,
+
+        /**
+         * What the processor took for it, in minor units of the order's
+         * currency, when it says. The published rate stands in otherwise.
+         */
+        public ?int $fee = null,
     ) {}
 }

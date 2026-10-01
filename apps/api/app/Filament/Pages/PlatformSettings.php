@@ -271,9 +271,9 @@ class PlatformSettings extends Page
                 Section::make('Pay later')
                     ->description(
                         'Klarna and Affirm at checkout, through Stripe, in Canada. Offered only where this is on and the '
-                        .'organizer has opted in, and only for nights this close: Affirm takes a refund back for 120 days '
+                        .'organizer has opted in, and only for nights this close: at most 110 days, because Affirm takes a refund back for 120 days '
                         .'after the payment, so a night further out could be cancelled after the money can no longer go '
-                        .'back the way it came. Each organizer pays what these cost over a card.'
+                        .'back the way it came, and the 10 between leave room for refunds after the night. Each organizer pays what these cost over a card.'
                     )
                     ->schema([
                         Toggle::make('bnpl_enabled')
@@ -284,7 +284,7 @@ class PlatformSettings extends Page
                             ->required()
                             ->integer()
                             ->minValue(1)
-                            ->maxValue(120)
+                            ->maxValue(110)
                             ->suffix('days'),
                     ])
                     ->columns(2),

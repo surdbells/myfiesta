@@ -1,15 +1,24 @@
 <x-mail::message>
+@if ($how !== null)
+# myFiesta support returned {{ $amount }}
+
+We returned {{ $amount }} on order **{{ $order->reference }}** for {{ $event->title }}, bought by
+{{ $order->buyer_name }}, outside {{ $processor }}: it was paid for with a lender that no longer takes money back this
+long after the payment. We have recorded it for you: your balance no longer counts that money, and the order shows
+the refund.
+@else
 # {{ $amount }} was refunded in {{ $processor }}
 
 Somebody refunded {{ $amount }} on order **{{ $order->reference }}** for {{ $event->title }}, bought by
 {{ $order->buyer_name }}. It was done in the {{ $processor }} dashboard rather than here, so we have recorded
 it for you: your balance no longer counts that money, and the order shows the refund.
+@endif
 
 @if ($whole)
 That was everything left on the order, so its tickets have been cancelled and will not open the door.
 @else
-That was part of the order, and every ticket on it still works: {{ $processor }} does not tell us which tickets
-the money was for, and we would rather not guess and turn away somebody who paid.
+That was part of the order, and every ticket on it still works: {{ $how !== null ? 'the amount was recorded without naming tickets' : $processor.' does not tell us which tickets the money was for' }},
+and we would rather not guess and turn away somebody who paid.
 
 <x-mail::panel>
 If it was for particular tickets, reply to this email and say which, and we will cancel them. Please do not

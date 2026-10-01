@@ -68,6 +68,8 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
 
     public function createCheckout(Order $order, CheckoutOptions $options): CheckoutSession
     {
+        [$configuration, $payLater] = $this->waysToPay($order);
+
         // The amount comes from the order, which computed it from prices held
         // in the database. There is no parameter for a caller to influence it.
         $response = Http::withToken($this->secretKey)
@@ -88,9 +90,14 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
                         'product_data' => ['name' => $order->event->title],
                     ],
                 ]],
+                // Said on the session so the notice that comes back says it
+                // too: a payment with a lender is the organizer's to pay the
+                // premium on only when they had opted in (ProcessorEvidence).
                 'metadata' => ['order_id' => $order->id, 'reference' => $order->reference]
+                    + ($payLater ? ['pay_later' => 'offered'] : [])
                     + $options->metadata,
-            ] + $this->answeringDisputes($order));
+            ] + $this->answeringDisputes($order)
+              + ($configuration === null ? [] : ['payment_method_configuration' => $configuration]));
 
         $response->throw();
 
@@ -101,6 +108,32 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
                 ? (new \DateTimeImmutable)->setTimestamp($response->json('expires_at'))
                 : null,
         );
+    }
+
+    /**
+     * Which ways to pay the page offers: one of the two payment method
+     * configurations made in Stripe's dashboard, and whether it was the one
+     * with Klarna and Affirm on it.
+     *
+     * Paying later only where the night is offered it (PayLater::eligible),
+     * and only once its configuration exists; every other checkout gets the
+     * standard one, cards, wallets and Link. With neither configured the
+     * session names none, and Stripe offers what the account's default has
+     * on, as it did before these existed.
+     *
+     * @return array{0: string|null, 1: bool}
+     */
+    private function waysToPay(Order $order): array
+    {
+        $configured = (array) config('payments.stripe.payment_method_configurations', []);
+        $standard = filled($configured['standard'] ?? null) ? (string) $configured['standard'] : null;
+        $later = filled($configured['pay_later'] ?? null) ? (string) $configured['pay_later'] : null;
+
+        if ($later !== null && app(PayLater::class)->eligible($order)) {
+            return [$later, true];
+        }
+
+        return [$standard, false];
     }
 
     /**
@@ -202,7 +235,9 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
         $charge = $intent['latest_charge'] ?? null;
 
         if (is_string($charge) && $charge !== '') {
-            $charge = $this->fetch('charges/'.rawurlencode($charge));
+            // With what Stripe took for it (the balance transaction's fee),
+            // which is what the order's processor fee becomes.
+            $charge = $this->fetch('charges/'.rawurlencode($charge), ['expand' => ['balance_transaction']]);
         } elseif (! is_array($charge)) {
             $charge = $intent['charges']['data'][0] ?? null;
         }
@@ -276,7 +311,34 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
                 ],
             ],
             receiptEmail: is_string($charge['receipt_email'] ?? null) ? $charge['receipt_email'] : null,
+            methodType: is_string($details['type'] ?? null) && $details['type'] !== '' ? $details['type'] : null,
+            fee: $this->feeOn($charge, (string) $order->currency),
         );
+    }
+
+    /**
+     * What Stripe took for a charge, from its balance transaction, when it
+     * says so in the order's own currency.
+     *
+     * Only when the transaction came back expanded: a bare id is Stripe not
+     * having been asked for it (an older API version listing the charge on
+     * the payment), and the published rate stands in that case. Nor when the
+     * account settles in another currency, since the fee is then in that one
+     * and the order's column is in the order's.
+     *
+     * @param  array<string, mixed>  $charge
+     */
+    private function feeOn(array $charge, string $currency): ?int
+    {
+        $balance = $charge['balance_transaction'] ?? null;
+
+        if (! is_array($balance) || ! is_numeric($balance['fee'] ?? null)) {
+            return null;
+        }
+
+        return strtoupper((string) ($balance['currency'] ?? '')) === strtoupper($currency)
+            ? (int) $balance['fee']
+            : null;
     }
 
     /**
@@ -444,12 +506,15 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
         return is_string($intent) && $intent !== '' ? $intent : null;
     }
 
-    /** @return array<string, mixed> */
-    private function fetch(string $path): array
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     */
+    private function fetch(string $path, array $query = []): array
     {
         return (array) Http::withToken($this->secretKey)
             ->timeout(15)
-            ->get('https://api.stripe.com/v1/'.$path)
+            ->get('https://api.stripe.com/v1/'.$path, $query === [] ? null : $query)
             ->throw()
             ->json();
     }
@@ -537,6 +602,12 @@ class StripeGateway implements AnswersDisputes, DescribesPayments, FindsCheckout
             'checkout.session.completed' => ($object['payment_status'] ?? null) === 'paid'
                 ? PaymentEvent::PAID
                 : null,
+            // A payment that takes a while to clear (a bank debit, a lender
+            // still deciding) completes the session unpaid, and then says
+            // which way it went. Paid is fulfilled as any payment is, late or
+            // not (Fulfiller); failed closes the order and lets its places go.
+            'checkout.session.async_payment_succeeded' => PaymentEvent::PAID,
+            'checkout.session.async_payment_failed' => PaymentEvent::FAILED,
             'checkout.session.expired' => PaymentEvent::EXPIRED,
             'charge.refunded',
             'refund.created', 'refund.updated', 'refund.failed', 'charge.refund.updated' => PaymentEvent::REFUNDED,

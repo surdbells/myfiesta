@@ -5,8 +5,12 @@ namespace App\Services\Disputes;
 use App\Contracts\Payments\DescribesPayments;
 use App\Contracts\Payments\PaymentEvent;
 use App\Contracts\Payments\PaymentGatewayRegistry;
+use App\Contracts\Payments\PaymentRecord;
+use App\Models\LedgerEntry;
 use App\Models\Order;
 use App\Models\PaymentEvidence;
+use App\Services\Payments\GatewayFee;
+use App\Services\Payments\PayLater;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -126,16 +130,115 @@ class ProcessorEvidence
             return;
         }
 
-        PaymentEvidence::query()->whereKey($row->id)->where('status', PaymentEvidence::PENDING)->update([
-            'status' => PaymentEvidence::CAPTURED,
-            'payment_reference' => $record->reference,
-            'facts' => json_encode($record->facts),
-            'receipt_email' => $record->receiptEmail,
-            'captured_at' => now(),
-            'next_attempt_at' => null,
-            'last_error' => null,
-            'updated_at' => now(),
+        $fee = $this->feeFor($row->order, $record);
+
+        // Captured, and what the payment cost written down, together: the
+        // capture is what makes this the only time the cost is written, and
+        // the row cannot be changed after it.
+        DB::transaction(function () use ($row, $record, $fee) {
+            $captured = PaymentEvidence::query()->whereKey($row->id)->where('status', PaymentEvidence::PENDING)->update([
+                'status' => PaymentEvidence::CAPTURED,
+                'payment_reference' => $record->reference,
+                'facts' => json_encode($record->facts),
+                'receipt_email' => $record->receiptEmail,
+                'method_type' => $record->methodType,
+                'fee_amount' => $fee,
+                'captured_at' => now(),
+                'next_attempt_at' => null,
+                'last_error' => null,
+                'updated_at' => now(),
+            ]);
+
+            if ($captured === 1 && $fee !== null) {
+                $this->charged($row->order, $row, $record, $fee);
+            }
+        });
+    }
+
+    /**
+     * Everything the processor took for the payment: its own figure, or for
+     * a lender that gave none, the lender's published rate. Null for a card
+     * whose figure did not come back, which keeps the published card rate
+     * the order already has (Fulfiller).
+     */
+    private function feeFor(Order $order, PaymentRecord $record): ?int
+    {
+        if ($record->fee !== null) {
+            return $record->fee;
+        }
+
+        $method = $record->methodType;
+
+        return $order->gateway !== null && app(PayLater::class)->isPayLater($method)
+            ? GatewayFee::on($order->total, $order->gateway.':'.$method)->amount
+            : null;
+    }
+
+    /**
+     * What taking the payment cost, now the processor has said how it was
+     * paid and what it kept.
+     *
+     * The order's processor fee becomes the processor's own figure. It was
+     * the published card rate until now (Fulfiller), which is right for most
+     * cards and short for a foreign one, and well short for a lender: Klarna
+     * and Affirm charge about twice what a card does. When the processor
+     * gives no figure for a lender, its published rate stands in.
+     *
+     * A payment with a lender costs the organizer who opted in the
+     * difference over a card (PayLater::premium), taken off their balance as
+     * an adjustment. Only on a sale: a payment that was turned away never
+     * reached their balance, and its whole cost is the platform's.
+     *
+     * The order's processor fee is the platform's side of the payment, set
+     * against its service charge on every report (Metrics: net take). So
+     * when the organizer pays part of it, the order keeps only the rest,
+     * and the whole of what the processor took stays on the evidence row
+     * (fee_amount), where the admin's order page reads both.
+     */
+    private function charged(Order $order, PaymentEvidence $row, PaymentRecord $record, int $fee): void
+    {
+        if ($order->paid_at === null || $order->gateway === null) {
+            return;
+        }
+
+        $payLater = app(PayLater::class);
+        $method = $record->methodType;
+
+        $premium = $payLater->isPayLater($method) && $this->optedIn($order, $row)
+            && LedgerEntry::query()->where('order_id', $order->id)->where('type', 'sale')->exists()
+                ? $payLater->premium($order, $fee)
+                : 0;
+
+        Order::query()->whereKey($order->id)->update(['gateway_fee_amount' => $fee - $premium]);
+
+        if ($premium <= 0) {
+            return;
+        }
+
+        LedgerEntry::create([
+            'organization_id' => $order->organization_id,
+            'event_id' => $order->event_id,
+            'order_id' => $order->id,
+            'type' => 'adjustment',
+            'amount' => -$premium,
+            'currency' => $order->currency,
+            'reason' => 'Paid later with '.$payLater->name((string) $method)." on order {$order->reference}: the lender's fee over a card's",
+            'occurred_at' => now(),
         ]);
+    }
+
+    /**
+     * Whether the night was offered paying later when this was bought.
+     *
+     * The session says so when its notice was kept (StripeGateway marks the
+     * ones it offered); otherwise the night's opt-in as it stands, which it
+     * almost always still is minutes after the sale.
+     */
+    private function optedIn(Order $order, PaymentEvidence $row): bool
+    {
+        $offered = $row->checkout['pay_later_offered'] ?? null;
+
+        return is_bool($offered) ? $offered : (bool) $order->event?->pay_later_enabled;
     }
 
     /**
@@ -210,7 +313,9 @@ class ProcessorEvidence
      */
     private function fromNotice(?PaymentEvent $notice): ?array
     {
-        if ($notice === null || ($notice->raw['type'] ?? null) !== 'checkout.session.completed') {
+        // The session as it completed, or as it said later that a payment
+        // which took a while to clear went through.
+        if ($notice === null || ! in_array($notice->raw['type'] ?? null, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
             return null;
         }
 
@@ -220,6 +325,8 @@ class ProcessorEvidence
             'session' => $session['id'] ?? null,
             'terms_of_service_asked' => $session['consent_collection']['terms_of_service'] ?? null,
             'terms_of_service' => $session['consent']['terms_of_service'] ?? null,
+            // Whether the page offered Klarna and Affirm (StripeGateway).
+            'pay_later_offered' => ($session['metadata']['pay_later'] ?? null) === 'offered',
         ];
     }
 

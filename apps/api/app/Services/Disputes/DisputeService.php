@@ -157,7 +157,14 @@ class DisputeService
         // finishing at this moment is either counted here or comes after.
         Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
-        $stillCredited = (int) LedgerEntry::query()->where('order_id', $order->id)->sum('amount');
+        // The sale's side only. An adjustment on the order is what the
+        // organizer paid for a buyer paying with Klarna or Affirm
+        // (ProcessorEvidence), and theirs to keep paying whichever way the
+        // money left: a refund leaves it with them too.
+        $stillCredited = (int) LedgerEntry::query()
+            ->where('order_id', $order->id)
+            ->where('type', '!=', 'adjustment')
+            ->sum('amount');
 
         if ($stillCredited > 0) {
             LedgerEntry::create([
