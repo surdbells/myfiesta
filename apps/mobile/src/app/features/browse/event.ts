@@ -26,6 +26,9 @@ import {
 } from '../../ui';
 import { SessionStore } from '../../core/session';
 import { type Availability, MfAvailability } from './availability';
+import { MfEventPerks } from './event-perks';
+import { MfNotifyOnSale } from './notify-on-sale';
+import { MfOtherDates } from './other-dates';
 
 /**
  * One event: the poster, the night, what it costs, and the way in.
@@ -56,6 +59,9 @@ import { type Availability, MfAvailability } from './availability';
     MfField,
     MfSelect,
     MfAvailability,
+    MfNotifyOnSale,
+    MfEventPerks,
+    MfOtherDates,
   ],
   template: `
     <mf-screen [title]="event()?.title ?? 'Event'" back flush backTo="/">
@@ -173,8 +179,16 @@ import { type Availability, MfAvailability } from './availability';
                   <p class="subtle">Nothing on sale right now.</p>
                 </mf-card>
               }
+
+              <mf-notify-on-sale [event]="night" />
             </section>
+
+            <mf-event-perks [event]="night" />
           }
+
+          <!-- Shown for a night that has been too: its next date is where
+               somebody who missed it goes. -->
+          <mf-other-dates [event]="night" />
 
           @if (night.description) {
             <section>

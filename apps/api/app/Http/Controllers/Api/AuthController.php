@@ -40,7 +40,9 @@ class AuthController extends Controller
             ])->status(429);
         }
 
-        $user = User::where('email', strtolower(trim($credentials['email'])))->first();
+        // However either was typed: an account made at a checkout before
+        // addresses were kept in lower case is still the one signed in to.
+        $user = User::whereRaw('lower(email) = ?', [strtolower(trim($credentials['email']))])->first();
 
         // One message for both causes. Distinguishing them turns this endpoint
         // into a way to enumerate who holds an account.

@@ -2,7 +2,16 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import type { DoorList, OfflineScan, ScanResult, SyncResult } from '@myfiesta/door';
-import type { Account, AccountErasurePreview, AccountErasureResult, Receipt, SignUp, TermsStanding } from '@myfiesta/api-types';
+import type {
+  Account,
+  AccountErasurePreview,
+  AccountErasureResult,
+  ClaimedPerk,
+  Receipt,
+  ShareLink,
+  SignUp,
+  TermsStanding,
+} from '@myfiesta/api-types';
 import type { Money } from './money';
 
 /** A refusal with a sentence worth showing, and the status it came with. */
@@ -44,6 +53,17 @@ export interface Ticket {
    * before receipts were sent.
    */
   receipt?: Receipt | null;
+
+  /*
+   * What each feature added since puts on a ticket (TicketExtras in the
+   * API). Always sent, and absent from a list saved on this phone before.
+   */
+  /** The perks its holder claimed with Fiesta Points for this night. Empty when none. */
+  perks?: ClaimedPerk[];
+  /** The holder's own friend-discount link for this night, or null when it has no offer. */
+  share_link?: ShareLink | null;
+  /** Whether it can be sent to somebody else from here. Null when the server does not say. */
+  transferable?: boolean | null;
 }
 
 /*
@@ -125,6 +145,11 @@ export interface Takings {
  * On a device there is no page to read it from, so the native default is used —
  * a debug build points at the development machine, a release build at the
  * production API through the environment written at package time.
+ *
+ * A feature added since keeps its own calls in an injectable of its own,
+ * beside its code (features/<feature>/<feature>-api.ts), that injects this
+ * and goes through request(), public() and the like, so several features
+ * built at once never edit this class.
  */
 @Injectable({ providedIn: 'root' })
 export class Api {

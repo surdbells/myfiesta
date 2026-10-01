@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Services\PersonalData\Exporter;
+use App\Services\PersonalData\Rows;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -57,6 +59,72 @@ class PersonalDataMapTest extends TestCase
         }
     }
 
+    /**
+     * A table reached through another, a filter on what is erased, and files
+     * on a disk: each names more of the schema than its own key, and a name
+     * gone wrong there misses somebody's data just as quietly.
+     */
+    #[DataProvider('mapSections')]
+    public function test_every_table_reached_through_another_and_every_file_is_mapped_to_something_real(string $section): void
+    {
+        $entries = config("personal_data.$section");
+        $this->assertNotEmpty($entries);
+
+        foreach ($entries as $table => $spec) {
+            if (isset($spec['via'])) {
+                $this->assertNotEmpty(Rows::parents($spec), "personal_data.$section.$table is reached via nothing.");
+            }
+
+            foreach (Rows::parents($spec) as $via) {
+                $this->assertTrue(Schema::hasTable($via['table']), "personal_data.$section.$table is reached via '{$via['table']}', which does not exist.");
+
+                foreach ([$via['column'] ?? 'id', $via['key']] as $column) {
+                    $this->assertTrue(
+                        Schema::hasColumn($via['table'], $column),
+                        "personal_data.$section.$table is reached via '{$via['table']}.$column', which does not exist."
+                    );
+                }
+
+                $through = $via['through'] ?? $spec['key'];
+                $this->assertTrue(
+                    Schema::hasColumn($table, $through),
+                    "personal_data.$section.$table points at '{$via['table']}' by '$through', which does not exist."
+                );
+
+                // The parent is what holds the person, so it has to be in the
+                // map itself, in the same section, keyed the same way — and
+                // not itself reached through another, or the Eraser would
+                // blank it in the same pass as this.
+                $this->assertSame(
+                    $via['key'],
+                    config("personal_data.$section.{$via['table']}.key"),
+                    "personal_data.$section.$table is reached via '{$via['table']}', which this section does not map by '{$via['key']}'."
+                );
+                $this->assertArrayNotHasKey(
+                    'via',
+                    config("personal_data.$section.{$via['table']}"),
+                    "personal_data.$section.$table is reached via '{$via['table']}', which is itself reached through another."
+                );
+            }
+
+            foreach ($spec['erase_where'] ?? [] as $column => $through) {
+                $this->assertTrue(Schema::hasColumn($table, $column), "personal_data.$section.$table erases by '$column', which does not exist.");
+                $this->assertTrue(
+                    Schema::hasColumn($through['table'], $through['column']),
+                    "personal_data.$section.$table erases by '{$through['table']}.{$through['column']}', which does not exist."
+                );
+                $this->assertNotEmpty($through['in'], "personal_data.$section.$table erases by a filter that matches nothing.");
+            }
+
+            if (($spec['files'] ?? []) !== []) {
+                $this->assertNotNull(
+                    config('filesystems.disks.'.($spec['disk'] ?? '')),
+                    "personal_data.$section.$table has files but names no disk they are on."
+                );
+            }
+        }
+    }
+
     #[DataProvider('mapSections')]
     public function test_anonymise_entries_declare_what_to_clear(string $section): void
     {
@@ -94,6 +162,36 @@ class PersonalDataMapTest extends TestCase
                 );
             }
         }
+    }
+
+    /**
+     * Nothing an export carries lets anybody in. A ticket's code, a link's
+     * token, under whatever name a table gives it, is left out by name
+     * (Exporter::NEVER); a new column that looks like one fails here until it
+     * is added there, or listed below as not being one.
+     */
+    public function test_no_export_carries_a_code_or_a_token(): void
+    {
+        // Columns named like a credential that are not one ('table.column').
+        // None yet; a postal code would be the first.
+        $notCredentials = [];
+        $checked = 0;
+
+        // The sections an export is built from.
+        foreach (['by_user', 'by_email', 'by_phone'] as $section) {
+            foreach (array_keys(config("personal_data.$section")) as $table) {
+                foreach (Schema::getColumnListing($table) as $column) {
+                    if (! preg_match('/(^|_)(code|token|secret|password)$/', $column) || in_array("$table.$column", $notCredentials, true)) {
+                        continue;
+                    }
+
+                    $this->assertContains($column, Exporter::NEVER, "An export of personal_data.$section.$table would carry '$column'.");
+                    $checked++;
+                }
+            }
+        }
+
+        $this->assertGreaterThan(0, $checked);
     }
 
     /**

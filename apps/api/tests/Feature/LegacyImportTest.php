@@ -463,9 +463,9 @@ class LegacyImportTest extends TestCase
         $this->assertSame('user_accounts', $result['failures'][0]['table']);
         $this->assertSame('32', $result['failures'][0]['id']);
 
-        // The constraint, not the row: Postgres quotes the offending value
-        // on the line after, and that line is not kept.
-        $this->assertStringContainsString('users_email_unique', $result['failures'][0]['reason']);
+        // Found however it was capitalised, and refused by name rather than
+        // left to the index; the reason never quotes the address.
+        $this->assertStringContainsString('already here', $result['failures'][0]['reason']);
         $this->assertStringNotContainsString('lagosnights', $result['failures'][0]['reason']);
 
         // No half of it: no second organization with no owner, no logo, no

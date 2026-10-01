@@ -29,8 +29,9 @@ use UnitEnum;
  * Settings that used to wait for a deploy: the service charge in each
  * currency, who the seller of record is, whether the service charge is taxed,
  * whether Quebec's QST is collected, and the registration numbers and legal
- * name printed on receipts. Each starts at what the server's configuration
- * says and changes here.
+ * name printed on receipts — and, since, what a night earns in points, the
+ * largest friend discount, and whether Klarna and Affirm are offered. Each
+ * starts at what the server's configuration says and changes here.
  *
  * Administrators change them. Finance can read them, because they explain
  * every figure finance is asked about. Every change is in the audit log with
@@ -223,6 +224,70 @@ class PlatformSettings extends Page
                             ->suffix('or fewer'),
                     ])
                     ->columns(3),
+
+                Section::make('Fiesta Points')
+                    ->description(
+                        'Earned by whoever holds a ticket bought at checkout when the door lets them in, once for each '
+                        .'night, and spent on perks organizers offer. Points are never money and never come off a price. '
+                        .'A change applies to admissions from now on; points already earned stay as they are.'
+                    )
+                    ->schema([
+                        TextInput::make('points_per_event')
+                            ->label('Points for a night')
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(10000)
+                            ->suffix('points'),
+
+                        TextInput::make('points_daily_cap')
+                            ->label('Nights a day that earn')
+                            ->helperText('So a string of free parties in one day is not a way to collect points.')
+                            ->required()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(10)
+                            ->suffix('a day'),
+                    ])
+                    ->columns(2),
+
+                Section::make('Friend discounts')
+                    ->description(
+                        'A buyer\'s link that takes a share off a friend\'s tickets and earns the buyer the same off their '
+                        .'next ones. The organizer chooses the share and pays for both; this is the most any of them '
+                        .'may offer. Offers already running above it are held to it on the next sale.'
+                    )
+                    ->schema([
+                        TextInput::make('share_max')
+                            ->label('Largest friend discount')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(50)
+                            ->step('0.01')
+                            ->suffix('%'),
+                    ]),
+
+                Section::make('Pay later')
+                    ->description(
+                        'Klarna and Affirm at checkout, through Stripe, in Canada. Offered only where this is on and the '
+                        .'organizer has opted in, and only for nights this close: Affirm takes a refund back for 120 days '
+                        .'after the payment, so a night further out could be cancelled after the money can no longer go '
+                        .'back the way it came. Each organizer pays what these cost over a card.'
+                    )
+                    ->schema([
+                        Toggle::make('bnpl_enabled')
+                            ->label('Offer Klarna and Affirm'),
+
+                        TextInput::make('bnpl_max_days_before_event')
+                            ->label('Up to this many days before a night')
+                            ->required()
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(120)
+                            ->suffix('days'),
+                    ])
+                    ->columns(2),
             ]);
     }
 
@@ -269,7 +334,7 @@ class PlatformSettings extends Page
         return Action::make('confirmSave')
             ->requiresConfirmation()
             ->modalHeading('Save the platform settings?')
-            ->modalDescription('Service charges, tax on them, the seller of record, what receipts say and the sold-out badges change for every organizer’s events. Orders placed from now on use them; orders already placed keep what they were charged. Recorded in the audit trail under your name.')
+            ->modalDescription('Service charges, tax on them, the seller of record, what receipts say, the sold-out badges, points, friend discounts and pay later change for every organizer’s events. Orders placed from now on use them; orders already placed keep what they were charged. Recorded in the audit trail under your name.')
             ->modalSubmitActionLabel('Save settings')
             ->action(fn () => $this->save());
     }
@@ -342,6 +407,11 @@ class PlatformSettings extends Page
             'almost_sold_out_percent' => (int) $settings['almost_sold_out_percent'],
             'almost_sold_out_floor' => (int) $settings['almost_sold_out_floor'],
             'only_left_under' => (int) $settings['only_left_under'],
+            'points_per_event' => (int) $settings['points_per_event'],
+            'points_daily_cap' => (int) $settings['points_daily_cap'],
+            'share_max' => $settings['share_max_bps'] / 100,
+            'bnpl_enabled' => (bool) $settings['bnpl_enabled'],
+            'bnpl_max_days_before_event' => (int) $settings['bnpl_max_days_before_event'],
         ];
     }
 
@@ -369,6 +439,11 @@ class PlatformSettings extends Page
             'almost_sold_out_percent' => (int) $form['almost_sold_out_percent'],
             'almost_sold_out_floor' => (int) $form['almost_sold_out_floor'],
             'only_left_under' => (int) $form['only_left_under'],
+            'points_per_event' => (int) $form['points_per_event'],
+            'points_daily_cap' => (int) $form['points_daily_cap'],
+            'share_max_bps' => (int) round(((float) $form['share_max']) * 100),
+            'bnpl_enabled' => (bool) ($form['bnpl_enabled'] ?? false),
+            'bnpl_max_days_before_event' => (int) $form['bnpl_max_days_before_event'],
         ];
     }
 }

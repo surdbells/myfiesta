@@ -21,6 +21,21 @@
  *   delete    remove the row outright
  *   anonymise blank the listed columns, keep the row for financial integrity
  *   retain    keep as-is; the legal basis is recorded in `reason`
+ *
+ * And, on any entry:
+ *   via         the table holds no address or account of its own, only a
+ *               key to one that does: `key` is the column pointing at it and
+ *               `via` names that table, its `column` (id when left out) and
+ *               the `key` there that holds the person. Found and erased
+ *               before anything else, while the parent still says whose it is.
+ *   erase_where only these rows are erased (all of them are exported): each
+ *               column's value must be the id of a row of `table` whose
+ *               `column` is one of `in`.
+ *   files       columns holding a path on `disk`; the file goes when the row
+ *               is erased, once the erasure has committed.
+ *
+ * Each feature added since has an anchor below, in each section, to add its
+ * tables under, so two features never edit the same lines.
  */
 
 return [
@@ -34,6 +49,10 @@ return [
             'strategy' => 'anonymise',
             'key' => 'id',
             'columns' => ['name', 'email', 'phone', 'avatar_path', 'timezone'],
+            // A profile photo is somebody's face: it goes from the disk, not
+            // just from the column that named it.
+            'files' => ['avatar_path'],
+            'disk' => 'public',
             'reason' => 'Row is retained because orders and tickets reference it; identifying fields are cleared.',
         ],
 
@@ -126,6 +145,19 @@ return [
             'columns' => ['staff_label', 'started_ip', 'opened_ip'],
             'reason' => 'The record that staff acted inside an organization is kept for that organization; who did it is not, once they have asked to be forgotten.',
         ],
+
+        // --- track: pay ---
+        // --- track: transfer ---
+        // --- track: profile ---
+        // --- track: public ---
+        // --- track: sched ---
+        // --- track: clone ---
+        // --- track: share ---
+        // --- track: survey ---
+        // --- track: points ---
+        // --- track: pass ---
+        // --- track: wait ---
+        // --- track: audience ---
     ],
 
     /*
@@ -143,6 +175,35 @@ return [
             'key' => 'buyer_email',
             'columns' => ['buyer_email', 'buyer_name', 'buyer_phone', 'purchase_ip', 'purchase_user_agent'],
             'reason' => 'Financial record. Amounts, tax, and commission are retained; the buyer is detached.',
+        ],
+
+        /*
+         * What a buyer answered at checkout: the name on each ticket, a
+         * phone number for a table, dietary needs, how they heard.
+         *
+         * Holding no address of its own, so reached through the orders
+         * placed under the address, and — for an answer about one person on
+         * an order — through the ticket that person holds, often on somebody
+         * else's order. "Grace is diabetic" is Grace's as much as the
+         * buyer's. Erased before those orders and tickets lose the address,
+         * or nothing would lead here afterwards (Eraser).
+         *
+         * What was typed goes: it can say anything about anybody. What was
+         * picked from the organizer's own list stays, saying nothing about
+         * anybody once its order no longer names them, and still in the
+         * counts the organizer caters from. All of it is in an export.
+         */
+        'order_answers' => [
+            'strategy' => 'delete',
+            'key' => 'order_id',
+            'via' => [
+                ['table' => 'orders', 'column' => 'id', 'key' => 'buyer_email'],
+                ['table' => 'tickets', 'column' => 'id', 'key' => 'owner_email', 'through' => 'ticket_id'],
+            ],
+            'erase_where' => [
+                'event_question_id' => ['table' => 'event_questions', 'column' => 'type', 'in' => ['text']],
+            ],
+            'reason' => 'What you typed in answer to an organizer\'s questions is deleted. An answer picked from their list stays in their totals, and says nothing about you once your order no longer names you.',
         ],
 
         /*
@@ -291,6 +352,19 @@ return [
             'key' => 'email',
             'reason' => 'A request to be emailed about one event. No transaction and no retention duty.',
         ],
+
+        // --- track: pay ---
+        // --- track: transfer ---
+        // --- track: profile ---
+        // --- track: public ---
+        // --- track: sched ---
+        // --- track: clone ---
+        // --- track: share ---
+        // --- track: survey ---
+        // --- track: points ---
+        // --- track: pass ---
+        // --- track: wait ---
+        // --- track: audience ---
     ],
 
     /*
@@ -343,6 +417,7 @@ return [
                 'document_number', 'expires_on',
             ],
             'files' => ['document_path'],
+            'disk' => 'private',
             'reason' => 'Stored on the private disk; the file is removed with the row.',
         ],
 

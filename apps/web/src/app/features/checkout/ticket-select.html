@@ -130,6 +130,11 @@
           </section>
         }
 
+        <!-- "Tell me when tickets go on sale": the waitlist feature's own
+             file, drawing nothing until it is filled. Whether to offer it is
+             the server's call (notify_on_sale). -->
+        <app-notify-on-sale-part [event]="ev" place="tickets" />
+
         <!-- What the last quote changed in the basket, said where it is heard. -->
         <div role="status">
           @if (notice(); as message) {

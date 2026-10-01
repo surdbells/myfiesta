@@ -18,6 +18,7 @@ import {
   type MfOption,
 } from '../../ui';
 import { MfAvailability, offSale } from './availability';
+import { MfProfileChip } from './profile-chip';
 
 /**
  * What is on.
@@ -34,10 +35,24 @@ import { MfAvailability, offSale } from './availability';
  */
 @Component({
   selector: 'mf-home',
-  imports: [MfScreen, MfIconButton, MfCarousel, MfPoster, MfCard, MfButton, MfEmpty, MfSkeleton, MfSelect, MfAvailability],
+  imports: [
+    MfScreen,
+    MfIconButton,
+    MfCarousel,
+    MfPoster,
+    MfCard,
+    MfButton,
+    MfEmpty,
+    MfSkeleton,
+    MfSelect,
+    MfAvailability,
+    MfProfileChip,
+  ],
   template: `
     <mf-screen title="What’s on" [subtitle]="greeting()" large>
       <button mfIconButton screenActions tone="tonal" [icon]="searchIcon" label="Search events" (click)="go('/browse')"></button>
+
+      <mf-profile-chip screenLead />
 
       <div class="content">
         @if (cityOptions().length > 2) {

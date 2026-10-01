@@ -198,6 +198,11 @@
           </div>
         }
 
+        <!-- "About you (optional)": the audience feature's own file, drawing
+             nothing until it is filled. What it gathers is sent with the
+             order (aboutYou). -->
+        <app-about-you-part [event]="ev" [(answers)]="aboutYou" />
+
         <!--
           Only when there is something to pay. A free order goes nowhere near
           a processor, and a $0 checkout that talked about paying on Stripe's
@@ -225,6 +230,12 @@
               }
             </p>
           </div>
+
+          <!-- Paying later: the pay-later feature's own file, drawing nothing
+               until it is filled. -->
+          @if (quote(); as q) {
+            <app-pay-later-part [event]="ev" [quote]="q" />
+          }
         }
 
         @if (orderError(); as message) {
@@ -336,6 +347,10 @@
                   <p class="mt-2 text-sm text-danger" role="alert">{{ message }}</p>
                 }
               }
+
+              <!-- "Friend's discount": the friend-discount feature's own file,
+                   drawing nothing until it is filled. -->
+              <app-friend-discount-part [event]="ev" [quote]="q" />
             </div>
 
             <!-- Every figure that makes up the total, before anybody is sent

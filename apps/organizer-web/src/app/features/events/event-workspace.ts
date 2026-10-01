@@ -6,11 +6,15 @@ import { filter, map } from 'rxjs';
 import { UiBadge, UiBreadcrumb, UiIcon, UiTabs, type Crumb, type TabLink } from '@myfiesta/ui';
 import { CalendarDays, MapPin } from 'lucide-angular';
 import { Api } from '../../core/api';
+import { placeAfter, type FeatureTab } from '../../core/feature-flags';
 import { OrganizerEventDetail } from '../../core/api.types';
 import { longEventTime } from '../../core/event-time';
 import { SessionStore } from '../../core/session';
 import { SITE_URL } from '../../core/site-url';
 import { eventStandingLabel, eventStandingTone } from './event-status';
+import { AUDIENCE_TAB } from '../audience/enabled';
+import { PERKS_TAB } from '../perks/enabled';
+import { FEEDBACK_TAB } from '../surveys/enabled';
 
 /**
  * The tabs that change what a buyer sees or pays. While the event is being
@@ -19,6 +23,13 @@ import { eventStandingLabel, eventStandingTone } from './event-status';
  * refused on save.
  */
 const LOCKED_IN_REVIEW = ['tickets', 'extras', 'questions', 'codes', 'pictures', 'edit'];
+
+/**
+ * Tabs that arrive switched off, each switched on in its own folder's
+ * enabled.ts (core/feature-flags.ts says why). Listed once, here; the order
+ * settles which goes first when two follow the same tab.
+ */
+const FEATURE_TABS: readonly FeatureTab[] = [PERKS_TAB, AUDIENCE_TAB, FEEDBACK_TAB];
 
 /**
  * The frame every screen about one event sits inside.
@@ -206,7 +217,14 @@ export class EventWorkspace {
       tabs.push({ label: 'Settings', route: [...base, 'edit'] });
     }
 
-    return tabs;
+    const features = FEATURE_TABS.filter((tab) => tab.enabled && tab.allowed(this.session, this.event()));
+
+    return placeAfter(
+      tabs,
+      features,
+      (tab) => String(tab.route[2] ?? ''),
+      ({ label, path }) => ({ label, route: [...base, path] }),
+    );
   });
 
   // "Over" for a night that is, as the list says it, rather than "On sale".
@@ -227,7 +245,12 @@ export class EventWorkspace {
   );
 
   /** Whether the forms on this tab are switched off because the event is in review. */
-  readonly lockedHere = computed(() => this.inReview() && LOCKED_IN_REVIEW.includes(this.section()));
+  readonly lockedHere = computed(
+    () =>
+      this.inReview() &&
+      (LOCKED_IN_REVIEW.includes(this.section()) ||
+        FEATURE_TABS.some((tab) => tab.enabled && tab.lockedInReview && tab.path === this.section())),
+  );
 
   private sectionOf(url: string): string {
     const path = url.split(/[?#]/)[0].split('/').filter(Boolean);

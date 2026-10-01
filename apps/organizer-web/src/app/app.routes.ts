@@ -170,7 +170,56 @@ export const routes: Routes = [
         path: 'edit',
         loadComponent: () => import('./features/events/event-edit').then((m) => m.EventEdit),
       },
+      /*
+       * Tabs that arrive switched off, each filled in from its own folder
+       * (core/feature-flags.ts says why they are registered up front). Until
+       * its enabled.ts switches it on, the tab is not in the strip and the
+       * page is a heading. Each mounts its folder's routes.ts, so a screen
+       * below the tab is added there rather than here.
+       */
+      {
+        path: 'feedback',
+        loadChildren: () => import('./features/surveys/routes').then((m) => m.FEEDBACK_ROUTES),
+      },
+      {
+        path: 'perks',
+        loadChildren: () => import('./features/perks/routes').then((m) => m.PERKS_ROUTES),
+      },
+      {
+        path: 'audience',
+        loadChildren: () => import('./features/audience/routes').then((m) => m.EVENT_AUDIENCE_ROUTES),
+      },
     ],
+  },
+  /*
+   * Screens that arrive switched off, for the same reason as the tabs above:
+   * not in the sidebar, and a heading only, until their enabled.ts says so,
+   * and each mounting its folder's routes.ts.
+   */
+  {
+    path: 'templates',
+    canActivate: [requireSession],
+    loadChildren: () => import('./features/templates/routes').then((m) => m.TEMPLATES_ROUTES),
+  },
+  {
+    path: 'surveys',
+    canActivate: [requireSession],
+    loadChildren: () => import('./features/surveys/routes').then((m) => m.SURVEYS_ROUTES),
+  },
+  {
+    path: 'demand',
+    canActivate: [requireSession],
+    loadChildren: () => import('./features/demand/routes').then((m) => m.DEMAND_ROUTES),
+  },
+  {
+    path: 'passes',
+    canActivate: [requireSession],
+    loadChildren: () => import('./features/passes/routes').then((m) => m.PASSES_ROUTES),
+  },
+  {
+    path: 'audience',
+    canActivate: [requireSession],
+    loadChildren: () => import('./features/audience/routes').then((m) => m.AUDIENCE_ROUTES),
   },
   {
     // Organization-wide, unlike the orders tab inside an event: support

@@ -57,6 +57,20 @@ class AccountController extends Controller
     }
 
     /**
+     * The address as the account has it, for the password broker, which
+     * matches exactly: an account made at a checkout under "Ada@example.com"
+     * was never sent a link for "ada@example.com", and its link — which
+     * carries the address as stored — was refused when it came back lowered.
+     * The typed address, lowered, where there is no account.
+     */
+    private function storedAddress(string $typed): string
+    {
+        $address = Str::lower(trim($typed));
+
+        return User::whereRaw('lower(email) = ?', [$address])->value('email') ?? $address;
+    }
+
+    /**
      * Ask for an account.
      *
      * The answer is the same for every address: check your email. The email
@@ -295,7 +309,7 @@ class AccountController extends Controller
         if (! RateLimiter::tooManyAttempts($key, 3)) {
             RateLimiter::hit($key, 900);
 
-            Password::sendResetLink(['email' => Str::lower(trim($data['email']))]);
+            Password::sendResetLink(['email' => $this->storedAddress($data['email'])]);
         }
 
         return response()->json([
@@ -315,7 +329,7 @@ class AccountController extends Controller
 
         $status = Password::reset(
             [
-                'email' => Str::lower(trim($data['email'])),
+                'email' => $this->storedAddress($data['email']),
                 'password' => $data['password'],
                 'password_confirmation' => $request->input('password_confirmation'),
                 'token' => $data['token'],

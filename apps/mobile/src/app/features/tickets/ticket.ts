@@ -20,6 +20,8 @@ import {
 } from '../../ui';
 import { Navigation } from '../../core/navigation';
 import { MfReceipt } from './receipt';
+import { MfTicketShare } from './ticket-share';
+import { MfTicketTransfer } from './ticket-transfer';
 
 /**
  * One ticket, full screen.
@@ -33,7 +35,21 @@ import { MfReceipt } from './receipt';
  */
 @Component({
   selector: 'mf-ticket',
-  imports: [FormsModule, MfScreen, MfCard, MfBadge, MfButton, MfQr, MfSheet, MfField, MfEmpty, MfSkeleton, MfReceipt],
+  imports: [
+    FormsModule,
+    MfScreen,
+    MfCard,
+    MfBadge,
+    MfButton,
+    MfQr,
+    MfSheet,
+    MfField,
+    MfEmpty,
+    MfSkeleton,
+    MfReceipt,
+    MfTicketShare,
+    MfTicketTransfer,
+  ],
   template: `
     <mf-screen [title]="ticket()?.event?.title ?? 'Ticket'" back backTo="/tickets">
       @if (loading()) {
@@ -100,7 +116,11 @@ import { MfReceipt } from './receipt';
           @if (held.status !== 'checked_in') {
             <button mfButton variant="ghost" block (click)="transferring.set(true)">Send to somebody else</button>
           }
+
+          <mf-ticket-transfer [ticket]="held" />
         </div>
+
+        <mf-ticket-share [ticket]="held" />
 
         @if (held.receipt; as receipt) {
           <mf-receipt [receipt]="receipt" [timezone]="held.event.timezone" />

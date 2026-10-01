@@ -9,6 +9,7 @@ use App\Contracts\Payments\RefundNotice;
 use App\Contracts\Payments\TotalsRefunds;
 use App\Enums\Permission;
 use App\Enums\Role;
+use App\Events\OrderFullyRefunded;
 use App\Mail\RefundMadeElsewhere;
 use App\Mail\SoldOutWhilePaying;
 use App\Models\Code;
@@ -980,6 +981,8 @@ class RefundService
                 ]);
             }
 
+            $wasWhole = $locked->status === 'refunded';
+
             $locked->update([
                 'status' => $refunded >= $locked->total_amount ? 'refunded' : 'partially_refunded',
                 // Set on the first refund and left alone. This is when the
@@ -987,6 +990,13 @@ class RefundService
                 // asked about; each refund carries its own timestamp.
                 'refunded_at' => $locked->refunded_at ?? now(),
             ]);
+
+            // The refund that completed it, and only that one. Heard once
+            // this commits (OrderFullyRefunded); not for a refund written down
+            // quietly at the cutover, which is history rather than news.
+            if ($announce && ! $wasWhole && $locked->status === 'refunded') {
+                OrderFullyRefunded::dispatch($locked);
+            }
 
             // A fully refunded order gives its code's use back.
             Code::recount($locked->code_id);

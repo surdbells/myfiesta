@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\TokenAbility;
+use App\Http\Resources\Extensions\Transfer;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\Organization;
@@ -11,6 +12,7 @@ use App\Models\TicketType;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -107,5 +109,35 @@ class MyTicketsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.event.venue', null)
             ->assertJsonPath('data.0.event.city', 'Toronto');
+    }
+
+    /**
+     * What a feature loads for the whole list is there when each ticket is
+     * read: the controller primes and the resource reads, and both reach the
+     * same features (TicketExtras is one per request). Otherwise a feature
+     * would quietly fall back to a query per ticket, or to saying nothing.
+     */
+    public function test_what_a_feature_loads_for_the_list_is_there_for_each_ticket(): void
+    {
+        $this->app->bind(Transfer::class, fn () => new class extends Transfer
+        {
+            /** @var list<string> */
+            private array $primed = [];
+
+            public function primeTickets(Collection $tickets): void
+            {
+                $this->primed = $tickets->pluck('id')->all();
+            }
+
+            public function transferable(Ticket $ticket): ?bool
+            {
+                return in_array($ticket->id, $this->primed, true);
+            }
+        });
+        Sanctum::actingAs($this->ada, [TokenAbility::Attendee->value]);
+
+        $this->getJson('/api/me/tickets')
+            ->assertOk()
+            ->assertJsonPath('data.0.transferable', true);
     }
 }

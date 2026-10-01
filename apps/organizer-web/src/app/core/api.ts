@@ -202,6 +202,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
  */
 export type { Account } from './api.types';
 
+/**
+ * Every call the console makes to the API, as it stood before the features
+ * added since.
+ *
+ * Each of those keeps its own calls in an injectable of its own, beside its
+ * code (features/<feature>/<feature>-api.ts, or next to its part in
+ * features/events/parts/), injecting HttpClient and API_BASE_URL as this
+ * does, so several features built at once never edit this class. A feature
+ * that needs a call here to say more adds its own rather than changing this
+ * one (duplicating with changes is a new call, not a wider duplicateEvent).
+ */
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);

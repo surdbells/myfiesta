@@ -48,14 +48,11 @@ class TicketIssuer
          * be transferred by nobody — which is exactly what a walk-up scanned
          * in on the spot is.
          *
-         * withTrashed: an account staff deactivated keeps its address, and a
-         * second row for it would break the unique index on email.
+         * Matched however the address was typed (User::forAddress): a buyer
+         * who typed a capital letter is still the account they sign in as.
          */
         $owner = $order->user ?? (filled($order->buyer_email)
-            ? User::withTrashed()->firstOrCreate(
-                ['email' => $order->buyer_email],
-                ['name' => $order->buyer_name, 'password' => null],
-            )
+            ? User::forAddress($order->buyer_email, $order->buyer_name)
             : null);
 
         $tickets = [];
@@ -134,11 +131,8 @@ class TicketIssuer
         string $email,
         string $name,
     ): Ticket {
-        // Deactivated accounts included, as in issueFor().
-        $owner = User::withTrashed()->firstOrCreate(
-            ['email' => strtolower(trim($email))],
-            ['name' => $name, 'password' => null],
-        );
+        // However the address was typed, as in issueFor().
+        $owner = User::forAddress($email, $name);
 
         return Ticket::create([
             'code' => $this->code(),

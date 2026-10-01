@@ -20,9 +20,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -43,8 +45,17 @@ use Laravel\Sanctum\PersonalAccessToken;
  *
  * @property string|null $terms_version
  * @property Carbon|null $terms_accepted_at
+ *
+ * The four demo_ columns belong to buyer analytics (an "About you" card in
+ * the phone's settings, saved through AccountController::updateProfile,
+ * which takes only what it validates). Named here ahead of the migration
+ * that adds them, so that feature never edits this file while the points
+ * feature adds its relation to it.
  */
-#[Fillable(['name', 'email', 'password', 'phone', 'locale', 'timezone'])]
+#[Fillable([
+    'name', 'email', 'password', 'phone', 'locale', 'timezone',
+    'demo_age_range', 'demo_gender', 'demo_postal_area', 'demo_consented_at',
+])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser, HasEmailAuthentication
 {
@@ -60,6 +71,8 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
             'password' => 'hashed',
             // Which terms this account agreed to, and when. See Terms.
             'terms_accepted_at' => 'datetime',
+            // When they agreed to share the demo_ answers as anonymous totals.
+            'demo_consented_at' => 'datetime',
         ];
     }
 
@@ -99,6 +112,41 @@ class User extends Authenticatable implements FilamentUser, HasEmailAuthenticati
     public function isUnclaimed(): bool
     {
         return $this->password === null;
+    }
+
+    /**
+     * The account at an address, however the address was typed — made,
+     * unclaimed, when there is none.
+     *
+     * One person is one account. Matched as lower(email), which a unique
+     * index holds the table to: an exact match made "Ada@example.com" at
+     * checkout a second account beside "ada@example.com", and the tickets
+     * bought under one never reached somebody signed in as the other.
+     *
+     * Including deactivated accounts: a closed account keeps its address and
+     * is still the one at it. Two checkouts making the same new account at
+     * once meet at the index; the one that loses takes the one that won,
+     * inside a savepoint so the transaction it runs in carries on.
+     */
+    public static function forAddress(string $email, ?string $name): self
+    {
+        $address = Str::lower(trim($email));
+
+        $existing = static::withTrashed()->whereRaw('lower(email) = ?', [$address])->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        // Named for the address where nobody gave a name, as an imported
+        // account is: a name is required, and inventing one is worse.
+        $name = filled($name) ? $name : $address;
+
+        try {
+            return DB::transaction(fn () => static::create(['email' => $address, 'name' => $name, 'password' => null]));
+        } catch (UniqueConstraintViolationException) {
+            return static::withTrashed()->whereRaw('lower(email) = ?', [$address])->firstOrFail();
+        }
     }
 
     /**

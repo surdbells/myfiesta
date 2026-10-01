@@ -47,6 +47,10 @@ const SECRET_AFTER = new Set([
   'sign-up',
   'reset-password',
   'impersonate',
+  // A survey's link: the site's /tickets/feedback/:token and the API's
+  // /surveys/:token answer to whoever holds the token.
+  'feedback',
+  'surveys',
 ]);
 
 /** Names whose values are never sent, matched as parts of the name. */

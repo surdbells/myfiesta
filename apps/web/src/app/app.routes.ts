@@ -46,6 +46,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/info/info').then((m) => m.Info),
   },
   {
+    // How-to videos. Under help/, so no word at the root is taken from the
+    // events (ReservedSlugMirrorTest).
+    path: 'help/videos',
+    loadComponent: () => import('./features/help/help-videos').then((m) => m.HelpVideos),
+  },
+  {
     path: 'terms',
     data: { page: 'terms' },
     loadComponent: () => import('./features/info/info').then((m) => m.Info),
@@ -86,6 +92,13 @@ export const routes: Routes = [
      */
     path: 'tickets/:token',
     loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets),
+  },
+  {
+    // The survey sent once a night is over, from the email's link: under
+    // tickets/ with the rest of what a buyer is emailed, the token again the
+    // whole credential.
+    path: 'tickets/feedback/:token',
+    loadComponent: () => import('./features/feedback/feedback').then((m) => m.Feedback),
   },
   {
     // The guessable organizer paths. Accounts live on the console app;
@@ -142,6 +155,11 @@ export const routes: Routes = [
      */
     path: 'o/:slug',
     loadComponent: () => import('./features/organizers/organizer').then((m) => m.Organizer),
+  },
+  {
+    // One of the organizer's flex passes, under their own page.
+    path: 'o/:slug/passes/:pass',
+    loadComponent: () => import('./features/passes/pass').then((m) => m.Pass),
   },
   {
     // The two checkout steps. Two-segment paths, so they cannot collide with

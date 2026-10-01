@@ -126,6 +126,12 @@ class OrganizerEventInsightsTest extends TestCase
         // And still everything the edit form round-trips.
         $this->assertSame('America/Toronto', $one['timezone']);
         $this->assertArrayHasKey('description', $one);
+
+        // And each field a feature added since, present before it says
+        // anything (OrganizerEventExtras).
+        $this->assertNull($one['publish_at']);
+        $this->assertFalse($one['pay_later_enabled']);
+        $this->assertNull($one['share_offer']);
     }
 
     public function test_what_a_night_earned_is_withheld_from_members_who_may_not_see_money(): void

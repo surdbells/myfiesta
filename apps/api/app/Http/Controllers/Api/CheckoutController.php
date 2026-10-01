@@ -8,6 +8,7 @@ use App\Exceptions\CheckoutException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateOrderRequest;
 use App\Http\Requests\QuoteRequest;
+use App\Http\Resources\Extensions\QuoteExtras;
 use App\Models\Event;
 use App\Services\Checkout\CheckoutService;
 use App\Services\Checkout\Fulfiller;
@@ -285,13 +286,17 @@ class CheckoutController extends Controller
                 'amount' => $money($line->amount),
             ], $quote->taxLines),
             'service_charge_tax' => $money($quote->serviceChargeTax ?? Money::zero($quote->currency())),
-            'code_applied' => $quote->code?->code,
             'access_code_applied' => $quote->accessCode?->code,
             // Null for a code on every ticket.
             'code_applies_to' => $quote->code && $quote->code->ticketTypes()->exists()
                 ? $quote->code->ticketTypes()->orderBy('sort_order')->pluck('name')->all()
                 : null,
             'requires_payment' => $quote->requiresPayment(),
+
+            // Which code is named as applied, paying later and a friend's
+            // discount: each feature's own field, from a class of its own
+            // (QuoteExtras), so none of them edits this.
+            ...app(QuoteExtras::class)->for($quote),
         ];
     }
 

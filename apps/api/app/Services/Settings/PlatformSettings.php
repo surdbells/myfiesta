@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
  * The settings staff change in the admin, over the defaults a deploy sets.
  *
  * Every setting has a default from configuration (config/tax.php,
- * config/payments.php, config/myfiesta.php), so nothing here has to exist for
- * the platform to work: a fresh install charges what its environment says.
+ * config/payments.php, config/myfiesta.php, config/discovery.php,
+ * config/rewards.php), so nothing here has to exist for the platform to
+ * work: a fresh install charges what its environment says.
  * An administrator saving a different value writes a row, and that row wins
  * until it is changed again.
  *
@@ -30,6 +31,25 @@ class PlatformSettings
 
     /** The currencies a service charge is set for. Anything else falls back to the default. */
     public const CURRENCIES = ['CAD', 'NGN'];
+
+    /**
+     * Where points, friend discounts and paying later may be set, from the
+     * admin or by a deploy.
+     *
+     * Saved outside it is refused (normalise). Set outside it in the
+     * environment is held to it (defaults): a deploy that says 180 days of
+     * paying later gets 120, the most Affirm takes a refund back for, rather
+     * than 180 until somebody happens to save the settings page — and pay
+     * later trusts what it is told here.
+     *
+     * @var array<string, array{int, int}>
+     */
+    private const RANGES = [
+        'points_per_event' => [0, 10_000],
+        'points_daily_cap' => [0, 10],
+        'share_max_bps' => [0, 5_000],
+        'bnpl_max_days_before_event' => [1, 120],
+    ];
 
     public function __construct(private readonly Auditor $auditor) {}
 
@@ -62,6 +82,16 @@ class PlatformSettings
             'almost_sold_out_percent' => (int) config('discovery.availability.almost_percent', 10),
             'almost_sold_out_floor' => (int) config('discovery.availability.almost_floor', 5),
             'only_left_under' => (int) config('discovery.availability.exact_under', 10),
+            // What a night at the door earns, and how many nights a day do
+            // (config/rewards.php).
+            'points_per_event' => self::within('points_per_event', config('rewards.points.per_event', 100)),
+            'points_daily_cap' => self::within('points_daily_cap', config('rewards.points.daily_cap', 2)),
+            // The most a friend discount may take off (config/rewards.php).
+            'share_max_bps' => self::within('share_max_bps', config('rewards.share.max_bps', 2000)),
+            // Klarna and Affirm, and how close a night has to be for them
+            // (config/payments.php).
+            'bnpl_enabled' => (bool) config('payments.pay_later.enabled', false),
+            'bnpl_max_days_before_event' => self::within('bnpl_max_days_before_event', config('payments.pay_later.max_days_before_event', 110)),
         ];
     }
 
@@ -197,6 +227,38 @@ class PlatformSettings
         };
     }
 
+    // --- what points, friend discounts and pay later ask -------------------
+
+    /** What one night at the door earns its ticket's holder. */
+    public function pointsPerEvent(): int
+    {
+        return (int) $this->get('points_per_event');
+    }
+
+    /** The most nights in one day that earn points for one person. */
+    public function pointsDailyCap(): int
+    {
+        return (int) $this->get('points_daily_cap');
+    }
+
+    /** The most a friend discount may take off, in basis points. */
+    public function shareMaxBps(): int
+    {
+        return (int) $this->get('share_max_bps');
+    }
+
+    /** Whether Klarna and Affirm are offered at all. Each organizer still opts in. */
+    public function payLaterEnabled(): bool
+    {
+        return (bool) $this->get('bnpl_enabled');
+    }
+
+    /** How many days before a night it may still be paid for later. */
+    public function payLaterMaxDaysBeforeEvent(): int
+    {
+        return (int) $this->get('bnpl_max_days_before_event');
+    }
+
     // --- changing them -------------------------------------------------------
 
     public static function allows(?User $staff): bool
@@ -312,13 +374,27 @@ class PlatformSettings
             'almost_sold_out_percent' => $this->whole($value, 0, 100, 'A share of capacity is between 0% and 100%.'),
             'almost_sold_out_floor' => $this->whole($value, 0, 10000, 'The fewest places is a whole number from 0 to 10,000.'),
             'only_left_under' => $this->whole($value, 0, 1000, 'The most places named exactly is a whole number from 0 to 1,000.'),
+            'points_per_event' => $this->whole($value, ...self::RANGES[$key], refusal: 'Points for a night are a whole number from 0 to 10,000.'),
+            'points_daily_cap' => $this->whole($value, ...self::RANGES[$key], refusal: 'The nights a day that earn points are a whole number from 0 to 10.'),
+            'share_max_bps' => $this->whole($value, ...self::RANGES[$key], refusal: 'A friend discount is at most 50%.'),
+            // Past 120 days a night could be cancelled after Affirm stops
+            // taking the refund back the way the money came.
+            'bnpl_max_days_before_event' => $this->whole($value, ...self::RANGES[$key], refusal: 'Pay later is offered from 1 to 120 days before a night: Affirm takes a refund back for 120 days.'),
             'seller_of_record' => SellerOfRecord::tryFrom((string) $value)?->value
                 ?? throw StaffActionRefused::because('The seller is either the organizer or the platform.'),
-            'tax_on_service_charge', 'qst_enabled' => (bool) $value,
+            'tax_on_service_charge', 'qst_enabled', 'bnpl_enabled' => (bool) $value,
             'address_ca', 'address_ng' => $this->limited($value, 500),
             'legal_name' => $this->limited($value, 200),
             default => $this->limited($value, 64),
         };
+    }
+
+    /** A value from the environment, held to where it may be set (RANGES). */
+    private static function within(string $key, mixed $value): int
+    {
+        [$min, $max] = self::RANGES[$key];
+
+        return max($min, min($max, (int) $value));
     }
 
     private function whole(mixed $value, int $min, int $max, string $refusal): int

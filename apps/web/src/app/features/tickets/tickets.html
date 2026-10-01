@@ -112,6 +112,11 @@
                   {{ working() === ticket.id ? 'Giving it back…' : "Can't go? Give this ticket back" }}
                 </button>
               }
+
+              <!-- "Send to someone": the transfer feature's own file, drawing
+                   nothing until it is filled. It shares `working` with the
+                   links above, so one request runs at a time. -->
+              <app-transfer-part [token]="token" [ticket]="ticket" [(working)]="working" (answered)="answered($event)" />
             </div>
           </li>
         }
@@ -122,6 +127,10 @@
         the most common reason a scanner will not read a ticket.
       </p>
     }
+
+    <!-- The buyer's friend-discount link: the friend-discount feature's own
+         file, drawing nothing until it is filled. -->
+    <app-share-part [order]="o" />
 
     <!--
       What else was bought. No code and nothing to scan: it is claimed at a

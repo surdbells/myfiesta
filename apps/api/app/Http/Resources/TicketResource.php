@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Extensions\TicketExtras;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Receipts\Receipt;
@@ -45,6 +46,11 @@ class TicketResource extends JsonResource
             'receipt' => $this->whenLoaded('order', fn () => $this->boughtBy($request->user())
                 ? Receipt::for($this->order)->toArray()
                 : null),
+
+            // Perks, a friend-discount link and whether it can be sent on:
+            // each feature's own field, from a class of its own
+            // (TicketExtras), so none of them edits this.
+            ...app(TicketExtras::class)->for($this->resource),
         ];
     }
 

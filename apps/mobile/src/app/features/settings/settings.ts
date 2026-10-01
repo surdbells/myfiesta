@@ -24,6 +24,9 @@ import {
   type MfOption,
   type MfSegment,
 } from '../../ui';
+import { MfAboutYou } from './about-you';
+import { MfSettingsAvatar } from './avatar';
+import { MfHowToVideos } from './how-to-videos';
 
 /**
  * The account, the theme, and the way out.
@@ -39,10 +42,23 @@ import {
  */
 @Component({
   selector: 'mf-settings',
-  imports: [MfScreen, MfCard, MfButton, MfField, MfSegmented, MfSelect, MfSheet, MfSwitch],
+  imports: [
+    MfScreen,
+    MfCard,
+    MfButton,
+    MfField,
+    MfSegmented,
+    MfSelect,
+    MfSheet,
+    MfSwitch,
+    MfSettingsAvatar,
+    MfAboutYou,
+    MfHowToVideos,
+  ],
   template: `
     <mf-screen title="Settings" large>
       <mf-card>
+        <mf-settings-avatar />
         <p class="label">Signed in as</p>
         <h2>{{ session.session()?.name }}</h2>
         @if (session.session()?.email; as email) {
@@ -84,6 +100,8 @@ import {
             many follow them, never who.
           </p>
         </mf-card>
+
+        <mf-about-you />
       }
 
       <mf-card class="block">
@@ -122,6 +140,7 @@ import {
         <p class="label">The app</p>
         <button mfButton class="mt" variant="secondary" block (click)="showIntroduction()">Show the introduction</button>
         <p class="hint muted">What myFiesta does, for going out and for running events — the pages a new phone opens on.</p>
+        <mf-how-to-videos />
       </mf-card>
 
       <!-- signOut() asks, in the one confirmation sheet every action uses.

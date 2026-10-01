@@ -2,6 +2,7 @@
 
 namespace App\Services\Checkout;
 
+use App\Events\OrderPaid;
 use App\Mail\TicketsIssued;
 use App\Models\AddOn;
 use App\Models\Code;
@@ -135,6 +136,13 @@ class Fulfiller
             // rolled-back order never announces itself; the delivery goes
             // after commit, and a receiver that is down never touches this.
             app(Webhooks::class)->emit($locked->organization_id, 'order.paid', app(Payloads::class)->order($locked->fresh()));
+
+            // And the platform's own features: heard once the payment has
+            // committed, and only by this call — a repeated notice returned
+            // above, before anything was issued. A feature that fails there
+            // is reported and stops there; the email, the payout and the text
+            // below still go (SaidOnceCommitted).
+            OrderPaid::dispatch($locked);
 
             // Queued, and dispatched only after the transaction commits.
             // Sending inside it risks a buyer holding tickets in their inbox

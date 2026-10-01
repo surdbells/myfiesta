@@ -91,6 +91,16 @@
     </div>
   }
 
+  <!--
+    Each part on this page is one feature's own file, placed here once and
+    never edited again, so a feature fills its part without touching the page.
+    Empty, a part draws nothing and takes no room. Each decides for itself
+    when it shows and who may use it, which is why they sit outside the
+    conditions around them. One that changes the event hands it back through
+    (changed), and the page and its header take it from there.
+  -->
+  <app-schedule-part [event]="event" (changed)="partChanged($event)" />
+
   @if (event.status === 'cancelled') {
     <p class="cancelled-banner mt-4 rounded-md border-l-[3px] border-l-danger bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-4 text-sm text-danger" role="status">
       <strong>This event was cancelled.</strong>
@@ -191,6 +201,8 @@
     </section>
   }
 
+  <app-series-part [event]="event" [series]="series()" (changed)="partChanged($event)" />
+
   @if (session.canEditEvents()) {
     <section class="copy mt-6">
       @if (!copying()) {
@@ -252,6 +264,10 @@
       }
     </section>
   }
+
+  <app-duplicate-part [event]="event" />
+
+  <app-share-offer-part [event]="event" (changed)="partChanged($event)" />
 
   <!-- Anybody who can edit the event can hand it to their web person. -->
   @if (session.canEditEvents() && event.status !== 'cancelled') {

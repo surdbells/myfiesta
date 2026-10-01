@@ -6,6 +6,7 @@ use App\Models\Event;
 use App\Models\EventImage;
 use App\Models\TicketType;
 use App\Models\User;
+use App\Services\Events\Copying\Carried;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -92,6 +93,10 @@ class EventDuplicator
             $this->copyTicketTypes($source, $copy, $start);
             $this->copyBanner($source, $copy, $by);
             $this->copyReminders($source, $copy);
+
+            // What the features added since keep on a copy, each deciding
+            // for its own columns (Copying\Carried).
+            app(Carried::class)->carry($source, $copy);
 
             return $copy->refresh();
         });

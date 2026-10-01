@@ -52,9 +52,7 @@ class Subject
                 continue;
             }
 
-            $exists = DB::table($table)->whereRaw("lower({$spec['key']}) = ?", [$this->email])->exists();
-
-            if ($exists) {
+            if (Rows::of($table, $spec, $this->email)->exists()) {
                 return true;
             }
         }

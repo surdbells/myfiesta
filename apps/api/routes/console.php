@@ -214,3 +214,15 @@ Schedule::command('disputes:remind')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Scheduled work belonging to one feature added since, one file each, so a
+ * feature's schedule is read beside nothing else's. The same rules hold there
+ * as here: withoutOverlapping, in the background, and nothing aimed at the
+ * audit trail or the ledger (PruneScheduleTest reads them all through the
+ * schedule).
+ */
+require __DIR__.'/schedule/sched.php';
+require __DIR__.'/schedule/survey.php';
+require __DIR__.'/schedule/wait.php';
+require __DIR__.'/schedule/points.php';

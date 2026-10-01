@@ -88,4 +88,20 @@ return [
         'stripe' => ['bps' => 290, 'flat' => 30],
         'paystack' => ['bps' => 150, 'flat' => 0, 'cap' => 200000],
     ],
+
+    /*
+     * Buy now, pay later: Klarna and Affirm, through Stripe, in Canada.
+     *
+     * Off until staff turn it on (Platform settings), and then only on
+     * nights whose organizer opted in. Only for nights this close: Affirm
+     * takes a refund for 120 days after the payment and Klarna for 180, so a
+     * night further out could be cancelled after the money can no longer go
+     * back the way it came. Staff change both in the admin; these are what
+     * applies until they do. Read them through PlatformSettings
+     * (payLaterEnabled, payLaterMaxDaysBeforeEvent), never from here.
+     */
+    'pay_later' => [
+        'enabled' => (bool) env('PAY_LATER_ENABLED', false),
+        'max_days_before_event' => (int) env('PAY_LATER_MAX_DAYS_BEFORE_EVENT', 110),
+    ],
 ];

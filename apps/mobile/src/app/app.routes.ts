@@ -140,6 +140,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/settings/settings').then((m) => m.Settings),
   },
   {
+    // Fiesta Points: what somebody has, and what it bought. An account's
+    // own, so it needs one. Nothing links here yet.
+    path: 'points',
+    canActivate: [signedIn],
+    loadComponent: () => import('./features/points/points').then((m) => m.Points),
+  },
+  {
     // Development only: every control on one screen, in both themes. A design
     // system nobody can see whole is one that drifts.
     path: 'ui',

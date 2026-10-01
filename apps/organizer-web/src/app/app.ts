@@ -14,11 +14,19 @@ import { UiSelect, type SelectOption } from '@myfiesta/ui/select';
 import { CalendarDays, LayoutDashboard, LogOut, Mail, Menu, Plug, PanelLeftClose, PanelLeftOpen, ReceiptText, Store, TicketPercent, Users, Wallet, X } from 'lucide-angular';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Api } from './core/api';
+import { placeAfter, type FeatureNavEntry } from './core/feature-flags';
 import { SessionStore } from './core/session';
 import { StaffBanner } from './features/impersonation/staff-banner';
 import { SuspensionBanner } from './features/suspension/suspension-banner';
 import { VerifyEmail } from './features/account/verify-email';
 import { TermsPrompt } from './features/account/terms-prompt';
+// Each only a few lines saying whether it is on and where it goes, never the
+// screen itself, so the first download stays the shell's.
+import { AUDIENCE_NAV } from './features/audience/enabled';
+import { DEMAND_NAV } from './features/demand/enabled';
+import { PASSES_NAV } from './features/passes/enabled';
+import { SURVEYS_NAV } from './features/surveys/enabled';
+import { TEMPLATES_NAV } from './features/templates/enabled';
 
 /** One entry in the sidebar. */
 interface NavItem {
@@ -30,6 +38,13 @@ interface NavItem {
 }
 
 const COLLAPSED_KEY = 'myfiesta.console.sidebar-collapsed';
+
+/**
+ * Sidebar entries that arrive switched off, each switched on in its own
+ * folder's enabled.ts (core/feature-flags.ts says why). Listed once, here; the
+ * order settles which goes first when two follow the same entry.
+ */
+const FEATURE_NAV: readonly FeatureNavEntry[] = [TEMPLATES_NAV, PASSES_NAV, DEMAND_NAV, AUDIENCE_NAV, SURVEYS_NAV];
 
 @Component({
   selector: 'app-root',
@@ -158,7 +173,9 @@ export class App {
     // change it.
     items.push({ label: 'How you appear', link: '/brand', glyph: Store });
 
-    return items;
+    const features = FEATURE_NAV.filter((entry) => entry.enabled && entry.allowed(this.session));
+
+    return placeAfter(items, features, (item) => item.link, ({ label, link, glyph }) => ({ label, link, glyph }));
   });
 
   readonly organizationOptions = computed<SelectOption[]>(() =>

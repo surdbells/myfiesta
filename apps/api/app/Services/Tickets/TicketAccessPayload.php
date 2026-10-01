@@ -2,6 +2,7 @@
 
 namespace App\Services\Tickets;
 
+use App\Http\Resources\Extensions\TicketExtras;
 use App\Models\Order;
 use App\Models\Ticket;
 use App\Services\Events\CalendarFile;
@@ -28,6 +29,20 @@ class TicketAccessPayload
 
         $event = $order->event;
         $qr = $this->qr;
+
+        // Only the tickets the buyer still holds. One handed to somebody
+        // else is theirs now, and after a reissue its new code must not
+        // reach this link (BuyersTickets). Refunded tickets are not shown. A
+        // QR that will be turned away at the door is worse than no QR,
+        // because the holder does not find out until they are at the front
+        // of the queue.
+        $tickets = BuyersTickets::of($order, $order->tickets)
+            ->whereNotIn('status', ['refunded', 'void'])
+            ->values();
+
+        // What each feature adds to a ticket, loaded once for the order.
+        $extras = app(TicketExtras::class);
+        $extras->prime($tickets);
 
         return [
             'reference' => $order->reference,
@@ -73,14 +88,7 @@ class TicketAccessPayload
             // how it was priced. No ticket codes in it.
             'receipt' => Receipt::for($order)->toArray(),
 
-            // Only the tickets the buyer still holds. One handed to somebody
-            // else is theirs now, and after a reissue its new code must not
-            // reach this link (BuyersTickets).
-            'tickets' => BuyersTickets::of($order, $order->tickets)
-                // Refunded tickets are not shown. A QR that will be turned away
-                // at the door is worse than no QR, because the holder does not
-                // find out until they are at the front of the queue.
-                ->whereNotIn('status', ['refunded', 'void'])
+            'tickets' => $tickets
                 ->map(fn (Ticket $ticket) => [
                     'id' => $ticket->id,
                     // A ticket waiting to be taken has no working code, and
@@ -107,6 +115,8 @@ class TicketAccessPayload
                         'listed' => $ticket->status === 'listed',
                         'refusal' => app(Resale::class)->refusal($ticket, $event),
                     ],
+                    // Each feature's own field (TicketExtras), as on the phone.
+                    ...$extras->for($ticket),
                 ])
                 ->values(),
         ];

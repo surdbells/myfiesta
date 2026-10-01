@@ -1331,3 +1331,25 @@ export interface SavedView {
   state: Record<string, SavedViewValue>;
   updated_at: string;
 }
+
+/*
+ * One file for each feature added since, so each is written in its own file
+ * and no two features edit this one. New shapes go in the feature's file. So
+ * does a field it adds to a shape above (Account's avatar, say): declared there
+ * inside `declare module './index' { interface Account { … } }`, which
+ * TypeScript merges into the shape here, as sched.ts, pay.ts and share.ts do
+ * for OrganizerEventDetail. Only changing the type of a field already here is
+ * done here, by the one feature that owns that shape.
+ */
+export * from './pay';
+export * from './transfer';
+export * from './profile';
+export * from './public';
+export * from './sched';
+export * from './clone';
+export * from './share';
+export * from './survey';
+export * from './points';
+export * from './pass';
+export * from './wait';
+export * from './audience';

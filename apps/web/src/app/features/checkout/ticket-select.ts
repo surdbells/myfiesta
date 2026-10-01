@@ -12,6 +12,7 @@ import { formatMoney, formatPrice } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { AvailabilityBadge } from '../../shared/availability-badge';
 import { CheckoutSteps } from '../../shared/checkout-steps';
+import { NotifyOnSalePart } from '../../shared/parts/notify-on-sale-part';
 
 /**
  * Step one: which tickets, and how many.
@@ -24,7 +25,8 @@ import { CheckoutSteps } from '../../shared/checkout-steps';
 @Component({
   selector: 'mf-ticket-select',
   standalone: true,
-  imports: [RouterLink, FormsModule, UiSelect, CheckoutSteps, AvailabilityBadge],
+  // The part is a feature's own file, placed once in the template.
+  imports: [RouterLink, FormsModule, UiSelect, CheckoutSteps, AvailabilityBadge, NotifyOnSalePart],
   templateUrl: './ticket-select.html',
 })
 export class TicketSelect {

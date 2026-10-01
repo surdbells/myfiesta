@@ -2,7 +2,6 @@
 
 namespace App\Services\PersonalData;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -20,8 +19,19 @@ use Illuminate\Support\Facades\Storage;
  */
 class Exporter
 {
-    /** Columns that would hand somebody a working credential. */
-    private const NEVER = ['token', 'access_token', 'password', 'remember_token', 'token_hash', 'secret', 'code'];
+    /**
+     * Columns that would hand somebody a working credential.
+     *
+     * A ticket's code by any name: the one on the ticket, and the one a door
+     * staffer's scans recorded — a table ticket still admitting more people
+     * is let in by it. And a guest's invitation link. An export is a file,
+     * and files get forwarded. PersonalDataMapTest fails a mapped column
+     * that looks like one of these and is not here.
+     */
+    public const NEVER = [
+        'token', 'access_token', 'password', 'remember_token', 'token_hash', 'secret',
+        'code', 'scanned_code', 'invite_token',
+    ];
 
     /** @return array<string, mixed> the export, as it is written to the file */
     public function build(Subject $subject): array
@@ -36,7 +46,7 @@ class Exporter
             }
 
             foreach (config("personal_data.$section") as $table => $spec) {
-                $rows = $this->rows($table, $spec['key'], $key);
+                $rows = $this->rows($table, $spec, $key);
 
                 if ($rows !== []) {
                     $data[$table] = array_merge($data[$table] ?? [], $rows);
@@ -47,7 +57,7 @@ class Exporter
         // One section is keyed by something a person can have several of.
         foreach ($subject->phones() as $phone) {
             foreach (config('personal_data.by_phone') as $table => $spec) {
-                $rows = $this->rows($table, $spec['key'], $phone);
+                $rows = $this->rows($table, $spec, $phone);
 
                 if ($rows !== []) {
                     $data[$table] = array_merge($data[$table] ?? [], $rows);
@@ -88,18 +98,15 @@ class Exporter
     }
 
     /**
+     * Every row about them, including the ones an erasure would keep or
+     * leave: an answer they picked from a list is still theirs to read.
+     *
+     * @param  array<string, mixed>  $spec
      * @return list<array<string, mixed>>
      */
-    private function rows(string $table, string $column, string|int $value): array
+    private function rows(string $table, array $spec, string|int $value): array
     {
-        $query = DB::table($table);
-
-        // Addresses are stored as they were typed; matched as they are meant.
-        is_string($value) && str_contains($value, '@')
-            ? $query->whereRaw("lower({$column}) = ?", [$value])
-            : $query->where($column, $value);
-
-        return $query->get()->map(function ($row) {
+        return Rows::of($table, $spec, $value)->get()->map(function ($row) {
             $fields = (array) $row;
 
             foreach (array_keys($fields) as $field) {

@@ -157,6 +157,13 @@
       <button class="link cursor-pointer border-0 bg-transparent p-0 text-sm text-text-muted underline underline-offset-2 [font-family:inherit] hover:text-text" type="button" (click)="done()">Done</button>
     </div>
   </form>
+
+  <!--
+    One feature's own file, placed here once and never edited again, so the
+    feature fills it without touching this page. Empty, it draws nothing.
+    Below the form rather than in it: it saves on its own, after asking.
+  -->
+  <app-pay-later-part [event]="ev" (changed)="event.set($event)" />
 } @else {
   <p class="error rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger">That event could not be found.</p>
 }

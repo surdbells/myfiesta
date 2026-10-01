@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Enums\TokenAbility;
 use App\Http\Requests\CreateOrderRequest;
 use App\Models\Event;
+use App\Models\Order;
 use App\Models\Organization;
+use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use Database\Seeders\TaxRateSeeder;
@@ -117,6 +119,62 @@ class ContractConformanceTest extends TestCase
         foreach ($declared as $field) {
             $this->assertArrayHasKey($field, $body,
                 "Event declares '{$field}' and the API does not return it.");
+        }
+    }
+
+    /**
+     * A ticket, the two places it is shown: the buyer's link and the phone's
+     * list. Each carries every field the features added since declare on it,
+     * as null or empty when they have nothing to say, so a client never
+     * mistakes "nothing" for "an older server".
+     */
+    public function test_a_ticket_carries_what_the_contract_promises_on_the_link_and_the_phone(): void
+    {
+        $holder = User::factory()->create(['email' => 'ada@example.com']);
+
+        $order = Order::create([
+            'reference' => 'MF'.strtoupper(Str::random(8)),
+            'access_token' => Str::random(44),
+            'organization_id' => $this->event->organization_id,
+            'event_id' => $this->event->id,
+            'buyer_email' => 'ada@example.com',
+            'buyer_name' => 'Ada Okafor',
+            'currency' => 'CAD',
+            'subtotal_amount' => 10000,
+            'net_revenue_amount' => 10000,
+            'total_amount' => 10000,
+            'status' => 'paid',
+        ]);
+
+        Ticket::create([
+            'event_id' => $this->event->id,
+            'order_id' => $order->id,
+            'ticket_type_id' => $this->type->id,
+            'code' => Ticket::generateCode(),
+            'owner_user_id' => $holder->id,
+            'owner_email' => 'ada@example.com',
+            'holder_name' => 'Ada Okafor',
+            'status' => 'valid',
+        ]);
+
+        $held = $this->getJson('/api/tickets/'.$order->access_token)->assertOk()->json('tickets.0');
+
+        foreach ($this->spec['components']['schemas']['HeldTicket']['required'] as $field) {
+            $this->assertArrayHasKey($field, $held, "HeldTicket requires '{$field}' and the ticket link does not return it.");
+        }
+
+        Sanctum::actingAs($holder, [TokenAbility::Attendee->value]);
+        $mine = $this->getJson('/api/me/tickets')->assertOk()->json('data.0');
+
+        foreach ($this->spec['components']['schemas']['Ticket']['required'] as $field) {
+            $this->assertArrayHasKey($field, $mine, "Ticket requires '{$field}' and the phone's list does not return it.");
+        }
+
+        // Declared as always there on both, so a generated client never
+        // makes them optional.
+        foreach (['perks', 'share_link', 'transferable'] as $field) {
+            $this->assertContains($field, $this->spec['components']['schemas']['HeldTicket']['required']);
+            $this->assertContains($field, $this->spec['components']['schemas']['Ticket']['required']);
         }
     }
 

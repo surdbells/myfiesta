@@ -86,6 +86,11 @@ export interface EventQuery {
  * URLs live here rather than scattered through components — the platform this
  * replaces kept a hand-maintained list of 80 endpoint strings in a class each
  * client copied, and they drifted.
+ *
+ * A feature added since keeps its own calls in an injectable of its own,
+ * beside its code (features/<feature>/<feature>-api.ts), injecting HttpClient
+ * and API_BASE_URL as this does, so several features built at once never
+ * edit this class. Still never in a component.
  */
 @Injectable({ providedIn: 'root' })
 export class Api {

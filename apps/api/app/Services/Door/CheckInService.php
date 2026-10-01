@@ -2,6 +2,8 @@
 
 namespace App\Services\Door;
 
+use App\Events\TicketAdmitted;
+use App\Models\Event;
 use App\Models\Ticket;
 use App\Models\TicketScan;
 use App\Models\User;
@@ -166,7 +168,14 @@ class CheckInService
             $admitCount = $this->admitCount($outcome, $offlineResult);
 
             if ($admitCount > 0) {
-                $this->admit($ticket, $admitCount, $eventId, $scanner, $scannedAt);
+                $this->admit(
+                    $ticket,
+                    $admitCount,
+                    $eventId,
+                    $scanner,
+                    $scannedAt,
+                    $offlineResult === null ? TicketAdmitted::ONLINE : TicketAdmitted::OFFLINE_SYNC,
+                );
             }
 
             $row = [
@@ -243,13 +252,18 @@ class CheckInService
         };
     }
 
-    /** Count people in against a ticket, and say so to anyone listening. */
+    /**
+     * Count people in against a ticket, and say so to anyone listening.
+     *
+     * @param  TicketAdmitted::ONLINE|TicketAdmitted::OFFLINE_SYNC  $source
+     */
     private function admit(
         Ticket $ticket,
         int $count,
         string $eventId,
         ?User $scanner,
         ?CarbonInterface $scannedAt,
+        string $source,
     ): void {
         $admitted = $ticket->admitted_count + $count;
 
@@ -265,8 +279,11 @@ class CheckInService
         // Somebody walked in. For a live screen elsewhere — a bar that wants
         // to know the room is filling, a promoter watching their list arrive.
         // The person, never their code.
+        // Deleted or not: a night taken out of every list still had a door.
+        $event = Event::withTrashed()->findOrFail($ticket->event_id);
+
         app(Webhooks::class)->emit(
-            $ticket->event()->value('organization_id'),
+            $event->organization_id,
             'ticket.checked_in',
             [
                 ...app(Payloads::class)->attendee($ticket),
@@ -274,6 +291,12 @@ class CheckInService
                 'event_id' => $eventId,
             ],
         );
+
+        // And the platform's own features, once the admission has
+        // committed: only here, where somebody was actually counted in, so
+        // a refusal, a repeat of a scan or a question about how many never
+        // says it.
+        TicketAdmitted::dispatch($ticket, $event, $count, $source);
     }
 
     /**
@@ -374,7 +397,8 @@ class CheckInService
         $more = max(0, $this->admitCount($outcome, $offlineResult) - $counted);
 
         if ($more > 0) {
-            $this->admit($ticket, $more, $eventId, $scanner, $earlier->scanned_at);
+            // What the door did with no signal, arriving in its sync.
+            $this->admit($ticket, $more, $eventId, $scanner, $earlier->scanned_at, TicketAdmitted::OFFLINE_SYNC);
         }
 
         // The verdict on what the door did, rather than on what the online

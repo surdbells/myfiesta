@@ -52,6 +52,12 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client,
   },
   {
+    // The survey after a night, for the same reasons: the token in its
+    // address is the credential, and nothing is gained by a crawler seeing it.
+    path: 'tickets/feedback/:token',
+    renderMode: RenderMode.Client,
+  },
+  {
     path: 'order/:reference',
     renderMode: RenderMode.Client,
   },

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Extensions\TicketExtras;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\TicketTransfer;
@@ -41,6 +42,9 @@ class TicketController extends Controller
         // history: the ticket was on this person's phone (ActivityLog).
         app(ActivityLog::class)->shownInApp($tickets->getCollection(), $request);
 
+        // What each feature adds to a ticket, loaded once for the page.
+        app(TicketExtras::class)->prime($tickets->getCollection());
+
         return TicketResource::collection($tickets);
     }
 
@@ -74,12 +78,9 @@ class TicketController extends Controller
         }
 
         $recipient = DB::transaction(function () use ($ticket, $validated, $request) {
-            // Deactivated accounts included: one keeps its address, and a
-            // second row for it would break the unique index on email.
-            $recipient = User::withTrashed()->firstOrCreate(
-                ['email' => strtolower(trim($validated['email']))],
-                ['name' => $validated['name'], 'password' => null],
-            );
+            // However the address was typed, deactivated accounts included:
+            // one person is one account (User::forAddress).
+            $recipient = User::forAddress($validated['email'], $validated['name']);
 
             TicketTransfer::create([
                 'ticket_id' => $ticket->id,

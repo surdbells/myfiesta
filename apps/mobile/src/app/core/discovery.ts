@@ -4,6 +4,7 @@ import { Api } from './api';
 import { SessionStore } from './session';
 import type { Money } from './money';
 import type { Availability } from '@myfiesta/shared/availability';
+import type { OtherDate, PayLater, Perk, ShareOffer } from '@myfiesta/api-types';
 
 /** An event as a list card shows it. */
 export interface EventCard {
@@ -68,6 +69,22 @@ export interface EventPage extends EventCard {
   gallery: { url: string; thumb_url: string; caption: string | null }[];
   ticket_types: TicketTypeCard[];
   calendar: { ics_url: string; google_url: string };
+
+  /*
+   * What each feature added since puts on the page, always sent: null, false
+   * or empty when it has nothing to say (EventExtras in the API). The shapes
+   * are in @myfiesta/api-types, one file for each feature.
+   */
+  /** The other dates of a repeating night, soonest first. Null for one that does not repeat. */
+  other_dates: OtherDate[] | null;
+  /** What Fiesta Points buy at this night. Empty when it offers nothing. */
+  perks: Perk[];
+  /** The friend discount this night offers, or null for none. */
+  share_offer: ShareOffer | null;
+  /** Whether to offer "Tell me when tickets go on sale": nothing is on sale yet. */
+  notify_on_sale: boolean;
+  /** Whether the night can be paid for later, and with whom. Null when it cannot. */
+  pay_later: PayLater | null;
 }
 
 /**

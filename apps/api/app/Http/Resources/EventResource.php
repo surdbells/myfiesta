@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Extensions\EventExtras;
 use App\Services\Events\CalendarFile;
 use App\Support\RichText;
 use Illuminate\Http\Request;
@@ -164,6 +165,11 @@ class EventResource extends EventSummaryResource
                 'ticketTypes',
                 fn () => $this->ticketTypes->each(fn ($type) => $type->setRelation('event', $this->resource)),
             )),
+
+            // Other dates, perks, a friend discount, "tell me when tickets go
+            // on sale" and paying later: each feature's own field, from a
+            // class of its own (EventExtras), so none of them edits this.
+            ...app(EventExtras::class)->for($this->resource, $request),
         ]);
     }
 }

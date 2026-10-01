@@ -5,8 +5,10 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ConfirmDialog } from '@myfiesta/ui';
 import { Api } from '../../core/api';
 import { Seo } from '../../core/seo';
-import { TicketAccess } from '../../core/api.types';
+import { TicketAccess, TicketAnswer } from '../../core/api.types';
 import { AddToCalendar } from '../../shared/add-to-calendar';
+import { SharePart } from './parts/share-part';
+import { TransferPart } from './parts/transfer-part';
 import { ReceiptSection } from './receipt';
 
 /**
@@ -22,7 +24,8 @@ import { ReceiptSection } from './receipt';
  */
 @Component({
   selector: 'app-tickets',
-  imports: [RouterLink, AddToCalendar, ReceiptSection],
+  // The parts are each a feature's own file, placed once in the template.
+  imports: [RouterLink, AddToCalendar, ReceiptSection, TransferPart, SharePart],
   templateUrl: './tickets.html',
 })
 export class Tickets {
@@ -36,8 +39,11 @@ export class Tickets {
   readonly loading = signal(true);
   readonly notFound = signal(false);
 
-  /** The link is the whole credential, and everything here is done with it. */
-  private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
+  /**
+   * The link is the whole credential, and everything here is done with it,
+   * by the parts on each ticket too.
+   */
+  protected readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
   /**
    * The ticket a request is running for. Every other ticket's link waits
@@ -131,6 +137,16 @@ export class Tickets {
         this.notice.set(response?.error?.message ?? 'That could not be done just now.');
       },
     });
+  }
+
+  /**
+   * What a part on a ticket did (sending it on), as it hands it back: said,
+   * and the page drawn from the server's own answer when there is one, as
+   * act() does for giving a ticket back.
+   */
+  answered({ message, access }: TicketAnswer): void {
+    this.notice.set(message);
+    if (access) this.order.set(access);
   }
 
   /**

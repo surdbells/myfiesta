@@ -6,10 +6,10 @@ use App\Models\Organization;
 use App\Services\Payouts\OverdraftPosition;
 use App\Services\Payouts\Overdrafts;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -40,18 +40,32 @@ class Eraser
     {
         $done = [];
 
-        foreach (['by_user', 'by_email'] as $section) {
-            $key = $subject->keyFor($section);
+        /*
+         * Tables reached through another first, then the rest.
+         *
+         * An answer given at checkout is found through its order or its
+         * ticket, and those through the address on them — which they give up
+         * when they are anonymised. Done the other way round, the answers
+         * would still be there and nothing would lead to them.
+         */
+        foreach ([true, false] as $reachedThroughAnother) {
+            foreach (['by_user', 'by_email'] as $section) {
+                $key = $subject->keyFor($section);
 
-            if ($key === null) {
-                continue;
-            }
+                if ($key === null) {
+                    continue;
+                }
 
-            foreach (config("personal_data.$section") as $table => $spec) {
-                $result = $this->apply($table, $spec, $key);
+                foreach (config("personal_data.$section") as $table => $spec) {
+                    if (isset($spec['via']) !== $reachedThroughAnother) {
+                        continue;
+                    }
 
-                if ($result !== null) {
-                    $done[$table] = $result;
+                    $result = $this->apply($table, $spec, $key);
+
+                    if ($result !== null) {
+                        $done[$table] = $result;
+                    }
                 }
             }
         }
@@ -179,16 +193,17 @@ class Eraser
     private function apply(string $table, array $spec, string|int $key): ?array
     {
         $strategy = $spec['strategy'] ?? null;
-        $column = $spec['key'];
 
         if ($strategy === 'retain') {
-            $rows = $this->query($table, $column, $key)->count();
+            $rows = Rows::of($table, $spec, $key)->count();
 
             return $rows === 0 ? null : ['action' => 'kept', 'rows' => $rows, 'why' => $spec['reason'] ?? null];
         }
 
+        $this->deleteFiles($table, $spec, $key);
+
         if ($strategy === 'delete') {
-            $rows = $this->query($table, $column, $key)->delete();
+            $rows = Rows::erasable($table, $spec, $key)->delete();
 
             return $rows === 0 ? null : ['action' => 'deleted', 'rows' => $rows];
         }
@@ -199,14 +214,14 @@ class Eraser
             // Inside a savepoint: Postgres abandons the whole transaction on a
             // failed statement, so an attempt that might fail has to be one
             // the database can roll back on its own.
-            $rows = DB::transaction(fn () => $this->query($table, $column, $key)->update($this->blanks($table, $columns)));
+            $rows = DB::transaction(fn () => Rows::erasable($table, $spec, $key)->update($this->blanks($table, $columns)));
         } catch (QueryException $e) {
             // A check constraint that insists on a value. An online order must
             // have a buyer address — the rule that stops a web sale pretending
             // to be a walk-up — so the column gets a placeholder rather than
             // nothing. Deliberately at a reserved domain: it is obviously not a
             // person and nothing can be delivered to it.
-            $rows = $this->query($table, $column, $key)->update($this->blanks($table, $columns, tombstones: true));
+            $rows = Rows::erasable($table, $spec, $key)->update($this->blanks($table, $columns, tombstones: true));
         }
 
         return $rows === 0 ? null : ['action' => 'anonymised', 'rows' => $rows, 'why' => $spec['reason'] ?? null];
@@ -274,13 +289,40 @@ class Eraser
         return ['action' => 'closed', 'tokens_revoked' => $tokens];
     }
 
-    private function query(string $table, string $column, string|int $key): Builder
+    /**
+     * The files a row points at, removed with what it says about them: a
+     * profile photo is the person's face, and blanking the column that
+     * named it would leave the picture on the disk with nothing leading to
+     * it, for ever.
+     *
+     * Once the erasure has committed, not before: a file cannot be rolled
+     * back, and an erasure the database refuses partway must leave the
+     * person exactly as they were.
+     *
+     * @param  array<string, mixed>  $spec
+     */
+    private function deleteFiles(string $table, array $spec, string|int $key): void
     {
-        $query = DB::table($table);
+        $columns = $spec['files'] ?? [];
 
-        return is_string($key) && str_contains($key, '@')
-            ? $query->whereRaw("lower({$column}) = ?", [$key])
-            : $query->where($column, $key);
+        if ($columns === []) {
+            return;
+        }
+
+        $paths = Rows::erasable($table, $spec, $key)
+            ->get($columns)
+            ->flatMap(fn (object $row) => array_values((array) $row))
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->values()
+            ->all();
+
+        if ($paths === []) {
+            return;
+        }
+
+        $disk = $spec['disk'];
+
+        DB::afterCommit(fn () => Storage::disk($disk)->delete($paths));
     }
 
     private function isNullable(string $table, string $column): bool

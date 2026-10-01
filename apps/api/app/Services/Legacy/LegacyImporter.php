@@ -471,10 +471,21 @@ class LegacyImporter
         }
 
         $name = trim(($row->first_name ?? '').' '.($row->last_name ?? ''));
+        $email = strtolower(trim((string) $row->email_address));
+
+        // However it was capitalised, here or there: one address is one
+        // account (users_email_lower_unique). One already here — bought
+        // tickets since, or a second old account differing only in capitals
+        // — is not quietly adopted or overwritten with an old password.
+        // Which of them runs the organization is a decision about people, so
+        // the row fails with a reason, to be merged by hand and run again.
+        if (User::withTrashed()->whereRaw('lower(email) = ?', [$email])->exists()) {
+            throw new \RuntimeException('An account with this address, however capitalised, is already here. Merge the two by hand, then run again.');
+        }
 
         $user = User::create([
             'name' => $name === '' ? (string) $row->email_address : $name,
-            'email' => strtolower(trim((string) $row->email_address)),
+            'email' => $email,
             // A random secret rather than null: the column is not nullable,
             // and a value nobody knows is a password nobody can use. The
             // real hash, where there is one, is written below.

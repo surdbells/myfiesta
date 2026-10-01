@@ -14,6 +14,10 @@ import { Seo } from '../../core/seo';
 import { offSale } from '@myfiesta/shared/availability';
 import { AddToCalendar } from '../../shared/add-to-calendar';
 import { AvailabilityBadge } from '../../shared/availability-badge';
+import { NotifyOnSalePart } from '../../shared/parts/notify-on-sale-part';
+import { OtherDatesPart } from './parts/other-dates-part';
+import { PerksPart } from './parts/perks-part';
+import { ShareBannerPart } from './parts/share-banner-part';
 
 /**
  * The page a shared link lands on. It sells the night; the buying moved to
@@ -23,7 +27,8 @@ import { AvailabilityBadge } from '../../shared/availability-badge';
 @Component({
   selector: 'mf-event-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, UiIcon, AddToCalendar, AvailabilityBadge],
+  // The parts are each a feature's own file, placed once in the template.
+  imports: [CommonModule, RouterLink, UiIcon, AddToCalendar, AvailabilityBadge, OtherDatesPart, ShareBannerPart, NotifyOnSalePart, PerksPart],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {

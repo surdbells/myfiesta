@@ -9,8 +9,32 @@
  */
 
 import type { Availability } from '@myfiesta/shared/availability';
+import type { PayLater, PayLaterQuote } from './types/pay';
+import type { OtherDate } from './types/sched';
+import type { FriendDiscount, ShareLink, ShareOffer } from './types/share';
+import type { ClaimedPerk, Perk } from './types/points';
 
 export type { Availability };
+
+/*
+ * One file for each feature added since, so each is written in its own file
+ * and no two features edit this one. New shapes go in the feature's file. So
+ * does a field it adds to a shape below (OrganizerPage's socials, say):
+ * declared there inside `declare module '../api.types' { interface
+ * OrganizerPage { … } }`, which TypeScript merges into the shape here. Only
+ * changing the type of a field already here is done here, by the one feature
+ * that owns that shape (TicketAccess's receipt, for the transfer feature).
+ */
+export * from './types/pay';
+export * from './types/transfer';
+export * from './types/public';
+export * from './types/sched';
+export * from './types/share';
+export * from './types/survey';
+export * from './types/points';
+export * from './types/pass';
+export * from './types/wait';
+export * from './types/audience';
 
 /**
  * An integer amount in minor units, with its currency.
@@ -198,6 +222,21 @@ export interface EventDetail extends EventSummary {
   /** Sold beside a ticket and admitting nobody. Empty when there is nothing extra. */
   add_ons: AddOn[];
   calendar: CalendarLinks;
+
+  /*
+   * What each feature added since puts on the page, always sent: null, false
+   * or empty when it has nothing to say (EventExtras in the API).
+   */
+  /** The other dates of a repeating night, soonest first. Null for one that does not repeat. */
+  other_dates: OtherDate[] | null;
+  /** What Fiesta Points buy at this night. Empty when it offers nothing. */
+  perks: Perk[];
+  /** The friend discount this night offers, or null for none. */
+  share_offer: ShareOffer | null;
+  /** Whether to offer "Tell me when tickets go on sale": nothing is on sale yet. */
+  notify_on_sale: boolean;
+  /** Whether the night can be paid for later, and with whom. Null when it cannot. */
+  pay_later: PayLater | null;
 }
 
 export interface QuoteLine {
@@ -244,12 +283,17 @@ export interface Quote {
   tax_lines: ReceiptTax[];
   /** How much of `service_charge` is tax on it. Zero unless it is taxed. */
   service_charge_tax: Money;
+  /** The code the buyer typed, shown as applied and removable. Never a friend's discount. */
   code_applied: string | null;
   /** The presale code that opened a locked ticket in this basket. */
   access_code_applied: string | null;
   /** The ticket types the code discounts; null when it covers every ticket. */
   code_applies_to: string[] | null;
   requires_payment: boolean;
+  /** Whether this basket can be paid for later, and with whom. Null when it cannot. */
+  pay_later: PayLaterQuote | null;
+  /** What a friend's link took off this basket, or null. */
+  friend_discount: FriendDiscount | null;
   /**
    * How each tier is selling as of this quote — so a tier that sold out
    * while somebody chose says so here, before checkout refuses it.
@@ -310,6 +354,17 @@ export interface HeldTicket {
   qr: string | null;
   /** Whether it can be given back, and if not, the reason to show. */
   return: { listed: boolean; refusal: string | null };
+
+  /*
+   * What each feature added since puts on a ticket, always sent (TicketExtras
+   * in the API).
+   */
+  /** The perks its holder claimed with Fiesta Points for this night. Empty when none. */
+  perks: ClaimedPerk[];
+  /** The holder's own friend-discount link for this night, or null when it has no offer. */
+  share_link: ShareLink | null;
+  /** Whether it can be sent to somebody else from here. Null when the server does not say. */
+  transferable: boolean | null;
 }
 
 export interface TicketAccess {

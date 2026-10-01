@@ -372,7 +372,7 @@ Route::middleware(['auth:sanctum', 'token.scope:organizer'])
         Route::post('/events/{event:id}/series/skip', [SeriesController::class, 'skip']);
         Route::delete('/events/{event:id}/series', [SeriesController::class, 'destroy']);
 
-        Route::post('/events/{event:id}/duplicate', [OrganizerEventController::class, 'duplicate']);
+        // Duplicating is in routes/api/clone.php (EventCopyController).
         Route::get('/events/{event:id}/cancellation', [OrganizerEventController::class, 'cancellationPreview']);
         Route::post('/events/{event:id}/cancel', [OrganizerEventController::class, 'cancel']);
         // Putting a night on sale under a name waits for a proved address
@@ -477,3 +477,28 @@ Route::prefix('v1')->middleware(['throttle:api-key', 'api.key'])->group(function
     Route::get('/events/{event}/orders', [ReadController::class, 'orders']);
     Route::get('/events/{event}/attendees', [ReadController::class, 'attendees']);
 });
+
+/*
+ * One file for each feature added since, in a fixed order.
+ *
+ * Each is a whole route file of its own: it declares its own middleware
+ * groups (throttles, auth:sanctum with token.scope:attendee, account or
+ * organizer, the organizer prefix, the public-read cache header) rather than
+ * reaching into the groups or variables above, so a feature is added, read
+ * and reviewed in one place and two features never edit the same lines.
+ * Required here, inside the api group, so each is under /api with the api
+ * middleware like everything above. The order only decides which of two
+ * clashing paths wins, and none should clash.
+ */
+require __DIR__.'/api/pay.php';
+require __DIR__.'/api/transfer.php';
+require __DIR__.'/api/profile.php';
+require __DIR__.'/api/public.php';
+require __DIR__.'/api/sched.php';
+require __DIR__.'/api/clone.php';
+require __DIR__.'/api/share.php';
+require __DIR__.'/api/survey.php';
+require __DIR__.'/api/points.php';
+require __DIR__.'/api/pass.php';
+require __DIR__.'/api/wait.php';
+require __DIR__.'/api/audience.php';

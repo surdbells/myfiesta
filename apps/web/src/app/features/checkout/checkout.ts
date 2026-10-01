@@ -3,13 +3,16 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
-import { AnswerValue, EventDetail, Money, Quote, ReceiptTax } from '../../core/api.types';
+import { AboutYou, AnswerValue, EventDetail, Money, Quote, ReceiptTax } from '../../core/api.types';
 import { attendeesFor, missing, slotsFor, withAnswer } from '../../core/checkout-answers';
 import { CheckoutStore } from '../../core/checkout-store';
 import { EmbedMode, rememberPayment } from '../../core/embed';
 import { formatMoney, formatPrice } from '../../core/money';
 import { Seo } from '../../core/seo';
 import { CheckoutSteps } from '../../shared/checkout-steps';
+import { AboutYouPart } from './parts/about-you-part';
+import { FriendDiscountPart } from './parts/friend-discount-part';
+import { PayLaterPart } from './parts/pay-later-part';
 import { QuestionField } from './question-field';
 
 /**
@@ -24,7 +27,8 @@ import { QuestionField } from './question-field';
 @Component({
   selector: 'mf-checkout',
   standalone: true,
-  imports: [FormsModule, RouterLink, CheckoutSteps, QuestionField],
+  // The parts are each a feature's own file, placed once in the template.
+  imports: [FormsModule, RouterLink, CheckoutSteps, QuestionField, AboutYouPart, PayLaterPart, FriendDiscountPart],
   templateUrl: './checkout.html',
 })
 export class Checkout {
@@ -75,6 +79,13 @@ export class Checkout {
    */
   readonly orderAnswers = signal<Record<string, AnswerValue>>({});
   readonly attendeeAnswers = signal<Record<string, Record<string, AnswerValue>>>({});
+
+  /**
+   * What the buyer chose to say under "About you (optional)", from that
+   * part, sent with the order as it stands. Null, which sends nothing, until
+   * the part is filled in and the buyer says something.
+   */
+  readonly aboutYou = signal<AboutYou | null>(null);
 
   readonly formatMoney = formatMoney;
   readonly formatPrice = formatPrice;
@@ -278,6 +289,9 @@ export class Checkout {
 
     this.api
       .order(this.slug, {
+        // "About you", when the buyer said anything: fields of its own, and
+        // first, so none of them can stand in for one of the order's below.
+        ...this.aboutYou(),
         items: this.store.lines(),
         add_ons: this.store.addOnLines(),
         buyer: { name, email: this.email().trim() },

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ConfirmDialog, UiButton, UiSelect, type SelectOption } from '@myfiesta/ui';
 import { RichTextEditor } from '../../shared/rich-text-editor';
+import { PayLaterPart } from './parts/pay-later-part';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { eventIdFrom } from '../../core/event-id';
@@ -32,7 +33,7 @@ import {
  */
 @Component({
   selector: 'app-event-edit',
-  imports: [FormsModule, UiButton, UiSelect, RichTextEditor],
+  imports: [FormsModule, UiButton, UiSelect, RichTextEditor, PayLaterPart],
   templateUrl: './event-edit.html',
 })
 export class EventEdit {

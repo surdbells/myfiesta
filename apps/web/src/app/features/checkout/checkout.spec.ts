@@ -53,6 +53,8 @@ const QUOTE: Quote = {
   access_code_applied: null,
   code_applies_to: null,
   requires_payment: true,
+  pay_later: null,
+  friend_discount: null,
 };
 
 /**

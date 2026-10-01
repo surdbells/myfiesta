@@ -24,10 +24,25 @@ import { EventEmbed } from './event-embed';
 import { EventSales } from './event-sales';
 import { eventStatusLabel, nightIsOver, reviewStepLabel } from './event-status';
 import { EventWorkspace } from './event-workspace';
+import { DuplicatePart } from './parts/duplicate-part';
+import { SchedulePart } from './parts/schedule-part';
+import { SeriesPart } from './parts/series-part';
+import { ShareOfferPart } from './parts/share-offer-part';
 
 @Component({
   selector: 'app-event-detail',
-  imports: [FormsModule, RouterLink, UiButton, UiSelect, EventSales, EventEmbed],
+  imports: [
+    FormsModule,
+    RouterLink,
+    UiButton,
+    UiSelect,
+    EventSales,
+    EventEmbed,
+    SchedulePart,
+    SeriesPart,
+    DuplicatePart,
+    ShareOfferPart,
+  ],
   templateUrl: './event-detail.html',
 })
 export class EventDetail {
@@ -478,6 +493,18 @@ export class EventDetail {
     this.publishing.set(false);
 
     if (done && result) this.afterReviewStep(result);
+  }
+
+  /**
+   * The event as one of the parts on this page has just changed it.
+   *
+   * Kept here and in the header alike, and the series read again with it:
+   * a go-live time or a shorter run can move or remove dates.
+   */
+  partChanged(fresh: OrganizerEventDetail): void {
+    this.event.set(fresh);
+    this.workspace?.setEvent(fresh);
+    this.loadSeries();
   }
 
   /** Say what happened, and read the event again so the page and the header agree. */

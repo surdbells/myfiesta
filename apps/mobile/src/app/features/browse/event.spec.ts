@@ -64,6 +64,12 @@ const night = (over: Partial<EventPage> = {}): EventPage =>
     gallery: [],
     ticket_types: [tier()],
     calendar: { ics_url: '', google_url: '' },
+    // What the API sends when no feature has anything to add (EventExtras).
+    other_dates: null,
+    perks: [],
+    share_offer: null,
+    notify_on_sale: false,
+    pay_later: null,
     ...over,
   }) as EventPage;
 

@@ -1839,6 +1839,21 @@ paths:
                 properties:
                   message: { type: string }
 
+  # Each feature added since writes its paths under its own anchor, so two
+  # features never edit the same lines of this file.
+  # --- track: pay ---
+  # --- track: transfer ---
+  # --- track: profile ---
+  # --- track: public ---
+  # --- track: sched ---
+  # --- track: clone ---
+  # --- track: share ---
+  # --- track: survey ---
+  # --- track: points ---
+  # --- track: pass ---
+  # --- track: wait ---
+  # --- track: audience ---
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2052,7 +2067,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [organizer, ticket_types]
+          required: [organizer, ticket_types, other_dates, perks, share_offer, notify_on_sale, pay_later]
           properties:
             description:
               type: [string, 'null']
@@ -2114,10 +2129,39 @@ components:
             ticket_types:
               type: array
               items: { $ref: '#/components/schemas/TicketType' }
+            # Each feature's own field, always present: null, false or an
+            # empty list when it has nothing to say (EventExtras).
+            other_dates:
+              description: |
+                The other dates of a repeating night that are on sale, soonest
+                first. Null for a night that does not repeat.
+              oneOf:
+                - type: array
+                  items: { $ref: '#/components/schemas/OtherDate' }
+                - type: 'null'
+            perks:
+              type: array
+              description: What Fiesta Points buy at this night. Empty when it offers nothing.
+              items: { $ref: '#/components/schemas/Perk' }
+            share_offer:
+              description: The friend discount this night offers, or null for none.
+              oneOf:
+                - $ref: '#/components/schemas/ShareOffer'
+                - type: 'null'
+            notify_on_sale:
+              type: boolean
+              description: |
+                Whether to offer "Tell me when tickets go on sale": the night is
+                on and still to come, and nothing is on sale yet.
+            pay_later:
+              description: Whether the night can be paid for later, and with whom. Null when it cannot.
+              oneOf:
+                - $ref: '#/components/schemas/PayLater'
+                - type: 'null'
 
     HeldTicket:
       type: object
-      required: [id, code, status, admits, admitted, qr]
+      required: [id, code, status, admits, admitted, qr, perks, share_link, transferable]
       properties:
         id: { type: string, format: uuid }
         code:
@@ -2142,6 +2186,9 @@ components:
             SVG markup, drawn by the server from the code. The white ground is
             part of the symbol: a QR rendered transparently over a dark theme
             inverts and will not scan.
+        perks: { $ref: '#/components/schemas/TicketPerks' }
+        share_link: { $ref: '#/components/schemas/TicketShareLink' }
+        transferable: { $ref: '#/components/schemas/TicketTransferable' }
 
     TicketAccess:
       type: object
@@ -2453,10 +2500,25 @@ components:
         tax_inclusive:
           type: boolean
           description: Whether tax was already inside the displayed price.
-        code_applied: { type: [string, 'null'] }
+        code_applied:
+          type: [string, 'null']
+          description: |
+            The code the buyer typed, to show as applied and removable. Null
+            for a friend's discount, which is shown as `friend_discount` rather
+            than as a code.
         access_code_applied:
           type: [string, 'null']
           description: The presale code that opened a locked ticket type in this basket.
+        pay_later:
+          description: Whether this basket can be paid for later, and with whom. Null when it cannot.
+          oneOf:
+            - $ref: '#/components/schemas/PayLaterQuote'
+            - type: 'null'
+        friend_discount:
+          description: The discount a friend's link took off this basket, or null for none.
+          oneOf:
+            - $ref: '#/components/schemas/FriendDiscount'
+            - type: 'null'
         code_applies_to:
           type: [array, 'null']
           items: { type: string }
@@ -2615,7 +2677,7 @@ components:
 
     Ticket:
       type: object
-      required: [id, code, status, event]
+      required: [id, code, status, event, perks, share_link, transferable]
       properties:
         id: { type: string, format: uuid }
         code:
@@ -2642,6 +2704,28 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Receipt'
             - type: 'null'
+        perks: { $ref: '#/components/schemas/TicketPerks' }
+        share_link: { $ref: '#/components/schemas/TicketShareLink' }
+        transferable: { $ref: '#/components/schemas/TicketTransferable' }
+
+    # What each feature adds to a ticket, wherever a ticket is shown (the
+    # phone's list and the buyer's link), always present (TicketExtras).
+    TicketPerks:
+      type: array
+      description: The perks the holder has claimed with Fiesta Points for this night. Empty when none.
+      items: { $ref: '#/components/schemas/ClaimedPerk' }
+
+    TicketShareLink:
+      description: The holder's own friend-discount link for this night, or null when the night has no offer.
+      oneOf:
+        - $ref: '#/components/schemas/ShareLink'
+        - type: 'null'
+
+    TicketTransferable:
+      type: [boolean, 'null']
+      description: |
+        Whether the ticket can be sent to somebody else from here. Null when
+        the server does not say, and a client decides as it did before.
 
     ScanResult:
       type: object
@@ -3163,3 +3247,52 @@ components:
         requested_by: { type: [string, 'null'] }
         requested_at: { type: string, format: date-time }
         decided_at: { type: [string, 'null'], format: date-time }
+
+    # Each feature added since writes its schemas under its own anchor, so two
+    # features never edit the same lines of this file. The shapes the event
+    # page and a ticket already point at (EventExtras, TicketExtras) start
+    # here as open objects, for each feature to fill in.
+    # --- track: pay ---
+    PayLater:
+      type: object
+      description: How a night can be paid for later. Filled in by the pay-later feature.
+    PayLaterQuote:
+      type: object
+      description: Whether a basket can be paid for later, and with whom. Filled in by the pay-later feature.
+    # --- track: transfer ---
+    # --- track: profile ---
+    # --- track: public ---
+    # --- track: sched ---
+    OtherDate:
+      type: object
+      description: Another date of a repeating night. Filled in by the scheduling feature.
+      required: [slug, starts_at, availability]
+      properties:
+        slug: { type: string }
+        starts_at: { type: string, format: date-time }
+        availability:
+          oneOf:
+            - $ref: '#/components/schemas/Availability'
+            - type: 'null'
+    # --- track: clone ---
+    # --- track: share ---
+    ShareOffer:
+      type: object
+      description: A night's friend discount. Filled in by the friend-discount feature.
+    ShareLink:
+      type: object
+      description: A holder's own friend-discount link. Filled in by the friend-discount feature.
+    FriendDiscount:
+      type: object
+      description: What a friend's link took off a basket. Filled in by the friend-discount feature.
+    # --- track: survey ---
+    # --- track: points ---
+    Perk:
+      type: object
+      description: Something Fiesta Points buy at a night. Filled in by the points feature.
+    ClaimedPerk:
+      type: object
+      description: A perk a ticket's holder claimed. Filled in by the points feature.
+    # --- track: pass ---
+    # --- track: wait ---
+    # --- track: audience ---
