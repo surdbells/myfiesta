@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Images\ImageStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -21,7 +22,7 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthController extends Controller
 {
-    public function login(Request $request): JsonResponse
+    public function login(Request $request, ImageStore $images): JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -73,6 +74,11 @@ class AuthController extends Controller
             'user' => [
                 'name' => $user->name,
                 'email' => $user->email,
+                // So the phone's home screen greets with a face and the right
+                // time of day from the first screen after signing in, rather
+                // than after a second request.
+                'avatar_url' => $images->avatarUrl($user),
+                'timezone' => $user->timezone,
             ],
             'abilities' => $abilities,
             'organizations' => $user->organizations->map(fn ($o) => [
@@ -109,7 +115,7 @@ class AuthController extends Controller
         return response()->json(['message' => 'Signed out.']);
     }
 
-    public function me(Request $request): JsonResponse
+    public function me(Request $request, ImageStore $images): JsonResponse
     {
         $user = $request->user()->load('organizations');
 
@@ -127,6 +133,9 @@ class AuthController extends Controller
             // was taken to mean "none", quietly threw it away.
             'phone' => $user->phone,
             'timezone' => $user->timezone,
+            // The photo, or null for initials. Asked for again when the phone
+            // opens, so one changed on another phone turns up here too.
+            'avatar_url' => $images->avatarUrl($user),
             'organizations' => $user->organizations->map(fn ($o) => [
                 'id' => $o->id,
                 'name' => $o->name,

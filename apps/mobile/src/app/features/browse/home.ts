@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Search } from 'lucide-angular';
 import { Discover, EventCard } from '../../core/discovery';
 import { SessionStore } from '../../core/session';
+import { Clock, greeting } from '../../core/greeting';
 import { shortEventTime } from '../../core/event-time';
 import { formatMoney } from '../../core/money';
 import {
@@ -341,6 +342,7 @@ export class Home {
 
   private readonly discover = inject(Discover);
   private readonly router = inject(Router);
+  private readonly clock = inject(Clock);
   readonly session = inject(SessionStore);
 
   readonly featured = signal<EventCard[]>([]);
@@ -368,13 +370,15 @@ export class Home {
     })),
   ]);
 
-  readonly greeting = computed(() => {
-    const name = this.session.session()?.name?.split(' ')[0];
-    const hour = new Date().getHours();
-    const part = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
-
-    return name ? `${part}, ${name}` : part;
-  });
+  /**
+   * The subtitle's greeting, for whoever has no profile chip: signed out, or
+   * a door pass. No name, and the phone's own zone — there is no account to
+   * ask for another. With an account the chip above the title says it, with
+   * the name, so the subtitle steps aside rather than say it twice.
+   */
+  readonly greeting = computed(() =>
+    this.session.signedIn() && !this.session.locked() ? null : greeting(this.clock.now(), null),
+  );
 
   constructor() {
     void this.load();

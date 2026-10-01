@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>The camera scans tickets at the door, and takes a picture for an event page when you choose Take Photo. It is only on while the scanner or the camera is open.</string>
+	<string>The camera scans tickets at the door, and takes a picture when you choose Take Photo: your profile photo, or a picture for an event page. It is only on while the scanner or the camera is open.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
   <key>CAPACITOR_DEBUG</key>

@@ -19,7 +19,8 @@
     door can give to have their ticket sent.
   - User ID: the account the token belongs to.
   - Purchase history: the tickets somebody holds, and an organizer's orders.
-  - Photos: pictures an organizer uploads for an event.
+  - Photos: pictures an organizer uploads for an event, and the photo
+    somebody may put on their own account in Settings, seen only by them.
   - Emails or text messages: what an organizer writes to ticket holders and
     followers.
   - Other user content: event pages, questions and answers, codes.

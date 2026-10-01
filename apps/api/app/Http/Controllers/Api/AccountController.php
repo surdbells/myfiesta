@@ -15,6 +15,8 @@ use App\Models\User;
 use App\Services\Accounts\SignUps;
 use App\Services\Accounts\Terms;
 use App\Services\Door\DoorPasses;
+use App\Services\Images\ImageRejected;
+use App\Services\Images\ImageStore;
 use App\Services\Impersonation\Impersonation;
 use App\Services\Team\TeamService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -383,7 +385,9 @@ class AccountController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:32'],
-            'timezone' => ['nullable', 'timezone'],
+            // With the older names too: a phone's zone list is ICU's, which
+            // still says Asia/Calcutta and America/Coral_Harbour (Atikokan).
+            'timezone' => ['nullable', 'timezone:all_with_bc'],
         ]);
 
         // Email is absent on purpose. Changing the address an account is
@@ -398,6 +402,40 @@ class AccountController extends Controller
             'phone' => $user->phone,
             'timezone' => $user->timezone,
         ]);
+    }
+
+    /**
+     * A photo for the account, in place of the one it had.
+     *
+     * Seen by the person it belongs to and nobody else: the home screen's
+     * greeting and the top of settings. ImageStore reads the bytes again,
+     * squares it and strips where it was taken before anything is kept.
+     */
+    public function storeAvatar(Request $request, ImageStore $images): JsonResponse
+    {
+        $request->validate([
+            // 12MB: a photo straight off a phone camera, which is the usual
+            // source, and well short of what decoding one costs.
+            'file' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:12288'],
+        ]);
+
+        $user = $request->user();
+
+        try {
+            $images->avatar($user, $request->file('file'));
+        } catch (ImageRejected $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['avatar_url' => $images->avatarUrl($user)]);
+    }
+
+    /** Back to initials, and the file off the disk. */
+    public function destroyAvatar(Request $request, ImageStore $images): JsonResponse
+    {
+        $images->removeAvatar($request->user());
+
+        return response()->json(['avatar_url' => null]);
     }
 
     public function changePassword(Request $request, DoorPasses $doorPasses): JsonResponse

@@ -134,4 +134,99 @@ describe('SessionStore', () => {
     expect(session.session()?.name).toBe('Front gate');
     expect(session.session()?.email).toBeNull();
   });
+
+  it('keeps the photo and the zone signing in sent, for the first home screen', async () => {
+    await session.startFromLogin({
+      token: 'tok',
+      abilities: ['attendee'],
+      user: { name: 'Ada Okoro', email: 'ada@example.test', avatar_url: 'https://media.test/avatars/1/a.jpg', timezone: 'America/Vancouver' },
+      organizations: [],
+    });
+
+    expect(session.session()?.avatarUrl).toBe('https://media.test/avatars/1/a.jpg');
+    expect(session.session()?.timezone).toBe('America/Vancouver');
+
+    // A session from before either existed: initials, and the phone's zone.
+    await session.startFromLogin({ token: 'tok', abilities: ['attendee'], user: { name: 'Bisi' }, organizations: [] });
+
+    expect(session.session()?.avatarUrl).toBeNull();
+    expect(session.session()?.timezone).toBeNull();
+  });
+
+  it('takes in a photo and a zone changed elsewhere, leaving out what was not said', async () => {
+    await session.startFromLogin({
+      token: 'tok',
+      abilities: ['attendee'],
+      user: { name: 'Ada Okoro', email: 'ada@example.test', avatar_url: null, timezone: null },
+      organizations: [],
+    });
+
+    await session.adoptAccount({ avatar_url: 'https://media.test/avatars/1/b.jpg', timezone: 'America/Halifax' });
+    await session.adoptAccount({ name: 'Ada O.' });
+
+    expect(session.session()).toMatchObject({
+      name: 'Ada O.',
+      email: 'ada@example.test',
+      avatarUrl: 'https://media.test/avatars/1/b.jpg',
+      timezone: 'America/Halifax',
+    });
+
+    TestBed.resetTestingModule();
+    const restored = TestBed.inject(SessionStore);
+    await restored.restore();
+    expect(restored.session()?.avatarUrl).toBe('https://media.test/avatars/1/b.jpg');
+  });
+
+  it('asks the server who this is at most once a minute, and never for a door pass', async () => {
+    const api = TestBed.inject(Api);
+    const me = vi.spyOn(api, 'me').mockResolvedValue({
+      name: 'Ada Okoro',
+      email: 'ada@example.test',
+      email_verified: true,
+      phone: null,
+      timezone: 'America/Toronto',
+      avatar_url: 'https://media.test/avatars/1/c.jpg',
+      organizations: [],
+    });
+
+    await session.startFromLogin({ token: 'tok', abilities: ['attendee'], user: { name: 'Ada Okoro', email: 'ada@example.test' }, organizations: [] });
+
+    await Promise.all([session.refreshAccount(), session.refreshAccount()]);
+    await session.refreshAccount();
+
+    expect(me).toHaveBeenCalledTimes(1);
+    expect(session.session()?.avatarUrl).toBe('https://media.test/avatars/1/c.jpg');
+    expect(session.session()?.timezone).toBe('America/Toronto');
+
+    TestBed.resetTestingModule();
+    const door = TestBed.inject(SessionStore);
+    const asked = vi.spyOn(TestBed.inject(Api), 'me');
+    await door.startFromDoorPass({
+      token: 'door-tok',
+      label: 'Front gate',
+      expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      event: { id: 'evt-1', title: 'Afro Fest' },
+    });
+
+    await door.refreshAccount();
+    await door.adoptAccount({ avatar_url: 'https://media.test/avatars/1/c.jpg' });
+
+    expect(asked).not.toHaveBeenCalled();
+    expect(door.session()?.avatarUrl).toBeUndefined();
+  });
+
+  it('keeps what it had when the server cannot be asked', async () => {
+    vi.spyOn(TestBed.inject(Api), 'me').mockRejectedValue(new Error('offline'));
+
+    await session.startFromLogin({
+      token: 'tok',
+      abilities: ['attendee'],
+      user: { name: 'Ada Okoro', email: 'ada@example.test', avatar_url: 'https://media.test/avatars/1/a.jpg', timezone: null },
+      organizations: [],
+    });
+
+    await session.refreshAccount();
+
+    expect(session.session()?.avatarUrl).toBe('https://media.test/avatars/1/a.jpg');
+  });
 });

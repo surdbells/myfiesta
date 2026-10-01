@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
+import type { SessionUser } from '@myfiesta/api-types';
 import { Api } from './api';
 import { HeldTicketStore } from './held-tickets';
 import { Reminders } from './reminders';
@@ -24,6 +25,19 @@ export interface Session {
 
   /** Which of them the organizer screens are about. The first, until one is chosen. */
   activeOrganization?: string;
+
+  /**
+   * The account's photo, for the home greeting and Settings; null or missing
+   * for initials. Missing on a session kept from before the photo existed.
+   */
+  avatarUrl?: string | null;
+
+  /**
+   * The zone the account chose, which the greeting reads the time of day in.
+   * Null or missing: the phone's own. Only ever what the server has — the
+   * phone's zone is never written back on its own.
+   */
+  timezone?: string | null;
 
   /** Door sessions only: the one event this phone may scan, and until when. */
   eventId?: string;
@@ -96,27 +110,74 @@ export class SessionStore {
     await this.save({ ...session, activeOrganization: id });
   }
 
-  /** The name shown back to the account, after it is changed. */
-  async rename(name: string): Promise<void> {
-    const session = this.state();
-    if (session) await this.save({ ...session, name });
+  /** The name and address as the server has them now. See adoptAccount. */
+  identify(name: string, email: string | null): Promise<void> {
+    return this.adoptAccount({ name, email });
   }
 
   /**
-   * The name and address as the server has them now.
+   * Take in what the server says about the person now: any of the name, the
+   * address, the photo and the zone. What is left out stays as it was.
    *
    * The address changes from a link that is often opened somewhere else —
    * the laptop, a mail app — and without this the phone would go on saying
-   * "signed in as" the old one until somebody signed out. Never for a door
+   * "signed in as" the old one until somebody signed out. A photo changed or
+   * a zone saved on another phone turns up the same way. Never for a door
    * pass, whose name is the label it was given for the night.
    */
-  async identify(name: string, email: string | null): Promise<void> {
+  async adoptAccount(account: { name?: string; email?: string | null; avatar_url?: string | null; timezone?: string | null }): Promise<void> {
     const session = this.state();
 
     if (!session || session.scope === 'door') return;
-    if (session.name === name && session.email === email) return;
 
-    await this.save({ ...session, name, email });
+    const next: Session = {
+      ...session,
+      ...(account.name !== undefined ? { name: account.name } : {}),
+      ...(account.email !== undefined ? { email: account.email } : {}),
+      ...(account.avatar_url !== undefined ? { avatarUrl: account.avatar_url } : {}),
+      ...(account.timezone !== undefined ? { timezone: account.timezone } : {}),
+    };
+
+    if (
+      next.name === session.name &&
+      next.email === session.email &&
+      next.avatarUrl === session.avatarUrl &&
+      next.timezone === session.timezone
+    ) {
+      return;
+    }
+
+    await this.save(next);
+  }
+
+  private askedAt = 0;
+  private asking: Promise<void> | null = null;
+
+  /**
+   * Ask the server who this is, quietly, and take in the answer.
+   *
+   * For the home screen's greeting, which should show the photo and the zone
+   * as they are now rather than as they were at sign-in. At most once a
+   * minute, however often the screen is opened, and nothing is said when it
+   * fails: without signal, what the phone remembers will do.
+   */
+  refreshAccount(): Promise<void> {
+    if (!this.signedIn() || this.locked()) return Promise.resolve();
+    if (this.asking) return this.asking;
+    if (Date.now() - this.askedAt < 60_000) return Promise.resolve();
+
+    this.askedAt = Date.now();
+    this.asking = (async () => {
+      try {
+        await this.adoptAccount(await this.api.me());
+      } catch {
+        // Kept as it was; the next visit asks again.
+      } finally {
+        this.asking = null;
+      }
+    })();
+
+    return this.asking;
   }
 
   /**
@@ -142,8 +203,10 @@ export class SessionStore {
     if (this.scope() !== 'organizer') return;
 
     try {
-      const { organizations } = await this.api.me();
-      await this.refreshMemberships(organizations);
+      const me = await this.api.me();
+      await this.refreshMemberships(me.organizations);
+      // The same answer says who they are, so the greeting is current too.
+      await this.adoptAccount(me);
     } catch {
       // Not worth interrupting anybody for: the next sign-in brings it anyway.
     }
@@ -174,7 +237,7 @@ export class SessionStore {
   /** From a sign-in response: the scope is whatever the abilities say. */
   async startFromLogin(body: Record<string, unknown>): Promise<Session> {
     const abilities = (body['abilities'] as string[] | undefined) ?? [];
-    const user = (body['user'] as { name?: string; email?: string } | undefined) ?? {};
+    const user = (body['user'] as Partial<SessionUser> | undefined) ?? {};
 
     const session: Session = {
       // Organizer is the wider grant, so it wins when both are present.
@@ -183,6 +246,10 @@ export class SessionStore {
       name: user.name ?? 'You',
       email: user.email ?? null,
       organizations: (body['organizations'] as Membership[] | undefined) ?? [],
+      // In the sign-in answer, so the first home screen greets with a face at
+      // the right time of day. A session made by joining a team has neither.
+      avatarUrl: user.avatar_url ?? null,
+      timezone: user.timezone ?? null,
     };
 
     await this.save(session);

@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Browser } from '@capacitor/browser';
 import type { AccountErasurePreview } from '@myfiesta/api-types';
+import { describeZone, localZone } from '@myfiesta/shared/zoned-time';
 import { APP_VERSION } from '../../core/app-version';
 import { SessionStore } from '../../core/session';
 import { Theme, ThemeChoice } from '../../core/theme';
@@ -27,6 +28,7 @@ import {
 import { MfAboutYou } from './about-you';
 import { MfSettingsAvatar } from './avatar';
 import { MfHowToVideos } from './how-to-videos';
+import { zoneOptions } from './time-zones';
 
 /**
  * The account, the theme, and the way out.
@@ -252,6 +254,23 @@ import { MfHowToVideos } from './how-to-videos';
         <mf-field label="Phone" optional hint="For the team to reach you on the night. Never shown to buyers." [error]="err('phone')">
           <input type="tel" inputmode="tel" autocomplete="tel" [value]="phone()" (input)="phone.set($any($event.target).value)" maxlength="32" />
         </mf-field>
+        <div class="zone">
+          <p class="zone-label">Time zone</p>
+          <mf-select
+            heading="Time zone"
+            subheading="Where you are most of the time."
+            ariaLabel="Time zone"
+            searchPlaceholder="Type a city"
+            [options]="zones()"
+            [value]="zone()"
+            (valueChange)="zone.set($event ?? '')"
+          />
+          @if (err('timezone'); as message) {
+            <p class="zone-error" role="alert">{{ message }}</p>
+          } @else {
+            <p class="zone-hint">The home screen says good morning or good evening by it.</p>
+          }
+        </div>
       </div>
       <ng-container sheetFooter>
         <button mfButton variant="secondary" (click)="detailsOpen.set(false)">Cancel</button>
@@ -324,6 +343,30 @@ import { MfHowToVideos } from './how-to-videos';
     .form {
       display: grid;
       gap: var(--space-4);
+    }
+
+    /* Laid out as a field is: the select draws its own box, so it is not put
+       inside a second one. */
+    .zone {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .zone-label {
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-medium);
+      color: var(--text);
+    }
+
+    .zone-hint,
+    .zone-error {
+      font-size: var(--font-size-sm);
+      line-height: var(--font-leading-snug);
+      color: var(--text-muted);
+    }
+
+    .zone-error {
+      color: var(--danger-text);
     }
 
     .sent {
@@ -428,6 +471,21 @@ export class Settings {
    */
   private readonly phoneOnFile = signal<string | null>(null);
 
+  /** The zone chosen in Your details, or '' for the phone's own. */
+  readonly zone = signal('');
+
+  /**
+   * The zone the server had when the form opened: null for the phone's own,
+   * undefined when it could not be asked. Like the phone number, an unknown
+   * one is never overwritten by a form that simply did not know it.
+   */
+  private readonly zoneOnFile = signal<string | null | undefined>(undefined);
+
+  /** Built when the form opens, not before: a few hundred zones, each with its abbreviation. */
+  readonly zones = computed<MfOption[]>(() =>
+    this.detailsOpen() ? zoneOptions(localZone(), this.zoneOnFile() ?? this.session.session()?.timezone ?? null) : [],
+  );
+
   constructor() {
     // The address shown up top can change from a link opened on another
     // device, so it is asked for rather than taken from when this phone
@@ -508,10 +566,11 @@ export class Settings {
   }
 
   /** What the server holds about this person now, or null when it could not be asked. */
-  private async load(): Promise<{ name: string; email: string; phone: string | null } | null> {
+  private async load(): Promise<{ name: string; email: string; phone: string | null; timezone: string | null } | null> {
     try {
       const me = await this.api.me();
-      await this.session.identify(me.name, me.email);
+      // The name and address, and the photo and zone the greeting uses.
+      await this.session.adoptAccount(me);
 
       return me;
     } catch {
@@ -535,26 +594,50 @@ export class Settings {
     // Unknown when the server could not be asked. Then an empty box is left
     // alone on save rather than taken as "no number".
     this.phoneOnFile.set(me ? me.phone : null);
+    this.zone.set(me ? (me.timezone ?? '') : (this.session.session()?.timezone ?? ''));
+    this.zoneOnFile.set(me ? me.timezone : undefined);
     this.errors.set({});
     this.detailsOpen.set(true);
+  }
+
+  /**
+   * The zone to send, or undefined to leave the one on file alone: only one
+   * that was changed, and never "the phone's own" over a zone the form could
+   * not see.
+   */
+  private zoneToSave(): string | null | undefined {
+    const chosen = this.zone() || null;
+    const onFile = this.zoneOnFile();
+
+    if (onFile === undefined) return chosen ?? undefined;
+
+    return chosen === onFile ? undefined : chosen;
   }
 
   async saveDetails(): Promise<void> {
     if (this.saving()) return;
 
     const phone = this.phone().trim();
-    const body: { name: string; phone?: string | null } = { name: this.name().trim() };
+    const body: { name: string; phone?: string | null; timezone?: string | null } = { name: this.name().trim() };
 
     if (phone !== '') body.phone = phone;
     // Emptied a box that had a number in it: take the number off.
     else if (this.phoneOnFile()) body.phone = null;
+
+    const zone = this.zoneToSave();
+    if (zone !== undefined) body.timezone = zone;
+
+    const consequences = ['It is the name on your tickets from now on, and the one your team sees.'];
+
+    if (zone === null) consequences.push('Your greeting follows this phone’s time zone, wherever it goes.');
+    else if (zone !== undefined) consequences.push(`Your greeting follows ${describeZone(zone)}, wherever this phone is.`);
 
     const sure = await this.dialogs.confirm({
       title: 'Save your details?',
       body: `Your name becomes ${body.name}${
         body.phone === null ? ', and the phone number on file is taken off' : body.phone ? `, and your phone number ${body.phone}` : ''
       }.`,
-      consequences: ['It is the name on your tickets from now on, and the one your team sees.'],
+      consequences,
       confirmLabel: 'Save details',
       tone: 'default',
     });
@@ -566,8 +649,9 @@ export class Settings {
 
     try {
       const saved = await this.api.updateProfile(body);
-      await this.session.rename(saved.name);
+      await this.session.adoptAccount({ name: saved.name, timezone: saved.timezone });
       this.phoneOnFile.set(saved.phone);
+      this.zoneOnFile.set(saved.timezone);
       this.detailsOpen.set(false);
       this.toasts.show('Saved.', 'success');
     } catch (error) {

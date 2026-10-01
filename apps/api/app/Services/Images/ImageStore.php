@@ -239,6 +239,104 @@ class ImageStore
     }
 
     /**
+     * A person's photo, for the greeting on the phone's home screen and the
+     * top of its settings.
+     *
+     * The same care as a logo, for a picture that is more often a selfie than
+     * anything else: the bytes are checked for what they are, the dimensions
+     * before anything is decoded, and the file is re-encoded, which strips the
+     * EXIF — a phone photo carries where it was taken, and that is usually
+     * somebody's home.
+     *
+     * 256 pixels square. It is drawn at 64 at the largest, and a screen three
+     * times as dense as a laptop's still has pixels to spare.
+     *
+     * Stored under a random name, so a new photo is a new address and no phone
+     * goes on showing the old one from its cache. The old file goes once the
+     * new one is saved.
+     *
+     * @throws ImageRejected when the file is not something we will keep
+     */
+    public function avatar(User $user, UploadedFile $file): string
+    {
+        $this->guardDimensions($file);
+
+        $image = $this->decode($file);
+        $image->orient();
+
+        // Cropped to fill, because it is drawn in a circle. A face in a wide
+        // photo stays in the middle, where the crop keeps it.
+        $image = $image->cover(256, 256);
+
+        $disk = Storage::disk('public');
+        $path = "avatars/{$user->id}/".Str::lower(Str::random(16)).'.jpg';
+
+        $this->write($disk, $path, (string) $image->toJpeg(quality: 86));
+
+        unset($image);
+
+        $previous = $this->swapAvatar($user, $path);
+
+        // After the new one is saved, as with a logo: a delete that runs first
+        // and a save that then fails leaves somebody with no photo at all.
+        if ($previous !== null && $previous !== $path) {
+            $disk->delete($previous);
+        }
+
+        return $path;
+    }
+
+    /** Take the photo away, bytes included. Their initials stand in. */
+    public function removeAvatar(User $user): void
+    {
+        $path = $this->swapAvatar($user, null);
+
+        if ($path !== null) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    /**
+     * Point the account at a new photo, or none, and say which file it
+     * pointed at before.
+     *
+     * The previous path is read from the row under a lock rather than from
+     * the model in hand. Two uploads that overlap — a double tap, or two
+     * phones — would otherwise each see the same old path, and the first
+     * one's file would stay on the disk with no column naming it. Erasure
+     * deletes only the file the column names, so that photo of somebody's
+     * face would outlive their account at an address that still works.
+     */
+    private function swapAvatar(User $user, ?string $path): ?string
+    {
+        $previous = DB::transaction(function () use ($user, $path): ?string {
+            $previous = User::query()->whereKey($user->id)->lockForUpdate()->value('avatar_path');
+
+            User::query()->whereKey($user->id)->update(['avatar_path' => $path]);
+
+            return is_string($previous) ? $previous : null;
+        });
+
+        // The model in hand is the one the response is built from.
+        $user->forceFill(['avatar_path' => $path])->syncOriginalAttribute('avatar_path');
+
+        return $previous;
+    }
+
+    /**
+     * Where the photo is served from, or null for none.
+     *
+     * The column holds a path, never an address, so moving the media disk to
+     * a bucket changes every address at once and no row has to be rewritten.
+     */
+    public function avatarUrl(User $user): ?string
+    {
+        return $user->avatar_path !== null
+            ? Storage::disk('public')->url($user->avatar_path)
+            : null;
+    }
+
+    /**
      * Remove the row and the bytes.
      *
      * Deleting the row alone leaves files on a disk nothing references, which

@@ -318,7 +318,7 @@ App Store Connect privacy answers must match it:
 | Phone Number | yes (optional) | yes | no | App Functionality |
 | User ID | yes | yes | no | App Functionality |
 | Purchase History | yes | yes | no | App Functionality |
-| Photos or Videos | yes (organizers' event pictures) | yes | no | App Functionality |
+| Photos or Videos | yes (a profile photo, if somebody adds one; organizers' event pictures) | yes | no | App Functionality |
 | Emails or Text Messages | yes (organizers' messages to guests) | yes | no | App Functionality |
 | Other User Content | yes | yes | no | App Functionality |
 | Other Financial Info | yes (organizers' payout account) | yes | no | App Functionality |
@@ -339,8 +339,10 @@ and no other linked plugin calls a listed API.
 
 `Info.plist`:
 
-- `NSCameraUsageDescription` — the door scanner, and Take Photo when an
-  organizer adds an event picture. Choosing from the library goes through the
+- `NSCameraUsageDescription` — the door scanner, and Take Photo when somebody
+  sets their profile photo (Settings) or an organizer adds an event picture.
+  App Review reads this against what the app does, so a new use of the camera
+  is named here and in the string. Choosing from the library goes through the
   system picker and needs no permission.
 - `ITSAppUsesNonExemptEncryption` is **false**: HTTPS through the system, and
   PBKDF2 hashing of ticket codes for the offline door through the WebView's

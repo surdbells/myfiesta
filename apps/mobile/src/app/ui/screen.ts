@@ -108,6 +108,8 @@ import { MfIconButton } from './icon-button';
     >
       @if (large()) {
         <div class="hero-title">
+          <!-- Above the big title: who it is for, on the home screen. -->
+          <ng-content select="[screenLead]" />
           <h1>{{ title() }}</h1>
           @if (subtitle()) {
             <p class="sub">{{ subtitle() }}</p>
