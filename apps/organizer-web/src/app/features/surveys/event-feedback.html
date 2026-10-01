@@ -1,0 +1,136 @@
+<header class="bar mb-6">
+  <div>
+    <h1 class="text-2xl">Feedback</h1>
+    <p class="sub mt-2 max-w-[60ch] text-sm text-text-muted">
+      The morning after, the people let in through the door are asked a few questions by email. Their answers
+      arrive here without their names.
+    </p>
+  </div>
+</header>
+
+@if (notice(); as message) {
+  <p class="notice mb-4 max-w-[640px] rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error mb-4 max-w-[640px] rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
+}
+
+@if (loading() && !survey()) {
+  <div class="card max-w-[640px] p-6"><ui-skeleton height="8rem" /></div>
+} @else if (failed(); as reason) {
+  <ui-error-state title="Could not load the survey" [detail]="reason" (retried)="load()" />
+} @else if (survey(); as s) {
+  <section class="settings mb-10 grid max-w-[640px] gap-5 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)">
+    <!-- Where it stands, first: sent, stopped and why, or when it goes. -->
+    @if (s.sent_at) {
+      <p class="state m-0 text-sm">
+        Sent {{ when(s.sent_at, s) }}@if (s.template) { with “{{ s.template.name }}”}. The questions are fixed now.
+      </p>
+    } @else if (s.stopped_because) {
+      <p class="state m-0 rounded-md bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] p-3 text-sm text-warning">
+        {{ s.stopped_because }}
+        @if (!s.organization_enabled) {
+          <a class="font-medium underline underline-offset-2" routerLink="/surveys">Switch them on</a>
+        }
+      </p>
+    } @else if (past(s.sends_at)) {
+      <p class="state m-0 text-sm">Goes within the hour, to the people let in.</p>
+    } @else {
+      <p class="state m-0 text-sm">
+        Goes <strong>{{ when(s.sends_at, s) }}</strong>, {{ hours(s.send_delay_hours) }} after the event ends.
+      </p>
+    }
+
+    <!-- Bound by hand rather than ngModel: a "no" to the question puts the box back. -->
+    <label class="flex cursor-pointer items-start gap-3 text-sm font-normal leading-[1.35]">
+      <input
+        #box
+        class="check mt-[2px]"
+        type="checkbox"
+        name="enabled"
+        [disabled]="locked()"
+        [checked]="s.enabled"
+        (change)="setEnabled(box.checked, box)"
+      />
+      Ask the people who came how it was
+    </label>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="field">
+        <label for="survey-template">Questions</label>
+        <select
+          id="survey-template"
+          name="template"
+          [disabled]="locked() || !s.enabled"
+          [ngModel]="s.template_id"
+          (ngModelChange)="setTemplate($event)"
+        >
+          @for (choice of s.templates; track choice.id) {
+            <option [ngValue]="choice.platform ? null : choice.id">{{ choice.name }}{{ choice.platform ? ' (myFiesta)' : '' }}</option>
+          }
+        </select>
+        <p class="field__hint"><a class="underline underline-offset-2" routerLink="/surveys">Write your own</a></p>
+      </div>
+
+      <div class="field">
+        <label for="survey-delay">When</label>
+        <select
+          id="survey-delay"
+          name="delay"
+          [disabled]="locked() || !s.enabled"
+          [ngModel]="s.send_delay_hours"
+          (ngModelChange)="setDelay($event)"
+        >
+          @for (n of delayChoices(); track n) {
+            <option [ngValue]="n">{{ hours(n) }} after it ends</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <details class="asked text-sm">
+      <summary class="cursor-pointer font-medium">
+        {{ s.questions.length === 1 ? 'The question' : 'The ' + s.questions.length + ' questions' }} people are asked
+      </summary>
+      <ol class="mt-3 grid gap-2 pl-5">
+        @for (q of s.questions; track q.id) {
+          <li>
+            {{ q.label }}
+            <span class="text-text-muted">· {{ questionKind(q.type) }}{{ q.required ? '' : ', optional' }}</span>
+          </li>
+        }
+      </ol>
+    </details>
+
+    @if (s.can_send_now) {
+      <div class="flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
+        <button uiButton variant="secondary" type="button" [loading]="sending()" [disabled]="sending()" (click)="sendNow()">
+          {{ sending() ? 'Sending…' : 'Send it now' }}
+        </button>
+        <p class="m-0 text-xs text-text-muted">
+          @if (past(s.sends_at)) {
+            Otherwise it goes on the next hourly run.
+          } @else {
+            Rather than {{ when(s.sends_at, s) }}.
+          }
+        </p>
+      </div>
+    } @else if (!s.sent_at && !s.stopped_because && !past(s.final_count_at)) {
+      <p class="early m-0 border-t border-border-subtle pt-4 text-xs text-text-muted">
+        You can send it early from {{ when(s.final_count_at, s) }}, once the door's last scans are in.
+      </p>
+    }
+  </section>
+
+  @if (s.sent_at) {
+    @if (results(); as r) {
+      <app-survey-results [results]="r" [eventId]="eventId" />
+    } @else if (resultsFailed(); as reason) {
+      <div class="max-w-[640px]">
+        <ui-error-state title="Could not load what people said" [detail]="reason" (retried)="loadResults()" />
+      </div>
+    } @else {
+      <div class="card max-w-[640px] p-6"><ui-skeleton height="6rem" /></div>
+    }
+  }
+}

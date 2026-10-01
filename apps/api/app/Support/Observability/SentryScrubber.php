@@ -81,7 +81,7 @@ final class SentryScrubber
     private const SECRET_AFTER = [
         'tickets' => 1, 'invitations' => 1, 'door-passes' => 1, 'unsubscribe' => 1,
         'waitlist' => 1, 'follows' => 1, 'requests' => 1, 'sign-up' => 1, 'sms' => 1,
-        'reset-password' => 1, 'verify-email' => 2,
+        'reset-password' => 1, 'verify-email' => 2, 'surveys' => 1,
     ];
 
     /** Data names that hold an address, in breadcrumbs, spans and a trace. */

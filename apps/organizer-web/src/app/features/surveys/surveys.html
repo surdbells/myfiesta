@@ -1,0 +1,142 @@
+<ui-page-header
+  title="Surveys"
+  subtitle="The morning after each event, the people let in through the door are asked how it was. Their answers arrive on the event's Feedback tab, without their names."
+/>
+
+@if (notice(); as message) {
+  <p class="notice mb-4 max-w-[52rem] rounded-md bg-[color-mix(in_srgb,var(--success)_10%,transparent)] p-3 text-sm text-success" role="status">{{ message }}</p>
+}
+@if (error(); as message) {
+  <p class="error mb-4 max-w-[52rem] rounded-md bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] p-3 text-sm text-danger" role="alert">{{ message }}</p>
+}
+
+@if (loading() && !overview()) {
+  <div class="grid max-w-[52rem] gap-2">
+    @for (n of [0, 1]; track n) {
+      <div class="card p-4"><ui-skeleton height="3rem" /></div>
+    }
+  </div>
+} @else if (refused()) {
+  <ui-empty title="Your role does not run surveys" hint="A survey is an email to the people who came, so it belongs to owners, managers and marketing." />
+} @else if (failed()) {
+  <ui-error-state title="Could not load your surveys" detail="We could not reach the server. It is usually temporary." (retried)="retry()" />
+} @else if (overview(); as o) {
+  <section class="switch mb-10 grid max-w-[52rem] gap-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5 shadow-(--shadow-card)">
+    <!-- Bound by hand rather than ngModel: a "no" to the question puts the box back. -->
+    <label class="flex cursor-pointer items-start gap-3 text-sm font-medium leading-[1.35]">
+      <input
+        #box
+        class="check mt-[2px]"
+        type="checkbox"
+        name="surveys_enabled"
+        [disabled]="switching()"
+        [checked]="enabled()"
+        (change)="setEnabled(box.checked, box)"
+      />
+      Ask the people who came how it was, after every event
+    </label>
+    <p class="m-0 pl-7 text-xs text-text-muted">
+      @if (enabled()) {
+        Anybody who turned off emails like this is never asked, and every survey email carries a way to stop them.
+      } @else {
+        No event is asked about while this is off, whatever its Feedback tab says.
+      }
+    </p>
+  </section>
+
+  <h2 class="section mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Recent events</h2>
+  @if (o.recent.length === 0) {
+    <p class="muted mb-10">No event has been surveyed yet. The first goes the morning after your next event ends.</p>
+  } @else {
+    <ul class="recent m-0 mb-10 grid max-w-[52rem] list-none gap-2 p-0">
+      @for (row of o.recent; track row.event_id) {
+        <li>
+          <a
+            class="card grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 p-4 no-underline hover:bg-surface-hover sm:grid-cols-[1fr_auto_auto_auto]"
+            [routerLink]="['/events', row.event_id, 'feedback']"
+          >
+            <span class="min-w-0">
+              <span class="block truncate font-semibold text-text">{{ row.title }}</span>
+              <span class="block text-xs text-text-muted">{{ night(row) }}</span>
+            </span>
+            <span class="text-sm text-text-muted tabular-nums">{{ row.responded }} of {{ row.invited }} answered</span>
+            <span class="hidden text-sm text-text-muted tabular-nums sm:block">{{ row.response_rate === null ? '—' : row.response_rate + '%' }}</span>
+            <span class="text-sm tabular-nums" [title]="row.nps === null ? 'Shown from ' + o.minimum + ' answers' : 'Recommend score'">
+              <span class="text-text-muted">Score </span><strong>{{ signed(row.nps) }}</strong>
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+
+  <div class="mb-3 flex max-w-[52rem] flex-wrap items-center gap-3">
+    <h2 class="section m-0 text-xs font-semibold uppercase tracking-[0.08em] text-text-subtle">Your surveys</h2>
+    @if (!editing()) {
+      <button uiButton size="sm" class="ml-auto" type="button" (click)="write()">Write a survey</button>
+    }
+  </div>
+
+  @if (editing(); as start) {
+    <div class="mb-6 max-w-[52rem]">
+      <app-survey-editor [start]="start" [maxQuestions]="maxQuestions()" (saved)="saved($event)" (cancelled)="editing.set(null)" />
+    </div>
+  }
+
+  @if (templatesLoading() && !templatesLoaded()) {
+    <div class="grid max-w-[52rem] gap-3">
+      @for (n of [0, 1]; track n) {
+        <div class="card p-4"><ui-skeleton height="4rem" /></div>
+      }
+    </div>
+  } @else if (templatesFailed() && !templatesLoaded()) {
+    <div class="max-w-[52rem]">
+      <ui-error-state title="Could not load your surveys" detail="We could not reach the server. It is usually temporary." (retried)="retryTemplates()" />
+    </div>
+  } @else {
+    <ul class="templates m-0 grid max-w-[52rem] list-none gap-3 p-0">
+      @if (platform(); as mine) {
+        <li class="card grid gap-2 p-4">
+          <div class="flex flex-wrap items-start gap-3">
+            <div class="grid min-w-0 flex-1 gap-1">
+              <h3 class="m-0 text-base font-semibold">{{ mine.name }}</h3>
+              <p class="m-0 text-xs text-text-muted">Sent unless an event chooses another. Ready to use; nothing to set up.</p>
+            </div>
+            <button uiButton variant="secondary" size="sm" type="button" (click)="copy(mine)">Copy and change it</button>
+          </div>
+          <ol class="m-0 grid gap-1 pl-5 text-sm">
+            @for (q of mine.questions; track q.id) {
+              <li>{{ q.label }} <span class="text-text-muted">· {{ questionKind(q.type) }}</span></li>
+            }
+          </ol>
+        </li>
+      }
+
+      @for (template of own(); track template.id) {
+        <li class="card grid gap-2 p-4">
+          <div class="flex flex-wrap items-start gap-3">
+            <div class="grid min-w-0 flex-1 gap-1">
+              <h3 class="m-0 text-base font-semibold [overflow-wrap:anywhere]">{{ template.name }}</h3>
+              <p class="m-0 text-xs text-text-muted">
+                {{ template.questions.length }} {{ template.questions.length === 1 ? 'question' : 'questions' }}
+                @if (template.nights_waiting > 0) {
+                  · chosen for {{ template.nights_waiting }} {{ template.nights_waiting === 1 ? 'event' : 'events' }} still to be sent
+                }
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button uiButton variant="secondary" size="sm" type="button" (click)="edit(template)">Edit</button>
+              <button uiButton variant="ghost" size="sm" type="button" (click)="remove(template)">Remove</button>
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+
+    @if (own().length === 0 && !editing()) {
+      <p class="muted mt-3 max-w-[52rem] text-sm">
+        You have no surveys of your own. myFiesta's suits most events; write your own to ask about something it does not.
+      </p>
+    }
+  }
+}

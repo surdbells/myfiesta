@@ -1,0 +1,162 @@
+@if (loading()) {
+  <section class="wrap frame-[640px] pb-24 pt-8"><p class="muted" role="status">Opening the survey…</p></section>
+} @else if (notFound()) {
+  <section class="wrap frame-[640px] pb-24 pt-8">
+    <h1 class="text-2xl">We cannot find that survey</h1>
+    <p class="muted">
+      Open the link in the email again — some email apps cut long links in half. Opening it from the message
+      itself usually works.
+    </p>
+  </section>
+} @else if (unavailable()) {
+  <section class="wrap frame-[640px] pb-24 pt-8">
+    <h1 class="text-2xl">We could not open the survey just now</h1>
+    <p class="muted max-w-[56ch]">Something did not answer in time. Try again in a minute — the link is fine.</p>
+    <button class="btn btn--primary mt-6" type="button" (click)="load()">Try again</button>
+  </section>
+} @else if (survey(); as s) {
+  <section class="wrap frame-[640px] pb-24 pt-8">
+    <header class="mb-8 grid justify-items-start gap-1">
+      <p class="eyebrow">{{ s.event.organizer }}</p>
+      <h1 class="text-2xl">How was {{ s.event.title }}?</h1>
+      <p class="muted">{{ night(s) }}</p>
+    </header>
+
+    @if (thanks(); as message) {
+      <div class="done grid gap-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" role="status">
+        <h2 class="text-lg">Your answers are in</h2>
+        <p>{{ message }}</p>
+      </div>
+    } @else if (s.answered) {
+      <div class="done grid gap-2 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-6 shadow-(--shadow-card)" role="status">
+        <h2 class="text-lg">You have already answered this survey</h2>
+        <p class="muted">Each link takes one answer, and yours is with {{ s.event.organizer }}. Thank you.</p>
+      </div>
+    } @else {
+      <p class="intro mb-6">
+        {{ s.questions.length === 1 ? 'One question' : s.questions.length + ' short questions' }}. Your answers go
+        to {{ s.event.organizer }} without your name or email address.
+      </p>
+
+      <form class="grid gap-6" (ngSubmit)="send()" novalidate>
+        @for (q of s.questions; track q.id) {
+          <fieldset
+            class="question grid gap-3 rounded-(--radius-card) border border-border-subtle bg-surface-raised p-5"
+            [attr.aria-invalid]="errors()[q.id] ? 'true' : null"
+            [attr.aria-describedby]="errors()[q.id] ? 'error-' + q.id : null"
+          >
+            <legend class="float-left mb-1 w-full p-0 text-base font-semibold">
+              {{ q.label }}
+              @if (!q.required) {
+                <span class="optional">(optional)</span>
+              }
+            </legend>
+
+            @switch (q.type) {
+              @case ('nps') {
+                <div class="scale grid grid-cols-6 gap-2 sm:grid-cols-11" role="radiogroup" [attr.aria-label]="q.label">
+                  @for (n of npsScale; track n) {
+                    <label
+                      class="score flex h-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-sm font-semibold has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:text-on-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary"
+                    >
+                      <input
+                        class="sr-only"
+                        type="radio"
+                        [attr.name]="'q-' + q.id"
+                        [name]="'q-' + q.id"
+                        [value]="n"
+                        [ngModel]="answers()[q.id]"
+                        (ngModelChange)="answer(q.id, n)"
+                      />
+                      {{ n }}
+                    </label>
+                  }
+                </div>
+                <p class="ends flex justify-between text-xs text-text-muted"><span>0 · Not likely</span><span>Very likely · 10</span></p>
+              }
+
+              @case ('rating5') {
+                <div class="scale grid grid-cols-5 gap-2" role="radiogroup" [attr.aria-label]="q.label">
+                  @for (n of ratingScale; track n) {
+                    <label
+                      class="score flex h-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-sm font-semibold has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:text-on-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary"
+                    >
+                      <input
+                        class="sr-only"
+                        type="radio"
+                        [attr.name]="'q-' + q.id"
+                        [name]="'q-' + q.id"
+                        [value]="n"
+                        [ngModel]="answers()[q.id]"
+                        (ngModelChange)="answer(q.id, n)"
+                      />
+                      {{ n }}
+                    </label>
+                  }
+                </div>
+                <p class="ends flex justify-between text-xs text-text-muted"><span>1 · Poor</span><span>Great · 5</span></p>
+              }
+
+              @case ('single') {
+                @for (option of q.options; track option) {
+                  <label class="flex cursor-pointer items-center gap-2 text-sm font-normal">
+                    <input
+                      class="radio"
+                      type="radio"
+                      [attr.name]="'q-' + q.id"
+                      [name]="'q-' + q.id"
+                      [value]="option"
+                      [ngModel]="answers()[q.id]"
+                      (ngModelChange)="answer(q.id, option)"
+                    />
+                    {{ option }}
+                  </label>
+                }
+              }
+
+              @case ('multi') {
+                @for (option of q.options; track option) {
+                  <label class="flex cursor-pointer items-center gap-2 text-sm font-normal">
+                    <input
+                      class="check"
+                      type="checkbox"
+                      [attr.name]="'q-' + q.id"
+                      [name]="'q-' + q.id + ':' + option"
+                      [ngModel]="chosen(q.id).includes(option)"
+                      (ngModelChange)="toggle(q, option, $event)"
+                    />
+                    {{ option }}
+                  </label>
+                }
+              }
+
+              @default {
+                <textarea
+                  [attr.name]="'q-' + q.id"
+                  [name]="'q-' + q.id"
+                  [attr.aria-label]="q.label"
+                  rows="4"
+                  maxlength="2000"
+                  [ngModel]="answers()[q.id] ?? ''"
+                  (ngModelChange)="answer(q.id, $event)"
+                ></textarea>
+              }
+            }
+
+            @if (errors()[q.id]; as error) {
+              <p class="field__error" [id]="'error-' + q.id" role="alert">{{ error }}</p>
+            }
+          </fieldset>
+        }
+
+        @if (failed(); as message) {
+          <p class="failed text-sm text-danger-text" role="alert">{{ message }}</p>
+        }
+
+        <button class="btn btn--primary btn--lg btn--block" type="submit" [disabled]="sending()">
+          {{ sending() ? 'Sending…' : 'Send my answers' }}
+        </button>
+      </form>
+    }
+  </section>
+}
